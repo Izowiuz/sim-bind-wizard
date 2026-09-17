@@ -17,6 +17,7 @@
       captures/<maker>/*.toml
 
     sim-bind-wizard/
+      bind                    verb -> (game, script, flags); forwards the rest
       core/devmap.py          find the map; pick a device per role
       core/game.py            Steam libraries, install dirs, prefixes, is-it-running
       core/needs.py           Need, Placement, allocate; shapes, reach, urgency

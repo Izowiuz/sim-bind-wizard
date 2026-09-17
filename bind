@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""One front door for every game in the repo.
+
+    ./bind                       what each game can do
+    ./bind bms                   the layout
+    ./bind wt why                and the evidence for each choice
+    ./bind x4 sheet              the kneeboard
+    ./bind dcs write             into the game
+    ./bind elite capture         the curses capture wizard
+    ./bind bms plan --audit      anything after the verb is forwarded
+
+The verb is canonical; what it runs is not. War Thunder writes with a separate
+script, DCS calls its planner `propose.py` and writes through its capture
+wizard, Falcon BMS needs two writes for one layout. This table is the only
+place that knows, so `./bind <game> write` means the same thing everywhere.
+
+Adding a game means adding a row. A verb it has no answer for is left out
+rather than faked, and `./bind` with no arguments prints exactly that.
+"""
+
+import os
+import subprocess
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+#: verb -> (script, fixed arguments). Order here is the order they print in.
+VERBS = ('harvest', 'plan', 'why', 'free', 'sheet', 'write', 'capture')
+
+GAMES = {
+    'falconbms': {
+        'title': 'Falcon BMS',
+        'alias': ('bms',),
+        'harvest': ('harvest.py', ()),
+        'plan':    ('plan.py', ()),
+        'why':     ('plan.py', ('--why',)),
+        'free':    ('plan.py', ('--free',)),
+        'sheet':   ('plan.py', ('--sheet', '--html')),
+        # one layout, two files: the key file and the axis mapping
+        'write':   ('plan.py', ('--write', '--write-axes')),
+    },
+    'warthunder': {
+        'title': 'War Thunder',
+        'alias': ('wt',),
+        'harvest': ('harvest.py', ()),
+        'plan':    ('plan.py', ()),
+        'why':     ('plan.py', ('--why',)),
+        'free':    ('plan.py', ('--unused',)),
+        'sheet':   ('plan.py', ('--sheet', 'KNEEBOARD.md',
+                                '--html', 'kneeboard.html')),
+        'write':   ('wt-bind-preset.py', ()),
+    },
+    'msfs': {
+        'title': 'MSFS 2024',
+        'alias': (),
+        'harvest': ('harvest.py', ()),
+        'plan':    ('plan.py', ()),
+        'why':     ('plan.py', ('--why',)),
+        'free':    ('plan.py', ('--free',)),
+        'sheet':   ('plan.py', ('--sheet', '--html')),
+        'write':   ('plan.py', ('--write',)),
+    },
+    'x4': {
+        'title': 'X4 Foundations',
+        'alias': (),
+        'harvest': ('harvest.py', ('--json',)),
+        'plan':    ('plan.py', ()),
+        'why':     ('plan.py', ('--why',)),
+        'free':    ('plan.py', ('--free',)),
+        'sheet':   ('plan.py', ('--sheet', '--html')),
+        'write':   ('plan.py', ('--write',)),
+    },
+    'dcs': {
+        'title': 'DCS World',
+        'alias': (),
+        'plan':    ('propose.py', ()),
+        'why':     ('propose.py', ('--why',)),
+        'sheet':   ('propose.py', ('--sheet', '--html')),
+        # the layout goes into the results file; the capture wizard is what
+        # writes DCS's own diff.lua from it
+        'write':   ('dcs-bind-wizard.py', ('--generate',)),
+        'capture': ('dcs-bind-wizard.py', ()),
+    },
+    'elite': {
+        'title': 'Elite Dangerous',
+        'alias': ('ed',),
+        'harvest': ('harvest.py', ('--json',)),
+        'plan':    ('plan.py', ()),
+        'why':     ('plan.py', ('--why',)),
+        'free':    ('plan.py', ('--free',)),
+        'sheet':   ('plan.py', ('--sheet', '--html')),
+        'write':   ('plan.py', ('--write',)),
+        'capture': ('ed-bind-wizard.py', ()),
+    },
+}
+
+#: Where a verb is missing, why -- printed in the table so a gap reads as a
+#: fact about the game rather than as an omission here.
+GAPS = {
+    ('dcs', 'harvest'): 'inside the capture wizard',
+    ('dcs', 'free'): 'no flag for it',
+    ('falconbms', 'capture'): 'no capture wizard',
+    ('warthunder', 'capture'): 'no capture wizard',
+    ('msfs', 'capture'): 'no capture wizard',
+    ('x4', 'capture'): 'no capture wizard',
+}
+
+
+def resolve(name):
+    """A game folder from a name or an alias."""
+    if name in GAMES:
+        return name
+    for game, spec in GAMES.items():
+        if name in spec['alias']:
+            return game
+    return None
+
+
+def table():
+    width = max(len(g) for g in GAMES) + 2
+    print(f'{"game":<{width}}' + ''.join(f'{v:<9}' for v in VERBS))
+    for game in sorted(GAMES):
+        spec = GAMES[game]
+        cells = []
+        for verb in VERBS:
+            cells.append('·' if verb in spec else '–')
+        print(f'{game:<{width}}' + ''.join(f'{c:<9}' for c in cells)
+              + f'  {spec["title"]}')
+    print()
+    print('· available   – not offered')
+    aliases = [(a, g) for g, s in sorted(GAMES.items()) for a in s['alias']]
+    if aliases:
+        print('aliases: ' + ', '.join(f'{a} = {g}' for a, g in aliases))
+    if GAPS:
+        print()
+        for (game, verb), why in sorted(GAPS.items()):
+            print(f'  {game} {verb}: {why}')
+
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0] in ('-h', '--help'):
+        if not args:
+            table()
+        else:
+            print(__doc__)
+        return 0
+
+    game = resolve(args[0])
+    if game is None:
+        print(f'no game called {args[0]!r}. Try ./bind with no arguments.',
+              file=sys.stderr)
+        return 2
+
+    spec = GAMES[game]
+    verb = args[1] if len(args) > 1 and not args[1].startswith('-') else 'plan'
+    rest = args[2:] if len(args) > 1 and not args[1].startswith('-') \
+        else args[1:]
+
+    if verb not in spec:
+        why = GAPS.get((game, verb))
+        print(f'{game} has no {verb!r}'
+              + (f': {why}' if why else '')
+              + '. Try ./bind with no arguments.', file=sys.stderr)
+        return 2
+
+    script, fixed = spec[verb]
+    path = os.path.join(HERE, 'games', game, script)
+    if not os.path.exists(path):
+        print(f'{path} is missing', file=sys.stderr)
+        return 2
+
+    cmd = [sys.executable, path, *fixed, *rest]
+    print(f'--> games/{game}/{script} '
+          + ' '.join([*fixed, *rest]), file=sys.stderr)
+    return subprocess.call(cmd, cwd=os.path.join(HERE, 'games', game))
+
+
+if __name__ == '__main__':
+    sys.exit(main())

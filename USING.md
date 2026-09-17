@@ -8,11 +8,14 @@ Four tasks. Find yours and stop reading.
 
 Configs the game reads are **outputs**. Edit `NEEDS` and regenerate.
 
-    cd games/<game>
-    ./plan.py                  what it would bind, and where
-    ./plan.py --why            and why each control was chosen
-    ./plan.py --write          into the game
-    ./plan.py --sheet --html   refresh the kneeboard
+    ./bind <game>              what it would bind, and where
+    ./bind <game> why          and why each control was chosen
+    ./bind <game> write        into the game
+    ./bind <game> sheet        refresh the kneeboard
+
+`./bind` with no arguments lists the games and which verbs each answers to.
+The scripts under `games/<game>/` do the same work and take their own flags;
+`./bind` forwards anything after the verb.
 
 Close the game first. Writers refuse while it is running.
 
@@ -88,6 +91,11 @@ hardware, counted rather than guessed.
 
 1. `games/<name>/harvest.py` — read and print; `--json` writes the cache. Find
    the game with `core.game`, write with `core.vocab.save`.
+
+   Three of the five older harvests do not meet this: Falcon BMS, War Thunder
+   and MSFS write their cache unconditionally and serialise it themselves
+   rather than through `core.vocab.save`. `./bind <game> harvest` hides the
+   difference; the contract is still owed.
 2. Measure what the files do not say. Record it in the code with its evidence,
    and mark what is still inference.
 3. `games/<name>/plan.py` — `NEEDS` of `core.needs.Need`, a writer, and
@@ -95,6 +103,9 @@ hardware, counted rather than guessed.
    `core.vocab.load`.
 4. `games/<name>/README.md` — six headings: where it lives, how to run it, the
    format, measured, still a guess, gotchas.
+5. A row in `bind`, naming which script and flags each verb maps to. A verb the
+   game has no answer for is left out and the reason goes in `GAPS`, so a gap
+   reads as a fact about the game rather than an omission.
 
 A writer must remove as well as add and change: a binding dropped from `NEEDS`
 has to disappear from the game's config.

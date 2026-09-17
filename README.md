@@ -18,6 +18,7 @@ describes devices, not games, and is useful with no game installed.
 
 ## Layout
 
+    bind        one front door: ./bind <game> <verb>
     core/       matching, device roles, game locations, kneeboards,
                 reading the sticks directly and the curses shell for it
     games/      one folder per game
@@ -35,8 +36,20 @@ describes devices, not games, and is useful with no game installed.
 
 ## Quick start
 
+    ./bind                   what each game can do
+    ./bind bms why           the layout, with the evidence for each choice
+    ./bind bms sheet         the kneeboard
+    ./bind bms write         into the game (close the game first)
+
+`./bind` is the front door. The verb is canonical, what it runs is not: War
+Thunder writes with a separate script, DCS calls its planner `propose.py` and
+writes through its capture wizard, Falcon BMS needs two writes for one layout.
+Anything after the verb is forwarded, so `./bind dcs plan -a su-25T` works.
+
+The scripts are still there to be run directly:
+
     cd games/falconbms
-    ./harvest.py --json      read the game: vocabulary and ranking
+    ./harvest.py             read the game: vocabulary and ranking
     ./plan.py --why          what it would bind, and why
-    ./plan.py --write        into the game (close the game first)
+    ./plan.py --write --write-axes    into the game
     ./plan.py --sheet --html the kneeboard

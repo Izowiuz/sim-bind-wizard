@@ -231,11 +231,11 @@ def axis_plan(devs):
 def build():
     devs = devmap.by_role('stick', 'throttle')
     flat = [n for n in NEEDS if n.first_shape != 'axis']
-    placed, unmet, _free = corneeds.allocate(flat, devs)
+    placed, unmet, free = corneeds.allocate(flat, devs)
     # bindings_for() works in (need, role, control) triples and does its own
     # slot arithmetic, so hand it that shape rather than rewrite it
     rows = [(p.need, p.role, p.ctrl, p.points) for p in placed]
-    return devs, rows, unmet, axis_plan(devs)
+    return devs, rows, unmet, axis_plan(devs), free
 
 
 def find_profiles(devs):
@@ -380,7 +380,7 @@ def _sheet():
     diff cost a second reader of the game's files that could disagree with the
     planner about what is bound.
     """
-    devs, placed, unmet, axes = build()
+    devs, placed, unmet, axes, free = build()
     CTX = {'plane': 'Aeroplane', 'heli': 'Helicopter', 'glob': 'Global'}
 
     sh = csheet.Sheet('Kneeboard MSFS 2024',
@@ -424,6 +424,8 @@ def _sheet():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--why', action='store_true')
+    ap.add_argument('--free', action='store_true',
+                    help='only what is unbound')
     ap.add_argument('--sheet', action='store_true',
                     help='write KNEEBOARD.md')
     ap.add_argument('--html', action='store_true',
@@ -434,7 +436,7 @@ def main():
                     default='~/OneDrive/backups/save-backup/MSFS24',
                     help='where to copy the profiles before writing')
     args = ap.parse_args()
-    devs, placed, unmet, axes = build()
+    devs, placed, unmet, axes, free = build()
 
     # Both, when both are asked for -- see the same fix in War Thunder.
     did = False
@@ -451,6 +453,11 @@ def main():
     if args.write:
         n = write(devs, placed, axes, args.backup_dir)
         print(f'  {n} bindings written')
+        return
+
+    if args.free:
+        for role, c in free:
+            print(f'  {role:9} {c.label:34} {c.kind:10} {c.reach or ""}')
         return
 
     print(f'{len(placed)} controls, {len(axes)} axis bindings\n')
