@@ -139,6 +139,14 @@ latch exactly that way.
    "right" because those came first would be a lie about the hardware.
    `SAME_WAY` widens the match, because hats were captured with whichever word
    fitted at the time: a need asking for `forward` accepts `up` or `fwd`.
+
+   `score()` knows about this rather than letting the fallback happen
+   silently: a control whose directions merely differ loses 8, and one with no
+   directions at all loses 60. The second test is against the direction
+   vocabulary and not "has any label", because a selector answers `1`..`5` and
+   an encoder `ccw`/`cw` — positions, not directions. Reading those as
+   directions put Elite's four panel-focus actions on a five-position switch
+   that holds whichever position it is in.
 3. **Otherwise the first N in the control's own press order**, with the click
    appended to the pool when the need has nothing of its own for it.
 

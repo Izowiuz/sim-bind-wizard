@@ -89,13 +89,12 @@ if CORE not in sys.path:
 
 from core import capture                                    # noqa: E402
 from core import game                                       # noqa: E402
+from core.game import install_dir                           # noqa: E402
 from core import tui as ctui                                # noqa: E402
 from core.capture import (axis_map, drain, save,             # noqa: E402
                           wait_input)
 
-STEAMAPPS = os.path.expanduser("~/.local/share/Steam/steamapps")
 DCS_APPID = "223750"
-DEFAULT_GAME_DIR = os.path.join(STEAMAPPS, "common/DCSWorld")
 
 AXIS_THRESHOLD = capture.AXIS_THRESHOLD
 DEBOUNCE = capture.DEBOUNCE
@@ -1291,8 +1290,11 @@ def detect_devices_screen(tui, cfg, results):
 
 def resolve_config(args, cfg):
     """Validate --game-dir / remembered config; exits with a clear message."""
-    game = args.game_dir or cfg.get("game_dir") or (
-        DEFAULT_GAME_DIR if os.path.isdir(DEFAULT_GAME_DIR) else None)
+    # core.game.install_dir searches EVERY Steam library, which the old
+    # hardcoded ~/.local/share/Steam path did not -- and this DCS lives on a
+    # second disk, so it was never found and --game-dir was mandatory once.
+    game = (args.game_dir or cfg.get("game_dir")
+            or install_dir("DCSWorld"))
     if not game:
         sys.exit("Pass --game-dir /path/to/steamapps/common/DCSWorld "
                  "(remembered in the results file afterwards).")

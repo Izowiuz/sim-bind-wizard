@@ -582,6 +582,18 @@ def _inverted(name):
 _esc = csheet.esc
 
 
+#: Panel order on the sheet. Anything the map has that is not named here
+#: follows, alphabetically -- so a captured third device appears rather than
+#: raising KeyError, and the stick still comes first.
+ROLE_ORDER = ('stick', 'throttle')
+
+
+def panel_roles(rows):
+    known = [r for r in ROLE_ORDER if r in rows]
+    return known + sorted(r for r in rows
+                          if r != 'axes' and r not in ROLE_ORDER)
+
+
 def bound_rows(module, key, cmds, guide):
     """What is actually bound, joined with what the hardware map calls it.
 
@@ -590,7 +602,11 @@ def bound_rows(module, key, cmds, guide):
     """
     binds = json.load(open(results_path()))['aircraft'].get(key, {})
     devs = devmap.by_role('stick', 'throttle')
-    rows = {'stick': [], 'throttle': [], 'axes': []}
+    # Keyed off the devices the map actually gave us, not a literal pair: a
+    # captured third device -- pedals, a button box -- used to raise KeyError
+    # here rather than show up on the sheet.
+    rows = {role: [] for role in devs}
+    rows['axes'] = []
     for h, r in binds.items():
         if not isinstance(r, dict) or 'role' not in r:
             continue
@@ -607,10 +623,10 @@ def bound_rows(module, key, cmds, guide):
         g = d.group_of(r['index']) if d else None
         part = g.direction(r['index']) if g else ''
         label = g.label if g else f'button {r["index"]}'
-        rows[r['role']].append((r['index'], label, part, r['name'], theme, mark))
-    for k in ('stick', 'throttle'):
+        rows.setdefault(r['role'], []).append(
+            (r['index'], label, part, r['name'], theme, mark))
+    for k in rows:
         rows[k].sort()
-    rows['axes'].sort()
     return rows, devs
 
 
@@ -633,7 +649,7 @@ def write_sheet(module, key, cmds, guide, path):
          '**Generated** by `./propose.py -a %s --sheet` from the results file'
          % key,
          'and `sim-device-map`. A `?` is proposed and not yet confirmed.', '']
-    for role in ('stick', 'throttle'):
+    for role in panel_roles(rows):
         d = devs.get(role)
         if not rows[role]:
             continue
@@ -701,8 +717,8 @@ def write_html(module, key, cmds, guide, path):
     tpl = open(os.path.join(HERE, 'sheet-template.html'), encoding='utf-8').read()
     n = sum(len(rows[k]) for k in rows)
     out = (tpl.replace('__MODULE__', _esc(key))
-              .replace('__STICK__', panel('stick'))
-              .replace('__THROTTLE__', panel('throttle'))
+              .replace('__PANELS__', ''.join(
+                  panel(r) for r in panel_roles(rows)))
               .replace('__AXES__', axes_panel)
               .replace('__UNBOUND__', unbound_panel)
               .replace('__STAMP__', f'generated {datetime.date.today()} '

@@ -157,6 +157,41 @@ class Need:
         return f'<Need {self.what!r} {self.shape} u{self.urgency}>'
 
 
+def directional(ctrl):
+    """Does this control move in named directions rather than sit in positions?
+
+    A hat answers 'up'/'left', a selector '1'..'5' and an encoder 'ccw'/'cw'.
+    Only the first kind can honour a need's `on`.
+    """
+    return any(ctrl.direction(b) in SAME_WAY
+               for b in ctrl.bindable_buttons)
+
+
+def satisfies_on(need, ctrl):
+    """Can this control put each binding on the direction the need names?
+
+    `need.on` is a claim about the hardware -- a speedbrake switch is fore/aft
+    whatever hat it lands on -- and `slots_for` falls back to press order when
+    it cannot be honoured. Silently: so a four-way need landed on a five
+    position selector, whose positions are '1'..'5' and are not directions at
+    all, and Elite's panel focus went onto a switch that HOLDS its position.
+    """
+    if not need.on:
+        return True
+    order = list(ctrl.buttons)
+    if ctrl.push is not None and need.push is None:
+        order.append(ctrl.push)
+    picked = []
+    for want in need.on:
+        names = SAME_WAY.get(want, (want,))
+        hit = next((b for b in order
+                    if ctrl.direction(b) in names and b not in picked), None)
+        if hit is None:
+            return False
+        picked.append(hit)
+    return True
+
+
 def slots_for(need, ctrl):
     """[button index] this need's bindings land on, in binding order.
 
@@ -255,6 +290,17 @@ def score(ctrl, need, role, floor=True, usable=None, reach=None):
         s += 25
     if need.push is not None and ctrl.push is not None:
         s += 15
+    if not satisfies_on(need, ctrl):
+        # A control whose directions merely differ is still a home -- a rocker
+        # is up/down and a need asking for left/right is happy enough on it --
+        # so that is a nudge towards one that does match. A control with no
+        # DIRECTIONS at all is a different matter, and the test has to be
+        # against the direction vocabulary rather than "has any label": a
+        # selector answers '1'..'5' and an encoder 'ccw'/'cw', which are
+        # positions, not directions. Reading those as directions let Elite's
+        # four panel-focus actions onto a five-position switch that HOLDS
+        # whichever position it is in.
+        s -= 8 if directional(ctrl) else 60
     s -= 4 * (len(ctrl.bindable_buttons) - need.wanted)
     return s
 

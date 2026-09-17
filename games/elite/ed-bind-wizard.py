@@ -54,6 +54,7 @@ if CORE not in sys.path:
 
 from core import capture                                    # noqa: E402
 from core import tui as ctui                                # noqa: E402
+from core.game import install_dir                           # noqa: E402
 from core.capture import (Device, axis_map, drain,           # noqa: E402
                           proc_joysticks, save, wait_input)
 
@@ -334,7 +335,11 @@ def resolve_config(args, cfg):
 
     Returns cfg with game_dir, schemes_dir and bindings_dir filled in.
     """
-    game = args.game_dir or cfg.get("game_dir")
+    # core.game.install_dir searches every Steam library, so the install is
+    # found on a second disk too and --game-dir is an override rather than a
+    # requirement. It used to have no default at all.
+    game = (args.game_dir or cfg.get("game_dir")
+            or install_dir("Elite Dangerous"))
     if not game:
         sys.exit("Pass --game-dir /path/to/steamapps/common/'Elite "
                  "Dangerous' (remembered in the results file afterwards).")
