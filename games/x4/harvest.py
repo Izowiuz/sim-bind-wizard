@@ -34,35 +34,98 @@ import os
 import re
 import sys
 
-#: Steam appid, and where the game keeps its profiles inside the prefix.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                '..', '..'))
+from core import game                                       # noqa: E402
+
+#: Steam appid, and where inside the prefix X4 keeps its profiles. Finding the
+#: prefix itself is core/game.py's job -- it searches every Steam library,
+#: which matters because compatdata lives next to the library a game is
+#: installed in, not always the first one.
 APPID = '392160'
-PROFILE_DIR = ('drive_c/users/steamuser/Documents/Egosoft/X4')
+PROFILE_PARTS = ('users', 'steamuser', 'Documents', 'Egosoft', 'X4')
 
 ROW = re.compile(r'<(action|state|range)\s+id="([^"]+)"\s+'
                  r'source="([^"]+)"\s+code="([^"]+)"\s*/>')
 HEADER = re.compile(r'<inputmap\s+version="(\d+)"(?:\s+id="(\d+)")?'
                     r'(?:\s+name="([^"]*)")?')
 
-#: button index -> X4 code. DELIBERATELY EMPTY.
+#: How a button index in the device map becomes an X4 `code`.
 #:
-#: X4 writes `INPUT_XBUTTON_A` for some buttons and `INPUT_XBUTTON_17` for
-#: others, and whether those are one numbering or two is not established. The
-#: way to find out is to bind one known button in the game's own menu and read
-#: the code back out of the file -- `./harvest.py --watch` does exactly that.
-#: Filling this in from a plausible-looking XInput order would be a guess, and
-#: guessing what a control physically is has already cost this project two
-#: wrong layouts.
-CODES = {}
+#: MEASURED 2026-09-17, by binding three isolated buttons on the WarBRD in the
+#: game's own menu and reading the file back:
+#:
+#:     js 12  ->  INPUT_XBUTTON_13
+#:     js 30  ->  INPUT_XBUTTON_31
+#:     js  6  ->  INPUT_XBUTTON_BACK
+#:
+#: So the number is the index PLUS ONE -- two independent points agree -- and
+#: names share that same numbering rather than living in a second one: BACK
+#: occupies the position that would otherwise read `_7`.
+#:
+#: The trigger could not be used for this. It is cumulative, so reaching the
+#: second detent means passing through the first, and X4 closes the binding
+#: dialog on the first input it catches.
+OFFSET = 1
+
+#: Positions 1..11 always come out as an Xbox name, 12 upward as a bare number.
+#:
+#: MEASURED: a bare number is NOT accepted where a name belongs -- OPEN_MAP was
+#: moved from `BACK` to `_7`, and X4 parsed the file, failed to recognise it and
+#: left the binding blank in its own menu. So the table below is needed; there
+#: is no way to sidestep it with numbers.
+#:
+#: CONFIRMED: js 9 came back `RIGHT_THUMB`, which is where the order below
+#: puts it. Two measured points inside the named range, two in the numeric one.
+#:
+#: The chain that got there, kept because it is the method rather than the
+#: answer:
+#:   * `BACK` is position 7 (measured, js 6);
+#:   * no `_1` through `_11` appears anywhere in four profile files, while
+#:     `_12` and `_13` do -- so everything up to 11 is named;
+#:   * fifteen names appear in those files, four of which are `DPAD_*`
+#:     directions belonging to a POV rather than a button position, leaving
+#:     exactly eleven -- the same count;
+#:   * those eleven in DirectInput's usual order for an Xbox pad put `BACK`
+#:     seventh, which is where it was measured.
+#:
+#: Every observation fitted and the prediction held on the next measurement,
+#: so the table stands. Note what could NOT be used to get here: the trigger is
+#: cumulative, so reaching a deeper detent means passing through the shallower
+#: ones, and X4 closes its binding dialog on the first input it catches.
+NAMES = ('A', 'B', 'X', 'Y', 'LEFT_SHOULDER', 'RIGHT_SHOULDER', 'BACK',
+         'START', 'LEFT_THUMB', 'RIGHT_THUMB', 'BIGBUTTON')
+
+#: Settled 2026-09-17 by the js 9 = RIGHT_THUMB prediction holding.
+NAMES_INFERRED = False
+
+
+def code(index):
+    """The X4 `code` for a button index in the device map."""
+    if index < len(NAMES):
+        return f'INPUT_XBUTTON_{NAMES[index]}'
+    return f'INPUT_XBUTTON_{index + OFFSET}'
+
+
+def index_of(code_str):
+    """The button index an X4 code refers to, or None if it is neither."""
+    m = re.fullmatch(r'INPUT_XBUTTON_(\d+)', code_str)
+    if m:
+        return int(m.group(1)) - OFFSET
+    m = re.fullmatch(r'INPUT_XBUTTON_([A-Z_]+)', code_str)
+    if m and m.group(1) in NAMES:
+        return NAMES.index(m.group(1))
+    return None
 
 
 def profile_dir():
     """Where X4 keeps its per-player profiles, under the Steam user id."""
     if os.environ.get('X4_DIR'):
         return os.environ['X4_DIR']
-    base = os.path.expanduser(
-        f'~/.local/share/Steam/steamapps/compatdata/{APPID}/pfx/{PROFILE_DIR}')
-    if not os.path.isdir(base):
-        sys.exit(f'no X4 profiles under {base} — set X4_DIR')
+    base = game.in_prefix(APPID, *PROFILE_PARTS)
+    if base is None:
+        sys.exit(f'no X4 profile directory in the prefix for appid {APPID} — '
+                 'run the game once, or set X4_DIR')
     players = [os.path.join(base, d) for d in sorted(os.listdir(base))
                if os.path.isdir(os.path.join(base, d))]
     if not players:
@@ -198,10 +261,15 @@ def main():
                   f'axes {",".join(st["axes"]) or "-":<22}'
                   f' codes: {st["named"]} named / {st["numeric"]} numeric')
 
-    if not CODES:
-        print('\n!! CODES is empty: which button index each INPUT_XBUTTON_* means')
-        print('   has not been measured. Bind one known button in X4 and read')
-        print('   it back before trusting any layout this repo writes.')
+    print('\nbutton codes')
+    for i in (0, 6, 9, 10, 11, 12, 30):
+        tag = '  <- measured' if i in (6, 12, 30) else ''
+        print(f'  js {i:<3} {code(i)}{tag}')
+    if NAMES_INFERRED:
+        print('  !! the eleven names rest on one measured point (js 6 = BACK).')
+        print('     One more bind settles it: js 9 should be RIGHT_THUMB.')
+    else:
+        print('  names confirmed: js 6 = BACK and js 9 = RIGHT_THUMB both held')
 
     if a.grep:
         print()

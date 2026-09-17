@@ -1,5 +1,8 @@
 # sim-bind-wizard
 
+**Want to change a binding? [`USING.md`](USING.md).** This file is about why
+the repo is shaped the way it is.
+
 One repo, one shared core, a folder per game. It replaces four separate
 wizards — DCS, War Thunder, MSFS 2024, Falcon BMS — that each grew their own
 copy of the same ideas.
@@ -30,7 +33,8 @@ The duplication was not theoretical. Two defects came straight out of it:
 ## Layout
 
     core/
-      devmap.py   find and load sim-device-map (was duplicated 4x)
+      devmap.py   find and load sim-device-map, and pick a device per role
+      game.py     Steam libraries, install dirs, Proton prefixes, is-it-running
       needs.py    Need, reach tiers, urgency, the allocator
     games/
       x4/         X4 Foundations
@@ -75,6 +79,99 @@ Xbox names with bare numbers and whether those share one numbering is not
 established. `CODES` in `harvest.py` is deliberately empty — filling it from a
 plausible-looking XInput order would be a guess, and guessing what a control
 physically is has already cost this project two wrong layouts.
+
+## Core API
+
+### `core.needs`
+
+    Need(what, shape, bindings=(), push=None, urgency=IN_THE_AIR,
+         suits=None, dev=None, prefer=None, on=None, note='')
+
+| field | type | meaning |
+|---|---|---|
+| `what` | str | human name, used in output and kneeboards |
+| `shape` | str or tuple | control shape; a tuple lists acceptable ones, first preferred |
+| `bindings` | list | **opaque game payload**, one per direction/stage, in the control's own press order. `None` skips that direction |
+| `push` | any | payload for the control's click, if it has one |
+| `urgency` | 0-3 | `IN_A_TURN`, `ON_APPROACH`, `IN_THE_AIR`, `ON_THE_RAMP` |
+| `suits` | str | matched against the control's `suits` in the map, +25 |
+| `dev` | str | device kind it belongs on (`'stick'`); +40 on match, −50 off |
+| `prefer` | str | pin to a control by its map label; +500 |
+| `on` | tuple | direction names it physically moves in (`('forward','back')`) |
+
+Derived: `slots` (len of bindings), `wanted` (slots + push), `shapes` (after
+substitution), `first_shape`. `relaxed` is set by the allocator when it had to
+reach past the floor.
+
+`bindings` is the seam. The core only ever indexes it, so an entry can be a War
+Thunder action id, a BMS callback string, or an X4 `(source, code)` pair.
+
+    allocate(needs, devices, usable=None) -> (placements, unplaced, free)
+
+`devices` is `{kind: Device}` from `devmap.by_role`. `usable(role, ctrl)` is an
+optional veto for hardware the game cannot address — BMS reads only a device's
+first 32 buttons, so the VMAX's last nineteen are real to your hand and
+invisible to the sim.
+
+A `Placement` carries `need`, `role`, `ctrl`, `points`, and `slots` as
+`[(button index, binding)]` with the push appended when there is one.
+
+Order of business inside: needs are sorted by `urgency`, then two passes. The
+first honours `MIN_REACH`, the second drops it for whatever is left. A third
+pass lets a one-slot need borrow the idle click of a control whose own need had
+nothing for it.
+
+    REACH_TIER   thumb/index 0 · without releasing 1 · needs letting go 3
+    MAX_REACH    {0: 1, 1: 3, 2: 3, 3: 3}   worst reach an urgency accepts
+    MIN_REACH    {0: 0, 1: 0, 2: 0, 3: 2}   best it may take
+
+Scoring is `100 + 12 * tier`, so among controls that fit, the **least precious**
+wins. Shapes and their substitutes live in `FITS`: `button` `dial` `encoder`
+`hat2` `hat4` `latch` `ministick` `paddle` `selector` `trigger`.
+
+### `core.devmap`
+
+    load()                      the devicemap module, honouring SIM_DEVICE_MAP
+    by_role(*required, pick=)   {kind: Device}, connected device wins a tie
+
+`by_role` exits rather than guess when two devices share a kind and neither is
+plugged in. Override with `pick={'stick': slug}` or `SIM_DEVICE_ROLES`.
+
+### `core.game`
+
+    libraries()                 every Steam library, main first
+    install_dir(*names)         install path, first name that exists
+    prefix(appid)               Proton prefix, or None for a native build
+    in_prefix(appid, *parts)    a path under drive_c, or None
+    userdata()                  Steam userdata dirs (Cloud saves live here)
+    running(*patterns)          pgrep, for a writer's refusal to touch a
+                                config the game will rewrite on exit
+
+Each searches every library, because `compatdata` sits next to the library its
+game is installed in — DCS is on the second disk here.
+
+## What a game adapter owes
+
+    games/<name>/harvest.py     read the game, print, write nothing
+    games/<name>/plan.py        NEEDS: list[Need], and a writer
+    games/<name>/README.md      six headings, below
+
+The writer's one contract, because breaking it is invisible: **it must remove,
+not only add and change.** Drop something from `NEEDS` and its old binding has
+to go, or it stays live in the game fighting whatever took its place.
+
+Per-game README headings, the same every time so any of them can be skimmed:
+*where it lives · how to run it · the format · measured · still a guess ·
+gotchas*.
+
+`measured` and `still a guess` are separate headings on purpose. Every wrong
+layout this family produced came from an inference filed as a fact — the
+WarBRD's "paddle" that is the brake lever's contact, the throttle lever that
+looked free and is clamped to its twin, a trim direction read off a command
+name. The split is how a later session knows which claims it may lean on.
+
+Reader map: [`USING.md`](USING.md) to change a binding, this file to add a
+game, `games/<game>/README.md` for one game's specifics.
 
 ## Migrating the rest
 
