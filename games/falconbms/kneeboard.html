@@ -1,0 +1,118 @@
+<title>Kneeboard Falcon BMS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+
+<style>
+  :root {
+    --paper:#e7ebed; --panel:#fbfcfc; --sunk:#dfe4e7; --ink:#14181b;
+    --muted:#566268; --faint:#8a949a; --rule:#ccd4d8; --rule-hi:#aab5bb;
+    --accent:#2f6b43; --edge:#8a5716;
+    --f-disp:"Barlow Condensed","Helvetica Neue",Arial,sans-serif;
+    --f-body:"Barlow","Helvetica Neue",Arial,sans-serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,"DejaVu Sans Mono",monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#0f1316; --panel:#171d21; --sunk:#121719; --ink:#e3e9ec;
+      --muted:#9aa6ac; --faint:#6b777d; --rule:#293237; --rule-hi:#3c474d;
+      --accent:#79c191; --edge:#d9a25b;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#0f1316; --panel:#171d21; --sunk:#121719; --ink:#e3e9ec;
+    --muted:#9aa6ac; --faint:#6b777d; --rule:#293237; --rule-hi:#3c474d;
+    --accent:#79c191; --edge:#d9a25b;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font-family: var(--f-body); font-size: 13px; line-height: 1.3; margin: 0;
+  }
+  .sheet {
+    max-width: 1500px; margin-inline: auto;
+    padding-inline: 18px; padding-block: 18px 28px;
+  }
+
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px;
+           border-bottom: 2px solid var(--rule-hi); padding-bottom: 10px; }
+  h1 { font-family: var(--f-disp); font-weight: 700; font-size: 26px;
+       letter-spacing: .02em; text-transform: uppercase; margin: 0; }
+  .sub { color: var(--muted); }
+  .stamp { margin-left: auto; font-family: var(--f-mono); font-size: 11px;
+           color: var(--faint); }
+
+  .cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 16px; margin-top: 16px; align-items: start; }
+  .cols3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+           gap: 16px; margin-top: 16px; align-items: start; }
+
+  .panel { background: var(--panel); border: 1px solid var(--rule);
+           border-radius: 3px; overflow: hidden; }
+  .panel h2 {
+    font-family: var(--f-disp); font-weight: 700; font-size: 14px;
+    letter-spacing: .1em; text-transform: uppercase; margin: 0;
+    padding: 8px 11px; border-bottom: 2px solid var(--rule-hi);
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 9px;
+  }
+  .panel h2 small { font-family: var(--f-mono); font-weight: 500; font-size: 10px;
+                    letter-spacing: 0; text-transform: none; color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { font-family: var(--f-disp); font-weight: 600; font-size: 10.5px;
+       letter-spacing: .12em; text-transform: uppercase; color: var(--faint);
+       text-align: left; padding: 6px 8px 4px; border-bottom: 1px solid var(--rule); }
+  th.a { color: var(--accent); }
+  td { padding: 3px 8px; vertical-align: top; border-top: 1px solid var(--rule); }
+  tr:first-child td { border-top: none; }
+  td.n { font-family: var(--f-mono); font-weight: 600; font-size: 11.5px;
+         font-variant-numeric: tabular-nums; text-align: right;
+         white-space: nowrap; width: 1%; }
+  td.c { font-weight: 600; white-space: nowrap; }
+  td.c em { font-style: normal; color: var(--faint); font-weight: 400; }
+  td.h { color: var(--muted); }
+  td.none { color: var(--faint); }
+
+  td .cb { display: block; font-family: var(--f-mono); font-size: 10px;
+           color: var(--faint); margin-top: 1px; }
+  td .edge { color: var(--edge); font-weight: 600; }
+  .panel h2 .tag { margin-left: auto; font-family: var(--f-mono); font-weight: 500;
+                   font-size: 10px; letter-spacing: 0; text-transform: none;
+                   color: var(--accent); }
+
+  .note { padding: 9px 11px; color: var(--muted); }
+  .note b { color: var(--ink); }
+  .note ul { margin: 0; padding-left: 1.05em; display: flex;
+             flex-direction: column; gap: 5px; }
+  .note li::marker { color: var(--faint); }
+  code { font-family: var(--f-mono); font-size: 11.5px; background: var(--sunk);
+         border-radius: 2px; padding: 1px 4px; }
+
+  @media (max-width: 900px) {
+    .cols, .cols3 { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media print {
+    body { background: #fff; font-size: 9px; }
+    .sheet { max-width: none; padding: 0; }
+    .panel { break-inside: avoid; }
+  }
+</style>
+
+<div class="sheet">
+  <header>
+    <h1>Kneeboard</h1>
+    <span class="sub">Falcon BMS · F-16C · VIRPIL</span>
+    <span class="stamp">generated 2026-09-17 · 54 bindings · 9 axes</span>
+  </header>
+
+  <div class="cols">
+    <div class="panel"><h2>R-VPC Stick WarBRD-D  (DX 0–31)</h2><table><tr><th>Control</th><th>DX</th><th>Does</th></tr><tr><td class="c">Trigger initial lever <em>press</em></td><td class="n">0</td><td>Master arm<span class="cb">SimArmMasterArm</span></td></tr><tr><td class="c">Trigger initial lever <em>press</em></td><td class="n">1</td><td>Master arm<span class="cb">SimSafeMasterArm</span></td></tr><tr><td class="c">Main trigger <em>first</em></td><td class="n">2</td><td>Trigger<span class="cb">SimTriggerFirstDetent</span></td></tr><tr><td class="c">Main trigger <em>second</em></td><td class="n">3</td><td>Trigger<span class="cb">SimTriggerSecondDetent</span></td></tr><tr><td class="c">Thumb top button <em>press</em></td><td class="n">6</td><td>Weapon release (Pickle)<span class="cb">SimPickle</span></td></tr><tr><td class="c">Top thumb hat <em>push</em></td><td class="n">7</td><td>Night vision<span class="cb">ToggleNVGMode</span></td></tr><tr><td class="c">Top thumb hat <em>up</em></td><td class="n">8</td><td>TMS — target management<span class="cb">SimTMSUp</span></td></tr><tr><td class="c">Top thumb hat <em>left</em></td><td class="n">9</td><td>TMS — target management<span class="cb">SimTMSLeft</span></td></tr><tr><td class="c">Top thumb hat <em>down</em></td><td class="n">10</td><td>TMS — target management<span class="cb">SimTMSDown</span></td></tr><tr><td class="c">Top thumb hat <em>right</em></td><td class="n">11</td><td>TMS — target management<span class="cb">SimTMSRight</span></td></tr><tr><td class="c">Thumb bottom button <em>press</em></td><td class="n">12</td><td>Paddle — AP / trim disconnect<span class="cb">SimAPOverride</span></td></tr><tr><td class="c">Bottom thumb hat <em>push</em></td><td class="n">13</td><td>Visor<span class="cb">SimVisorToggle</span></td></tr><tr><td class="c">Bottom thumb hat <em>up</em></td><td class="n">14</td><td>DMS — display management<span class="cb">SimDMSUp</span></td></tr><tr><td class="c">Bottom thumb hat <em>left</em></td><td class="n">15</td><td>DMS — display management<span class="cb">SimDMSLeft</span></td></tr><tr><td class="c">Bottom thumb hat <em>down</em></td><td class="n">16</td><td>DMS — display management<span class="cb">SimDMSDown</span></td></tr><tr><td class="c">Bottom thumb hat <em>right</em></td><td class="n">17</td><td>DMS — display management<span class="cb">SimDMSRight</span></td></tr><tr><td class="c">Stick encoder and click <em>push</em></td><td class="n">18</td><td>Trim — pitch<span class="cb">AFResetTrim</span></td></tr><tr><td class="c">Stick encoder and click <em>cw</em></td><td class="n">20</td><td>Trim — pitch<span class="cb">AFElevatorTrimUp</span></td></tr><tr><td class="c">Stick encoder and click <em>ccw</em></td><td class="n">21</td><td>Trim — pitch<span class="cb">AFElevatorTrimDown</span></td></tr><tr><td class="c">Grip thumb hat <em>up</em></td><td class="n">23</td><td>CMS — countermeasures<span class="cb">SimCMSUp</span></td></tr><tr><td class="c">Grip thumb hat <em>left</em></td><td class="n">24</td><td>CMS — countermeasures<span class="cb">SimCMSLeft</span></td></tr><tr><td class="c">Grip thumb hat <em>down</em></td><td class="n">25</td><td>CMS — countermeasures<span class="cb">SimCMSDown</span></td></tr><tr><td class="c">Grip thumb hat <em>right</em></td><td class="n">26</td><td>CMS — countermeasures<span class="cb">SimCMSRight</span></td></tr><tr><td class="c">Grip pinky button <em>press</em></td><td class="n">30</td><td>DX shift (pinky)<span class="cb">SimHotasPinkyShift</span></td></tr><tr><td class="c">Stick encoder and click <em>cw</em></td><td class="n">276</td><td>MAN RANGE knob<span class="cb">SimRangeKnobUp</span></td></tr><tr><td class="c">Stick encoder and click <em>ccw</em></td><td class="n">277</td><td>MAN RANGE knob<span class="cb">SimRangeKnobDown</span></td></tr></table></div><div class="panel"><h2>L-VPC VMAX Prime Throttle  (DX 32–63)</h2><table><tr><th>Control</th><th>DX</th><th>Does</th></tr><tr><td class="c">Pinky button <em>press</em></td><td class="n">32</td><td>NWS / AR DISC / MSL STEP<span class="cb">SimMissileStep</span></td></tr><tr><td class="c">Left side dial <em>push</em></td><td class="n">33</td><td>Air refuelling door<span class="cb">SimFuelDoorToggle</span></td></tr><tr><td class="c">Middle finger button <em>press</em></td><td class="n">34</td><td>MAN RANGE knob — UNCAGE<span class="cb">SimToggleMissileCage</span></td></tr><tr><td class="c">Middle finger hat <em>up</em></td><td class="n">36</td><td>COMMS switch<span class="cb">SimTransmitCom1</span></td></tr><tr><td class="c">Middle finger hat <em>right</em></td><td class="n">37</td><td>COMMS switch<span class="cb">SimCommsSwitchRight</span></td></tr><tr><td class="c">Middle finger hat <em>down</em></td><td class="n">38</td><td>COMMS switch<span class="cb">SimTransmitCom2</span></td></tr><tr><td class="c">Middle finger hat <em>left</em></td><td class="n">39</td><td>COMMS switch<span class="cb">SimCommsSwitchLeft</span></td></tr><tr><td class="c">Right side dial <em>push</em></td><td class="n">40</td><td>Canopy<span class="cb">AFCanopyToggle</span></td></tr><tr><td class="c">Thumb two-way hat <em>forward</em></td><td class="n">42</td><td>SPD BRAKE switch<span class="cb">AFBrakesIn</span></td></tr><tr><td class="c">Thumb two-way hat <em>back</em></td><td class="n">44</td><td>SPD BRAKE switch<span class="cb">AFBrakesOut</span></td></tr><tr><td class="c">Thumb mini-stick <em>push</em></td><td class="n">46</td><td>Radar cursor (slew)<span class="cb">SimCursorEnable</span></td></tr><tr><td class="c">Thumb button <em>press</em></td><td class="n">47</td><td>Radar cursor zero<span class="cb">SimRadarCursorZero</span></td></tr><tr><td class="c">Bottom thumb button <em>press</em></td><td class="n">48</td><td>AVTR<span class="cb">SimAVTRToggle</span></td></tr><tr><td class="c">Thumb hat <em>up</em></td><td class="n">50</td><td>DOGFIGHT / MRM override <span class="edge">+ release</span><span class="cb">SimSelectMRMOverride / SimDeselectOverride</span></td></tr><tr><td class="c">Thumb hat <em>down</em></td><td class="n">52</td><td>DOGFIGHT / MRM override <span class="edge">+ release</span><span class="cb">SimSelectSRMOverride / SimDeselectOverride</span></td></tr><tr><td class="c">Keyboard B1 button <em>press</em></td><td class="n">54</td><td>Landing / taxi lights<span class="cb">SimLandingLightCycle</span></td></tr><tr><td class="c">Keyboard B2 button <em>press</em></td><td class="n">55</td><td>ICP — NAV mode<span class="cb">SimICPNav</span></td></tr><tr><td class="c">Keyboard B3 button <em>press</em></td><td class="n">56</td><td>Recentre head tracking<span class="cb">RecenterTrackIR</span></td></tr><tr><td class="c">Keyboard B4 button <em>press</em></td><td class="n">57</td><td>Look closer<span class="cb">FOVToggle</span></td></tr><tr><td class="c">Keyboard B5 button <em>press</em></td><td class="n">58</td><td>Slap switch (ECM)<span class="cb">SimSlapSwitch</span></td></tr><tr><td class="c">Keyboard B6 button <em>press</em></td><td class="n">59</td><td>Laser arm<span class="cb">SimLaserArmToggle</span></td></tr><tr><td class="c">Big red button <em>press</em></td><td class="n">60</td><td>Stores config (CAT I / III)<span class="cb">SimCATSwitch</span></td></tr><tr><td class="c">T1 rocker <em>up</em></td><td class="n">61</td><td>ICP — master mode<span class="cb">SimICPAA</span></td></tr><tr><td class="c">T1 rocker <em>down</em></td><td class="n">62</td><td>ICP — master mode<span class="cb">SimICPAG</span></td></tr><tr><td class="c">Thumb two-way hat <em>forward</em></td><td class="n">298</td><td>Parking brake<span class="cb">SimParkingBrakeUp</span></td></tr><tr><td class="c">Thumb two-way hat <em>back</em></td><td class="n">300</td><td>Parking brake<span class="cb">SimParkingBrakeDown</span></td></tr><tr><td class="c">T1 rocker <em>up</em></td><td class="n">317</td><td>Landing gear<span class="cb">AFGearUp</span></td></tr><tr><td class="c">T1 rocker <em>down</em></td><td class="n">318</td><td>Landing gear<span class="cb">AFGearDown</span></td></tr></table></div>
+  </div>
+
+  <div class="cols3">
+    <div class="panel"><h2>Axes</h2><table><tr><th>Control</th><th>DX</th><th>Does</th></tr><tr><td class="c">Main stick, left/right</td><td class="n">X</td><td>AXIS_ROLL</td></tr><tr><td class="c">Main stick, fore/aft</td><td class="n">Y</td><td>AXIS_PITCH</td></tr><tr><td class="c">Stick twist</td><td class="n">Z</td><td>AXIS_YAW</td></tr><tr><td class="c">Left throttle lever</td><td class="n">RX</td><td>AXIS_THROTTLE</td></tr><tr><td class="c">Analogue brake lever on the grip</td><td class="n">SLIDER0</td><td>AXIS_BRAKE_LEFT</td></tr><tr><td class="c">Side lever</td><td class="n">RZ</td><td>AXIS_ANT_ELEV</td></tr><tr><td class="c">Thumb mini-stick</td><td class="n">X</td><td>AXIS_CURSOR_X</td></tr><tr><td class="c">Thumb mini-stick</td><td class="n">Y</td><td>AXIS_CURSOR_Y</td></tr><tr><td class="c">Right side dial</td><td class="n">SLIDER1</td><td>AXIS_FOV</td></tr></table></div>
+    <div class="panel"><h2>Left free</h2><table><tr><th>Control</th><th>DX</th><th>Reach</th></tr><tr><td class="c">Mini-stick</td><td class="n">5</td><td class="h">thumb, without releasing grip</td></tr><tr><td class="c">Trigger initial lever</td><td class="n">1, 0</td><td class="h">index finger, on the grip</td></tr><tr><td class="c">Main trigger</td><td class="n">2, 3, 4</td><td class="h">index finger, on the grip</td></tr><tr><td class="c">Thumb top button</td><td class="n">6</td><td class="h">thumb, without releasing grip</td></tr><tr><td class="c">Top thumb hat</td><td class="n">8, 11, 10, 9, 7</td><td class="h">thumb, without releasing grip</td></tr><tr><td class="c">Thumb bottom button</td><td class="n">12</td><td class="h">thumb, without releasing grip</td></tr><tr><td class="c">Bottom thumb hat</td><td class="n">14, 17, 16, 15, 13</td><td class="h">thumb, without releasing grip</td></tr><tr><td class="c">Grip thumb hat</td><td class="n">23, 26, 25, 24, 22</td><td class="h">thumb, without releasing grip</td></tr><tr><td class="c">Grip pinky button</td><td class="n">30</td><td class="h">needs letting go</td></tr><tr><td class="c">Analogue brake lever on the grip</td><td class="n">—</td><td class="h">pinky finger, without releasing grip</td></tr><tr><td class="c">Left side dial</td><td class="n">33</td><td class="h">needs letting go</td></tr><tr><td class="c">Pinky button</td><td class="n">32</td><td class="h">pinky finger, without releasing grip</td></tr><tr><td class="c">Right side dial</td><td class="n">40</td><td class="h">needs letting go</td></tr><tr><td class="c">Thumb mini-stick</td><td class="n">46</td><td class="h">thumb, without releasing grip</td></tr><tr><td class="c">Middle finger button</td><td class="n">34</td><td class="h">middle/ring finger, without releasing grip</td></tr><tr><td class="c">Middle finger hat</td><td class="n">36, 37, 38, 39, 35</td><td class="h">middle/ring finger, without releasing grip</td></tr><tr><td class="c">Thumb button</td><td class="n">47</td><td class="h">thumb, without releasing grip</td></tr><tr><td class="c">Bottom thumb button</td><td class="n">48</td><td class="h">thumb, without releasing grip</td></tr><tr><td class="c">Thumb hat</td><td class="n">50, 51, 52, 53, 49</td><td class="h">thumb, without releasing grip</td></tr><tr><td class="c">Keyboard B1 button</td><td class="n">54</td><td class="h">needs letting go</td></tr><tr><td class="c">Keyboard B2 button</td><td class="n">55</td><td class="h">needs letting go</td></tr><tr><td class="c">Keyboard B3 button</td><td class="n">56</td><td class="h">needs letting go</td></tr><tr><td class="c">Keyboard B4 button</td><td class="n">57</td><td class="h">needs letting go</td></tr><tr><td class="c">Keyboard B5 button</td><td class="n">58</td><td class="h">needs letting go</td></tr><tr><td class="c">Keyboard B6 button</td><td class="n">59</td><td class="h">needs letting go</td></tr><tr><td class="c">Big red button</td><td class="n">60</td><td class="h">needs letting go</td></tr><tr><td class="c">T2 rocker</td><td class="n">63, 64</td><td class="h">needs letting go</td></tr><tr><td class="c">T3 rocker</td><td class="n">65, 66</td><td class="h">needs letting go</td></tr><tr><td class="c">T4 rocker</td><td class="n">67, 68</td><td class="h">needs letting go</td></tr><tr><td class="c">T5 rocker</td><td class="n">69, 70</td><td class="h">needs letting go</td></tr><tr><td class="c">APU button</td><td class="n">71</td><td class="h">needs letting go</td></tr><tr><td class="c">E1 encoder</td><td class="n">73, 74, 72</td><td class="h">needs letting go</td></tr><tr><td class="c">E2 encoder</td><td class="n">77, 76, 75</td><td class="h">needs letting go</td></tr><tr><td class="c">Mode selector</td><td class="n">82, 81, 80, 79, 78</td><td class="h">needs letting go</td></tr></table></div>
+    <div class="panel"><h2>Check on the ramp</h2><div class="note"><ul><li><b>Master arm</b> — it is on the trigger lever, so the guard position IS the switch position. Which of the two contacts is the closed lever was never measured — if the jet arms with the lever down, swap the two names in NEEDS and regenerate.</li><li><b>Trim</b> — BMS names trim after the wheel, not the nose: <code>AFElevatorTrimUp</code> is nose DOWN.</li><li><b>DOGFIGHT switch</b> — hold it forward for MRM, back for dogfight, let go and it should cancel. The cancel is the release edge — no other sim of the four can express it.</li></ul></div></div><div class="panel"><h2>Where the hardware and the jet disagree</h2><div class="note"><ul><li><b>Roll trim</b> — the F-16 grip has four hats and the WarBRD has three, so TMS, DMS and CMS take them and trim gets the encoder: pitch only. Roll trim stays on the keyboard.</li><li><b>Eject</b> — not bound. Twenty of the twenty-two vendor profiles hide it on the pinky-shifted layer; we do not use that layer, and no button here is awkward enough to be safe.</li><li><b>Zoom</b> — on the dial, which rests centred rather than at zero — so the view may start part-zoomed. The price of the same dial carrying zoom in DCS and War Thunder too.</li><li><b>Axis direction</b> — not ours to set. <code>DeviceDefaults.txt</code> says <i>which</i> physical axis, never <i>which way</i> — so walk the four Advanced Options tabs, move each control, watch its value bar and hit <b>Reverse</b> where it runs backwards. Pitch almost certainly needs it.</li><li><b>SET AB</b> — on the Controllers page: left-click sets the afterburner detent, right-click the idle detent. Without the first there is no afterburner. <b>CENTER</b>, stick released, zeroes pitch and roll.</li><li><b>A missing axis</b> — is usually assigned already — BMS allows one physical axis per in-game axis, so an axis in use vanishes from every other dropdown. Check all four tabs before concluding a device is dead.</li></ul></div></div><div class="panel"><h2>Picking it up</h2><div class="note"><p>falcon-bms launcher → Keyfile → "BMS - VIRPIL". Regenerate with ./plan.py --write; never hand-edit.</p></div></div>
+  </div>
+</div>

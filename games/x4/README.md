@@ -1,8 +1,5 @@
 # X4 Foundations
 
-Every game folder in this repo uses these same headings, so you can open any of
-them and know where to look without reading the whole thing.
-
 ## Where it lives
 
 Inside the Proton prefix, under the Steam player id:
@@ -19,12 +16,29 @@ the working copy does not.
 
 ## How to run it
 
-    ./harvest.py            profiles, vocabulary, device slots, button codes
-    ./harvest.py --vocab    everything X4 accepts a binding for
-    ./harvest.py --grep map  vocabulary entries matching a word
+In: the four `inputmap*.xml` files. Out: printed only — X4 needs no cache,
+because reparsing four 46 KB XML files costs nothing, unlike War Thunder's
+zstd archives or BMS's 100 KB key file.
 
-There is no `plan.py` yet. The vocabulary, the slots and the button codes are
-settled, which is everything a planner needs; the need list is the next job.
+    ./harvest.py             profiles, vocabulary, device slots, button codes
+    ./harvest.py --vocab     everything X4 accepts a binding for
+    ./harvest.py --grep map  vocabulary entries matching a word
+    ./harvest.py --json      cache it, the way the other games do
+
+    ./plan.py                the layout
+    ./plan.py --why          and the evidence for each choice
+    ./plan.py --free         what stays unbound
+    ./plan.py --sheet --html the kneeboard
+    ./plan.py --write        into the game (close X4 first)
+
+`plan.py` writes `inputmap_3.xml`; `--profile` and `X4_PROFILE` point it
+elsewhere, `X4_SLOTS="stick=2,throttle=3"` overrides slot detection. It backs
+the profile up in place as `*.bak.<stamp>` and into `--backup-dir`
+(`~/OneDrive/backups/save-backup/X4` by default).
+
+Every id in `NEEDS` is checked against the harvested vocabulary before
+anything runs, so a typo or an id a patch removed is an error rather than a
+binding that silently does nothing.
 
 ## The format
 
@@ -58,19 +72,19 @@ turns `INPUT_ACTION_TOGGLE_TRAVEL_MODE` into `Toggle travel mode`.
                LEFT_THUMB RIGHT_THUMB BIGBUTTON
     js 11+     INPUT_XBUTTON_<index + 1>
 
-**A bare number is not accepted where a name belongs.** `OPEN_MAP` was moved
-from `BACK` to `_7`; X4 parsed the file, failed to recognise it, and left the
-binding blank in its own menu. So the name table is required, not a convenience.
+**A bare number is not accepted where a name belongs.** Writing
+`INPUT_XBUTTON_7` in place of `INPUT_XBUTTON_BACK` leaves the binding blank in
+the game's own menu. The name table is required, not a convenience.
 
-**The trigger cannot be used for this kind of measurement.** It is cumulative,
-so reaching a deeper detent means passing through the shallower ones, and X4
-closes its binding dialog on the first input it catches.
+**The trigger cannot be measured this way.** It is cumulative, so reaching a
+deeper detent means passing through the shallower ones, and X4 closes its
+binding dialog on the first input it catches.
 
 ## Still a guess
 
 Nothing load-bearing. The eleven names rest on two measured points (js 6 and
-js 9) plus the absence of `_1`..`_11` anywhere in four profile files and a name
-count that matches exactly; a third point would be belt and braces.
+js 9), the absence of `_1`..`_11` in any profile file, and a name count of
+exactly eleven once the four `DPAD_*` POV directions are set aside.
 
 ## Gotchas
 
@@ -79,10 +93,32 @@ order, and there is no device list anywhere in the config to pin them. The
 stick was slot 2 in an older profile and slot 1 when we measured. `slots()`
 infers them from a profile's own bindings — a slot whose codes are all Xbox
 names and which offers RZ is a gamepad; the slot with THROTTLE on an axis is
-the throttle; what is left is the stick. **Infer per profile, never across
-them**: a slot number only means something inside the file that wrote it, and
-reading all four together called two different slots the throttle.
+the throttle; what is left is the stick. **Infer per profile, never across them**: a slot number only means something
+inside the file that wrote it.
 
 **X4 writes the working copy, not your named profile.** Binding something in
 the game's menu lands in `inputmap.xml`. Check which file changed before
-concluding anything.
+concluding anything — and it is why `plan.py` writes a *named* profile, which
+the menu leaves alone.
+
+**Attribute order is not fixed and there are more than three.** `toggle="1"`
+sits between `source` and `code` on a latching `<state>`, and `sgn="±1"` after
+`code` where a VR axis drives a button. Matching the three positionally lost
+3–18 rows a file and two ids outright — `INPUT_STATE_MATCH_SPEED` and
+`INPUT_STATE_MAP_PAN_TO_ROTATE` were missing from the vocabulary although
+match speed is bound on the throttle. Match the element, then the attributes.
+
+**One id, several lines; the key is `(id, source)`.** Up to three lines share
+an id — `INPUT_ACTION_OPEN_MAP` is a keyboard line *and* a joystick line, and
+`INPUT_STATE_FIRE_PRIMARY_WEAPON` is two joystick lines on different slots.
+Replacing an element by id alone would take the keyboard binding with it, so
+the writer removes by `source` and inserts fresh.
+
+**The plan owns our hardware completely.** Every line whose `source` is one of
+our slots is removed before ours go in, which is how a binding dropped from
+`NEEDS` stops answering. Keyboard, mouse, compass-menu and VR lines are never
+touched — 311 keyboard lines in, 311 out.
+
+**A third device is in the mix.** The Steam Controller puck enumerates as a pad
+and holds slot 1 in `inputmap_3.xml`, which is why the VIRPIL pair are slots 2
+and 3. Its 25 bindings are left alone.

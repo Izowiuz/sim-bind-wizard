@@ -1,0 +1,803 @@
+{
+  "_config": {
+    "game_dir": "/mnt/steam-library-b/SteamLibrary/steamapps/common/DCSWorld",
+    "saved_games": "/mnt/steam-library-b/SteamLibrary/steamapps/compatdata/223750/pfx/drive_c/users/steamuser/Saved Games/DCS",
+    "aircraft": "FA-18C"
+  },
+  "_devices": {
+    "stick": {
+      "name": "VIRPIL Controls 20260723 R-VPC Stick WarBRD-D",
+      "dcs_id": "R-VPC Stick WarBRD-D {4D241405-AA30-11f1-8003-000044455354}",
+      "axmap": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        6
+      ]
+    },
+    "throttle": {
+      "name": "VIRPIL Controls 20260723 L-VPC VMAX Prime Throttle",
+      "dcs_id": "L-VPC VMAX Prime Throttle {4D243B15-AA30-11f1-8004-000044455354}",
+      "axmap": [
+        0,
+        1,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    }
+  },
+  "aircraft": {
+    "su-25T": {
+      "d113pnilunilcdnilvdnilvpnilvunil": {
+        "name": "Cannon",
+        "role": "stick",
+        "type": "button",
+        "index": 2,
+        "proposed": true
+      },
+      "d84pnilu85cdnilvdnilvpnilvunil": {
+        "name": "Weapon Fire",
+        "role": "stick",
+        "type": "button",
+        "index": 3,
+        "proposed": true
+      },
+      "dnilp96u215cdnilvdnilvpnilvunil": {
+        "name": "Trim Hat - NOSE DOWN",
+        "role": "stick",
+        "type": "button",
+        "index": 8,
+        "proposed": true
+      },
+      "dnilp95u215cdnilvdnilvpnilvunil": {
+        "name": "Trim Hat - NOSE UP",
+        "role": "stick",
+        "type": "button",
+        "index": 10,
+        "proposed": true
+      },
+      "dnilp93u215cdnilvdnilvpnilvunil": {
+        "name": "Trim Hat - ROLL LEFT",
+        "role": "stick",
+        "type": "button",
+        "index": 9,
+        "proposed": true
+      },
+      "dnilp94u215cdnilvdnilvpnilvunil": {
+        "name": "Trim Hat - ROLL RIGHT",
+        "role": "stick",
+        "type": "button",
+        "index": 11,
+        "proposed": true
+      },
+      "a2001cdnil": {
+        "name": "Pitch",
+        "role": "stick",
+        "type": "axis",
+        "index": 1,
+        "invert": true,
+        "proposed": true
+      },
+      "a2002cdnil": {
+        "name": "Roll",
+        "role": "stick",
+        "type": "axis",
+        "index": 0,
+        "invert": false,
+        "proposed": true
+      },
+      "d105pnilunilcdnilvdnilvpnilvunil": {
+        "name": "(1) Navigation Modes",
+        "role": "stick",
+        "type": "button",
+        "index": 13,
+        "proposed": true
+      },
+      "d111pnilunilcdnilvdnilvpnilvunil": {
+        "name": "(7) Air-To-Ground Mode",
+        "role": "stick",
+        "type": "button",
+        "index": 22,
+        "proposed": true
+      },
+      "d101pnilunilcdnilvdnilvpnilvunil": {
+        "name": "Weapon Change",
+        "role": "throttle",
+        "type": "button",
+        "index": 3,
+        "proposed": true
+      },
+      "d100pnilu1627cdnilvdnilvpnilvunil": {
+        "name": "Target Lock",
+        "role": "stick",
+        "type": "button",
+        "index": 6,
+        "proposed": true
+      },
+      "d110pnilunilcdnilvdnilvpnilvunil": {
+        "name": "(6) Longitudinal Missile Aiming Mode",
+        "role": "throttle",
+        "type": "button",
+        "index": 17,
+        "proposed": true
+      },
+      "a2005cdnil": {
+        "name": "Thrust Left",
+        "role": "throttle",
+        "type": "axis",
+        "index": 2,
+        "invert": false,
+        "proposed": true
+      },
+      "a2006cdnil": {
+        "name": "Thrust Right",
+        "role": "throttle",
+        "type": "axis",
+        "index": 3,
+        "invert": false,
+        "proposed": true
+      },
+      "a2003cdnil": {
+        "name": "Rudder",
+        "role": "stick",
+        "type": "axis",
+        "index": 2,
+        "invert": false,
+        "proposed": true
+      },
+      "d146pnilunilcdnilvdnilvpnilvunil": {
+        "name": "Flaps Up",
+        "role": "throttle",
+        "type": "button",
+        "index": 29,
+        "proposed": true
+      },
+      "d72pnilunilcdnilvdnilvpnilvunil": {
+        "name": "Flaps Up/Down",
+        "role": "throttle",
+        "type": "button",
+        "index": 31,
+        "proposed": true
+      },
+      "d430pnilunilcdnilvdnilvpnilvunil": {
+        "name": "Landing Gear Up",
+        "role": "throttle",
+        "type": "button",
+        "index": 50,
+        "proposed": true
+      },
+      "d68pnilunilcdnilvdnilvpnilvunil": {
+        "name": "Landing Gear Up/Down",
+        "role": "throttle",
+        "type": "button",
+        "index": 49,
+        "proposed": true
+      },
+      "d431pnilunilcdnilvdnilvpnilvunil": {
+        "name": "Landing Gear Down",
+        "role": "throttle",
+        "type": "button",
+        "index": 48,
+        "proposed": true
+      },
+      "d74pnilu75cdnilvdnilvpnilvunil": {
+        "name": "Wheel Brake On",
+        "role": "stick",
+        "type": "button",
+        "index": 30,
+        "proposed": true
+      },
+      "d73pnilunilcdnilvdnilvpnilvunil": {
+        "name": "Airbrake",
+        "role": "throttle",
+        "type": "button",
+        "index": 33,
+        "proposed": true
+      },
+      "d148pnilunilcdnilvdnilvpnilvunil": {
+        "name": "Airbrake Off",
+        "role": "throttle",
+        "type": "button",
+        "index": 35,
+        "proposed": true
+      },
+      "d147pnilunilcdnilvdnilvpnilvunil": {
+        "name": "Airbrake On",
+        "role": "throttle",
+        "type": "button",
+        "index": 37,
+        "proposed": true
+      },
+      "d392pnilunilcdnilvdnilvpnilvunil": {
+        "name": "Laser Ranger On/Off",
+        "role": "stick",
+        "type": "button",
+        "index": 12,
+        "proposed": true
+      },
+      "d103pnilunilcdnilvdnilvpnilvunil": {
+        "name": "Radar | Display Zoom In",
+        "role": "stick",
+        "type": "button",
+        "index": 31,
+        "proposed": true
+      },
+      "d104pnilunilcdnilvdnilvpnilvunil": {
+        "name": "Radar | Display Zoom Out",
+        "role": "throttle",
+        "type": "button",
+        "index": 0,
+        "proposed": true
+      },
+      "d1635pnilunilcdnilvdnilvpnilvunil": {
+        "name": "Target Unlock",
+        "role": "throttle",
+        "type": "button",
+        "index": 2,
+        "proposed": true
+      },
+      "d179pnilunilcdnilvdnilvpnilvunil": {
+        "name": "Communication menu",
+        "role": "throttle",
+        "type": "button",
+        "index": 15,
+        "proposed": true
+      },
+      "a2012cdnil": {
+        "name": "Zoom View",
+        "role": "throttle",
+        "type": "axis",
+        "index": 6,
+        "invert": false,
+        "proposed": true
+      },
+      "d86pnilunilcdnilvdnilvpnilvunil": {
+        "name": "ELINT Pod On/Off",
+        "role": "throttle",
+        "type": "button",
+        "index": 22,
+        "proposed": true
+      },
+      "d144pnilunilcdnilvdnilvpnilvunil": {
+        "name": "Audible Warning Reset",
+        "role": "throttle",
+        "type": "button",
+        "index": 23,
+        "proposed": true
+      },
+      "dnilp413u414cdnilvdnilvpnilvunil": {
+        "name": "Target Size / Gunpod Elevation Decrease",
+        "role": "throttle",
+        "type": "button",
+        "index": 24,
+        "proposed": true
+      },
+      "dnilp412u414cdnilvdnilvpnilvunil": {
+        "name": "Target Size / Gunpod Elevation Increase",
+        "role": "throttle",
+        "type": "button",
+        "index": 25,
+        "proposed": true
+      },
+      "d112pnilunilcdnilvdnilvpnilvunil": {
+        "name": "(8) Gunsight Reticle Switch",
+        "role": "stick",
+        "type": "button",
+        "index": 7,
+        "proposed": true
+      },
+      "d358pnilunilcdnilvdnilvpnilvunil": {
+        "name": "Countermeasures Chaff Dispense",
+        "role": "throttle",
+        "type": "button",
+        "index": 4,
+        "proposed": true
+      },
+      "d357pnilunilcdnilvdnilvpnilvunil": {
+        "name": "Countermeasures Flares Dispense",
+        "role": "throttle",
+        "type": "button",
+        "index": 5,
+        "proposed": true
+      }
+    },
+    "FA-18C": {
+      "dnilp3016u3016cd13vdnilvp1vu0": {
+        "name": "Trimmer Switch - LEFT WING DOWN",
+        "role": "stick",
+        "type": "button",
+        "index": 9
+      },
+      "dnilp3014u3014cd13vdnilvp1vu0": {
+        "name": "Trimmer Switch - PULL(CLIMB)",
+        "role": "stick",
+        "type": "button",
+        "index": 10
+      },
+      "dnilp3015u3015cd13vdnilvp1vu0": {
+        "name": "Trimmer Switch - PUSH(DESCEND)",
+        "role": "stick",
+        "type": "button",
+        "index": 8
+      },
+      "dnilp3017u3017cd13vdnilvp1vu0": {
+        "name": "Trimmer Switch - RIGHT WING DOWN",
+        "role": "stick",
+        "type": "button",
+        "index": 11
+      },
+      "d3018pnilu3018cd13vd1vpnilvu0": {
+        "name": "Autopilot/Nosewheel Steering Disengage (Paddle) Switch",
+        "role": "stick",
+        "type": "button",
+        "index": 31
+      },
+      "d3013pnilu3013cd13vd1vpnilvu0": {
+        "name": "Undesignate/Nose Wheel Steer Switch",
+        "role": "stick",
+        "type": "button",
+        "index": 6
+      },
+      "d3002pnilu3002cd13vd1vpnilvu0": {
+        "name": "Gun Trigger - SECOND DETENT (Press to shoot)",
+        "role": "stick",
+        "type": "button",
+        "index": 3
+      },
+      "d3003pnilu3003cd13vd1vpnilvu0": {
+        "name": "Weapon Release Button",
+        "role": "stick",
+        "type": "button",
+        "index": 12
+      },
+      "d3011pnilu3011cd13vd1vpnilvu0": {
+        "name": "Select AMRAAM",
+        "role": "stick",
+        "type": "button",
+        "index": 15
+      },
+      "d3010pnilu3010cd13vd1vpnilvu0": {
+        "name": "Select Gun",
+        "role": "stick",
+        "type": "button",
+        "index": 16
+      },
+      "d3009pnilu3009cd13vd1vpnilvu0": {
+        "name": "Select Sparrow",
+        "role": "stick",
+        "type": "button",
+        "index": 14
+      },
+      "d3012pnilu3012cd13vd1vpnilvu0": {
+        "name": "Select Sidewinder",
+        "role": "stick",
+        "type": "button",
+        "index": 17
+      },
+      "d3006pnilu3006cd13vd1vpnilvu0": {
+        "name": "Sensor Control Switch - Aft",
+        "role": "stick",
+        "type": "button",
+        "index": 25
+      },
+      "d3005pnilu3005cd13vd1vpnilvu0": {
+        "name": "Sensor Control Switch - Fwd",
+        "role": "stick",
+        "type": "button",
+        "index": 23
+      },
+      "d3007pnilu3007cd13vd1vpnilvu0": {
+        "name": "Sensor Control Switch - Left",
+        "role": "stick",
+        "type": "button",
+        "index": 24
+      },
+      "d3008pnilu3008cd13vd1vpnilvu0": {
+        "name": "Sensor Control Switch - Right",
+        "role": "stick",
+        "type": "button",
+        "index": 26
+      },
+      "d3045pnilu3045cd13vd1vpnilvu0": {
+        "name": "Sensor Control Switch - Depress",
+        "role": "stick",
+        "type": "button",
+        "index": 22
+      },
+      "a2001cdnil": {
+        "name": "Pitch",
+        "role": "stick",
+        "type": "axis",
+        "index": 1,
+        "invert": true
+      },
+      "a2002cdnil": {
+        "name": "Roll",
+        "role": "stick",
+        "type": "axis",
+        "index": 0,
+        "invert": false
+      },
+      "d3033pnilu3033cd13vd-1vpnilvu0": {
+        "name": "Dispense Switch - Aft(FLARE)/Center(OFF)",
+        "role": "throttle",
+        "type": "button",
+        "index": 10
+      },
+      "d3032pnilu3032cd13vd1vpnilvu0": {
+        "name": "Dispense Switch - Forward(CHAFF)/Center(OFF)",
+        "role": "throttle",
+        "type": "button",
+        "index": 12
+      },
+      "d3037pnilu3037cd13vd1vpnilvu0": {
+        "name": "ATC Engage/Disengage Switch",
+        "role": "throttle",
+        "type": "button",
+        "index": 0
+      },
+      "d3001pnilu3001cd23vd1vpnilvu0": {
+        "name": "Master Mode Button - A/A",
+        "role": "throttle",
+        "type": "button",
+        "index": 2
+      },
+      "d3002pnilu3002cd23vd1vpnilvu0": {
+        "name": "Master Mode Button - A/G",
+        "role": "throttle",
+        "type": "button",
+        "index": 15
+      },
+      "a2005cdnil": {
+        "name": "Thrust Left",
+        "role": "throttle",
+        "type": "axis",
+        "index": 2,
+        "invert": false
+      },
+      "a2006cdnil": {
+        "name": "Thrust Right",
+        "role": "throttle",
+        "type": "axis",
+        "index": 3,
+        "invert": false
+      },
+      "a2003cdnil": {
+        "name": "Rudder",
+        "role": "stick",
+        "type": "axis",
+        "index": 2,
+        "invert": false
+      },
+      "d3009pnilunilcd5vd0vpnilvunil": {
+        "name": "Arresting Hook Handle - Down",
+        "role": "throttle",
+        "type": "button",
+        "index": 30
+      },
+      "d3009pnilunilcd5vd1vpnilvunil": {
+        "name": "Arresting Hook Handle - Up",
+        "role": "throttle",
+        "type": "button",
+        "index": 29
+      },
+      "d3035pnilu3035cd13vd-1vpnilvu0": {
+        "name": "Speed Brake Switch - EXTEND",
+        "role": "throttle",
+        "type": "button",
+        "index": 31
+      },
+      "d3035pnilunilcd13vd1vpnilvunil": {
+        "name": "Speed Brake Switch - RETRACT",
+        "role": "throttle",
+        "type": "button",
+        "index": 33
+      },
+      "d3007pnilunilcd2vd-1vpnilvunil": {
+        "name": "FLAP Switch - FULL",
+        "role": "throttle",
+        "type": "button",
+        "index": 50
+      },
+      "d3007pnilunilcd2vd0vpnilvunil": {
+        "name": "FLAP Switch - HALF",
+        "role": "throttle",
+        "type": "button",
+        "index": 49
+      },
+      "d3007pnilunilcd2vd1vpnilvunil": {
+        "name": "FLAP Switch - AUTO",
+        "role": "throttle",
+        "type": "button",
+        "index": 48
+      },
+      "d3017pnilunilcd2vd1vpnilvunil": {
+        "name": "FLAP Switch - Up",
+        "role": "throttle",
+        "type": "button",
+        "index": 47
+      },
+      "d431pnilunilcdnilvdnilvpnilvunil": {
+        "name": "Landing Gear Control Handle - DOWN",
+        "role": "throttle",
+        "type": "button",
+        "index": 36
+      },
+      "d430pnilunilcdnilvdnilvpnilvunil": {
+        "name": "Landing Gear Control Handle - UP",
+        "role": "throttle",
+        "type": "button",
+        "index": 35
+      },
+      "d3014pnilu3014cd5vd1vpnilvu0": {
+        "name": "Launch Bar Control Switch - EXTEND",
+        "role": "throttle",
+        "type": "button",
+        "index": 22
+      },
+      "d3014pnilunilcd5vd-1vpnilvunil": {
+        "name": "Launch Bar Control Switch - RETRACT",
+        "role": "throttle",
+        "type": "button",
+        "index": 23
+      },
+      "a2101cdnil": {
+        "name": "Wheel Brake",
+        "role": "stick",
+        "type": "axis",
+        "index": 5,
+        "invert": false
+      },
+      "d74pnilu75cdnilvdnilvpnilvunil": {
+        "name": "Wheel Brake - ON/OFF",
+        "role": "throttle",
+        "type": "button",
+        "index": 24
+      },
+      "d3023pnilu3023cd13vd1vpnilvu0": {
+        "name": "Throttle Designator Controller - Depress",
+        "role": "throttle",
+        "type": "button",
+        "index": 14
+      },
+      "d3031pnilu3031cd13vd1vpnilvu0": {
+        "name": "Cage/Uncage Button",
+        "role": "throttle",
+        "type": "button",
+        "index": 16
+      },
+      "a3044cd13": {
+        "name": "Throttle Designator Controller - Horizontal Axis",
+        "role": "throttle",
+        "type": "axis",
+        "index": 0,
+        "invert": false
+      },
+      "a3043cd13": {
+        "name": "Throttle Designator Controller - Vertical Axis",
+        "role": "throttle",
+        "type": "axis",
+        "index": 1,
+        "invert": false
+      },
+      "a2012cdnil": {
+        "name": "Zoom View",
+        "role": "throttle",
+        "type": "axis",
+        "index": 6,
+        "invert": false
+      },
+      "d3008pnilu3008cd9vd1vpnilvu0": {
+        "name": "MASTER CAUTION Reset Button",
+        "role": "throttle",
+        "type": "button",
+        "index": 25
+      },
+      "d3041pnilunilcd13vd0vpnilvunil": {
+        "name": "Exterior Lights Switch - OFF",
+        "role": "throttle",
+        "type": "button",
+        "index": 26
+      },
+      "d3041pnilunilcd13vd1vpnilvunil": {
+        "name": "Exterior Lights Switch - ON",
+        "role": "throttle",
+        "type": "button",
+        "index": 27
+      },
+      "d313pnilu311cdnilvd1vpnilvu1": {
+        "name": "Throttle (Left) - OFF(hold)<>IDLE",
+        "role": "throttle",
+        "type": "button",
+        "index": 37
+      },
+      "d314pnilu312cdnilvd1vpnilvu1": {
+        "name": "Throttle (Right) - OFF(hold)<>IDLE",
+        "role": "throttle",
+        "type": "button",
+        "index": 38
+      },
+      "d3004pnilu3004cd13vd1vpnilvu0": {
+        "name": "RECCE Event Mark Switch",
+        "role": "stick",
+        "type": "button",
+        "index": 7
+      },
+      "d3034pnilu3034cd13vd1vpnilvu0": {
+        "name": "RAID/FLIR FOV Select Button",
+        "role": "throttle",
+        "type": "button",
+        "index": 9
+      },
+      "d3027pnilu3027cd13vd0.2vpnilvu0": {
+        "name": "COMM Switch - COMM 1 (call radio menu)",
+        "role": "throttle",
+        "type": "button",
+        "index": 3
+      },
+      "d3028pnilu3028cd13vd0.4vpnilvu0": {
+        "name": "COMM Switch - COMM 2 (call radio menu)",
+        "role": "throttle",
+        "type": "button",
+        "index": 4
+      },
+      "d3029pnilu3029cd13vd0.6vpnilvu0": {
+        "name": "COMM Switch - MIDS A",
+        "role": "throttle",
+        "type": "button",
+        "index": 5
+      },
+      "d3030pnilu3030cd13vd0.8vpnilvu0": {
+        "name": "COMM Switch - MIDS B",
+        "role": "throttle",
+        "type": "button",
+        "index": 6
+      }
+    },
+    "TF-51D": {
+      "dnilp3011unilcd12vdnilvp-0.1vunil": {
+        "name": "Trim Aileron Left",
+        "role": "stick",
+        "type": "button",
+        "index": 9,
+        "proposed": true
+      },
+      "dnilp3011unilcd12vdnilvp0.1vunil": {
+        "name": "Trim Aileron Right",
+        "role": "stick",
+        "type": "button",
+        "index": 11,
+        "proposed": true
+      },
+      "dnilp3012unilcd12vdnilvp0.05vunil": {
+        "name": "Trim Elevator Down",
+        "role": "stick",
+        "type": "button",
+        "index": 14,
+        "proposed": true
+      },
+      "dnilp3012unilcd12vdnilvp-0.05vunil": {
+        "name": "Trim Elevator Up",
+        "role": "stick",
+        "type": "button",
+        "index": 16,
+        "proposed": true
+      },
+      "a2001cdnil": {
+        "name": "Pitch",
+        "role": "stick",
+        "type": "axis",
+        "index": 1,
+        "invert": true,
+        "proposed": true
+      },
+      "a2002cdnil": {
+        "name": "Roll",
+        "role": "stick",
+        "type": "axis",
+        "index": 0,
+        "invert": false,
+        "proposed": true
+      },
+      "dnilp3013unilcd12vdnilvp-0.1vunil": {
+        "name": "Trim Rudder Left",
+        "role": "stick",
+        "type": "button",
+        "index": 24,
+        "proposed": true
+      },
+      "dnilp3013unilcd12vdnilvp0.1vunil": {
+        "name": "Trim Rudder Right",
+        "role": "stick",
+        "type": "button",
+        "index": 26,
+        "proposed": true
+      },
+      "a3026cd5": {
+        "name": "Engine RPM Setting",
+        "role": "throttle",
+        "type": "axis",
+        "index": 4,
+        "invert": false,
+        "proposed": true
+      },
+      "d1601pnilunilcdnilvdnilvpnilvunil": {
+        "name": "War Emergency Power",
+        "role": "stick",
+        "type": "button",
+        "index": 6,
+        "proposed": true
+      },
+      "a2003cdnil": {
+        "name": "Rudder",
+        "role": "stick",
+        "type": "axis",
+        "index": 2,
+        "invert": false,
+        "proposed": true
+      },
+      "d3014pnilunilcd12vd1vpnilvunil": {
+        "name": "Trimmers Reset",
+        "role": "throttle",
+        "type": "button",
+        "index": 3,
+        "proposed": true
+      },
+      "d3002pnilunilcd12vd0vpnilvunil": {
+        "name": "Flaps Down",
+        "role": "throttle",
+        "type": "button",
+        "index": 30,
+        "proposed": true
+      },
+      "d3002pnilunilcd12vd1vpnilvunil": {
+        "name": "Flaps Up",
+        "role": "throttle",
+        "type": "button",
+        "index": 29,
+        "proposed": true
+      },
+      "d3004pnilunilcd12vd1vpnilvunil": {
+        "name": "Landing Gear Up/Down",
+        "role": "throttle",
+        "type": "button",
+        "index": 31,
+        "proposed": true
+      },
+      "d961pnilu962cdnilvdnilvpnilvunil": {
+        "name": "Wheel brake Left",
+        "role": "throttle",
+        "type": "button",
+        "index": 33,
+        "proposed": true
+      },
+      "d963pnilu964cdnilvdnilvpnilvunil": {
+        "name": "Wheel brake Right",
+        "role": "throttle",
+        "type": "button",
+        "index": 34,
+        "proposed": true
+      },
+      "d179pnilunilcdnilvdnilvpnilvunil": {
+        "name": "COMM Communication menu",
+        "role": "throttle",
+        "type": "button",
+        "index": 0,
+        "proposed": true
+      },
+      "a2012cdnil": {
+        "name": "Zoom View",
+        "role": "throttle",
+        "type": "axis",
+        "index": 6,
+        "invert": false,
+        "proposed": true
+      }
+    }
+  }
+}

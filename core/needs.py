@@ -13,6 +13,9 @@ a War Thunder action id, a BMS callback, or a pair of X4 source/code strings
 without the allocator knowing the difference.
 """
 
+import sys
+
+
 # ---------------------------------------------------------------- vocabulary
 
 #: What may stand in for what when the exact shape is not on the hardware.
@@ -42,12 +45,28 @@ REACH_TIER = [('thumb', 0), ('index finger', 0),
               ('without releasing', 1),
               ('needs letting go', 3)]
 
-#: The worst reach an urgency can live with...
+#: The worst reach an urgency can live with in the floored pass. Only a
+#: preference: the relaxed pass lifts it.
+#:
+#: Tier 2 was tried at 1, to keep `in the air` off controls you must let go of
+#: the grip for. Measured on this hardware it did the opposite of its
+#: intention: War Thunder's airbrake, bombs, radar ACM, sight stabilisation
+#: and air-to-ground lock -- all `in a turn` -- were being served by the
+#: BORROW pass, which runs last, so tightening the ceiling let `in the air`
+#: needs take the whole controls whose presses they were borrowing. Five
+#: combat functions moved from the thumb to the keyboard panel and five cruise
+#: functions took their place. The fault is the pass order, not the ceiling:
+#: borrowing happens after every main pass, so a need that can only borrow
+#: loses to anything that can claim a control outright, however less urgent.
 MAX_REACH = {0: 1, 1: 3, 2: 3, 3: 3}
 #: ...and the best it may take. Without a floor, something you do once on the
 #: ramp grabs a thumb position the moment one is free, and the only defence is
 #: hand-sorting the need list -- which is what War Thunder was reduced to.
 MIN_REACH = {0: 0, 1: 0, 2: 0, 3: 2}
+
+#: Controls whose buttons are one physical mechanism rather than independent
+#: positions. They may lend their click and nothing else.
+ONE_MECHANISM = ('latch', 'trigger', 'selector', 'encoder')
 
 #: Hats are captured with whichever words fitted the control at the time, so a
 #: need asking for "forward" has to accept "up" from a hat that calls it that.
@@ -78,7 +97,7 @@ class Need:
 
     def __init__(self, what, shape, bindings=(), push=None,
                  urgency=IN_THE_AIR, suits=None, dev=None, prefer=None,
-                 on=None, note=''):
+                 on=None, rank=0, note=''):
         self.what = what
         self.shape = shape
         self.bindings = list(bindings)
@@ -98,6 +117,13 @@ class Need:
         #: it on "up" and "right" because those came first would be a lie about
         #: the hardware.
         self.on = tuple(on) if on else None
+        #: how much the game itself asks for this, counted rather than judged
+        #: -- how many factory profiles bind it. Breaks ties WITHIN an urgency
+        #: band and never across one: a cockpit switch a hundred profiles bind
+        #: still does not outrank something you reach for in a turn. Games that
+        #: ship no profiles to count (X4, Elite) leave it at 0, which orders
+        #: them by urgency alone exactly as before.
+        self.rank = rank
         self.note = note
         #: set by the allocator when it had to reach past the floor
         self.relaxed = False
@@ -142,6 +168,13 @@ def slots_for(need, ctrl):
     order = list(ctrl.buttons)
     if ctrl.push is not None and need.push is None:
         order.append(ctrl.push)
+    # One binding on a control with several buttons belongs on its CLICK, not
+    # on the first direction. A lone action on `buttons[0]` reads as "push the
+    # hat left" when the obvious gesture is to press the hat -- and it leaves
+    # the click, the one position a single action actually wants, idle.
+    if (need.slots == 1 and not need.on and need.push is None
+            and ctrl.push is not None and len(ctrl.bindable_buttons) > 1):
+        return [ctrl.push]
     if need.on:
         picked = []
         for want in need.on:
@@ -158,16 +191,51 @@ def slots_for(need, ctrl):
 
 # ----------------------------------------------------------------- the match
 
-def score(ctrl, need, role, floor=True, usable=None):
-    """How well a control plays this part. None means it cannot."""
+def score(ctrl, need, role, floor=True, usable=None, reach=None):
+    """How well a control plays this part. None means it cannot.
+
+    `reach` overrides MAX_REACH for a game whose need list is ranked and
+    truncated rather than written out by hand -- see allocate().
+    """
     if usable is not None and not usable(role, ctrl):
         return None
     if ctrl.kind not in need.shapes:
         return None
     if len(ctrl.bindable_buttons) < need.wanted:
         return None
+
+    # A pin outranks the reach tables, not just the ranking. `prefer` used to
+    # be a +500 bonus applied AFTER the ceiling, so a pinned control the
+    # ceiling excluded scored None and the bonus never ran: BMS's pinky shift,
+    # pinned to the grip pinky button, scored 721 with a loose ceiling and
+    # None with a tight one, and silently moved to the thumb mini-stick --
+    # a control you cannot hold as a modifier while working the thumb hats the
+    # shifted layer sits on. Shape and capacity still have to fit; a pin cannot
+    # put four directions on a single button.
+    if need.prefer and need.prefer == ctrl.label:
+        return 1000
+
     tier = reach_tier(ctrl)
-    if tier > MAX_REACH[need.urgency]:
+    # The ceiling yields in the relaxed pass, but only for a need the borrow
+    # pass could never serve.
+    #
+    # Borrowing hands a need one spare button on a control somebody else took,
+    # so it only ever works for a need that wants ONE button -- and for those a
+    # borrowed thumb press beats a whole control you must let go of the grip to
+    # reach. Lifting the ceiling for them made it lose: War Thunder's radar ACM
+    # and sight stabilisation, both `in a turn`, left the thumb for the side
+    # dials because a whole dial became legal in the relaxed pass, which runs
+    # BEFORE borrowing.
+    #
+    # A need wanting several buttons has no such fallback. Every encoder and
+    # selector on this hardware needs letting go of the grip, so without the
+    # lift BMS's MAN RANGE knob, radar gain, ICP master mode and IFF MASTER had
+    # nowhere to go at all.
+    table = reach or MAX_REACH
+    ceiling = table[need.urgency]
+    if not floor and need.wanted > 1:
+        ceiling = max(table.values())
+    if tier > ceiling:
         return None
     if floor and tier < MIN_REACH[need.urgency]:
         return None
@@ -177,8 +245,6 @@ def score(ctrl, need, role, floor=True, usable=None):
     # time anything from the ramp gets a look -- and it has no reason to want
     # one anyway.
     s = 100 + 12 * tier
-    if need.prefer and need.prefer == ctrl.label:
-        s += 500                        # an explicit choice outranks the ranking
     if need.dev == role:
         s += 40
     elif need.dev and need.dev != role:
@@ -211,8 +277,8 @@ class Placement:
         return f'<Placement {self.need.what!r} -> {self.role}/{self.ctrl.label}>'
 
 
-def allocate(needs, devices, usable=None):
-    """(placements, unplaced), most urgent first.
+def allocate(needs, devices, usable=None, reach=None):
+    """(placements, unplaced, free), most urgent first.
 
     Two passes. The first keeps the reach floor: something you do on the ramp
     may not take a control your thumb rests on, however many are spare at that
@@ -223,11 +289,28 @@ def allocate(needs, devices, usable=None):
     `usable(role, ctrl)` lets a game veto a control the hardware has but the
     game cannot address: BMS sees only a device's first 32 buttons, so the
     VMAX's last nineteen are real to your hand and invisible to the sim.
+
+    `reach` replaces MAX_REACH for this run, because the same ceiling means
+    different things depending on where the needs came from. A hand-written
+    list saturates the good controls, so a tight ceiling displaces something
+    more urgent -- War Thunder lost its airbrake off the thumb that way. A list
+    derived from the game's vocabulary and cut at a vote threshold, as DCS's
+    is, has room to spare, and there a tight ceiling on `in the air` simply
+    steers sensor and radio switches onto borrowed finger positions instead of
+    whole keyboard buttons, which is what it was for.
     """
     pool = [(role, c) for role, d in sorted(devices.items())
             for c in d.groups(bindable=True)]
     taken, placed = set(), []
-    order = sorted(range(len(needs)), key=lambda i: needs[i].urgency)
+    #: Pinned needs go first, before urgency is consulted at all. `prefer` used
+    #: to only tip the scales, which is no use once something more urgent has
+    #: already taken the control: BMS's pinky shift was pinned to the grip
+    #: pinky button and still lost it to the landing lights, because they are
+    #: touched on approach and it is not. An explicit choice has to outrank the
+    #: ordering as well as the ranking, or it is not a choice.
+    order = sorted(range(len(needs)),
+                   key=lambda i: (needs[i].prefer is None, needs[i].urgency,
+                                  -needs[i].rank))
 
     def pass_over(todo, floor):
         left = []
@@ -237,9 +320,19 @@ def allocate(needs, devices, usable=None):
             for j, (role, c) in enumerate(pool):
                 if j in taken:
                     continue
-                s = score(c, need, role, floor=floor, usable=usable)
+                s = score(c, need, role, floor=floor,
+                          usable=usable, reach=reach)
                 if s is not None and (best_s is None or s > best_s):
                     best, best_s = j, s
+            if best is not None and need.prefer and floor \
+                    and pool[best][1].label != need.prefer:
+                # it is pinned and this is not the pin: say so rather than
+                # quietly put it somewhere else and look like it worked
+                print(f'!! {need.what!r} is pinned to {need.prefer!r}, which is '
+                      f'not free; leaving it for the relaxed pass',
+                      file=sys.stderr)
+                left.append(i)
+                continue
             if best is None:
                 left.append(i)
                 continue
@@ -256,38 +349,71 @@ def allocate(needs, devices, usable=None):
 
     unplaced = pass_over(pass_over(order, True), False)
 
-    # A hat carries its directions AND a press; if the need that took it had
-    # nothing for the press, that press is still a button somebody can use.
-    spoken = {id(p.ctrl) for p in placed
-              if any(b == p.ctrl.push for b, _ in p.slots)}
+    # A control carries more than the need that took it. A hat has four
+    # directions AND a press; a rocker nobody claimed has two positions. What
+    # is spare is counted per BUTTON, not per control, because a need having
+    # one binding does not make the other three buttons of its hat spoken for.
+    occupied = {(p.role, b) for p in placed for b, _ in p.slots}
     still = []
     for i in unplaced:
         need = needs[i]
         if need.wanted != 1:
-            still.append(i)
+            still.append(i)        # nothing to borrow for a whole-control need
             continue
         best = None
-        for role, c in pool:
-            if c.push is None or id(c) in spoken:
-                continue
+        for j, (role, c) in enumerate(pool):
             if usable is not None and not usable(role, c):
                 continue
-            if reach_tier(c) > MAX_REACH[need.urgency]:
+            if reach_tier(c) > (reach or MAX_REACH)[need.urgency]:
                 continue
-            s = score(c, need, role, floor=False, usable=usable)
-            if s is None:
-                s = 60                  # borrowing a press, not the shape
+            spare = [b for b in c.bindable_buttons
+                     if (role, b) not in occupied]
+            if not spare:
+                continue
+            if c.kind in ONE_MECHANISM:
+                # These do not lend a position. A trigger's stages are the gun,
+                # a selector's positions are one switch, an encoder's two
+                # contacts are one more/less pair, and a latch HOLDS whichever
+                # position it is in -- so a press action borrowed from one
+                # fires for as long as the lever sits there. Bomb release
+                # landed on the master-arm latch exactly that way. Their click,
+                # where they have one, is a real button and is fair game.
+                if c.push is None or (role, c.push) in occupied:
+                    continue
+                button = c.push
+            else:
+                button = (c.push if c.push is not None
+                          and (role, c.push) not in occupied else spare[0])
+            # The main passes reward a HIGHER tier -- take the least precious
+            # control that still does the job, because something more urgent
+            # may still be coming. Nothing is coming here: borrowing is the
+            # last pass, so the polarity flips and a leftover need gets the
+            # BEST leftover. Rewarding tier here instead sent War Thunder's
+            # airbrake, bombs and sight stabilisation off the thumb onto the
+            # middle-finger hat for no gain to anybody. (DCS's own borrow pass,
+            # which this is lifted from, still has the old sign.)
+            s = 60 + 12 * ((reach or MAX_REACH)[ON_THE_RAMP]
+                           - reach_tier(c))
+            s += 30 if need.dev == role else 0
+            if j not in taken:
+                # Prefer borrowing a spare position over opening a control
+                # nothing has touched: four idle two-way rockers should not sit
+                # there while a cold-start switch goes homeless, but neither
+                # should one be broken open while a real spare exists.
+                s -= 15
             if best is None or s > best[0]:
-                best = (s, role, c)
+                best = (s, role, c, button)
         if best is None:
             still.append(i)
             continue
-        _s, role, ctrl = best
-        spoken.add(id(ctrl))
+        _s, role, ctrl, button = best
+        occupied.add((role, button))
         need.relaxed = True
         placed.append(Placement(need, role, ctrl,
-                                [(ctrl.push, need.bindings[0])], _s))
+                                [(button, need.bindings[0])], _s))
 
+    # Free means every button of it is free, not merely that no need chose it.
     free = [(r, c) for j, (r, c) in enumerate(pool)
-            if j not in taken and id(c) not in spoken]
+            if j not in taken
+            and not any((r, b) in occupied for b in c.bindable_buttons)]
     return placed, [needs[i] for i in still], free

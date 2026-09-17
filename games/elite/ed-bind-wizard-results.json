@@ -1,0 +1,258 @@
+{
+  "RollAxisRaw": {
+    "role": "stick",
+    "type": "axis",
+    "index": 0,
+    "sign": 1
+  },
+  "PitchAxisRaw": {
+    "role": "stick",
+    "type": "axis",
+    "index": 1,
+    "sign": -1
+  },
+  "YawAxisRaw": {
+    "role": "stick",
+    "type": "axis",
+    "index": 2,
+    "sign": 1
+  },
+  "ThrottleAxis": {
+    "role": "throttle",
+    "type": "axis",
+    "index": 2,
+    "sign": 1
+  },
+  "LateralThrustRaw": {
+    "role": "throttle",
+    "type": "axis",
+    "index": 1,
+    "sign": 1
+  },
+  "VerticalThrustRaw": {
+    "role": "throttle",
+    "type": "axis",
+    "index": 0,
+    "sign": 1
+  },
+  "PrimaryFire": {
+    "role": "stick",
+    "type": "button",
+    "index": 3,
+    "sign": 1
+  },
+  "SecondaryFire": {
+    "role": "throttle",
+    "type": "button",
+    "index": 3,
+    "sign": 1
+  },
+  "CycleFireGroupNext": {
+    "role": "stick",
+    "type": "button",
+    "index": 14,
+    "sign": 1
+  },
+  "DeployHardpointToggle": {
+    "role": "stick",
+    "type": "button",
+    "index": 6,
+    "sign": 1
+  },
+  "UseBoostJuice": {
+    "role": "throttle",
+    "type": "button",
+    "index": 2,
+    "sign": 1
+  },
+  "HyperSuperCombination": {
+    "role": "throttle",
+    "type": "button",
+    "index": 15,
+    "sign": 1
+  },
+  "ToggleFlightAssist": {
+    "role": "throttle",
+    "type": "button",
+    "index": 10,
+    "sign": 1
+  },
+  "SetSpeedZero": {
+    "role": "throttle",
+    "type": "button",
+    "index": 12,
+    "sign": 1
+  },
+  "LandingGearToggle": {
+    "role": "throttle",
+    "type": "button",
+    "index": 37,
+    "sign": 1
+  },
+  "ToggleCargoScoop": {
+    "role": "throttle",
+    "type": "button",
+    "index": 38,
+    "sign": 1
+  },
+  "ShipSpotLightToggle": {
+    "role": "throttle",
+    "type": "button",
+    "index": 35,
+    "sign": 1
+  },
+  "NightVisionToggle": {
+    "role": "throttle",
+    "type": "button",
+    "index": 36,
+    "sign": 1
+  },
+  "SelectTarget": {
+    "role": "stick",
+    "type": "button",
+    "index": 7,
+    "sign": 1
+  },
+  "CyclePreviousTarget": {
+    "role": "stick",
+    "type": "button",
+    "index": 10,
+    "sign": 1
+  },
+  "CycleNextHostileTarget": {
+    "role": "stick",
+    "type": "button",
+    "index": 8,
+    "sign": 1
+  },
+  "SelectHighestThreat": {
+    "role": "stick",
+    "type": "button",
+    "index": 12,
+    "sign": 1
+  },
+  "CycleNextSubsystem": {
+    "role": "stick",
+    "type": "button",
+    "index": 11,
+    "sign": 1
+  },
+  "CyclePreviousSubsystem": {
+    "role": "stick",
+    "type": "button",
+    "index": 9,
+    "sign": 1
+  },
+  "IncreaseSystemsPower": {
+    "role": "throttle",
+    "type": "button",
+    "index": 22,
+    "sign": 1
+  },
+  "IncreaseEnginesPower": {
+    "role": "throttle",
+    "type": "button",
+    "index": 23,
+    "sign": 1
+  },
+  "IncreaseWeaponsPower": {
+    "role": "throttle",
+    "type": "button",
+    "index": 24,
+    "sign": 1
+  },
+  "ResetPowerDistribution": {
+    "role": "throttle",
+    "type": "button",
+    "index": 26,
+    "sign": 1
+  },
+  "DeployHeatSink": {
+    "role": "throttle",
+    "type": "button",
+    "index": 28,
+    "sign": 1
+  },
+  "FireChaffLauncher": {
+    "role": "throttle",
+    "type": "button",
+    "index": 29,
+    "sign": 1
+  },
+  "UseShieldCell": {
+    "role": "throttle",
+    "type": "button",
+    "index": 31,
+    "sign": 1
+  },
+  "UI_Up": null,
+  "UI_Down": null,
+  "UI_Left": null,
+  "UI_Right": null,
+  "UI_Select": null,
+  "UI_Back": null,
+  "FocusLeftPanel": null,
+  "FocusRightPanel": null,
+  "FocusCommsPanel": null,
+  "GalaxyMapOpen": null,
+  "SystemMapOpen": null,
+  "_config": {
+    "game_dir": "/home/izowiuz/.local/share/Steam/steamapps/common/Elite Dangerous",
+    "schemes_dir": "/home/izowiuz/.local/share/Steam/steamapps/common/Elite Dangerous/Products/elite-dangerous-odyssey-64/ControlSchemes",
+    "bindings_dir": "/home/izowiuz/.local/share/Steam/steamapps/compatdata/359320/pfx/drive_c/users/steamuser/AppData/Local/Frontier Developments/Elite Dangerous/Options/Bindings",
+    "base": "/home/izowiuz/.local/share/Steam/steamapps/common/Elite Dangerous/Products/elite-dangerous-odyssey-64/ControlSchemes/KeyboardMouseOnly.binds"
+  },
+  "_devices": {
+    "stick": {
+      "name": "VIRPIL Controls 20260723 R-VPC Stick WarBRD-D",
+      "vid": "3344",
+      "pid": "43e8",
+      "axmap": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        6
+      ]
+    },
+    "throttle": {
+      "name": "VIRPIL Controls 20260723 L-VPC VMAX Prime Throttle",
+      "vid": "3344",
+      "pid": "8196",
+      "axmap": [
+        0,
+        1,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    }
+  },
+  "CycleFireGroupPrevious": {
+    "role": "stick",
+    "type": "button",
+    "index": 16,
+    "sign": 1
+  },
+  "HeadLookPitchAxisRaw": {
+    "role": "throttle",
+    "type": "axis",
+    "index": 0,
+    "sign": 1
+  },
+  "HeadLookReset": {
+    "role": "throttle",
+    "type": "button",
+    "index": 14,
+    "sign": 1
+  },
+  "HeadLookYawAxis": {
+    "role": "throttle",
+    "type": "axis",
+    "index": 1,
+    "sign": -1
+  }
+}

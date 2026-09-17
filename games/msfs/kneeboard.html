@@ -1,0 +1,118 @@
+<title>Kneeboard MSFS 2024</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+
+<style>
+  :root {
+    --paper:#e7ebed; --panel:#fbfcfc; --sunk:#dfe4e7; --ink:#14181b;
+    --muted:#566268; --faint:#8a949a; --rule:#ccd4d8; --rule-hi:#aab5bb;
+    --accent:#2f6b43; --edge:#8a5716;
+    --f-disp:"Barlow Condensed","Helvetica Neue",Arial,sans-serif;
+    --f-body:"Barlow","Helvetica Neue",Arial,sans-serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,"DejaVu Sans Mono",monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#0f1316; --panel:#171d21; --sunk:#121719; --ink:#e3e9ec;
+      --muted:#9aa6ac; --faint:#6b777d; --rule:#293237; --rule-hi:#3c474d;
+      --accent:#79c191; --edge:#d9a25b;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#0f1316; --panel:#171d21; --sunk:#121719; --ink:#e3e9ec;
+    --muted:#9aa6ac; --faint:#6b777d; --rule:#293237; --rule-hi:#3c474d;
+    --accent:#79c191; --edge:#d9a25b;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font-family: var(--f-body); font-size: 13px; line-height: 1.3; margin: 0;
+  }
+  .sheet {
+    max-width: 1500px; margin-inline: auto;
+    padding-inline: 18px; padding-block: 18px 28px;
+  }
+
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px;
+           border-bottom: 2px solid var(--rule-hi); padding-bottom: 10px; }
+  h1 { font-family: var(--f-disp); font-weight: 700; font-size: 26px;
+       letter-spacing: .02em; text-transform: uppercase; margin: 0; }
+  .sub { color: var(--muted); }
+  .stamp { margin-left: auto; font-family: var(--f-mono); font-size: 11px;
+           color: var(--faint); }
+
+  .cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 16px; margin-top: 16px; align-items: start; }
+  .cols3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+           gap: 16px; margin-top: 16px; align-items: start; }
+
+  .panel { background: var(--panel); border: 1px solid var(--rule);
+           border-radius: 3px; overflow: hidden; }
+  .panel h2 {
+    font-family: var(--f-disp); font-weight: 700; font-size: 14px;
+    letter-spacing: .1em; text-transform: uppercase; margin: 0;
+    padding: 8px 11px; border-bottom: 2px solid var(--rule-hi);
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 9px;
+  }
+  .panel h2 small { font-family: var(--f-mono); font-weight: 500; font-size: 10px;
+                    letter-spacing: 0; text-transform: none; color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { font-family: var(--f-disp); font-weight: 600; font-size: 10.5px;
+       letter-spacing: .12em; text-transform: uppercase; color: var(--faint);
+       text-align: left; padding: 6px 8px 4px; border-bottom: 1px solid var(--rule); }
+  th.a { color: var(--accent); }
+  td { padding: 3px 8px; vertical-align: top; border-top: 1px solid var(--rule); }
+  tr:first-child td { border-top: none; }
+  td.n { font-family: var(--f-mono); font-weight: 600; font-size: 11.5px;
+         font-variant-numeric: tabular-nums; text-align: right;
+         white-space: nowrap; width: 1%; }
+  td.c { font-weight: 600; white-space: nowrap; }
+  td.c em { font-style: normal; color: var(--faint); font-weight: 400; }
+  td.h { color: var(--muted); }
+  td.none { color: var(--faint); }
+
+  td .cb { display: block; font-family: var(--f-mono); font-size: 10px;
+           color: var(--faint); margin-top: 1px; }
+  td .edge { color: var(--edge); font-weight: 600; }
+  .panel h2 .tag { margin-left: auto; font-family: var(--f-mono); font-weight: 500;
+                   font-size: 10px; letter-spacing: 0; text-transform: none;
+                   color: var(--accent); }
+
+  .note { padding: 9px 11px; color: var(--muted); }
+  .note b { color: var(--ink); }
+  .note ul { margin: 0; padding-left: 1.05em; display: flex;
+             flex-direction: column; gap: 5px; }
+  .note li::marker { color: var(--faint); }
+  code { font-family: var(--f-mono); font-size: 11.5px; background: var(--sunk);
+         border-radius: 2px; padding: 1px 4px; }
+
+  @media (max-width: 900px) {
+    .cols, .cols3 { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media print {
+    body { background: #fff; font-size: 9px; }
+    .sheet { max-width: none; padding: 0; }
+    .panel { break-inside: avoid; }
+  }
+</style>
+
+<div class="sheet">
+  <header>
+    <h1>Kneeboard</h1>
+    <span class="sub">Microsoft Flight Simulator 2024 · VIRPIL</span>
+    <span class="stamp">generated 2026-09-17 · 26 bindings · 14 axes</span>
+  </header>
+
+  <div class="cols">
+    <div class="panel"><h2>R-VPC Stick WarBRD-D</h2><table><tr><th>Control</th><th>Button</th><th class="a">Aeroplane</th><th class="a">Helicopter</th><th class="a">Global</th></tr><tr><td class="c">Top thumb hat <em>up</em></td><td class="n">#9</td><td>KEY_ELEV_TRIM_UP</td><td>KEY_ROTOR_LONGITUDINAL_TRIM_INC</td><td class="none">—</td></tr><tr><td class="c">Top thumb hat <em>left</em></td><td class="n">#10</td><td>KEY_AILERON_TRIM_LEFT</td><td>KEY_ROTOR_LATERAL_TRIM_DEC</td><td class="none">—</td></tr><tr><td class="c">Top thumb hat <em>down</em></td><td class="n">#11</td><td>KEY_ELEV_TRIM_DN</td><td>KEY_ROTOR_LONGITUDINAL_TRIM_DEC</td><td class="none">—</td></tr><tr><td class="c">Top thumb hat <em>right</em></td><td class="n">#12</td><td>KEY_AILERON_TRIM_RIGHT</td><td>KEY_ROTOR_LATERAL_TRIM_INC</td><td class="none">—</td></tr><tr><td class="c">Bottom thumb hat <em>push</em></td><td class="n">#14</td><td class="none">—</td><td class="none">—</td><td>KEY_VIEW_MODE</td></tr><tr><td class="c">Bottom thumb hat <em>up</em></td><td class="n">#15</td><td class="none">—</td><td class="none">—</td><td>KEY_COCKPIT_QUICKVIEW3</td></tr><tr><td class="c">Bottom thumb hat <em>left</em></td><td class="n">#16</td><td class="none">—</td><td class="none">—</td><td>KEY_CHASE_QUICKVIEW4</td></tr><tr><td class="c">Bottom thumb hat <em>down</em></td><td class="n">#17</td><td class="none">—</td><td class="none">—</td><td>KEY_COCKPIT_QUICKVIEW4</td></tr><tr><td class="c">Bottom thumb hat <em>right</em></td><td class="n">#18</td><td class="none">—</td><td class="none">—</td><td>KEY_CHASE_QUICKVIEW2</td></tr><tr><td class="c">Grip pinky button <em>press</em></td><td class="n">#31</td><td class="none">—</td><td class="none">—</td><td>KEY_MENU_SR_COM_PANEL_OPEN</td></tr></table></div><div class="panel"><h2>L-VPC VMAX Prime Throttle</h2><table><tr><th>Control</th><th>Button</th><th class="a">Aeroplane</th><th class="a">Helicopter</th><th class="a">Global</th></tr><tr><td class="c">Pinky button <em>press</em></td><td class="n">#1</td><td class="none">—</td><td class="none">—</td><td>KEY_SR_COM_QUICK_REPLY</td></tr><tr><td class="c">Middle finger button <em>press</em></td><td class="n">#3</td><td class="none">—</td><td>KEY_ROTOR_TRIM_RESET</td><td class="none">—</td></tr><tr><td class="c">T1 rocker <em>up</em></td><td class="n">#30</td><td>KEY_FLAPS_DECR</td><td class="none">—</td><td class="none">—</td></tr><tr><td class="c">T1 rocker <em>down</em></td><td class="n">#31</td><td>KEY_FLAPS_INCR</td><td class="none">—</td><td class="none">—</td></tr><tr><td class="c">T2 rocker <em>up</em></td><td class="n">#32</td><td>KEY_GEAR_TOGGLE</td><td>KEY_GEAR_TOGGLE</td><td class="none">—</td></tr><tr><td class="c">T2 rocker <em>down</em></td><td class="n">#33</td><td>KEY_GEAR_TOGGLE</td><td>KEY_GEAR_TOGGLE</td><td class="none">—</td></tr><tr><td class="c">T3 rocker <em>up</em></td><td class="n">#34</td><td>KEY_SPOILERS_DEC</td><td class="none">—</td><td class="none">—</td></tr><tr><td class="c">T3 rocker <em>down</em></td><td class="n">#35</td><td>KEY_SPOILERS_INC</td><td class="none">—</td><td class="none">—</td></tr><tr><td class="c">T4 rocker <em>up</em></td><td class="n">#36</td><td class="none">—</td><td class="none">—</td><td>KEY_COCKPIT_BACKCYCLE</td></tr><tr><td class="c">T4 rocker <em>down</em></td><td class="n">#37</td><td class="none">—</td><td class="none">—</td><td>KEY_COCKPIT_CYCLE</td></tr><tr><td class="c">T5 rocker <em>up</em></td><td class="n">#38</td><td class="none">—</td><td class="none">—</td><td>KEY_CYCLE_PILOTVIEW_BACK</td></tr><tr><td class="c">T5 rocker <em>down</em></td><td class="n">#39</td><td class="none">—</td><td class="none">—</td><td>KEY_CYCLE_PILOTVIEW_NEXT</td></tr><tr><td class="c">Keyboard B1 button <em>press</em></td><td class="n">#23</td><td class="none">—</td><td class="none">—</td><td>KEY_TOGGLE_SMART_CAMERA</td></tr><tr><td class="c">Keyboard B2 button <em>press</em></td><td class="n">#24</td><td>KEY_PARKING_BRAKES</td><td>KEY_PARKING_BRAKES</td><td class="none">—</td></tr><tr><td class="c">Keyboard B3 button <em>press</em></td><td class="n">#25</td><td class="none">—</td><td>KEY_ROTOR_BRAKE_TOGGLE</td><td class="none">—</td></tr><tr><td class="c">Keyboard B4 button <em>press</em></td><td class="n">#26</td><td>KEY_ENGINE_AUTO_START</td><td>KEY_ENGINE_AUTO_START</td><td class="none">—</td></tr></table></div>
+  </div>
+
+  <div class="cols3">
+    <div class="panel"><h2>Axes</h2><table><tr><th>Control</th><th>Button</th><th>Does</th></tr><tr><td class="c">Main stick, left/right</td><td class="n">Joystick L-Axis X </td><td>KEY_AXIS_AILERONS_SET</td></tr><tr><td class="c">Main stick, fore/aft</td><td class="n">Joystick L-Axis Y </td><td>KEY_AXIS_ELEVATOR_SET</td></tr><tr><td class="c">Stick twist</td><td class="n">Joystick L-Axis Z </td><td>KEY_AXIS_RUDDER_SET</td></tr><tr><td class="c">Main stick, left/right</td><td class="n">Joystick L-Axis X </td><td>KEY_AXIS_CYCLIC_LATERAL_SET</td></tr><tr><td class="c">Main stick, fore/aft</td><td class="n">Joystick L-Axis Y </td><td>KEY_AXIS_CYCLIC_LONGITUDINAL_SET</td></tr><tr><td class="c">Stick twist</td><td class="n">Joystick L-Axis Z </td><td>KEY_AXIS_TAIL_ROTOR_SET</td></tr><tr><td class="c">Left throttle lever</td><td class="n">Joystick R-Axis X </td><td>KEY_THROTTLE_AXIS_SET_EX1</td></tr><tr><td class="c">Left throttle lever</td><td class="n">Joystick R-Axis X </td><td>KEY_AXIS_COLLECTIVE_SET</td></tr><tr><td class="c">Analogue brake lever on the grip</td><td class="n">Joystick Slider X </td><td>KEY_BRAKES</td></tr><tr><td class="c">Analogue brake lever on the grip</td><td class="n">Joystick Slider X </td><td>KEY_BRAKES</td></tr><tr><td class="c">Side lever</td><td class="n">Joystick R-Axis Z </td><td>KEY_PROP_PITCH_AXIS_SET_EX1</td></tr><tr><td class="c">Right side dial</td><td class="n">Joystick Slider Y </td><td>KEY_AXIS_VERTICAL_SPEED_SET</td></tr><tr><td class="c">Thumb mini-stick</td><td class="n">Joystick L-Axis X </td><td>KEY_AXIS_PAN_HEADING</td></tr><tr><td class="c">Thumb mini-stick</td><td class="n">Joystick L-Axis Y </td><td>KEY_AXIS_PAN_PITCH</td></tr></table></div>
+    
+    <div class="panel"><h2>Writing it</h2><div class="note"><p>Close Steam first -- it syncs these files from the cloud and will overwrite what we write. ./plan.py --write</p></div></div>
+  </div>
+</div>

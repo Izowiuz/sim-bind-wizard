@@ -30,6 +30,7 @@ Two things this cannot tell us, and one of them still needs measuring:
 
 import argparse
 import collections
+import html
 import os
 import re
 import sys
@@ -37,6 +38,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 '..', '..'))
 from core import game                                       # noqa: E402
+from core import vocab                                      # noqa: E402
 
 #: Steam appid, and where inside the prefix X4 keeps its profiles. Finding the
 #: prefix itself is core/game.py's job -- it searches every Steam library,
@@ -45,8 +47,15 @@ from core import game                                       # noqa: E402
 APPID = '392160'
 PROFILE_PARTS = ('users', 'steamuser', 'Documents', 'Egosoft', 'X4')
 
-ROW = re.compile(r'<(action|state|range)\s+id="([^"]+)"\s+'
-                 r'source="([^"]+)"\s+code="([^"]+)"\s*/>')
+#: Attributes are not always in the same order and not always just the three.
+#: `toggle="1"` sits BETWEEN source and code on a latching <state>, and `sgn`
+#: sits after code on a VR axis used as a button. Matching them positionally
+#: lost 3-18 rows a file, and two ids entirely -- INPUT_STATE_MATCH_SPEED and
+#: INPUT_STATE_MAP_PAN_TO_ROTATE were absent from the vocabulary although
+#: match speed is bound on the throttle. Match the element, then the
+#: attributes.
+ROW = re.compile(r'<(action|state|range)\s+([^>]*?)\s*/>')
+ATTR = re.compile(r'(\w+)="([^"]*)"')
 HEADER = re.compile(r'<inputmap\s+version="(\d+)"(?:\s+id="(\d+)")?'
                     r'(?:\s+name="([^"]*)")?')
 
@@ -133,6 +142,20 @@ def profile_dir():
     return players[-1]
 
 
+def rows(txt):
+    """[(kind, id, source, code)] for every binding in a profile's text.
+
+    Attributes beyond those four are read and dropped here; a writer that
+    needs `toggle` or `sgn` parses the line itself.
+    """
+    out = []
+    for kind, attrs in ROW.findall(txt):
+        a = dict(ATTR.findall(attrs))
+        if 'id' in a and 'source' in a and 'code' in a:
+            out.append((kind, a['id'], a['source'], a['code']))
+    return out
+
+
 def profiles(path=None):
     """{filename: (version, id, name, [(kind, id, source, code)])}."""
     path = path or profile_dir()
@@ -146,10 +169,12 @@ def profiles(path=None):
         out[name] = {
             'version': h.group(1) if h else '?',
             'id': h.group(2) if h else None,
-            # the working copy carries no name= at all, only the saved
-            # profiles do, so an absent group is the default one
-            'name': (h.group(3) if h else None) or '(default)',
-            'rows': ROW.findall(txt),
+            # The working copy carries no name= at all, only the saved
+            # profiles do, so an absent group is the default one. The
+            # attribute is captured raw, so &amp; arrives still escaped.
+            'name': html.unescape((h.group(3) if h else None)
+                                  or '(default)'),
+            'rows': rows(txt),
         }
     return out
 
@@ -168,6 +193,11 @@ def vocabulary(profs=None):
     return {k: sorted(v) for k, v in vocab.items()}
 
 
+#: Words in an id that are names rather than prose.
+ACRONYMS = {'FP', 'VR', 'SETA', 'HUD', 'AI', 'UI', 'NPC', 'LOD', 'MK1', 'MK2',
+            'MK3', 'MK4'}
+
+
 def readable(ident):
     """`INPUT_ACTION_TOGGLE_TRAVEL_MODE` -> `Toggle travel mode`.
 
@@ -178,7 +208,13 @@ def readable(ident):
         if ident.startswith(prefix):
             ident = ident[len(prefix):]
             break
-    return ident.replace('_', ' ').capitalize()
+    # A flat .capitalize() turned FP_YAW into "Fp yaw". The ids carry a few
+    # acronyms and they are the ones that mean something.
+    words = ident.split('_')
+    out = [w if w in ACRONYMS else w.lower() for w in words]
+    if out[0] not in ACRONYMS:
+        out[0] = out[0].capitalize()
+    return ' '.join(out)
 
 
 AXIS_CODE = re.compile(r'INPUT_JOYAXIS_(\w+)$')
@@ -238,6 +274,12 @@ def main():
                     help='what X4 will accept a binding for')
     ap.add_argument('--grep', metavar='WORD',
                     help='vocabulary entries matching a word')
+    ap.add_argument('--json', action='store_true',
+                    help='cache the vocabulary next to this file, the way the '
+                         'other games do. X4 does not need it -- reparsing four '
+                         '46 KB XML files is free where War Thunder unpacks '
+                         'zstd archives -- but the interface is the same '
+                         'everywhere so a planner need not know the difference')
     a = ap.parse_args()
 
     path = profile_dir()
@@ -270,6 +312,12 @@ def main():
         print('     One more bind settles it: js 9 should be RIGHT_THUMB.')
     else:
         print('  names confirmed: js 6 = BACK and js 9 = RIGHT_THUMB both held')
+
+    if a.json:
+        print()
+        vocab.save(os.path.dirname(os.path.abspath(__file__)), 'x4-actions.json',
+                   vocabulary=v, slots={n: slots(pr) for n, pr in profs.items()},
+                   profiles={n: pr['name'] for n, pr in profs.items()})
 
     if a.grep:
         print()
