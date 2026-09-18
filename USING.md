@@ -118,6 +118,10 @@ hardware, counted rather than guessed.
    take the flag from `core.backup.add_argument`.
 4. `games/<name>/README.md` — six headings: where it lives, how to run it, the
    format, measured, still a guess, gotchas.
+   A test in `tests/test_formats.py` for whatever the writer does to the
+   game's own text — what it must remove as well as add, and whatever the
+   format will not forgive. Write the fixture, then break the writer and check
+   the test notices.
 5. A row in `bind`, naming which script and flags each verb maps to. A verb the
    game has no answer for is left out and the reason goes in `GAPS`, so a gap
    reads as a fact about the game rather than an omission.

@@ -31,6 +31,10 @@
       games/<game>/harvest.py
       games/<game>/plan.py
       games/<game>/README.md
+      tests/run.py            every test; stdlib unittest, nothing to install
+      tests/fake.py           hardware that does not exist, out of devicemap's
+                              own classes
+      tests/test_*.py
 
 `games/dcs` is on the core for the matching but keeps its own
 `sheet-template.html`, whose placeholders are per-device (`__STICK__`,
@@ -85,6 +89,7 @@ in scope in those two files.
 | shapes, reach tiers, urgency floor, scoring, passes | `core/needs` |
 | loading a vocabulary, cached or reparsed | `core/vocab` |
 | keeping a copy of what a writer replaces | `core/backup` |
+| hardware that does not exist | `tests/fake` |
 | kneeboard rendering | `core/sheet` |
 | the action vocabulary and its readable names | `games/<g>/harvest` |
 | device slots, button codes, global numbering | `games/<g>/harvest` |
@@ -226,6 +231,37 @@ several devices of one kind the connected one wins; if that does not decide it,
 
 Each searches every library: `compatdata` sits beside the library its game is
 installed in.
+
+## Tests
+
+    ./tests/run.py              all of them
+    ./tests/run.py needs        one file
+    ./tests/run.py -v           and say what each one was
+
+Three things are mocked, and nothing else:
+
+| mocked | how | why |
+|---|---|---|
+| the hardware | `fake.device()` builds a real `devicemap.Device` from a dict | a hand-written stub of a control is a second opinion about what a control IS, and drifts |
+| the game's files | a few lines of synthetic config per format | a harvest's output is the publisher's — `.gitignore` keeps it out of the repo and so do the fixtures |
+| where backups go | `into=` a temp directory | |
+
+A game whose vocabulary has not been harvested cannot have its planner
+imported, so those tests skip with the harvest command in the reason. Everything
+in `test_needs` and `test_backup` runs on a fresh clone.
+
+**What is tested is what has a story.** Nearly every rule in `core/needs.py`
+carries a comment saying what went wrong before it existed — the airbrake that
+left the thumb, the pinky shift that lost its pin to the landing lights, the
+bomb release that landed on a latch. Those comments are the specification.
+
+**A test is not believed until the rule it covers has been broken in front of
+it.** Deleting the reach floor, demoting the pin to a bonus, letting a latch
+lend a position: each is an edit to the source that must turn the suite red.
+Five tests written here passed against a deliberately broken allocator — the
+ramp need avoided the thumb by scoring, not by the floor; the capacity check
+was shadowed by the shape check — and each was rewritten until it failed for
+the right reason.
 
 ## Adapter contract
 
