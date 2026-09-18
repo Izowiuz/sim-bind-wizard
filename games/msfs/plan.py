@@ -23,9 +23,7 @@ import argparse
 import glob
 import os
 import re
-import shutil
 import sys
-import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CORE = os.environ.get('SIM_BIND_WIZARD') or os.path.normpath(
@@ -37,6 +35,7 @@ if not os.path.isdir(CORE):
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import backup                                     # noqa: E402
 from core import devmap                                     # noqa: E402
 from core import needs as corneeds
 from core import vocab
@@ -253,10 +252,12 @@ def find_profiles(devs):
         if usb:
             pid[int(usb, 16)] = role
     out = []
-    # `inputprofile_*` also matches the .bak.<stamp> copies write() leaves
-    # behind, so a second run bound into its own backups and backed THOSE
-    # up again -- the .bak.X.bak.Y files in the remote folder are the proof.
-    # MSFS names the real ones with digits and nothing else.
+    # `inputprofile_*` also matched the .bak.<stamp> copies write() used to
+    # leave behind, so a second run bound into its own backups and backed
+    # THOSE up again -- the .bak.X.bak.Y files in the remote folder are the
+    # proof. Backups live outside the folder now (core.backup), but the ones
+    # from before that still sit here, so the filter stays: MSFS names the
+    # real profiles with digits and nothing else.
     for path in sorted(glob.glob(os.path.join(REMOTE, 'inputprofile_*'))):
         if not re.fullmatch(r'inputprofile_\d+', os.path.basename(path)):
             continue
@@ -337,13 +338,9 @@ def write(devs, placed, axes, backup_dir=None):
     if not profiles:
         sys.exit('found no MSFS input profiles -- has the sim seen the devices?')
 
-    stamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-    if backup_dir:
-        dest = os.path.join(os.path.expanduser(backup_dir), stamp)
-        os.makedirs(dest, exist_ok=True)
-        for path, _r, _b in profiles:
-            shutil.copy2(path, dest)
-        print(f'  backed up to {dest}')
+    dest, _ = backup.save('msfs', *(p for p, _r, _b in profiles),
+                          into=backup_dir)
+    print(f'  backed up to {dest}')
 
     plan = bindings_for(devs, placed, axes)
     total = missing = 0
@@ -352,7 +349,6 @@ def write(devs, placed, axes, backup_dir=None):
         if not want:
             continue
         text = open(path, encoding='utf-8').read()
-        shutil.copy2(path, f'{path}.bak.{stamp}')
         done = 0
         for action, info, code in want:
             text, ok = bind_into(text, action, info, code)
@@ -432,9 +428,7 @@ def main():
                     help='the same in columns, for a second screen')
     ap.add_argument('--write', action='store_true',
                     help='fill the profiles in (Steam must be closed)')
-    ap.add_argument('--backup-dir',
-                    default='~/OneDrive/backups/save-backup/MSFS24',
-                    help='where to copy the profiles before writing')
+    backup.add_argument(ap, 'msfs')
     args = ap.parse_args()
     devs, placed, unmet, axes, free = build()
 

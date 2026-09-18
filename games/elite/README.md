@@ -139,7 +139,10 @@ game's record of the active preset and the wizard does not touch it, so a
 newly written preset is chosen once in the game's own control options.
 
 **The game keeps its own backups** as `<preset>.4.2.binds.<number>.backup`
-next to the file.
+next to the file — but only of presets it wrote itself. Ours is copied into
+`<repo>/backups/elite/<stamp>/` before it is regenerated (`--backup-dir` moves
+it); before that it was replaced in place with nothing kept, so a deadzone
+tuned in game and then regenerated over was simply gone.
 
 **A button pressed while the wizard asked for an axis used to be stored as a
 button.** Elite's copy of `wait_input` had lost the `and not want_axis` gate

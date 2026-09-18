@@ -23,6 +23,7 @@
       core/needs.py           Need, Placement, allocate; shapes, reach, urgency
                               (ALLOCATION.md describes what it does)
       core/vocab.py           load a harvest's output; save it
+      core/backup.py          copy what a writer is about to replace; put it back
       core/sheet.py           Sheet, Row, AxisRow -> markdown and html
       core/sheet-template.html
       core/capture.py         the js protocol: Device, wait_input, detect_roles
@@ -37,8 +38,8 @@
 for a proposal and no vote-ordered "still unbound" panel, and both are
 load-bearing for its confirm-rather-than-invent workflow. It also passes its
 own `reach` table to `allocate()`. `games/dcs/dcs-bind-wizard.py` is a curses
-capture TUI, not a planner: it writes the vocabulary `propose.py` reads, and it
-does not import the core yet.
+capture TUI, not a planner: it writes the vocabulary `propose.py` reads, and of
+the core it uses only `capture`, `game`, `tui` and `backup`.
 
 `games/elite` has two tools on one writer: `plan.py` lays out from `NEEDS` like
 the rest of the family, and hands the result to `ed-bind-wizard.py`'s own
@@ -83,6 +84,7 @@ in scope in those two files.
 | Steam libraries, install dirs, prefixes, is-it-running | `core/game` |
 | shapes, reach tiers, urgency floor, scoring, passes | `core/needs` |
 | loading a vocabulary, cached or reparsed | `core/vocab` |
+| keeping a copy of what a writer replaces | `core/backup` |
 | kneeboard rendering | `core/sheet` |
 | the action vocabulary and its readable names | `games/<g>/harvest` |
 | device slots, button codes, global numbering | `games/<g>/harvest` |
@@ -179,6 +181,31 @@ as a second line under the plain-English name; several render a column each.
 `load` returns the cache when it exists, otherwise calls `build` for a game
 cheap enough to reparse, otherwise exits telling you to run the harvest.
 
+## core.backup
+
+    stamp()                     '20260918-214917'
+    save(game, *paths, into=, move=, when=)  -> (directory, [(stored, from)])
+    runs(game, into=)           -> [(stamp, directory, [(stored, from)])]
+    restore(game, which=, into=) -> (directory, [paths written])
+    add_argument(parser, game)  the shared --backup-dir flag
+
+    backups/<game>/<stamp>/MANIFEST     stored name -> where it came from
+    backups/<game>/<stamp>/<file>...
+
+`backups/` in the repo by default, gitignored; `--backup-dir` or
+`SIM_BIND_BACKUPS` moves it. Nothing is left in the game's own directories,
+which is the point: MSFS finds its profiles by globbing `inputprofile_*` and
+used to find its own backups that way too.
+
+Pass one `when` to group several calls into one run — BMS writes two files
+under `./bind bms write`, DCS's `--reseed` rewrites one file once per aircraft.
+A name already stored under that stamp is kept, so a run folder holds the state
+from before the run rather than a half-written intermediate.
+
+The MANIFEST is what makes `restore` generic rather than per-game: War
+Thunder's `--restore` used to sort sibling filenames, which only worked because
+the copy sat beside the original.
+
 ## core.devmap
 
     load()                      the devicemap module; honours SIM_DEVICE_MAP
@@ -205,12 +232,18 @@ installed in.
     harvest.py    in: the game's files.  out: vocabulary + ranking JSON
                   no arguments prints a summary; --json writes the cache
     plan.py       NEEDS: list[Need]; build(); a writer; --sheet, --html, --why
+                  a writer copies through core.backup.save and takes
+                  --backup-dir from core.backup.add_argument
     README.md     where it lives · how to run it · the format ·
                   measured · still a guess · gotchas
 
 A writer must **remove** as well as add and change: a binding dropped from
 `NEEDS` has to disappear from the game's config, or it stays live alongside
 whatever replaced it.
+
+A writer must leave **nothing behind** in the game's directories. What it
+replaces goes to `core.backup`, never to a sibling file: the game reads that
+folder, and four of the six writers here have a scar from it.
 
 `measured` and `still a guess` are separate headings so a reader knows which
 claims are load-bearing.

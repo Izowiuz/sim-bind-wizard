@@ -165,7 +165,10 @@ device's own configuration would make the split real and would also make
 ## Gotchas
 
 **DCS overwrites `Config/Input` on exit.** Both tools refuse to write while the
-game is running, and back up what they replace as `*.bak`.
+game is running, and copy what they replace into `<repo>/backups/dcs/<stamp>/`
+first (`--backup-dir` moves it). The `.diff.lua` files used to get a single
+`*.bak` each, overwritten every run, so the copy of what you wanted back was
+eaten by the run you wanted undone.
 
 **Device GUIDs come from `dcs.log`**, so the game has to have been started at
 least once with the devices plugged in. Without them the tool falls back to the

@@ -32,9 +32,9 @@ zstd archives or BMS's 100 KB key file.
     ./plan.py --write        into the game (close X4 first)
 
 `plan.py` writes `inputmap_3.xml`; `--profile` and `X4_PROFILE` point it
-elsewhere, `X4_SLOTS="stick=2,throttle=3"` overrides slot detection. It backs
-the profile up in place as `*.bak.<stamp>` and into `--backup-dir`
-(`~/OneDrive/backups/save-backup/X4` by default).
+elsewhere, `X4_SLOTS="stick=2,throttle=3"` overrides slot detection. The
+profile is copied into `<repo>/backups/x4/<stamp>/` before it is replaced;
+`--backup-dir` or `SIM_BIND_BACKUPS` puts that elsewhere.
 
 Every id in `NEEDS` is checked against the harvested vocabulary before
 anything runs, so a typo or an id a patch removed is an error rather than a

@@ -27,7 +27,13 @@ left byte-identical.
     ./wt-bind-preset.py --dry-run   resolved ids, writes nothing
     ./wt-bind-preset.py --render PATH   a copy for review
     ./wt-bind-preset.py             into the game
-    ./wt-bind-preset.py --restore   the most recent backup
+    ./wt-bind-preset.py --restore   put the newest backup back
+    ./wt-bind-preset.py --restore --restore-from 20260918-2149   an older one
+
+Every `machine.blk` a write touches is copied into
+`<repo>/backups/warthunder/<stamp>/` first — one folder per run, so a restore
+returns all of them together rather than half an account's worth.
+`--backup-dir` or `SIM_BIND_BACKUPS` moves them.
 
 ## The format
 

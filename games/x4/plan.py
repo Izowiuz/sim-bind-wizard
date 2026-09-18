@@ -19,11 +19,9 @@ a record of what was worth binding by hand -- and ordered by urgency alone.
 """
 
 import argparse
-import datetime
 import importlib.util
 import os
 import re
-import shutil
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -35,6 +33,7 @@ if not os.path.isdir(CORE):
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import backup                                     # noqa: E402
 from core import devmap                                     # noqa: E402
 from core import game                                       # noqa: E402
 from core import needs as corneeds                          # noqa: E402
@@ -442,13 +441,8 @@ def write(devs, placed, axes, backup_dir=None, name=None):
     wanted = lines_for(devs, placed, axes, slot)
     new, dropped = rewrite(text, wanted, ours)
 
-    stamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-    if backup_dir:
-        dest = os.path.join(os.path.expanduser(backup_dir), stamp)
-        os.makedirs(dest, exist_ok=True)
-        shutil.copy2(path, dest)
-        print(f'backed up to {dest}')
-    shutil.copy2(path, f'{path}.bak.{stamp}')
+    dest, _ = backup.save('x4', path, into=backup_dir)
+    print(f'backed up to {dest}')
 
     open(path, 'w', encoding='utf-8').write(new)
     print(f'{os.path.basename(path)}: removed {len(dropped)}, '
@@ -536,9 +530,7 @@ def main():
     p.add_argument('--write', action='store_true',
                    help='into the game (close X4 first)')
     p.add_argument('--profile', help=f'which file to write (default {PROFILE})')
-    p.add_argument('--backup-dir',
-                   default='~/OneDrive/backups/save-backup/X4',
-                   help='where to copy the profile before writing')
+    backup.add_argument(p, 'x4')
     args = p.parse_args()
 
     bad = unknown()

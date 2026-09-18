@@ -30,15 +30,24 @@ import argparse
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
-from datetime import datetime
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+CORE = os.environ.get('SIM_BIND_WIZARD') or os.path.normpath(
+    os.path.join(HERE, '..', '..'))
+if not os.path.isdir(CORE):
+    raise SystemExit(f'no shared core at {CORE}\n'
+                     'set SIM_BIND_WIZARD to the sim-bind-wizard checkout')
+if CORE not in sys.path:
+    sys.path.insert(0, CORE)
+
+from core import backup                                     # noqa: E402
 
 HOME = os.path.expanduser('~')
 SAVES = os.path.join(HOME, '.config/WarThunder/Saves')
 GAME_DIR = os.path.join(HOME, '.local/share/Steam/steamapps/common/War Thunder')
-ACTIONS_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'wt-actions.json')
+ACTIONS_JSON = os.path.join(HERE, 'wt-actions.json')
 
 THR, STK = 'throttle', 'stick'
 
@@ -196,12 +205,15 @@ def main():
     ap.add_argument('--dry-run', action='store_true',
                     help='print the plan and the resolved ids, write nothing')
     ap.add_argument('--restore', action='store_true',
-                    help='restore the most recent backup')
+                    help='put the files of a backup back')
+    ap.add_argument('--restore-from', metavar='STAMP',
+                    help='which backup --restore uses (default the newest)')
     ap.add_argument('--why', action='store_true',
                     help='print why each control was chosen, then exit')
     ap.add_argument('--render', metavar='PATH',
                     help='write the resulting machine.blk to PATH for review '
                          'instead of touching the real one')
+    backup.add_argument(ap, 'warthunder')
     args = ap.parse_args()
 
     import plan
@@ -233,15 +245,14 @@ def main():
         sys.exit(f'error: no machine.blk under {SAVES}')
 
     if args.restore:
-        for t in targets:
-            baks = sorted(f for f in os.listdir(os.path.dirname(t))
-                          if f.startswith('machine.blk.bak.'))
-            if not baks:
-                print(f'  no backup for {t}')
-                continue
-            src = os.path.join(os.path.dirname(t), baks[-1])
-            shutil.copy2(src, t)
-            print(f'  restored {t} from {baks[-1]}')
+        # Every machine.blk of a run goes back together: they are one account's
+        # worth of the same layout, and restoring half of them is a state the
+        # game was never in.
+        src, done = backup.restore('warthunder', args.restore_from,
+                                   args.backup_dir)
+        for path in done:
+            print(f'  restored {path}')
+        print(f'  from {src}')
         return
 
     lang = json.load(open(ACTIONS_JSON, encoding='utf-8'))
@@ -470,14 +481,14 @@ def main():
         print(f'  rendered {args.render} (nothing else was touched)')
         return
 
-    stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+    dest, _ = backup.save('warthunder', *targets, into=args.backup_dir)
+    print(f'  backed up to {dest}')
     for t in targets:
         txt, eol = read_blk(t)
         s, e, _ = extract_controls(txt)
         lines = txt.split('\n')
-        shutil.copy2(t, f'{t}.bak.{stamp}')
         write_blk(t, lines[:s] + block + lines[e:], eol)
-        print(f'  wrote {t}  (backup: machine.blk.bak.{stamp})')
+        print(f'  wrote {t}')
 
 
 if __name__ == '__main__':

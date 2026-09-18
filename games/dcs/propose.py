@@ -29,7 +29,6 @@ import importlib.util
 import json
 import os
 import re
-import shutil
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -41,6 +40,7 @@ if not os.path.isdir(CORE):
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import backup                                     # noqa: E402
 from core import devmap                                     # noqa: E402
 from core import needs as corneeds                          # noqa: E402
 from core import sheet as csheet                            # noqa: E402
@@ -727,7 +727,7 @@ def write_html(module, key, cmds, guide, path):
     return path, n
 
 
-def reseed(module, key, cmds, guide):
+def reseed(module, key, cmds, guide, backup_dir=None, when=None):
     """Throw an aircraft's bindings away and lay it out fresh.
 
     A results file that has been through several device configurations and two
@@ -742,16 +742,17 @@ def reseed(module, key, cmds, guide):
     """
     path = results_path()
     data = json.load(open(path))
-    stamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-    backup = f'{path}.bak.{stamp}'
-    shutil.copy2(path, backup)
+    # One folder for the whole --reseed, however many aircraft it walks: the
+    # results file is rewritten once per aircraft, and a copy per rewrite would
+    # be six backups of six intermediate states of the same run.
+    dest, _ = backup.save('dcs', path, into=backup_dir, when=when)
 
     before = len(data['aircraft'].get(key, {}))
     recs = seed(module, cmds, guide)
     data.setdefault('aircraft', {})[key] = recs
     with open(path, 'w') as f:
         json.dump(data, f, indent=2)
-    return backup, before, len(recs)
+    return dest, before, len(recs)
 
 
 def audit(module, key, cmds, guide):
@@ -828,6 +829,7 @@ def main():
                     help='bindings that no longer match the hardware')
     ap.add_argument('--check', action='store_true',
                     help='compare against dcs-bind-wizard-results.json')
+    backup.add_argument(ap, 'dcs')
     args = ap.parse_args()
 
     module = wizard()
@@ -839,13 +841,15 @@ def main():
         for k in keys:
             if k not in ac:
                 sys.exit(f'no such module: {k} (have {", ".join(ac)})')
+        when = backup.stamp()
         first = True
         for k in keys:
             cmds = module.harvest_commands(cfg, k, ac[k]['factory_dir'])
             guide = module.build_guide(cmds)
-            backup, before, after = reseed(module, k, cmds, guide)
+            dest, before, after = reseed(module, k, cmds, guide,
+                                         args.backup_dir, when)
             if first:
-                print(f'  backed up to {os.path.basename(backup)}')
+                print(f'  backed up to {dest}')
                 first = False
             print(f'  {k:9s} {before} bindings -> {after}, all marked ?')
         print('  open the wizard and walk the list: c confirms one, C the '

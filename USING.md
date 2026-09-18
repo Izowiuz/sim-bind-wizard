@@ -19,6 +19,20 @@ The scripts under `games/<game>/` do the same work and take their own flags;
 
 Close the game first. Writers refuse while it is running.
 
+Everything a writer replaces is copied first, into `backups/<game>/<stamp>/`
+in the repo — one folder per run, with a `MANIFEST` saying where each file came
+from. `--backup-dir DIR` or `SIM_BIND_BACKUPS` puts them somewhere else; a
+cloud folder or an external disk is a reasonable choice, the game's own
+directory is not. Nothing prunes them.
+
+    ./bind <game> write --backup-dir ~/OneDrive/backups/<game>
+
+Putting one back is War Thunder's only, so far — the rest are a restore away
+from having it, since the MANIFEST already says where every file belongs.
+
+    ./bind wt write --restore                          the newest run
+    ./bind wt write --restore --restore-from 20260918   an older one
+
 Three fields decide placement:
 
 **`urgency`** — when you touch it. Nothing at `ON_THE_RAMP` can take a control
@@ -100,7 +114,8 @@ hardware, counted rather than guessed.
    and mark what is still inference.
 3. `games/<name>/plan.py` — `NEEDS` of `core.needs.Need`, a writer, and
    `_sheet()` returning a `core.sheet.Sheet`. Read the vocabulary through
-   `core.vocab.load`.
+   `core.vocab.load`, copy what you replace through `core.backup.save`, and
+   take the flag from `core.backup.add_argument`.
 4. `games/<name>/README.md` — six headings: where it lives, how to run it, the
    format, measured, still a guess, gotchas.
 5. A row in `bind`, naming which script and flags each verb maps to. A verb the

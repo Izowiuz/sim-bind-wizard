@@ -28,9 +28,7 @@ that is what sim-device-map is for.
 
 import argparse
 import os
-import shutil
 import sys
-from datetime import datetime
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 #: the shared core. Sibling directory by default; SIM_BIND_WIZARD overrides it.
@@ -43,6 +41,7 @@ if not os.path.isdir(CORE):
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import backup                                     # noqa: E402
 from core import devmap                                     # noqa: E402
 from core import needs as corneeds
 from core import vocab
@@ -516,19 +515,19 @@ def write_keeping(path, text, nl):
 KEYFILE_OUT = 'BMS - VIRPIL.key'
 
 
-def write_key(bms):
+def write_key(bms, backup_dir=None, when=None):
     """Build our key file from the shipped Full one, so every keyboard binding
     and every comment in it survives; only the DX block is ours."""
     src = bms / 'User' / 'Config' / 'BMS - Full.key'
     dst = bms / 'User' / 'Config' / KEYFILE_OUT
+    when = when or backup.stamp()
     _axes, binds, _p, _u, _f = build()
     body, nl = read_keeping(src)
     # the first line's description names the file inside BMS's own UI
     body = body.replace('"BMS - Full"', f'"{KEYFILE_OUT[:-4]}"', 1)
-    if dst.exists():
-        bak = dst.with_suffix(f'.key.{datetime.now():%Y%m%d-%H%M%S}.bak')
-        shutil.copy2(dst, bak)
-        print(f'backed up  {bak.name}')
+    dest, saved = backup.save('falconbms', dst, into=backup_dir, when=when)
+    if saved:
+        print(f'backed up  {dest}')
     write_keeping(dst, body.rstrip('\n') + '\n' + dx_lines(binds) + '\n', nl)
     print(f'wrote      {dst}')
     print(f'           {len(binds)} DX bindings')
@@ -569,11 +568,12 @@ def _strip_stub(txt, guid, product):
     return '\n'.join(out)
 
 
-def write_axes(bms):
+def write_axes(bms, backup_dir=None, when=None):
     """Write our devices into DeviceDefaults.txt and move the binary mapping out
     of the way so BMS rebuilds it from them."""
     cfg = bms / 'User' / 'Config'
     defaults = cfg / 'DeviceDefaults.txt'
+    when = when or backup.stamp()
     axes, _b, _p, _u, _f = build()
     devs = devices()
 
@@ -605,18 +605,21 @@ def write_axes(bms):
         txt = _strip_stub(txt, guid, dev.product)
         if txt != before:
             print(f'removed    the game\'s own stub for {dev.product}')
-    shutil.copy2(defaults, defaults.with_suffix(
-        f'.txt.{datetime.now():%Y%m%d-%H%M%S}.bak'))
+    dest, _ = backup.save('falconbms', defaults, into=backup_dir, when=when)
+    print(f'backed up  {dest}')
     write_keeping(defaults, txt.rstrip('\n') + '\n' + '\n'.join(block) + '\n',
                   nl)
     print(f'wrote      {defaults}')
 
-    for name in ('axismapping.dat', 'axismapping_tmp.dat'):
-        p = cfg / name
-        if p.exists():
-            moved = p.with_suffix(f'.dat.{datetime.now():%Y%m%d-%H%M%S}.bak')
-            shutil.move(p, moved)
-            print(f'moved away {name} -> {moved.name}')
+    # The binary mapping has to be GONE, not replaced, for BMS to rebuild it
+    # from the defaults -- so these move into the backup rather than being
+    # renamed in place, where they used to pile up as .dat.<stamp>.bak.
+    gone, moved = backup.save('falconbms', *(cfg / n for n in
+                                             ('axismapping.dat',
+                                              'axismapping_tmp.dat')),
+                              into=backup_dir, move=True, when=when)
+    for name, _orig in moved:
+        print(f'moved away {name} -> {gone}')
     print()
     print('BMS should rebuild the binary from the defaults on next start.')
     print('If it does not, set these nine by hand in the Launcher — the plan')
@@ -831,6 +834,7 @@ def main():
     p.add_argument('--write-axes', action='store_true',
                    help='write the axis defaults (untested, see README)')
     p.add_argument('--bms-dir', help='override the BMS install')
+    backup.add_argument(p, 'falconbms')
     a = p.parse_args()
 
     if a.bms_dir:
@@ -849,11 +853,14 @@ def main():
         path, nb, na = html_sheet(os.path.join(HERE, 'kneeboard.html'))
         print(f'wrote {path}: {nb} bindings, {na} axes')
         did = True
+    # One stamp for both, so `./bind bms write` -- which is --write and
+    # --write-axes together -- leaves one run folder rather than two.
+    when = backup.stamp()
     if a.write:
-        write_key(bms)
+        write_key(bms, a.backup_dir, when)
         did = True
     if a.write_axes:
-        write_axes(bms)
+        write_axes(bms, a.backup_dir, when)
         did = True
     if not did:
         show(why=a.why, free_only=a.free)

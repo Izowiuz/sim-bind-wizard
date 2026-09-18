@@ -30,6 +30,12 @@ BMS installs *inside* Falcon 4.0's Proton prefix, not as a Steam app:
     ./plan.py --write        writes BMS - VIRPIL.key
     ./plan.py --write-axes   writes DeviceDefaults.txt, moves the binary aside
 
+Both copy what they replace into `<repo>/backups/falconbms/<stamp>/`, one
+folder for the pair, and `axismapping.dat` is *moved* there rather than renamed
+in place — BMS only rebuilds it from `DeviceDefaults.txt` if it is gone, and a
+`.dat.<stamp>.bak` sitting beside it is still in the folder the game reads.
+`--backup-dir` or `SIM_BIND_BACKUPS` moves them.
+
 Then in the game: Setup → Controllers → LOAD → "BMS - VIRPIL", and leave with
 **OK** or **APPLY**.
 

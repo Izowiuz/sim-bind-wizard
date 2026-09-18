@@ -32,6 +32,7 @@ if not os.path.isdir(CORE):
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import backup                                     # noqa: E402
 from core import devmap                                     # noqa: E402
 from core import needs as corneeds                          # noqa: E402
 from core import sheet as csheet                            # noqa: E402
@@ -408,7 +409,7 @@ def as_results(devs, placed, axes):
     return out
 
 
-def write(devs, placed, axes, preset=None):
+def write(devs, placed, axes, preset=None, backup_dir=None):
     mod = wizard()
     results = as_results(devs, placed, axes)
     # the captured results file is where the device ids and axis maps live
@@ -418,7 +419,8 @@ def write(devs, placed, axes, preset=None):
     cfg = saved.get('_config', {})
     base = cfg.get('base') or mod.DEFAULT_BASE
     bindings = cfg.get('bindings_dir') or mod.DEFAULT_BINDINGS_DIR
-    for line in mod.generate(results, base, bindings, preset or PRESET):
+    for line in mod.generate(results, base, bindings, preset or PRESET,
+                             backup_dir):
         print(line)
 
 
@@ -487,6 +489,7 @@ def main():
     p.add_argument('--write', action='store_true',
                    help="into the game's Bindings folder")
     p.add_argument('--preset', help=f'which preset to write (default {PRESET})')
+    backup.add_argument(p, 'elite')
     a = p.parse_args()
 
     bad = unknown()
@@ -511,7 +514,7 @@ def main():
               % _sheet().html(os.path.join(HERE, 'kneeboard.html')))
         did = True
     if a.write:
-        write(devs, placed, axes, a.preset)
+        write(devs, placed, axes, a.preset, a.backup_dir)
         did = True
     if did:
         return

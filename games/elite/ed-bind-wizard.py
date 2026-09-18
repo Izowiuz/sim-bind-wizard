@@ -52,6 +52,7 @@ if not os.path.isdir(CORE):
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import backup                                     # noqa: E402
 from core import capture                                    # noqa: E402
 from core import tui as ctui                                # noqa: E402
 from core.game import install_dir                           # noqa: E402
@@ -245,7 +246,7 @@ def resolve_devices(results):
     return out
 
 
-def generate(results, base, bindings_dir, preset_name):
+def generate(results, base, bindings_dir, preset_name, backup_dir=None):
     """Build the .binds file. Returns human-readable summary lines."""
     devs = resolve_devices(results)
     lines = [f"device ids: stick={devs['stick']['id']} "
@@ -314,6 +315,12 @@ def generate(results, base, bindings_dir, preset_name):
         bound.append(func)
 
     out = os.path.join(bindings_dir, f"{preset_name}.4.2.binds")
+    # The game keeps its own numbered `.binds.N.backup` copies, but only of
+    # presets IT wrote; ours was replaced in place with nothing kept, so a
+    # deadzone tuned in game and then regenerated over was simply gone.
+    dest, kept = backup.save("elite", out, into=backup_dir)
+    if kept:
+        lines.append(f"backed up the previous preset -> {dest}")
     ET.indent(tree, space="\t")
     tree.write(out, encoding="utf-8", xml_declaration=True)
 
@@ -579,7 +586,8 @@ def tui_main(scr, args, results, cfg):
             tui.page("Generate .binds")
             try:
                 for line in generate(results, cfg["base"],
-                                     cfg["bindings_dir"], args.preset_name):
+                                     cfg["bindings_dir"], args.preset_name,
+                                     args.backup_dir):
                     tui.log(line)
             except (RuntimeError, OSError, ET.ParseError) as e:
                 tui.log(f"ERROR: {e}")
@@ -627,6 +635,7 @@ def main():
     ap.add_argument("--bindings-dir", default=None,
                     help="where to write the generated .binds "
                          "(default: the folder picked in the TUI)")
+    backup.add_argument(ap, "elite")
     args = ap.parse_args()
 
     if args.reset and os.path.exists(args.results):
@@ -641,7 +650,7 @@ def main():
                         or DEFAULT_BINDINGS_DIR)
         try:
             for line in generate(results, base, bindings_dir,
-                                 args.preset_name):
+                                 args.preset_name, args.backup_dir):
                 print(line)
         except (RuntimeError, OSError, ET.ParseError) as e:
             sys.exit(f"ERROR: {e}")

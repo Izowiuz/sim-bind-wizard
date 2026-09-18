@@ -50,7 +50,8 @@ Results are saved after every change, so quitting any time is safe.
 Generator mode (--generate): headless; builds one diff.lua per device and
 writes them into Saved Games/DCS/Config/Input/<aircraft>/joystick/.
 DCS overwrites those files on exit, so generation refuses to run while
-the game is running. Existing files are backed up as *.bak first.
+the game is running. Whatever they replace is copied into the backup
+folder first (core.backup; --backup-dir moves it).
 
 The generator also cleans up DCS's per-device defaults (it assigns
 pitch/roll/rudder/thrust and fire/weapon-change/cannon to EVERY joystick
@@ -87,6 +88,7 @@ if not os.path.isdir(CORE):
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import backup                                     # noqa: E402
 from core import capture                                    # noqa: E402
 from core import game                                       # noqa: E402
 from core.game import install_dir                           # noqa: E402
@@ -1150,7 +1152,7 @@ def joystick_dir(cfg, aircraft):
                         input_id(cfg, aircraft), "joystick")
 
 
-def generate(results, cfg, aircraft):
+def generate(results, cfg, aircraft, backup_dir=None):
     """Build and install the per-device diff.lua files. Returns summary."""
     if dcs_running():
         raise RuntimeError("DCS is running — quit the game first "
@@ -1159,16 +1161,21 @@ def generate(results, cfg, aircraft):
     diffs = build_diffs(results, aircraft, devs)
     out_dir = joystick_dir(cfg, aircraft)
     os.makedirs(out_dir, exist_ok=True)
+    paths = [os.path.join(out_dir, info["dcs_id"] + ".diff.lua")
+             for info in devs.values()]
+    # One folder per run rather than a single `.bak` per file: the old one was
+    # overwritten every time, so a run you wanted undone had already eaten the
+    # copy of what came before it.
+    dest, kept = backup.save("dcs", *paths, into=backup_dir)
     lines = []
     for role, info in devs.items():
         path = os.path.join(out_dir, info["dcs_id"] + ".diff.lua")
-        if os.path.exists(path):
-            shutil.copy2(path, path + ".bak")
         with open(path, "w", encoding="utf-8") as f:
             f.write(render_diff(diffs[role]))
         n = (len(diffs[role]["axisDiffs"]) + len(diffs[role]["keyDiffs"]))
         lines.append("%s: %d entries -> %s" % (role, n, path))
-    lines.append("backups: *.bak next to each file (when one existed)")
+    if kept:
+        lines.append("backed up %d file(s) -> %s" % (len(kept), dest))
     stale = os.path.join(cfg["saved_games"], "Config", "Input", aircraft,
                          "joystick")
     if os.path.normpath(stale) != os.path.normpath(out_dir) and \
@@ -1627,7 +1634,8 @@ def tui_main(scr, args, results, cfg):
         if choice == 2:
             tui.page("Generate — %s" % display)
             try:
-                for line in generate(results, cfg, aircraft):
+                for line in generate(results, cfg, aircraft,
+                                     args.backup_dir):
                     tui.log(line)
             except (RuntimeError, OSError) as e:
                 tui.log("ERROR: %s" % e)
@@ -1675,6 +1683,7 @@ def main():
     ap.add_argument("--saved-games", default=None,
                     help="Saved Games/DCS folder inside the Proton prefix "
                          "(default: derived from --game-dir)")
+    backup.add_argument(ap, "dcs")
     args = ap.parse_args()
 
     if args.reset and os.path.exists(args.results):
@@ -1696,7 +1705,8 @@ def main():
                 results["_config"] = cfg
                 save(results, args.results)
             else:
-                lines = generate(results, cfg, aircraft)
+                lines = generate(results, cfg, aircraft,
+                                 args.backup_dir)
             for line in lines:
                 print(line)
         except (RuntimeError, OSError, ValueError) as e:

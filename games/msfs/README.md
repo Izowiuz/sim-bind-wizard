@@ -21,7 +21,11 @@ The install supplies the ranking:
     ./plan.py --write         into the profiles (close Steam first)
     ./plan.py --write --backup-dir PATH
 
-Backups default to `~/OneDrive/backups/save-backup/MSFS24`.
+Every profile it touches is copied into `<repo>/backups/msfs/<stamp>/` first;
+`--backup-dir` or `SIM_BIND_BACKUPS` puts them somewhere else. Nothing is left
+beside the originals — `find_profiles` globs `inputprofile_*` and used to match
+its own backups, which is how the `.bak.X.bak.Y` files in the remote folder
+got there.
 
 ## The format
 
