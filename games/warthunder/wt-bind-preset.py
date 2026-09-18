@@ -1,30 +1,44 @@
 #!/usr/bin/env python3
-"""Generate a full HOTAS control preset for War Thunder (native Linux client).
+"""wt-bind-preset.py - write War Thunder's control preset
 
-The plan is not written here. plan.py reads sim-device-map, which knows the
-shape of every control on the hardware -- which buttons are one hat, which
-trigger stages are cumulative, what you can reach without letting go -- and
-matches each thing a pilot needs to a shape that suits it. This file only
-resolves that onto War Thunder's global numbering and writes the file.
+DESCRIPTION
+    Resolve plan.py's layout onto War Thunder's global numbering and write the
+    controls{} block of machine.blk. Every other block is left byte-identical.
+    `./bind wt write` calls this through plan.py --write.
 
-Targets air Simulator Battles + helicopters on a VIRPIL VMAX Prime throttle
-(js0) + VPC Stick WarBRD-D (js1).  Writes the `controls{}` block of
-Saves/<uid>/production/machine.blk, which is the file the game actually reads;
-every other block in that file is left byte-identical.
-
-War Thunder numbers joystick axes and buttons GLOBALLY across devices, in the
-order the devices appear in machine.blk's deviceMapping:
-
-    throttle  axes 0..6    buttons 0..50    (axesOffset 0,  buttonsOffset 0)
-    stick     axes 0..5    buttons 0..31    (axesOffset 7,  buttonsOffset 51)
-
-so  WT axisId = axesOffset + local axis  and  WT joyButton = buttonsOffset +
-local button.  The PLAN below is written in local (device, index) terms and
-resolved against the deviceMapping that the game itself recorded, so it stays
-correct if the offsets ever change.
-
-Usage:  ./wt-bind-preset.py [--dry-run] [--restore]
+FILES
+    ~/.config/WarThunder/Saves/*/production/machine.blk   written, one per
+                                                          account
+NOTES
+    Close War Thunder first: it rewrites machine.blk on exit.
+    Copies of what is replaced go to <repo>/backups/warthunder/<stamp>/.
 """
+
+# Generate a full HOTAS control preset for War Thunder (native Linux client).
+#
+# The plan is not written here. plan.py reads sim-device-map, which knows the
+# shape of every control on the hardware -- which buttons are one hat, which
+# trigger stages are cumulative, what you can reach without letting go -- and
+# matches each thing a pilot needs to a shape that suits it. This file only
+# resolves that onto War Thunder's global numbering and writes the file.
+#
+# Targets air Simulator Battles + helicopters on a VIRPIL VMAX Prime throttle
+# (js0) + VPC Stick WarBRD-D (js1).  Writes the `controls{}` block of
+# Saves/<uid>/production/machine.blk, which is the file the game actually reads;
+# every other block in that file is left byte-identical.
+#
+# War Thunder numbers joystick axes and buttons GLOBALLY across devices, in the
+# order the devices appear in machine.blk's deviceMapping:
+#
+#     throttle  axes 0..6    buttons 0..50    (axesOffset 0,  buttonsOffset 0)
+#     stick     axes 0..5    buttons 0..31    (axesOffset 7,  buttonsOffset 51)
+#
+# so  WT axisId = axesOffset + local axis  and  WT joyButton = buttonsOffset +
+# local button.  The PLAN below is written in local (device, index) terms and
+# resolved against the deviceMapping that the game itself recorded, so it stays
+# correct if the offsets ever change.
+#
+# Usage:  ./wt-bind-preset.py [--dry-run] [--restore]
 
 import argparse
 import json
@@ -204,7 +218,9 @@ def main(argv=None, layout=None):
     """Write the preset. `layout` is a plan somebody else already narrowed --
     what the review screen hands over when only some bindings were kept --
     and without it the whole plan is computed here as before."""
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--dry-run', action='store_true',
                     help='print the plan and the resolved ids, write nothing')
     ap.add_argument('--restore', action='store_true',

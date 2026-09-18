@@ -1,14 +1,14 @@
 # Elite Dangerous
 
-Two tools on one writer. `plan.py` lays a layout out from `NEEDS` and the
-device map, the way the rest of the family does; `ed-bind-wizard.py` is a
-curses TUI that captures bindings off the physical devices. The plan hands its
-result to the TUI's own `generate()` in the shape the TUI produces, so there is
-one implementation of the `.binds` format and not two.
+Two tools on one writer:
 
-They own different presets — the plan writes `Izowiuz-PLAN`, the TUI whatever
-you captured — so neither overwrites the other and both can be selected in the
-game to compare.
+    plan.py             lays a layout out from NEEDS and the device map
+    ed-bind-wizard.py   a curses TUI that captures bindings off the devices
+
+The plan hands its result to the TUI's own `generate()`, so there is one
+implementation of the `.binds` format. They write different presets —
+`Izowiuz-PLAN` and whatever you captured — so neither overwrites the other
+and both can be selected in the game to compare.
 
 ## Where it lives
 
@@ -26,9 +26,12 @@ into the prefix:
         StartPreset.4.start         which preset is selected — not written
         BindingLoadingErrors.log    the game's complaint if a preset is bad
 
-`--game-dir` sets the install and the Bindings folder is derived from it; both
-are remembered in `ed-bind-wizard-results.json` (`-r` points elsewhere), so
-they are passed once.
+    ED_DIR, --game-dir, --schemes-dir   the install; the Bindings folder is
+                                        derived from it
+    ED_PRESET, --preset                 which preset the plan writes
+    -r FILE                             ed-bind-wizard-results.json, which
+                                        remembers both paths after the first
+                                        run
 
 ## How to run it
 
@@ -45,19 +48,21 @@ they are passed once.
 
     ./ed-bind-wizard.py             the capture TUI
     ./ed-bind-wizard.py --reset     discard the results file
-    ./ed-bind-wizard.py -r other.json
     ./ed-bind-wizard.py --generate  headless: write the captured preset
 
-`ED_PRESET` and `--preset` change which preset the plan writes; `ED_DIR` and
-`--schemes-dir` override the install lookup. Every function named in `NEEDS`
-is checked against the vocabulary before anything runs, and a function claimed
-by two needs is an error — Elite has one element per function, so the second
-would quietly win.
-
 In the TUI: pick the base preset, then SHIP or SRV, then a mapping section or
-ALL. Arrows move, RETURN captures the next press or axis movement and steps to
-the next row, `I` inverts an axis, `X` clears a binding, ESC backs out. The
-results file is saved after every change.
+ALL.
+
+    arrows   move                    I     invert an axis
+    RETURN   capture the next press  X     clear a binding
+             or axis move, and step  ESC   back out
+             to the next row
+
+The results file is saved after every change.
+
+Every function named in `NEEDS` is checked against the vocabulary before
+anything runs. A function claimed by two needs is an error: Elite has one
+element per function, so the second would quietly win.
 
 ## The format
 
@@ -82,8 +87,10 @@ file name must be `<PresetName>.4.2.binds` and match the `PresetName`
 attribute.
 
 Button keys are `Joy_<index+1>`. Axis keys use DirectInput's naming, not
-Wine's HID one: `ABS_X → Joy_XAxis`, `ABS_RZ → Joy_RZAxis`,
-`ABS_THROTTLE → Joy_UAxis`, `ABS_RUDDER → Joy_VAxis`.
+Wine's HID one:
+
+    ABS_X → Joy_XAxis       ABS_THROTTLE → Joy_UAxis
+    ABS_RZ → Joy_RZAxis     ABS_RUDDER   → Joy_VAxis
 
 ## Measured
 
@@ -92,68 +99,57 @@ VIRPIL's `3344` plus the product id, so the WarBRD is `334443E8` and the VMAX
 `33448196`. Read from `/proc/bus/input/devices`, matched to the `js` handler.
 
 **The base preset's keyboard binding is kept as a fallback.** Writing a HOTAS
-binding moves whatever the base had onto `<Secondary>` rather than dropping it,
-so keyboard control still works alongside.
+binding moves whatever the base had onto `<Secondary>` rather than dropping
+it, so keyboard control still works alongside.
 
 **The vocabulary is the shipped `KeyboardMouseOnly.binds`** — every function
-the game accepts a binding for is an element in it. There is no separate action
-list to harvest.
+the game accepts a binding for is an element in it. There is no separate
+action list to harvest.
 
-**The ranking is real, and it says which device too.** Elite ships thirty
-presets. Thirteen are HOTAS rather than pad or keyboard, and five of those —
-the X55, X56, Warthog, T16000M and G940 — name the stick and the throttle as
-separate devices, so they answer both "does this matter" and "where does it
-go". Roll, pitch and throttle axes are 13/13; boost, the panel cycle and
-vertical thrusters are 13/13 on the throttle; fire, target and the four power
-pips are 13/13 on the stick.
+**The ranking names the device too.** Of the thirty shipped presets, thirteen
+are HOTAS rather than pad or keyboard, and five — X55, X56, Warthog, T16000M,
+G940 — name the stick and the throttle as separate devices:
+
+    13/13 on the throttle   boost, panel cycle, vertical thrusters
+    13/13 on the stick      fire, target, the four power pips
+    13/13 either            roll, pitch and throttle axes
 
 **Several functions share one axis on purpose.** All four split HOTAS presets
 bind `RollAxisRaw`, `BuggyRollAxisRaw` and `SteeringAxis` to the same stick
 axis, and `ThrottleAxis` with `DriveSpeedAxis` to the same throttle axis. The
-game decides by mode, so this is the design rather than a clash — a checker
-that flags it is wrong.
+game decides by mode; a checker that flags it is wrong.
 
 **The vocabulary is wider than the base preset.** `KeyboardMouseOnly.binds`
 carries 369 bindable functions, the other presets name 24 more (`Humanoid*`,
 the FSS camera buttons), and `NightVisionToggle` appears in none of the thirty
-although the game accepts it and it works. So a function bound and verified by
-hand counts as vouched for as well.
+although the game accepts it. A function bound and verified by hand counts as
+vouched for as well.
 
 **SRV functions do not all say so.** Most carry a `_Buggy` suffix or a `Buggy`
-prefix, which is War Thunder's rule exactly — but `SteeringAxis`,
-`DriveSpeedAxis` and `ToggleDriveAssist` are SRV-only and name nothing. So the
-context is declared in `AXIS_NEEDS` and in each `Need`, never read off the
-name.
+prefix, but `SteeringAxis`, `DriveSpeedAxis` and `ToggleDriveAssist` are
+SRV-only and name nothing. The context is declared in `AXIS_NEEDS` and in each
+`Need`, never read off the name.
 
 ## Still a guess
 
 **Whether the plan flies better than what was captured by hand.** The two
 presets sit side by side in the game and have not been compared in flight. The
-plan follows the factory ranking; the captured one follows what felt right,
-and it differs — secondary fire on the throttle rather than the stick, the
-panels left on the keyboard.
+plan follows the factory ranking; the captured one differs — secondary fire on
+the throttle rather than the stick, the panels left on the keyboard.
 
 ## Gotchas
 
 **The preset is not selected by writing it.** `StartPreset.4.start` is the
-game's record of the active preset and the wizard does not touch it, so a
-newly written preset is chosen once in the game's own control options.
+game's record of the active preset and nothing here touches it, so a newly
+written preset is chosen once in the game's own control options.
 
-**The game keeps its own backups** as `<preset>.4.2.binds.<number>.backup`
-next to the file — but only of presets it wrote itself. Ours is copied into
-`<repo>/backups/elite/<stamp>/` before it is regenerated (`--backup-dir` moves
-it); before that it was replaced in place with nothing kept, so a deadzone
-tuned in game and then regenerated over was simply gone.
+**The game's own backups cover only presets it wrote itself**,
+as `<preset>.4.2.binds.<number>.backup` beside the file. Ours is copied into
+`<repo>/backups/elite/<stamp>/` before it is regenerated; `--backup-dir` or
+`SIM_BIND_BACKUPS` moves that elsewhere.
 
-**A button pressed while the wizard asked for an axis used to be stored as a
-button.** Elite's copy of `wait_input` had lost the `and not want_axis` gate
-the DCS one kept, so the record came back `{"type": "button"}` against an
-axis-kind function and the generator wrote `<Primary Key="Joy_N">` under an
-axis element — which the game silently ignores. The merged
-`core.capture.wait_input` keeps DCS's gate and Elite's `sign`.
-
-**`4.2` is the binds schema version**, not the game version. A game update that
-bumps it makes existing presets invisible, and the filename suffix in the
+**`4.2` is the binds schema version**, not the game version. A game update
+that bumps it makes existing presets invisible, and the filename suffix in the
 writer has to follow.
 
 **`BindingLoadingErrors.log` is the only diagnostic.** A preset the game

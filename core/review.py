@@ -105,11 +105,17 @@ class Review:
     one call on this -- which is the point of keeping them apart.
     """
 
-    def __init__(self, layout, title, subtitle='', describe=None):
+    def __init__(self, layout, title, subtitle='', describe=None,
+                 paths=()):
         self.layout = layout
         self.title = title
         self.subtitle = subtitle
         self.describe = describe or (lambda p: [])
+        #: [(label, path)] the game supplies: where it found the install, the
+        #: file it will write. The core cannot know these -- every game hides
+        #: its config somewhere else -- and a screen that will overwrite a
+        #: file should say which file.
+        self.paths = list(paths)
         self.status = ''
 
         #: what the planner worked out, per need. A need it could not place
@@ -227,6 +233,56 @@ class Review:
                          else ' — its own direction')
         return f'{said}  (yours)'
 
+    def devices(self):
+        """[(role, Device)] in a fixed order, for the header and the map."""
+        return sorted(self.layout.devices.items())
+
+    def device_line(self):
+        """`stick R-VPC Stick WarBRD-D · throttle L-VPC VMAX...`
+
+        A role is not a device. `devmap.by_role` keys on the map's `kind`, so
+        a second stick makes you choose between them with SIM_DEVICE_ROLES --
+        and once you have, a row reading "stick" no longer says which one you
+        chose. The header carries the answer so no row has to.
+        """
+        return '   '.join(f'{role} {d.product}' for role, d in self.devices())
+
+    def map_lines(self):
+        """The device map as the review sees it, with what sits on each
+        control -- the answer to "is that really a hat, and what is on it"."""
+        out = []
+        if self.paths:
+            out.append('WHERE')
+            # Each path on its own line: a Proton prefix is 90 characters
+            # before it says anything, and a truncated path answers nothing.
+            for label, path in self.paths:
+                out.append(f'  {label}')
+                out.extend(f'    {ln}' for ln in _fold(str(path)))
+            out.append('')
+        out.append('DEVICE MAP')
+        for role, dev in self.devices():
+            out.append('')
+            out.append(f'  {role}  {dev.product}')
+            out.append(f'    {dev.slug} · usb {dev.usb or "?"}'
+                       + (f' · serial {dev.serial}' if dev.serial else ''))
+            out.append(f'    {dev.n_buttons} buttons, {dev.n_axes} axes'
+                       f' · {dev.path}')
+            out.append('')
+            for ctrl in dev.groups():
+                held = self.who_has(role, ctrl)
+                parts = [','.join(str(b) for b in ctrl.buttons)]
+                if ctrl.push is not None:
+                    parts.append(f'+{ctrl.push}')
+                if ctrl.axes:
+                    parts.append('ax' + ','.join(str(a) for a in ctrl.axes))
+                btns = ' '.join(x for x in parts if x)
+                out.append(f'    {ctrl.kind:10} {ctrl.label[:26]:26} '
+                           f'{(btns or "-")[:16]:16} '
+                           f'{(ctrl.reach or ""):24.24} '
+                           + (held.what if held else
+                              ('' if ctrl.bindable else '(carries nothing)')))
+        return out
+
     # -------------------------------------------------------------- writing
 
     def placements(self):
@@ -296,6 +352,21 @@ class Review:
         self.mark[need] = UNSET
         return f'{need.what}: cleared — its control is free again'
 
+    def clear_all(self):
+        """Drop every proposal, and only the proposals.
+
+        The mirror of `confirm_all`, and the way back out of a `P` you did
+        not want. What you chose by hand is never touched, for the same
+        reason `propose_all` never overwrites it: a key that could undo an
+        hour of your own decisions is one you would stop pressing.
+        """
+        drop = [need for need in self.needs if self.mark[need] == PROPOSED]
+        for need in drop:
+            self.clear(need)
+        n = len(drop)
+        return (f'dropped {n} proposal{"" if n == 1 else "s"} — what is '
+                'yours stayed' if n else 'no proposals left to drop')
+
     def honours_press(self, need, ctrl, button):
         """Whether the exact button pressed is what this need should land on.
 
@@ -345,8 +416,33 @@ class Review:
 
 # ------------------------------------------------------------------- drawing
 
-KEYS = ('c/C confirm · p/P from plan · RETURN press it · l from list · '
-        'x clear · w write · q quit')
+#: Two lines, because one was 96 characters and a terminal is 80: `w write`
+#: and `q quit` fell off the end of the screen that documents them. Moving
+#: comes first -- it is what you need before any of the rest is reachable.
+KEYS = ('↑/↓ j/k move · g/G first/last · RETURN press it · l from list',
+        'c/C confirm · p/P from plan · x/X clear · m map · w write · q quit')
+
+
+def _fold(path, width=74):
+    """A long path over several lines, broken at directory boundaries.
+
+    A Proton prefix is ninety characters before it says which game, so the
+    part that answers the question is the part a terminal cuts off.
+    """
+    if len(path) <= width:
+        return [path]
+    lead = os.sep if path.startswith(os.sep) else ''
+    out, line = [], ''
+    for part in path.lstrip(os.sep).split(os.sep):
+        piece = (line + os.sep + part) if line else part
+        if line and len(piece) > width:
+            out.append(line + os.sep)
+            line = part
+        else:
+            line = piece
+    if line:
+        out.append(line)
+    return [lead + out[0]] + out[1:] if out else [path]
 
 
 def _put(scr, y, x, text, attr=curses.A_NORMAL):
@@ -381,7 +477,7 @@ def _draw(scr, rv, sel, state, paint):
     h, w = scr.getmaxyx()
     rows = rv.rows()
     detail = 5
-    visible = max(3, h - detail - 4)
+    visible = max(3, h - detail - 6)
     top = state['top']
     if sel < top:
         top = sel
@@ -395,11 +491,14 @@ def _draw(scr, rv, sel, state, paint):
     mine, prop, unset = rv.counts()
     tally = f'{mine} yours · {prop} proposed · {unset} unset'
     _put(scr, 0, max(0, w - len(tally) - 1), tally, paint[BLUE])
-    _put(scr, 1, 0, '─' * (w - 1))
+    # Which device each role IS, always on screen: a row saying "stick" does
+    # not say which stick, and with two of them you had to choose one.
+    _put(scr, 1, 0, rv.device_line(), paint[BLUE])
+    _put(scr, 2, 0, '─' * (w - 1))
 
     for i in range(top, min(len(rows), top + visible)):
         row = rows[i]
-        y = 2 + i - top
+        y = 3 + i - top
         if row.kind == 'head':
             _put(scr, y, 0, f' {row.text}', paint[BLUE])
         elif row.kind == 'need':
@@ -413,8 +512,9 @@ def _draw(scr, rv, sel, state, paint):
     for j, line in enumerate(
             _detail(rv, rows[sel] if 0 <= sel < len(rows) else None)[:detail]):
         _put(scr, h - detail + j, 0, line)
-    _put(scr, h - 2, 0, rv.status[:w - 1], paint[MAGENTA])
-    _put(scr, h - 1, 0, KEYS[:w - 1])
+    _put(scr, h - 3, 0, rv.status[:w - 1], paint[MAGENTA])
+    for i, line in enumerate(KEYS):
+        _put(scr, h - len(KEYS) + i, 0, line[:w - 1])
     scr.refresh()
 
 
@@ -479,15 +579,52 @@ class Sticks:
         self.opened = False
 
 
+def _pager(scr, tui, title, lines):
+    """Show lines, scroll them, leave on ESC or q.
+
+    `core/tui.py` keeps a transcript and repaints its tail, which is right for
+    a capture prompt and wrong for a listing longer than the screen -- the
+    device map is thirty lines before it has said anything about the second
+    stick.
+    """
+    top = 0
+    while True:
+        h, w = scr.getmaxyx()
+        page = max(1, h - 3)
+        top = max(0, min(top, max(0, len(lines) - page)))
+        scr.erase()
+        _put(scr, 0, 0, title, curses.A_BOLD)
+        for i, line in enumerate(lines[top:top + page]):
+            _put(scr, 1 + i, 0, line)
+        more = f'{top + 1}-{min(len(lines), top + page)} of {len(lines)}'
+        _put(scr, h - 1, 0,
+             f'↑↓ jk scroll · SPACE page · g/G first/last · '
+             f'q back    {more}')
+        scr.refresh()
+        k = tui.key(0.5)
+        if k in ('esc', 'q', 'Q', 'enter'):
+            return
+        if k in ('up', 'k'):
+            top -= 1
+        elif k in ('down', 'j'):
+            top += 1
+        elif k == 'g':
+            top = 0
+        elif k == 'G':
+            top = len(lines)
+        elif k == ' ':
+            top += page
+
+
 # ------------------------------------------------------------------ the loop
 
-def run(layout, title, subtitle='', describe=None, write=None):
+def run(layout, title, subtitle='', describe=None, write=None, paths=()):
     """Show the need list, let it be filled, write what has a control.
     Returns the `Layout` that was written, or None if nothing was."""
     sticks = Sticks(layout)
+    rv = Review(layout, title, subtitle, describe, paths)
     try:
-        return curses.wrapper(_loop, Review(layout, title, subtitle,
-                                            describe), write, sticks)
+        return curses.wrapper(_loop, rv, write, sticks)
     finally:
         sticks.close()
 
@@ -526,6 +663,12 @@ def _loop(scr, rv, write, sticks):
         elif k in ('down', 'j'):
             move(+1)
             rv.status = ''
+        elif k == 'g':
+            move(-len(rows))
+            rv.status = ''
+        elif k == 'G':
+            move(len(rows))
+            rv.status = ''
         elif k == 'c' and need is not None:
             rv.status = rv.confirm(need)
             move(+1)
@@ -535,12 +678,16 @@ def _loop(scr, rv, write, sticks):
             rv.status = rv.propose(need)
         elif k == 'P':
             rv.status = rv.propose_all()
-        elif k in ('x', 'X') and need is not None:
+        elif k == 'x' and need is not None:
             rv.status = rv.clear(need)
+        elif k == 'X':
+            rv.status = rv.clear_all()
         elif k == 'enter' and need is not None:
             rv.status = _by_press(tui, rv, need, sticks)
         elif k in ('l', 'L') and need is not None:
             rv.status = _by_hand(tui, rv, need)
+        elif k in ('m', 'M'):
+            _pager(scr, tui, f'{rv.title} — device map', rv.map_lines())
         elif k in ('w', 'W'):
             written = _write(tui, rv, write) or written
         elif k == ' ' and need is not None:

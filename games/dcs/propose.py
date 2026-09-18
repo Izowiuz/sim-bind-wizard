@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
-"""Propose a HOTAS layout for a DCS module, instead of asking for 26 presses.
+"""propose.py - lay out one DCS module on the HOTAS
 
-Both halves of the answer already exist and had never been joined.
+DESCRIPTION
+    Propose a binding for every command the module ships, from the shape of
+    the controls in the device map and the factory profiles' ranking.
+    Proposals land in the wizard's results file marked `?` until confirmed.
+    --write hands the result to dcs-bind-wizard.py, which owns diff.lua.
 
-The module knows what each command WANTS: `dcs-bind-wizard.py` reads the
-factory joystick profiles that ship with it, which gives every command a vote
-count (how many profiles bind it), a device (stick or throttle, counted), and a
-sentence about the hardware it belongs on -- "the hat on TOP of the grip. A
-4-way hat", "the paddle behind the grip", "the trigger", "keyboard is fine".
+FILES
+    dcs-bind-wizard.py             the capture TUI and the writer
+    dcs-bind-wizard-results.json   the bindings, and where the game is
+    sheet-template.html            the kneeboard template
+    <device>.diff.lua              written by --write, per aircraft
 
-sim-device-map knows what the hardware HAS: which buttons form one hat,
-which trigger stages are cumulative, what a little finger reaches without
-regripping.
+ENVIRONMENT
+    SIM_DEVICE_MAP      where sim-device-map is checked out
+    SIM_BIND_BACKUPS    where copies of replaced files go
 
-So: classify the sentence into a shape, match it against a control of that
-shape, hardest-wanted first. The capture flow is still there for anything you
-disagree with -- this only means you confirm rather than invent.
-
-    ./propose.py -a FA-18C            # the proposed layout
-    ./propose.py -a FA-18C --check    # against what you already bound
-    ./propose.py -a FA-18C --why      # and why each control was chosen
+NOTES
+    Close DCS first: it rewrites Config/Input on exit.
+    Aircraft is remembered after the first run; -a picks another.
 """
 
 import argparse
@@ -755,6 +755,18 @@ def reseed(module, key, cmds, guide, backup_dir=None, when=None):
     return dest, before, len(recs)
 
 
+def write(module, cfg, aircraft, backup_dir=None):
+    """Into the game, through the wizard that knows diff.lua.
+
+    The wizard stays the writer -- it owns the format, and the results file it
+    reads is its own. What it should not also own is the *verb*: every other
+    planner in the family answers `--write` itself, and this delegating is
+    what makes that true for DCS too.
+    """
+    results = json.load(open(results_path()))
+    return module.generate(results, cfg, aircraft, backup_dir)
+
+
 def audit(module, key, cmds, guide):
     """Bindings that no longer match the hardware.
 
@@ -814,25 +826,43 @@ def audit(module, key, cmds, guide):
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('-a', '--aircraft', default='FA-18C')
-    ap.add_argument('--game-dir', help='where DCS is installed')
-    ap.add_argument('--why', action='store_true')
+    ap = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('-a', '--aircraft', default='FA-18C',
+                    help='which module (default FA-18C)')
+    ap.add_argument('--game-dir', help='the DCS install directory')
+    ap.add_argument('--why', action='store_true',
+                    help='print why each control was chosen')
     ap.add_argument('--sheet', nargs='?', const='', metavar='PATH',
-                    help='write KNEEBOARD-<module>.md from what is bound')
+                    help='write KNEEBOARD-<module>.md')
     ap.add_argument('--html', nargs='?', const='', metavar='PATH',
-                    help='the same, laid out in columns for a second screen')
+                    help='write kneeboard-<module>.html')
     ap.add_argument('--reseed', action='store_true',
-                    help='throw this module\'s bindings away and lay it out '
-                         'fresh (backs the results file up first)')
+                    help='discard this module\'s bindings and lay it out fresh')
     ap.add_argument('--audit', action='store_true',
-                    help='bindings that no longer match the hardware')
+                    help='list bindings that no longer match the hardware')
     ap.add_argument('--check', action='store_true',
-                    help='compare against dcs-bind-wizard-results.json')
+                    help='compare against the results file')
+    ap.add_argument('--write', action='store_true',
+                    help='write the whole layout into the game')
     backup.add_argument(ap, 'dcs')
     args = ap.parse_args()
 
     module = wizard()
+
+    if args.write:
+        cfg = load_cfg(module, args.game_dir)
+        aircraft = args.aircraft or cfg.get('aircraft')
+        if not aircraft:
+            sys.exit('pass -a (e.g. -a FA-18C); the wizard remembers it after '
+                     'the first run')
+        try:
+            for line in write(module, cfg, aircraft, args.backup_dir):
+                print(line)
+        except (RuntimeError, OSError, ValueError) as e:
+            sys.exit(f'ERROR: {e}')
+        return
 
     if args.reseed:
         cfg = load_cfg(module, args.game_dir)

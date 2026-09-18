@@ -1,68 +1,99 @@
 #!/usr/bin/env python3
-"""Interactive DCS World bindings wizard + diff.lua generator for HOTAS on Linux.
+"""dcs-bind-wizard.py - capture DCS bindings, and write diff.lua
 
-TUI mode (default): full-screen terminal wizard. Flow:
+DESCRIPTION
+    Full-screen wizard by default: pick an aircraft, then bind each command by
+    pressing the control. Start with `Essential binds`, which is the module's
+    commands ranked by how many factory HOTAS profiles bind each one, grouped
+    in the order you learn an aircraft. Every change is saved at once, so
+    quitting is safe at any point.
+    With --generate, headless: build one diff.lua per device and exit.
 
-    1. game folder comes from --game-dir (remembered in the results file,
-       so you only pass it once); the Saved Games folder inside the Proton
-       prefix is derived from it
-    2. pick the aircraft (installed modules are discovered automatically)
-    3. bind the essentials — or pick one of the game's own sections, or ALL
-
-'Essentials' is the short list to set up first, and it tries to answer
-the question a new module actually raises — not 'which button do I
-press' but 'what is this thing and do I need it?':
-
-    * the commands are ranked by how many of the factory HOTAS profiles
-      shipped with the module bind each one, so a Hornet opens on
-      trigger, trim, sensor control and TDC rather than on the 800-odd
-      switches of its cockpit;
-    * they are grouped in the order you learn an aircraft — fly it,
-      take off and land, fight with it, sensors and radio;
-    * the selected row explains itself in the three lines above the key
-      legend: what the control does, where it sits in the real aircraft
-      and what kind of hardware it wants, and which of your two devices
-      the factory profiles put it on, and for a switch with a direction
-      (trim, the castle hat, weapon select, the TDC) which way it goes.
-      All three stay on screen while you are capturing a button — the
-      prompt gets its own line — because that is when you need them.
-
-Commands are harvested from the game files themselves: the module's
-default.lua is run through a Lua interpreter (when one is installed) for
-the full list with today's names and categories, and the factory joystick
-profiles supply the hashes of the sim's own commands plus that popularity
-score. Either way there is no hardcoded function list — the wizard works
-for any installed module.
-
-Bindings are edited in a table: every command of the section is a row
-showing its current assignment straight from the results file. Keys:
-
+KEYS
     arrows  move between commands
-    RETURN  (re)bind the selected command — then press the physical
-            button / move the axis; after accepting, the cursor moves
-            to the next row so you can chain RETURN-capture-RETURN
-    I       invert an axis (stored or freshly captured)
-    X       clear the binding (the DCS default, if any, comes back)
-    ESC     back / cancel / redo
+    RETURN  (re)bind the selected one, then press the button or move the axis
+    P       propose bindings for everything still unbound, marked ?
+    c / C   confirm the selected proposal / every proposal in the section
+    I       invert an axis
+    X       clear the binding, so the DCS default comes back
+    ESC     back, cancel, redo
 
-Results are saved after every change, so quitting any time is safe.
+FILES
+    dcs-bind-wizard-results.json    the bindings, and where the game is (-r)
+    <module>/default.lua            read: the command list, via a lua binary
+    Config/Input/<aircraft>/joystick/<device>.diff.lua   written by --generate
 
-Generator mode (--generate): headless; builds one diff.lua per device and
-writes them into Saved Games/DCS/Config/Input/<aircraft>/joystick/.
-DCS overwrites those files on exit, so generation refuses to run while
-the game is running. Whatever they replace is copied into the backup
-folder first (core.backup; --backup-dir moves it).
-
-The generator also cleans up DCS's per-device defaults (it assigns
-pitch/roll/rudder/thrust and fire/weapon-change/cannon to EVERY joystick
-device), so a stick and a throttle never fight over the same axis.
-
-Usage:
-    dcs-bind-wizard.py                      # TUI wizard
-    dcs-bind-wizard.py --reset              # wizard from scratch
-    dcs-bind-wizard.py -r other.json        # use a different results file
-    dcs-bind-wizard.py -g -a su-25T         # write the diff.lua files
+NOTES
+    Close DCS first: it rewrites Config/Input on exit.
+    Without a lua binary the command list falls back to the factory profiles:
+    fewer commands, and whatever names their authors used.
+    --generate also clears DCS's per-device defaults, which otherwise assign
+    pitch, roll, rudder and thrust to every joystick at once.
 """
+
+# Interactive DCS World bindings wizard + diff.lua generator for HOTAS on Linux.
+#
+# TUI mode (default): full-screen terminal wizard. Flow:
+#
+#     1. game folder comes from --game-dir (remembered in the results file,
+#        so you only pass it once); the Saved Games folder inside the Proton
+#        prefix is derived from it
+#     2. pick the aircraft (installed modules are discovered automatically)
+#     3. bind the essentials — or pick one of the game's own sections, or ALL
+#
+# 'Essentials' is the short list to set up first, and it tries to answer
+# the question a new module actually raises — not 'which button do I
+# press' but 'what is this thing and do I need it?':
+#
+#     * the commands are ranked by how many of the factory HOTAS profiles
+#       shipped with the module bind each one, so a Hornet opens on
+#       trigger, trim, sensor control and TDC rather than on the 800-odd
+#       switches of its cockpit;
+#     * they are grouped in the order you learn an aircraft — fly it,
+#       take off and land, fight with it, sensors and radio;
+#     * the selected row explains itself in the three lines above the key
+#       legend: what the control does, where it sits in the real aircraft
+#       and what kind of hardware it wants, and which of your two devices
+#       the factory profiles put it on, and for a switch with a direction
+#       (trim, the castle hat, weapon select, the TDC) which way it goes.
+#       All three stay on screen while you are capturing a button — the
+#       prompt gets its own line — because that is when you need them.
+#
+# Commands are harvested from the game files themselves: the module's
+# default.lua is run through a Lua interpreter (when one is installed) for
+# the full list with today's names and categories, and the factory joystick
+# profiles supply the hashes of the sim's own commands plus that popularity
+# score. Either way there is no hardcoded function list — the wizard works
+# for any installed module.
+#
+# Bindings are edited in a table: every command of the section is a row
+# showing its current assignment straight from the results file. Keys:
+#
+#     arrows  move between commands
+#     RETURN  (re)bind the selected command — then press the physical
+#             button / move the axis; after accepting, the cursor moves
+#             to the next row so you can chain RETURN-capture-RETURN
+#     I       invert an axis (stored or freshly captured)
+#     X       clear the binding (the DCS default, if any, comes back)
+#     ESC     back / cancel / redo
+#
+# Results are saved after every change, so quitting any time is safe.
+#
+# Generator mode (--generate): headless; builds one diff.lua per device and
+# writes them into Saved Games/DCS/Config/Input/<aircraft>/joystick/.
+# DCS overwrites those files on exit, so generation refuses to run while
+# the game is running. Whatever they replace is copied into the backup
+# folder first (core.backup; --backup-dir moves it).
+#
+# The generator also cleans up DCS's per-device defaults (it assigns
+# pitch/roll/rudder/thrust and fire/weapon-change/cannon to EVERY joystick
+# device), so a stick and a throttle never fight over the same axis.
+#
+# Usage:
+#     dcs-bind-wizard.py                      # TUI wizard
+#     dcs-bind-wizard.py --reset              # wizard from scratch
+#     dcs-bind-wizard.py -r other.json        # use a different results file
+#     dcs-bind-wizard.py -g -a su-25T         # write the diff.lua files
 
 import argparse
 import copy
@@ -1662,7 +1693,8 @@ def tui_main(scr, args, results, cfg):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="DCS World HOTAS bindings wizard and diff.lua generator")
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-r", "--results", default=DEFAULT_RESULTS,
                     help="results JSON: wizard state / generator input "
                          "(default: next to this script)")

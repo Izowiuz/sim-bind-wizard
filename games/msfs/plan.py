@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
-"""Lay out a HOTAS for MSFS 2024 from the shape of the hardware.
+"""plan.py - lay out MSFS 2024 on the HOTAS
 
-MSFS has ~1700 bindable actions and no opinion about where to start. It does
-ship 551 default profiles across 101 devices, split by aircraft category, and
-`harvest.py` turns those into a ranking -- the same trick as the DCS and War
-Thunder wizards. sim-device-map supplies the other half: which buttons form
-one hat, what a little finger reaches, which axis is a dial.
+DESCRIPTION
+    Match what a pilot must be able to do against the controls in the device
+    map, then fill in the profiles MSFS keeps in Steam Cloud.
 
-MSFS keeps a user's bindings in Steam Cloud, two files per device:
+FILES
+    harvest.py          the action vocabulary and the factory ranking
+    inputprofile_*      written by --write, two per device:
+                          with <AircraftInfo/>   flight controls
+                          without                camera, ATC, global
+    KNEEBOARD.md, kneeboard.html   written by --sheet and --html
 
-    inputprofile_*  with <AircraftInfo CategoryName="AIRPLANE"/>  flight controls
-    inputprofile_*  with none                                     camera, ATC, global
+ENVIRONMENT
+    SIM_DEVICE_MAP      where sim-device-map is checked out
+    SIM_BIND_BACKUPS    where copies of replaced files go
 
-Their context sets are disjoint, so a binding goes in exactly one of them.
-
-    ./plan.py              # what goes where
-    ./plan.py --why        # and why, with the factory ranking
-    ./plan.py --write      # fill the profiles in (Steam must be closed)
+NOTES
+    Close Steam first: it syncs these files from the cloud.
+    An action the profile does not contain is skipped and reported.
 """
 
 import argparse
@@ -388,8 +390,15 @@ def tui(args):
         n = write(kept.devices, kept.placed, kept.axes, args.backup_dir)
         return [f'{n} binding(s) written']
 
+    found = find_profiles(devmap.by_role('stick', 'throttle'))
     creview.run(build(), 'MSFS 2024', 'VIRPIL',
-                describe=_describe, write=write_kept)
+                describe=_describe, write=write_kept,
+                paths=[('profiles', os.path.dirname(found[0][0]) if found
+                        else '(none found)')]
+                      + [(f'  {role} {bucket}', os.path.basename(path))
+                         for path, role, bucket in found]
+                      + [('backups',
+                          backup.dir_for('msfs', args.backup_dir))])
 
 
 def _sheet():
@@ -448,18 +457,21 @@ def _sheet():
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--why', action='store_true')
+    ap = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('--why', action='store_true',
+                    help='print why each control was chosen')
     ap.add_argument('--free', action='store_true',
-                    help='only what is unbound')
+                    help='list controls left unbound')
     ap.add_argument('--sheet', action='store_true',
                     help='write KNEEBOARD.md')
     ap.add_argument('--html', action='store_true',
-                    help='the same in columns, for a second screen')
+                    help='write kneeboard.html')
     ap.add_argument('--write', action='store_true',
-                    help='fill the profiles in (Steam must be closed)')
+                    help='write the whole layout into the game')
     ap.add_argument('--tui', action='store_true',
-                    help='review the layout and write what you keep')
+                    help='review the layout, write what you keep')
     backup.add_argument(ap, 'msfs')
     args = ap.parse_args()
     devs, placed, unmet, free, axes = build()

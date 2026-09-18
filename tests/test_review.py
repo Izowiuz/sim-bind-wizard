@@ -11,6 +11,7 @@ overwrites, choosing by hand needs no confirming, and `?` is a note to
 yourself rather than a filter.
 """
 
+import re
 import unittest
 
 import fake
@@ -108,6 +109,41 @@ class Clearing(unittest.TestCase):
         rv = made()
         rv.clear(by(rv, 'Gear'))
         self.assertNotIn('Gear', [p.need.what for p in rv.result().placed])
+
+    def test_clear_all_drops_the_proposals(self):
+        rv = made()
+        rv.clear_all()
+        self.assertEqual((0, 0, 3), rv.counts())
+
+    def test_clear_all_leaves_what_you_chose_alone(self):
+        # The rule that makes X safe to press an hour in: it undoes the
+        # planner, never you.
+        rv = made()
+        trim = by(rv, 'Trim')
+        rv.confirm(trim)
+        was = rv.at[trim].ctrl.label
+        rv.clear_all()
+        self.assertEqual(MINE, rv.mark[trim])
+        self.assertEqual(was, rv.at[trim].ctrl.label)
+        self.assertEqual((1, 0, 2), rv.counts())
+
+    def test_the_controls_the_proposals_had_come_back_free(self):
+        rv = made()
+        had = rv.at[by(rv, 'Gear')].ctrl.label
+        rv.clear_all()
+        self.assertIn(had, [c.label for _r, c in rv.free()])
+
+    def test_clear_all_says_when_there_is_nothing_to_drop(self):
+        rv = made()
+        rv.confirm_all()
+        self.assertIn('no proposals left', rv.clear_all())
+
+    def test_what_P_puts_in_X_takes_back_out(self):
+        rv = made()
+        rv.clear_all()
+        rv.propose_all()
+        rv.clear_all()
+        self.assertEqual((0, 0, 3), rv.counts())
 
 
 class Proposing(unittest.TestCase):
@@ -453,6 +489,124 @@ class Rows(unittest.TestCase):
         rows = made().rows()
         self.assertTrue(all(r.kind == 'need' for r in rows if r.selectable))
         self.assertTrue(any(r.kind == 'head' for r in rows))
+
+
+class WhatItFound(unittest.TestCase):
+    """The header line and the map screen: which device is which, and where
+    the game was found."""
+
+    def two_sticks(self):
+        devs = {'stick': fake.device('stick', [
+                    fake.button('Trigger', 0, reach=fake.INDEX)],
+                    product='R-VPC Stick WarBRD-D'),
+                'throttle': fake.device('throttle', [
+                    fake.button('Pinky', 0, reach=fake.PANEL)],
+                    product='L-VPC VMAX Prime Throttle')}
+        lay = Layout(devs, *allocate([Need('Fire', 'button', ['F'])], devs))
+        return review.Review(lay, 'Test', paths=[('game', '/games/thing')])
+
+    def test_the_header_names_the_device_behind_each_role(self):
+        # A role is not a device: with two sticks in the map you choose one,
+        # and a row reading "stick" no longer says which.
+        line = self.two_sticks().device_line()
+        self.assertIn('stick R-VPC Stick WarBRD-D', line)
+        self.assertIn('throttle L-VPC VMAX Prime Throttle', line)
+
+    def test_the_map_screen_says_where_the_game_was_found(self):
+        lines = '\n'.join(self.two_sticks().map_lines())
+        self.assertIn('WHERE', lines)
+        self.assertIn('/games/thing', lines)
+
+    def test_a_game_that_names_no_paths_gets_no_where_section(self):
+        rv = made()
+        self.assertNotIn('WHERE', '\n'.join(rv.map_lines()))
+
+    def test_the_map_screen_lists_every_control_with_what_is_on_it(self):
+        rv = made()
+        gear = by(rv, 'Gear')
+        lines = '\n'.join(rv.map_lines())
+        self.assertIn(rv.at[gear].ctrl.label, lines)
+        self.assertIn('Gear', lines)
+        self.assertIn('Thumb hat', lines, 'a control nobody took is listed')
+
+    def test_it_marks_a_control_that_can_carry_nothing(self):
+        devs = stick(fake.control('unwired', 'Phantom', [0]),
+                     fake.button('Real', 1, reach=fake.PANEL))
+        rv = made([Need('Gear', 'button', ['GEAR'])], devs=devs)
+        phantom = [ln for ln in rv.map_lines() if 'Phantom' in ln][0]
+        self.assertIn('carries nothing', phantom)
+
+    def test_it_shows_the_axes_of_a_control_that_has_no_buttons(self):
+        devs = stick(fake.ministick('Mini-stick', 3, push=0,
+                                    reach=fake.THUMB))
+        rv = made([Need('Gear', 'button', ['GEAR'])], devs=devs)
+        line = [ln for ln in rv.map_lines() if 'Mini-stick' in ln][0]
+        self.assertIn('ax3,4', line)
+        self.assertIn('+0', line)
+
+
+class Folding(unittest.TestCase):
+    """A Proton prefix is ninety characters before it says which game."""
+
+    def test_a_short_path_is_left_alone(self):
+        self.assertEqual(['/short/one'], review._fold('/short/one'))
+
+    def test_a_long_one_breaks_at_directory_boundaries(self):
+        p = '/home/someone/.local/share/Steam/steamapps/compatdata/429530/' \
+            'pfx/drive_c/Falcon BMS 4.38/User/Config/BMS - VIRPIL.key'
+        out = review._fold(p, width=60)
+        self.assertGreater(len(out), 1)
+        self.assertTrue(all(len(ln) <= 62 for ln in out), out)
+
+    def test_it_stays_an_absolute_path(self):
+        p = '/' + '/'.join(['directory'] * 12)
+        self.assertTrue(review._fold(p, width=40)[0].startswith('/'))
+
+    def test_nothing_is_lost(self):
+        p = '/' + '/'.join(f'part{i}' for i in range(20))
+        self.assertEqual(p, ''.join(review._fold(p, width=30)))
+
+
+class Footer(unittest.TestCase):
+    """The line that says which keys exist has to fit the screen it is on.
+
+    It did not: one 96-character line on an 80-column terminal cut off at
+    `m map`, so `w write` and `q quit` were documented nowhere a reader would
+    look. Moving is listed first because nothing else is reachable without it.
+    """
+
+    WIDTH = 80
+
+    def test_every_footer_line_fits_a_standard_terminal(self):
+        for line in review.KEYS:
+            self.assertLessEqual(len(line), self.WIDTH - 1, line)
+
+    def test_moving_is_documented_at_all(self):
+        keys = ' '.join(review.KEYS)
+        for what in ('j/k', 'g/G'):
+            self.assertIn(what, keys)
+
+    def test_every_branch_of_the_loop_is_reachable_from_the_footer(self):
+        # Per branch, not per letter: `m` and `M` are one action under two
+        # keys, while `c` and `C` are two actions. What has to be findable is
+        # the action -- so each branch needs one of its keys spelled out.
+        import inspect
+        src = inspect.getsource(review._loop)
+        listed = ' '.join(review.KEYS)
+        spelled = {'up': '↑', 'down': '↓', 'enter': 'RETURN', 'esc': 'q',
+                   ' ': 'c/C'}
+        branches = [frozenset(re.findall(r"'([^']+)'", m.group(1)))
+                    for m in re.finditer(r"k (?:==|in) \(?([^:)]+)\)?:", src)]
+        self.assertGreater(len(branches), 6, 'the parse found nothing')
+        def spelled_out(token):
+            # At a word boundary: a bare `in` check finds the `m` of
+            # "confirm" and calls the map key documented.
+            return re.search(rf'(^|[ ·/]){re.escape(token)}([ /]|$)', listed)
+
+        for keys in branches:
+            tokens = {spelled.get(k, k) for k in keys}
+            self.assertTrue(any(spelled_out(t) for t in tokens),
+                            f'{sorted(keys)} works, the footer never says so')
 
 
 class Describing(unittest.TestCase):

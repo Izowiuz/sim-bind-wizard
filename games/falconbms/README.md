@@ -16,8 +16,10 @@ BMS installs *inside* Falcon 4.0's Proton prefix, not as a Steam app:
         Launcher/FalconBMS_Alternative_Launcher.exe   axes and keymapping UI
         Launcher.exe                      Play / Config only, no bindings
 
-`BMS_DIR` or `--bms-dir` overrides the lookup. Launch with
-`~/.local/bin/falcon-bms` (`game`, `launcher`, `mainlauncher`, `config`).
+    BMS_DIR, --bms-dir   the install, instead of the lookup
+
+Launch with `~/.local/bin/falcon-bms` (`game`, `launcher`, `mainlauncher`,
+`config`).
 
 ## How to run it
 
@@ -31,11 +33,12 @@ BMS installs *inside* Falcon 4.0's Proton prefix, not as a Steam app:
     ./plan.py --write        writes BMS - VIRPIL.key
     ./plan.py --write-axes   writes DeviceDefaults.txt, moves the binary aside
 
-Both copy what they replace into `<repo>/backups/falconbms/<stamp>/`, one
-folder for the pair, and `axismapping.dat` is *moved* there rather than renamed
-in place — BMS only rebuilds it from `DeviceDefaults.txt` if it is gone, and a
-`.dat.<stamp>.bak` sitting beside it is still in the folder the game reads.
-`--backup-dir` or `SIM_BIND_BACKUPS` moves them.
+    --backup-dir DIR   where both writes copy what they replace, one folder
+                       for the pair (default <repo>/backups/falconbms/<stamp>/;
+                       SIM_BIND_BACKUPS does the same)
+
+`axismapping.dat` is *moved* into the backup, not renamed in place: BMS
+rebuilds it from `DeviceDefaults.txt` only if it is gone.
 
 Then in the game: Setup → Controllers → LOAD → "BMS - VIRPIL", and leave with
 **OK** or **APPLY**.
@@ -47,16 +50,18 @@ Key files are plain text, latin-1, CRLF. A full line is nine fields:
     SimRingCommMenu -1 0 0X2B 0 0 0 1 "UI: Ring Comm Menu"
     callback  sound  -  key  mod  combo  combo_mod  flag  "description"
 
-`flag`: `1` a real binding · `-1` a `SimDoNothing` section header · `-0`
-hardcoded or a `REM:` comment · `-2` developer-only.
+    flag   1  a real binding          -1  a SimDoNothing section header
+          -0  hardcoded or REM:       -2  developer-only
 
 DX bindings are separate, shorter lines appended to the same file:
 
     SimTriggerFirstDetent 0 -1 -2 0 0x0 -1
     callback  dx  sound  kind  press  hex  sound2
 
-`kind` `-2` is a button, `-3` a POV hat. Nothing here writes `-3`: VIRPIL
-firmware reports no HID hat usages, so every hat is a set of plain buttons.
+    kind  -2  a button    -3  a POV hat
+
+Nothing here writes `-3`: VIRPIL firmware reports no HID hat usages, so every
+hat is a set of plain buttons.
 
 Press and release are separate bindings. `-2` in the sound field opts in, and
 the sixth field selects the edge:
@@ -71,15 +76,15 @@ DirectInput's slider axes, numbered in report-descriptor order, so
 
 ## Measured
 
-**32 DX numbers per device**, assigned by `DeviceSorting.txt` order:
+32 DX numbers per device, assigned by `DeviceSorting.txt` order:
 
     DX  0-31   3344:43e8   R-VPC Stick WarBRD-D
     DX 32-63   3344:8196   L-VPC VMAX Prime Throttle
 
 The VMAX has 51 buttons, so its last nineteen — T2 down, T3–T5, APU, both
-encoders, the mode selector — have no DX number. `usable()` refuses to place
-anything on them. `g_nButtonsPerDevice` raises the limit to as much as 128 for
-every device at once, renumbering all DX ids; not set here.
+encoders, the mode selector — have no DX number, and `usable()` refuses to
+place anything on them. `g_nButtonsPerDevice` raises the limit to as much as
+128 for every device at once, renumbering all DX ids; not set here.
 
 **The pinky-shifted layer** adds `g_nHotasPinkyShiftMagnitude` (256) to a DX
 number. Used for seven needs that do not fit unshifted.

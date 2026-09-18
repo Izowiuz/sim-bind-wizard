@@ -1,25 +1,31 @@
 #!/usr/bin/env python3
-"""Lay out Elite Dangerous on the VIRPIL HOTAS and write a .binds preset.
+"""plan.py - lay out Elite Dangerous on the HOTAS
 
-    ./plan.py                 the layout
-    ./plan.py --why           and the evidence for each choice
-    ./plan.py --free          what stays unbound
-    ./plan.py --sheet --html  the kneeboard
-    ./plan.py --write         into the game's Bindings folder
+DESCRIPTION
+    Match what a pilot must be able to do against the controls in the device
+    map, then write a .binds preset through ed-bind-wizard.py.
 
-harvest.py supplies the vocabulary and the ranking; sim-device-map supplies
-the shape of every control; `core.needs.allocate` does the matching. The
-writing is `ed-bind-wizard.py`'s own `generate()` -- the layout is handed to it
-in the shape its capture TUI produces, so there is one writer and not two.
+FILES
+    harvest.py                  the function vocabulary and the ranking
+    ed-bind-wizard-results.json device ids and axis maps, from the capture TUI
+    <preset>.4.2.binds          written by --write, in the game's Bindings dir
+    KNEEBOARD.md, kneeboard.html   written by --sheet and --html
 
-The two work on different presets by default. The TUI owns whatever you
-captured by hand; the plan writes `Izowiuz-PLAN`, so neither overwrites the
-other and both can be selected in the game to compare.
+ENVIRONMENT
+    ED_PRESET           preset to write (default Izowiuz-PLAN)
+    SIM_DEVICE_MAP      where sim-device-map is checked out
+    SIM_BIND_BACKUPS    where copies of replaced files go
+
+NOTES
+    The plan and the capture TUI write different presets, so neither
+    overwrites the other.
+    Writing a preset does not select it: choose it once in the game.
 """
 
 import argparse
 import collections
 import importlib.util
+import json
 import os
 import sys
 
@@ -444,9 +450,19 @@ def tui(args):
         write(kept.devices, kept.placed, kept.axes, args.preset,
               args.backup_dir)
 
+    mod = wizard()
+    saved = json.load(open(os.path.join(HERE, 'ed-bind-wizard-results.json')))
+    cfg = saved.get('_config', {})
     creview.run(build(), 'Elite Dangerous',
                 f'VIRPIL · {args.preset or PRESET}',
-                describe=_describe, write=write_kept)
+                describe=_describe, write=write_kept,
+                paths=[('game', cfg.get('game_dir', '(not recorded)')),
+                       ('base preset', cfg.get('base') or mod.DEFAULT_BASE),
+                       ('writes', os.path.join(
+                           cfg.get('bindings_dir') or mod.DEFAULT_BINDINGS_DIR,
+                           f'{args.preset or PRESET}.4.2.binds')),
+                       ('backups',
+                        backup.dir_for('elite', args.backup_dir))])
 
 
 # ---------------------------------------------------------------- the sheet --
@@ -505,17 +521,19 @@ def _sheet():
 # ------------------------------------------------------------------- output --
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    p.add_argument('--why', action='store_true', help='explain every choice')
-    p.add_argument('--free', action='store_true', help='only what is unbound')
+    p = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument('--why', action='store_true', help='print why each control was chosen')
+    p.add_argument('--free', action='store_true', help='list controls left unbound')
     p.add_argument('--sheet', action='store_true', help='write KNEEBOARD.md')
     p.add_argument('--html', action='store_true',
-                   help='the same in columns, for a second screen')
+                   help='write kneeboard.html')
     p.add_argument('--write', action='store_true',
-                   help="into the game's Bindings folder")
-    p.add_argument('--preset', help=f'which preset to write (default {PRESET})')
+                   help='write the whole layout into the game')
+    p.add_argument('--preset', help=f'preset to write (default {PRESET})')
     p.add_argument('--tui', action='store_true',
-                   help='review the layout and write what you keep')
+                   help='review the layout, write what you keep')
     backup.add_argument(p, 'elite')
     a = p.parse_args()
 

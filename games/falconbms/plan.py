@@ -1,29 +1,27 @@
 #!/usr/bin/env python3
-"""Lay the real F-16 HOTAS onto the hardware we actually have.
+"""plan.py - lay out Falcon BMS on the HOTAS
 
-This one is different from its three siblings, and the difference is the whole
-point. In DCS, War Thunder and MSFS the wizard has to *invent* a layout: the
-sims have hundreds of aircraft and no opinion about where anything goes, so the
-needs are stated as shapes and matched against whatever fits.
+DESCRIPTION
+    Match what a pilot must be able to do against the controls in the device
+    map, then write BMS's key file. --write-axes writes the axis defaults too.
 
-BMS has one aircraft, and the F-16's HOTAS is prescriptive. Its designers
-already decided that target management is a four-way hat under your thumb and
-that the speedbrake is a fore/aft switch on the throttle. Twenty-two vendor
-profiles in `Hotas/Archive` agree with each other to a degree nothing in the
-other three sims comes close to. So the needs below are not a guess -- they are
-the real jet's own controls, and `--why` prints how many of those profiles back
-each one.
+FILES
+    harvest.py                  the callback vocabulary and the vendor ranking
+    BMS - Full.key              the shipped key file --write builds on
+    BMS - VIRPIL.key            written by --write
+    DeviceDefaults.txt          written by --write-axes
+    axismapping.dat             moved aside by --write-axes, so BMS rebuilds it
+    KNEEBOARD.md, kneeboard.html   written by --sheet and --html
 
-What still has to be worked out is which of OUR controls plays each part, and
-that is what sim-device-map is for.
+ENVIRONMENT
+    BMS_DIR             the BMS install (--bms-dir overrides)
+    SIM_DEVICE_MAP      where sim-device-map is checked out
+    SIM_BIND_BACKUPS    where copies of replaced files go
 
-    ./plan.py                 # the layout
-    ./plan.py --why           # and the evidence for each choice
-    ./plan.py --free          # what is still unbound
-    ./plan.py --audit         # ranked callbacks we did not place
-    ./plan.py --sheet         # write KNEEBOARD.md
-    ./plan.py --write         # write the key file into the game
-    ./plan.py --write-axes    # and the axis defaults (see the README caveat)
+NOTES
+    Config files are latin-1 and CRLF; both are preserved.
+    Select the key file in BMS Setup -> Controllers, or in the Launcher.
+    --write-axes is untested; see README.
 """
 
 import argparse
@@ -662,8 +660,14 @@ def tui(args):
         write_key(bms, args.backup_dir, when, kept.placed)
         write_axes(bms, args.backup_dir, when)
 
+    cfg = bms / 'User' / 'Config'
     creview.run(build(), 'Falcon BMS', f'VIRPIL · {KEYFILE_OUT}',
-                describe=_describe, write=write_kept)
+                describe=_describe, write=write_kept,
+                paths=[('game', str(bms)),
+                       ('writes', str(cfg / KEYFILE_OUT)),
+                       ('and', str(cfg / 'DeviceDefaults.txt')),
+                       ('backups',
+                        backup.dir_for('falconbms', args.backup_dir))])
 
 
 # -------------------------------------------------------------------- output
@@ -864,20 +868,19 @@ def html_sheet(path):
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('--why', action='store_true', help='explain every choice')
-    p.add_argument('--free', action='store_true', help='only what is unbound')
+    p.add_argument('--why', action='store_true', help='print why each control was chosen')
+    p.add_argument('--free', action='store_true', help='list controls left unbound')
     p.add_argument('--audit', action='store_true',
-                   help='ranked callbacks we did not place')
+                   help='list ranked callbacks left unplaced')
     p.add_argument('--sheet', action='store_true', help='write KNEEBOARD.md')
     p.add_argument('--html', action='store_true',
-                   help='write kneeboard.html — the same thing in columns,'
-                        ' for a second screen')
+                   help='write kneeboard.html')
     p.add_argument('--write', action='store_true', help='write the key file')
     p.add_argument('--write-axes', action='store_true',
-                   help='write the axis defaults (untested, see README)')
-    p.add_argument('--bms-dir', help='override the BMS install')
+                   help='write the axis defaults (untested)')
+    p.add_argument('--bms-dir', help='the BMS install directory')
     p.add_argument('--tui', action='store_true',
-                   help='review the layout and write what you keep')
+                   help='review the layout, write what you keep')
     backup.add_argument(p, 'falconbms')
     a = p.parse_args()
 

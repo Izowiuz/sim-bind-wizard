@@ -1,36 +1,59 @@
 #!/usr/bin/env python3
-"""Interactive Elite Dangerous bindings wizard + .binds generator for HOTAS.
+"""ed-bind-wizard.py - capture Elite bindings, and write the preset
 
-TUI mode (default): full-screen terminal wizard. Flow:
+DESCRIPTION
+    Full-screen wizard by default: pick a base preset, pick SHIP or SRV, pick
+    a section, then bind each function by pressing the control. Every change
+    is saved at once, so quitting is safe at any point.
+    With --generate, headless: build the .binds preset and exit.
 
-    1. game folder comes from --game-dir (remembered in the results file,
-       so you only pass it once); the Bindings folder is derived from it
-    2. pick the base preset (its bindings stay as keyboard/mouse fallback)
-    3. pick target: SHIP or SRV
-    4. pick a mapping section to (re)bind — or ALL
-
-Bindings are edited in a table: every function of the section is a row
-showing its current assignment straight from the results file. Keys:
-
+KEYS
     arrows  move between functions
-    RETURN  (re)bind the selected function — then press the physical
-            button / move the axis; after accepting, the cursor moves
-            to the next row so you can chain RETURN-capture-RETURN
-    I       invert an axis (stored or freshly captured)
-    X       clear the binding (base preset fallback stays)
-    ESC     back / cancel / redo
+    RETURN  (re)bind the selected one, then press the button or move the axis
+    I       invert an axis
+    X       clear the binding, leaving the base preset's
+    ESC     back, cancel, redo
 
-Results are saved after every change, so quitting any time is safe.
+FILES
+    ed-bind-wizard-results.json   the bindings, and where the game is (-r)
+    <preset>.4.2.binds            written by --generate
 
-Generator mode (--generate): headless; builds the .binds preset from the
-results file and writes it into the game's Bindings folder.
-
-Usage:
-    ed-bind-wizard.py                       # TUI wizard
-    ed-bind-wizard.py --reset               # wizard from scratch
-    ed-bind-wizard.py -r other.json         # use a different results file
-    ed-bind-wizard.py --generate            # write the .binds preset
+NOTES
+    The base preset's bindings stay as the keyboard and mouse fallback.
+    Writing a preset does not select it: choose it once in the game.
 """
+
+# Interactive Elite Dangerous bindings wizard + .binds generator for HOTAS.
+#
+# TUI mode (default): full-screen terminal wizard. Flow:
+#
+#     1. game folder comes from --game-dir (remembered in the results file,
+#        so you only pass it once); the Bindings folder is derived from it
+#     2. pick the base preset (its bindings stay as keyboard/mouse fallback)
+#     3. pick target: SHIP or SRV
+#     4. pick a mapping section to (re)bind — or ALL
+#
+# Bindings are edited in a table: every function of the section is a row
+# showing its current assignment straight from the results file. Keys:
+#
+#     arrows  move between functions
+#     RETURN  (re)bind the selected function — then press the physical
+#             button / move the axis; after accepting, the cursor moves
+#             to the next row so you can chain RETURN-capture-RETURN
+#     I       invert an axis (stored or freshly captured)
+#     X       clear the binding (base preset fallback stays)
+#     ESC     back / cancel / redo
+#
+# Results are saved after every change, so quitting any time is safe.
+#
+# Generator mode (--generate): headless; builds the .binds preset from the
+# results file and writes it into the game's Bindings folder.
+#
+# Usage:
+#     ed-bind-wizard.py                       # TUI wizard
+#     ed-bind-wizard.py --reset               # wizard from scratch
+#     ed-bind-wizard.py -r other.json         # use a different results file
+#     ed-bind-wizard.py --generate            # write the .binds preset
 
 import argparse
 import curses
@@ -615,7 +638,8 @@ def tui_main(scr, args, results, cfg):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Elite Dangerous HOTAS bindings wizard and generator")
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-r", "--results", default=DEFAULT_RESULTS,
                     help="results JSON: wizard state / generator input "
                          "(default: next to this script)")

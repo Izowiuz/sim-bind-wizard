@@ -1,22 +1,31 @@
 #!/usr/bin/env python3
-"""Lay out X4 Foundations on the VIRPIL HOTAS and write inputmap_3.xml.
+"""plan.py - lay out X4 Foundations on the HOTAS
 
-    ./plan.py                 the layout
-    ./plan.py --why           and the evidence for each choice
-    ./plan.py --free          what stays unbound
-    ./plan.py --sheet --html  the kneeboard
-    ./plan.py --write         into the game (close X4 first)
+DESCRIPTION
+    Match what a pilot must be able to do against the controls in the device
+    map, then write the result into X4's own profile.
 
-harvest.py supplies the vocabulary; sim-device-map supplies the shape of every
-control. This file holds the only X4-specific knowledge: which functions
-deserve hardware, what an X4 binding line looks like, and which device slot is
-which.
+FILES
+    harvest.py          the action vocabulary
+    inputmap_3.xml      written by --write, under the Proton prefix
+    KNEEBOARD.md        written by --sheet
+    kneeboard.html      written by --html
 
-X4 has no factory HOTAS profiles to count, unlike BMS, War Thunder, MSFS and
-DCS, so there is no ranking to read off the game. The need list below is
-seeded from the bindings already in `inputmap_3.xml` ("Izowiuz VIrpil") --
-a record of what was worth binding by hand -- and ordered by urgency alone.
+ENVIRONMENT
+    X4_PROFILE          profile file to write (default inputmap_3.xml)
+    X4_SLOTS            override slot detection, e.g. "stick=2,throttle=3"
+    SIM_DEVICE_MAP      where sim-device-map is checked out
+    SIM_BIND_BACKUPS    where copies of replaced files go
+
+NOTES
+    Close X4 first: it rewrites these files on exit.
+    Every id in NEEDS is checked against the vocabulary before anything runs.
 """
+
+# X4 ships no factory HOTAS profiles to count, unlike BMS, War Thunder, MSFS
+# and DCS, so there is no ranking to read off the game. NEEDS below is seeded
+# from the bindings already in inputmap_3.xml -- a record of what was worth
+# binding by hand -- and ordered by urgency alone.
 
 import argparse
 import importlib.util
@@ -550,23 +559,28 @@ def tui(args):
 
     creview.run(layout, 'X4 Foundations',
                 f'VIRPIL · {args.profile or PROFILE}',
-                describe=_describe, write=write_kept)
+                describe=_describe, write=write_kept,
+                paths=[('profile dir', harvest.profile_dir()),
+                       ('writes', profile_path(args.profile)),
+                       ('backups', backup.dir_for('x4', args.backup_dir))])
 
 
 # ------------------------------------------------------------------- output --
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    p.add_argument('--why', action='store_true', help='explain every choice')
-    p.add_argument('--free', action='store_true', help='only what is unbound')
+    p = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument('--why', action='store_true', help='print why each control was chosen')
+    p.add_argument('--free', action='store_true', help='list controls left unbound')
     p.add_argument('--sheet', action='store_true', help='write KNEEBOARD.md')
     p.add_argument('--html', action='store_true',
-                   help='the same in columns, for a second screen')
+                   help='write kneeboard.html')
     p.add_argument('--write', action='store_true',
-                   help='into the game (close X4 first)')
+                   help='write the whole layout into the game')
     p.add_argument('--tui', action='store_true',
-                   help='review the layout and write what you keep')
-    p.add_argument('--profile', help=f'which file to write (default {PROFILE})')
+                   help='review the layout, write what you keep')
+    p.add_argument('--profile', help=f'profile to write (default {PROFILE})')
     backup.add_argument(p, 'x4')
     args = p.parse_args()
 

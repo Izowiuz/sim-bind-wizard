@@ -5,12 +5,12 @@
 Profiles are Steam Cloud saves, not files in the install:
 
     ~/.local/share/Steam/userdata/<steam id>/2537590/remote/
-      inputprofile_<n>        two per device
+      inputprofile_<n>      two per device
 
-The install supplies the ranking:
+The ranking comes from the install:
 
     .../steamapps/common/MSFS2024/Packages/
-      asobo-input-profiles-pc/InputProfiles/Categories/    551 shipped profiles
+      asobo-input-profiles-pc/InputProfiles/Categories/   551 shipped profiles
 
 ## How to run it
 
@@ -20,22 +20,21 @@ The install supplies the ranking:
     ./plan.py --sheet --html  the kneeboard
     ./plan.py --tui           walk the layout and write what you keep
     ./plan.py --write         all of it (close Steam first)
-    ./plan.py --write --backup-dir PATH
 
-Every profile it touches is copied into `<repo>/backups/msfs/<stamp>/` first;
-`--backup-dir` or `SIM_BIND_BACKUPS` puts them somewhere else. Nothing is left
-beside the originals — `find_profiles` globs `inputprofile_*` and used to match
-its own backups, which is how the `.bak.X.bak.Y` files in the remote folder
-got there.
+    --backup-dir DIR   where every touched profile is copied first
+                       (default <repo>/backups/msfs/<stamp>/; SIM_BIND_BACKUPS
+                       does the same)
+
+Backups never land beside the originals.
 
 ## The format
 
-Plain XML. Each device has **two** profiles and which one an action belongs in
-is decided by a single element:
+Plain XML. Each device has **two** profiles, and one element decides which of
+them an action belongs in:
 
-    with    <AircraftInfo CategoryName="AIRPLANE"/>   flight controls, aeroplane
-                                                      and helicopter actions
-    without                                           global: camera, ATC, UI
+    with     <AircraftInfo CategoryName="AIRPLANE"/>   flight controls,
+                                                       aeroplane and helicopter
+    without                                            global: camera, ATC, UI
 
 A device is identified by `ProductID`, decimal, equal to the USB PID.
 
@@ -44,15 +43,15 @@ untouched entries stay byte-identical.
 
 ## Measured
 
-**Buttons are one-based in the label and zero-based in the code.**
+Buttons are one-based in the label and zero-based in the code:
 `Joystick Button N` carries code `N-1`.
 
-**Axis codes** are fixed per DirectInput axis:
+Axis codes are fixed per DirectInput axis:
 
-    X   Joystick L-Axis X  1026      Rx  Joystick R-Axis X   770
-    Y   Joystick L-Axis Y  1042      Ry  Joystick R-Axis Y   786
-    Z   Joystick L-Axis Z  1058      Rz  Joystick R-Axis Z   802
-    Slider  Joystick Slider X  514   Dial  Joystick Slider Y  530
+    X       Joystick L-Axis X   1026     Rx    Joystick R-Axis X    770
+    Y       Joystick L-Axis Y   1042     Ry    Joystick R-Axis Y    786
+    Z       Joystick L-Axis Z   1058     Rz    Joystick R-Axis Z    802
+    Slider  Joystick Slider X    514     Dial  Joystick Slider Y    530
 
 `Dial` is `Slider Y`, code 530 — the VMAX's rotary, distinct from its slider.
 
@@ -62,13 +61,12 @@ Nothing load-bearing.
 
 ## Gotchas
 
-**Steam must be closed to write.** It syncs these files from the cloud and will
-overwrite what the tool writes. `plan.py --write` refuses while it is running.
+**Steam must be closed to write.** It syncs these files from the cloud and
+overwrites what the tool wrote. `plan.py --write` refuses while it is running.
 
 **Both profiles of a device matter.** An action put in the wrong one is
-accepted and never fires; `find_profiles()` decides by the `AircraftInfo`
-element rather than by filename.
+accepted and never fires. `find_profiles()` decides by the `AircraftInfo`
+element, not by filename.
 
-**`Look around` binds nothing.** It exists to reserve the mini-stick so a
-button need cannot take it; the head-look axes themselves come from
-`axis_plan()`.
+**`Look around` binds nothing.** It reserves the mini-stick so a button need
+cannot take it; the head-look axes come from `axis_plan()`.

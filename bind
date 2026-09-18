@@ -1,21 +1,36 @@
 #!/usr/bin/env python3
-"""One front door for every game in the repo.
+"""bind - run one game's binding tools
 
-    ./bind                       what each game can do
-    ./bind bms                   the layout
-    ./bind wt why                and the evidence for each choice
-    ./bind x4 sheet              the kneeboard
-    ./bind dcs write             into the game
-    ./bind elite capture         the curses capture wizard
-    ./bind bms plan --audit      anything after the verb is forwarded
+SYNOPSIS
+    ./bind
+    ./bind GAME [VERB] [ARG...]
 
-The verb is canonical; what it runs is not. War Thunder writes with a separate
-script, DCS calls its planner `propose.py` and writes through its capture
-wizard, Falcon BMS needs two writes for one layout. This table is the only
-place that knows, so `./bind <game> write` means the same thing everywhere.
+DESCRIPTION
+    With no arguments, print which verbs each game answers.
+    VERB defaults to `plan`. Anything after it is passed to the script.
 
-Adding a game means adding a row. A verb it has no answer for is left out
-rather than faked, and `./bind` with no arguments prints exactly that.
+VERBS
+    harvest   read the game's files, write the vocabulary cache
+    plan      what it would bind, and where
+    why       the same, plus the evidence for each control
+    free      controls left unbound
+    sheet     write KNEEBOARD.md and kneeboard.html
+    tui       review the layout, write what you keep
+    write     the whole layout, into the game
+    capture   the curses capture wizard
+
+GAMES
+    dcs  elite (ed)  falconbms (bms)  msfs  warthunder (wt)  x4
+
+EXAMPLES
+    ./bind wt why
+    ./bind x4 sheet
+    ./bind bms plan --audit
+
+NOTES
+    A verb a game does not answer is omitted; `./bind` prints the reason.
+    Every planner owns --write. War Thunder and DCS delegate it to the
+    script that owns their file format.
 """
 
 import os
@@ -50,7 +65,7 @@ GAMES = {
         'sheet':   ('plan.py', ('--sheet', 'KNEEBOARD.md',
                                 '--html', 'kneeboard.html')),
         'tui':     ('plan.py', ('--tui',)),
-        'write':   ('wt-bind-preset.py', ()),
+        'write':   ('plan.py', ('--write',)),
     },
     'msfs': {
         'title': 'MSFS 2024',
@@ -80,9 +95,7 @@ GAMES = {
         'plan':    ('propose.py', ()),
         'why':     ('propose.py', ('--why',)),
         'sheet':   ('propose.py', ('--sheet', '--html')),
-        # the layout goes into the results file; the capture wizard is what
-        # writes DCS's own diff.lua from it
-        'write':   ('dcs-bind-wizard.py', ('--generate',)),
+        'write':   ('propose.py', ('--write',)),
         'capture': ('dcs-bind-wizard.py', ()),
     },
     'elite': {

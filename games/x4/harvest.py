@@ -1,32 +1,46 @@
 #!/usr/bin/env python3
-"""Read what X4 Foundations can be told to do, and how it names our devices.
+"""harvest.py - read X4's action vocabulary
 
-X4 is the friendliest target of the family. Its bindings live in plain XML in
-the Proton prefix, one file per named profile, and every binding is one line:
+DESCRIPTION
+    Parse the bindings X4 keeps in its Proton prefix and report what the game
+    can be told to do. With no arguments, print a summary.
 
-    <action id="INPUT_ACTION_TOGGLE_TRAVEL_MODE"
-            source="INPUT_SOURCE_JOYBUTTONS_3" code="INPUT_XBUTTON_16"/>
+FILES
+    inputmap*.xml       read, under the prefix
+    x4-actions.json     written by --json
 
-Three element types, and the difference matters when deciding what a control
-should carry:
-
-    <action>  fires once on press          280 of them
-    <state>   true while held              113
-    <range>   an axis                       34
-
-`source` names the device by SLOT -- `JOYBUTTONS`, `_2`, `_3` -- and `code` is
-LOCAL to that device. No global numbering to undo, unlike War Thunder and BMS.
-
-Two things this cannot tell us, and one of them still needs measuring:
-
-- Which slot is which device. There is no device list anywhere in the config,
-  so the slots follow enumeration order. `slots()` infers it from an existing
-  profile instead: the slot carrying THROTTLE on RX is the throttle, the slot
-  whose codes are all Xbox names is a gamepad.
-- What `INPUT_XBUTTON_17` is in terms of the button index the device map uses.
-  X4 mixes Xbox names with bare numbers and it is not established whether they
-  share one numbering. NOT GUESSED HERE -- see `CODES` below.
+NOTES
+    plan.py reparses the XML when this cache is missing, so --json is
+    optional here and required for every other game in the repo.
 """
+
+# Read what X4 Foundations can be told to do, and how it names our devices.
+#
+# X4 is the friendliest target of the family. Its bindings live in plain XML in
+# the Proton prefix, one file per named profile, and every binding is one line:
+#
+#     <action id="INPUT_ACTION_TOGGLE_TRAVEL_MODE"
+#             source="INPUT_SOURCE_JOYBUTTONS_3" code="INPUT_XBUTTON_16"/>
+#
+# Three element types, and the difference matters when deciding what a control
+# should carry:
+#
+#     <action>  fires once on press          229 distinct ids
+#     <state>   true while held              101
+#     <range>   an axis                       29
+#
+# `source` names the device by SLOT -- `JOYBUTTONS`, `_2`, `_3` -- and `code` is
+# LOCAL to that device. No global numbering to undo, unlike War Thunder and BMS.
+#
+# Two things this cannot tell us, and one of them still needs measuring:
+#
+# - Which slot is which device. There is no device list anywhere in the config,
+#   so the slots follow enumeration order. `slots()` infers it from an existing
+#   profile instead: the slot carrying THROTTLE on RX is the throttle, the slot
+#   whose codes are all Xbox names is a gamepad.
+# - What `INPUT_XBUTTON_17` is in terms of the button index the device map uses.
+#   X4 mixes Xbox names with bare numbers and it is not established whether they
+#   share one numbering. NOT GUESSED HERE -- see `CODES` below.
 
 import argparse
 import collections

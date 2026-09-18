@@ -1,25 +1,42 @@
 #!/usr/bin/env python3
-"""Rebuild the game vocabulary this wizard validates against, from the game.
+"""harvest.py - read War Thunder's action vocabulary and factory ranking
 
-Two files come out, and neither belongs in version control -- one is Gaijin's
-localisation, the other is derived from the presets they ship:
+DESCRIPTION
+    Unpack the game's archives and report every bindable action and axis with
+    its menu name, plus how many shipped joystick profiles bind each one.
 
-  wt-actions.json      every bindable action and axis, with its menu name.
-                       plan.py refuses to write an action that is not in here,
-                       because War Thunder drops an unknown id in silence.
-  wt-factory-rank.json how many of the joystick profiles the game ships bind
-                       each action. Not a verdict -- those profiles are old and
-                       lean arcade, they predate countermeasures and radar --
-                       but a useful prior on what a HOTAS is expected to carry.
+FILES
+    wt-actions.json        written: every action and axis, with its menu name
+    wt-factory-rank.json   written: how many shipped profiles bind each
 
-The archives are `VRFx` containers: zstd, with the first and last 16 bytes of
-the compressed body XORed against a fixed key. Inside sits a flat filesystem.
-The preset files are binary .blk, zstd-compressed against a dictionary shipped
-alongside them, with their key names in a nametable shared across the archive.
+OPTIONS
+    --game-dir PATH        the War Thunder install (auto-detected otherwise)
 
-    ./harvest.py                       # auto-detect the Steam install
-    ./harvest.py --game-dir /path/to/War\\ Thunder
+NOTES
+    plan.py refuses to write an action that is not in the vocabulary: War
+    Thunder drops an unknown id in silence.
 """
+
+# Rebuild the game vocabulary this wizard validates against, from the game.
+#
+# Two files come out, and neither belongs in version control -- one is Gaijin's
+# localisation, the other is derived from the presets they ship:
+#
+#   wt-actions.json      every bindable action and axis, with its menu name.
+#                        plan.py refuses to write an action that is not in here,
+#                        because War Thunder drops an unknown id in silence.
+#   wt-factory-rank.json how many of the joystick profiles the game ships bind
+#                        each action. Not a verdict -- those profiles are old and
+#                        lean arcade, they predate countermeasures and radar --
+#                        but a useful prior on what a HOTAS is expected to carry.
+#
+# The archives are `VRFx` containers: zstd, with the first and last 16 bytes of
+# the compressed body XORed against a fixed key. Inside sits a flat filesystem.
+# The preset files are binary .blk, zstd-compressed against a dictionary shipped
+# alongside them, with their key names in a nametable shared across the archive.
+#
+#     ./harvest.py                       # auto-detect the Steam install
+#     ./harvest.py --game-dir /path/to/War\ Thunder
 
 import argparse
 import csv
@@ -249,7 +266,9 @@ def harvest(game_dir):
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--game-dir', help='where War Thunder is installed')
     args = ap.parse_args()
 

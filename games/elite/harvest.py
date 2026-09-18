@@ -1,24 +1,37 @@
 #!/usr/bin/env python3
-"""Read Elite Dangerous: every function it accepts a binding for, and how many
-of the HOTAS presets it ships bind each one.
+"""harvest.py - read Elite's function vocabulary and factory ranking
 
-    ./harvest.py              what it found
-    ./harvest.py --vocab      every function, by kind
-    ./harvest.py --grep word  functions matching a word
-    ./harvest.py --json       cache it, the way the other games do
+DESCRIPTION
+    Read the control schemes Elite ships and report every bindable function,
+    plus how many factory presets bind each one.
 
-In: the shipped `.binds` presets under `ControlSchemes/`. Out: two JSON files
-next to this script -- the vocabulary and the ranking.
+FILES
+    ed-actions.json     written by --json: every function
+    ed-rank.json        written by --json: how many presets bind each
 
-The vocabulary is `KeyboardMouseOnly.binds`, which carries every function as an
-element whether or not it is bound: 311 buttons, 58 axes and 68 settings that
-are not bindings at all (`MouseSensitivity`, deadzones, `YawToRollMode`).
-
-The ranking is the other presets. Fifteen of the thirty are real HOTAS
-profiles, and five of those -- the X55, X56, Warthog, T16000M and G940 -- name
-the stick and the throttle as separate devices, so they say which device a
-function belongs on as well as how much it matters.
+OPTIONS
+    --schemes-dir PATH  the ControlSchemes directory
 """
+
+# Read Elite Dangerous: every function it accepts a binding for, and how many
+# of the HOTAS presets it ships bind each one.
+#
+#     ./harvest.py              what it found
+#     ./harvest.py --vocab      every function, by kind
+#     ./harvest.py --grep word  functions matching a word
+#     ./harvest.py --json       cache it, the way the other games do
+#
+# In: the shipped `.binds` presets under `ControlSchemes/`. Out: two JSON files
+# next to this script -- the vocabulary and the ranking.
+#
+# The vocabulary is `KeyboardMouseOnly.binds`, which carries every function as an
+# element whether or not it is bound: 311 buttons, 58 axes and 68 settings that
+# are not bindings at all (`MouseSensitivity`, deadzones, `YawToRollMode`).
+#
+# The ranking is the other presets. Fifteen of the thirty are real HOTAS
+# profiles, and five of those -- the X55, X56, Warthog, T16000M and G940 -- name
+# the stick and the throttle as separate devices, so they say which device a
+# function belongs on as well as how much it matters.
 
 import argparse
 import collections
@@ -190,7 +203,9 @@ def readable(name):
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__.split('\n')[0])
+    p = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--vocab', action='store_true',
                    help='every function, by kind')
     p.add_argument('--grep', metavar='WORD', help='functions matching a word')

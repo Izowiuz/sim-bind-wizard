@@ -1,21 +1,34 @@
 #!/usr/bin/env python3
-"""Read what a HOTAS is expected to carry, from the profiles MSFS ships.
+"""harvest.py - read MSFS's action vocabulary and factory ranking
 
-MSFS 2024 has ~1700 bindable actions and offers no hint where to start. It also
-ships 551 default profiles covering 101 devices, split by aircraft category --
-which is a far better answer to "what matters" than any list anyone could write
-by hand, and the same trick that drives the DCS and War Thunder wizards.
+DESCRIPTION
+    Read the profiles MSFS ships and report every bindable action, plus how
+    many factory profiles bind each one.
 
-Two things come out:
+FILES
+    msfs-actions.json   written: every action, per aircraft category
+    msfs-rank.json      written: how many factory profiles bind each action
 
-  msfs-actions.json   every action name seen, with the contexts it lives in
-  msfs-rank.json      how many shipped profiles bind each action, per category
-
-Neither belongs in version control: both are derived from Asobo's files.
-
-    ./harvest.py                  # auto-detect the Steam install
-    ./harvest.py --game-dir PATH
+OPTIONS
+    --game-dir PATH     the MSFS install (auto-detected otherwise)
 """
+
+# Read what a HOTAS is expected to carry, from the profiles MSFS ships.
+#
+# MSFS 2024 has ~1700 bindable actions and offers no hint where to start. It also
+# ships 551 default profiles covering 101 devices, split by aircraft category --
+# which is a far better answer to "what matters" than any list anyone could write
+# by hand, and the same trick that drives the DCS and War Thunder wizards.
+#
+# Two things come out:
+#
+#   msfs-actions.json   every action name seen, with the contexts it lives in
+#   msfs-rank.json      how many shipped profiles bind each action, per category
+#
+# Neither belongs in version control: both are derived from Asobo's files.
+#
+#     ./harvest.py                  # auto-detect the Steam install
+#     ./harvest.py --game-dir PATH
 
 import argparse
 import collections
@@ -124,7 +137,9 @@ def harvest(game_dir):
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--game-dir')
     args = ap.parse_args()
 

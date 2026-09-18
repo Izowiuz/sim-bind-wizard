@@ -1,21 +1,37 @@
 #!/usr/bin/env python3
-"""Read everything Falcon BMS already knows about bindings, and write it out as JSON.
+"""harvest.py - read BMS's callback vocabulary and vendor ranking
 
-Nothing here touches the game.  Three things come off disk:
+DESCRIPTION
+    Read BMS's shipped key file and its vendor profiles, and report every
+    callback with how many of those profiles bind it. Also reports the DX
+    offset each device gets, which decides its button numbering.
 
-  * the vocabulary  - every bindable callback in `BMS - Full.key`, with the
-    human description and the cockpit section it sits in.  BMS is the only sim
-    of the four that ships its action list already grouped by panel.
-  * the ranking     - the 22 vendor HOTAS profiles in `Hotas/Archive`.  They are
-    deprecated and no longer maintained, but they are still 22 independent
-    answers to "what belongs on a stick", which is exactly what we rank by
-    everywhere else.
-  * the devices     - `DeviceSorting.txt` fixes the DX numbering: device N owns
-    DX numbers N*32 .. N*32+31, so the sorting order *is* the offset table.
+FILES
+    BMS - Full.key      read: the callback vocabulary
+    Hotas/Archive/*.key read: the vendor profiles, for the ranking
+    DeviceSorting.txt   read: device order, which fixes the DX offsets
 
-Outputs bms-actions.json and bms-rank.json next to this file.
+ENVIRONMENT
+    BMS_DIR             the BMS install
 """
 
+# Read everything Falcon BMS already knows about bindings, and write it out as JSON.
+#
+# Nothing here touches the game.  Three things come off disk:
+#
+#   * the vocabulary  - every bindable callback in `BMS - Full.key`, with the
+#     human description and the cockpit section it sits in.  BMS is the only sim
+#     of the four that ships its action list already grouped by panel.
+#   * the ranking     - the 22 vendor HOTAS profiles in `Hotas/Archive`.  They are
+#     deprecated and no longer maintained, but they are still 22 independent
+#     answers to "what belongs on a stick", which is exactly what we rank by
+#     everywhere else.
+#   * the devices     - `DeviceSorting.txt` fixes the DX numbering: device N owns
+#     DX numbers N*32 .. N*32+31, so the sorting order *is* the offset table.
+#
+# Outputs bms-actions.json and bms-rank.json next to this file.
+
+import argparse
 import json
 import os
 import re
@@ -165,6 +181,9 @@ def harvest_devices(path):
 
 
 def main():
+    argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter).parse_args()
     bms = bms_dir()
     keyfile = bms / "User" / "Config" / "BMS - Full.key"
     archive = bms / "Hotas" / "Archive"

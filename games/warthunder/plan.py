@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
-"""Work out what goes where from the device map, instead of a hand-written list.
+"""plan.py - lay out War Thunder on the HOTAS
 
-The first version of this wizard carried a table of `(device, button, action)`
-written from memory of the hardware, and got it wrong twice: countermeasures
-landed on a hat direction because a DCS command called "Paddle Switch" was read
-as a description of the paddle, and flaps were split across what turned out to
-be one hat.
+DESCRIPTION
+    Match what a pilot must be able to do against the controls in the device
+    map. --write hands the result to wt-bind-preset.py, which owns machine.blk.
 
-Now the hardware describes itself. sim-device-map knows the SHAPE of every
-control -- a four-way hat, a three-stage cumulative trigger, a sprung two-way
-hat, a thumb-reachable paddle -- and each need below says what shape it wants.
-Matching the two is the whole job, and the reasoning prints with `--why`.
+FILES
+    harvest.py          the action vocabulary and the factory ranking
+    wt-bind-preset.py   the writer; it also has --dry-run, --render, --restore
+    machine.blk         written by --write, one per account under Saves/
+    KNEEBOARD.md, kneeboard.html   written by --sheet and --html
 
-    ./plan.py            # the assignment, grouped by device
-    ./plan.py --why      # and why each control was chosen
-    ./plan.py --unused   # what is still free
+ENVIRONMENT
+    SIM_DEVICE_MAP      where sim-device-map is checked out
+    SIM_BIND_BACKUPS    where copies of replaced files go
+
+NOTES
+    Close War Thunder first: it rewrites machine.blk on exit.
+    Air and helicopter are separate contexts, so one control carries both.
 """
 
 import argparse
@@ -454,6 +457,28 @@ def _describe(p):
     return out
 
 
+def preset_writer():
+    """wt-bind-preset.py, imported.
+
+    It stays a separate script because it owns machine.blk -- 490 lines of
+    .blk parsing, plus a restore and a render nobody else has a use for. What
+    it should not also own is the *verb*: every other planner in the family
+    answers `--write` itself, and this one delegating is what makes that true
+    here too.
+    """
+    spec = importlib.util.spec_from_file_location(
+        'wtpreset', os.path.join(HERE, 'wt-bind-preset.py'))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def write(args, layout=None):
+    """Into the game, through the script that knows the format."""
+    argv = ['--backup-dir', args.backup_dir] if args.backup_dir else []
+    preset_writer().main(argv, layout=layout)
+
+
 def tui(args):
     """The review, writing through wt-bind-preset.py.
 
@@ -462,17 +487,15 @@ def tui(args):
     `write()` here -- that script owns machine.blk and nothing else should
     learn the format.
     """
-    spec = importlib.util.spec_from_file_location(
-        'wtpreset', os.path.join(HERE, 'wt-bind-preset.py'))
-    preset = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(preset)
-
     def write_kept(kept):
-        argv = ['--backup-dir', args.backup_dir] if args.backup_dir else []
-        preset.main(argv, layout=kept)
+        write(args, layout=kept)
 
+    preset = preset_writer()
     creview.run(build(), 'War Thunder', 'air simulator + helicopters · VIRPIL',
-                describe=_describe, write=write_kept)
+                describe=_describe, write=write_kept,
+                paths=[('game', preset.GAME_DIR), ('saves', preset.SAVES),
+                       ('backups',
+                        backup.dir_for('warthunder', args.backup_dir))])
 
 
 def _sheet():
@@ -553,21 +576,28 @@ def html_sheet(path):
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--why', action='store_true', help='explain each choice')
-    ap.add_argument('--unused', action='store_true', help='what is still free')
+    ap = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('--why', action='store_true', help='print why each control was chosen')
+    ap.add_argument('--unused', action='store_true', help='list controls left unbound')
     ap.add_argument('--sheet', nargs='?', const='KNEEBOARD.md', metavar='PATH',
-                    help='write the cheat sheet and exit')
+                    help='write KNEEBOARD.md')
     ap.add_argument('--html', nargs='?', const='kneeboard.html', metavar='PATH',
-                    help='write the same thing laid out in columns, for a'
-                         ' second screen')
+                    help='write kneeboard.html')
     ap.add_argument('--tui', action='store_true',
-                    help='review the layout and write what you keep')
+                    help='review the layout, write what you keep')
+    ap.add_argument('--write', action='store_true',
+                    help='write the whole layout into the game')
     backup.add_argument(ap, 'warthunder')
     args = ap.parse_args()
 
     if args.tui:
         tui(args)
+        return
+
+    if args.write:
+        write(args)
         return
 
     # Both, when both are asked for. An early return here meant

@@ -208,8 +208,15 @@ design:
     p / P   put the planner's choice on this one / into every gap
     RETURN  press the control you want it on
     l       or pick one from a list, with no hardware
-    x       clear it — the control goes back to the free list
+    x / X   clear this one / drop every proposal, leaving yours
+    m       the device map, and where the game was found
     w       write everything that has a control
+
+The header names the device behind each role. `devmap.by_role` keys on the
+map's `kind`, so two sticks make you choose one with `SIM_DEVICE_ROLES` -- and
+once you have, a row reading "stick" no longer says which. `m` has the rest:
+the paths a game supplies through `paths=`, then every control in the map with
+its buttons, axes, reach and whatever need sits on it.
 
 Pressing a control reads `/dev/input/js*` through `core.capture`, the same way
 the two capture wizards do. `Review.took()` is everything that happens once the
@@ -368,6 +375,13 @@ A writer must **remove** as well as add and change: a binding dropped from
 `NEEDS` has to disappear from the game's config, or it stays live alongside
 whatever replaced it.
 
+A planner must answer **`--write` itself**, whatever it delegates to. War
+Thunder's `machine.blk` and DCS's `diff.lua` are written by separate scripts
+that own those formats and keep the verbs only a writer needs -- a dry run, a
+render, a restore -- but `plan.py --write` is what `bind` calls, in every
+game. Before that, the dispatch table absorbed the difference, which made it
+look like a fact about the games rather than a gap in two adapters.
+
 A writer must take **the placements it is handed**, not call `build()` for
 itself. Two did, and the review screen -- whose entire job is to write some of
 a plan and not the rest -- could not exist until they stopped.
@@ -378,3 +392,10 @@ folder, and four of the six writers here have a scar from it.
 
 `measured` and `still a guess` are separate headings so a reader knows which
 claims are load-bearing.
+
+Three of the five standalone harvests do not meet the first line of the
+contract: Falcon BMS, War Thunder and MSFS write their cache unconditionally,
+have no `--json`, and serialise it themselves rather than through
+`core.vocab.save`. `./bind <game> harvest` hides the difference; the contract
+is still owed. (DCS has no `harvest.py`: its harvest is inside the capture
+wizard.)

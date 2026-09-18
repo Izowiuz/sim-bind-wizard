@@ -1,6 +1,6 @@
 # Using it
 
-Four tasks. Find yours and stop reading.
+Four tasks.
 
 ---
 
@@ -14,6 +14,14 @@ Configs the game reads are **outputs**. Edit `NEEDS` and regenerate.
     ./bind <game> write        all of it, into the game
     ./bind <game> sheet        refresh the kneeboard
 
+`./bind` with no arguments lists the games and the verbs each answers to.
+Anything after the verb is forwarded to the script under `games/<game>/`,
+which does the same work and takes its own flags.
+
+Close the game first. Writers refuse while it is running.
+
+### The review screen
+
 `tui` is `write` with a say in it. Every need is a row, whether the planner
 found it a home or not, and each row is in one of three states:
 
@@ -25,55 +33,58 @@ found it a home or not, and each row is in one of three states:
     p / P   put the planner's choice on this one / into every gap
     RETURN  press the control you want it on
     l       or pick one from a list, with no hardware
-    x       clear it — the control goes back on the free list
+    x / X   clear this one / drop every proposal, leaving yours
+    m       the device map, and where the game was found
     w       write everything that has a control
 
-`P` only ever fills gaps, so it cannot undo a choice of yours; that is what
-makes it safe to press at any point.
+`P` only fills gaps and `X` only drops proposals, so neither can undo a choice
+of yours: both are safe to press at any point.
 
-`RETURN` waits for you to press the control. What it does with the press
-depends on the need: one wanting four directions takes the whole hat in the
-hat's own order, so press whichever corner is under your thumb; one wanting a
-single binding goes **exactly where you pressed**, so the second detent of a
-trigger is the second detent. The screen says which of the two you are in
-before you press anything.
+`?` is a note to yourself, not a switch. A proposal you never confirmed is
+still written; clearing it is how you say no.
 
-Which stick is which is worked out from the USB ids, so nothing asks you to
-identify them first, and nothing is opened until you press RETURN. If a
-control cannot take that need it says why: wrong shape, too few buttons, or
-which other need is already sitting on it.
+What `RETURN` does with the press depends on the need, and the screen says
+which of the two you are in before you press anything:
 
-`l` does the same from a list, for when the sticks are not plugged in. Neither
-applies the reach rules -- someone choosing by hand has already decided the
-reach is worth it.
+    several bindings   the whole control, in its own order — press whichever
+                       corner is under your thumb
+    one binding        exactly where you pressed, so the second detent of a
+                       trigger is the second detent
 
-`?` is a note to yourself, not a switch: a proposal you never confirmed is
-still written. Clearing with `x` is how you say no.
+Which stick is which comes from the USB ids, so nothing asks you to identify
+them, and nothing is opened until you press RETURN. A control that cannot take
+the need says why: wrong shape, too few buttons, or which other need is
+already sitting on it.
 
-DCS answers `capture` instead. Its own wizard is where all of this came from,
-for a game whose bindings live in a results file.
+`l` picks from a list instead, for when the sticks are not plugged in. Neither
+`l` nor RETURN applies the reach rules.
 
-`./bind` with no arguments lists the games and which verbs each answers to.
-The scripts under `games/<game>/` do the same work and take their own flags;
-`./bind` forwards anything after the verb.
+`m` shows where the game was found, which file will be written, and every
+control the map knows about with what is on it. The header names the device
+behind each role, because "stick" is a role and you may own two.
 
-Close the game first. Writers refuse while it is running.
+DCS answers `capture` instead of `tui`.
 
-Everything a writer replaces is copied first, into `backups/<game>/<stamp>/`
-in the repo — one folder per run, with a `MANIFEST` saying where each file came
-from. `--backup-dir DIR` or `SIM_BIND_BACKUPS` puts them somewhere else; a
-cloud folder or an external disk is a reasonable choice, the game's own
-directory is not. Nothing prunes them.
+### Backups
+
+Everything a writer replaces is copied into `backups/<game>/<stamp>/` in the
+repo first — one folder per run, with a `MANIFEST` saying where each file came
+from. Nothing prunes them.
+
+    --backup-dir DIR      somewhere else; SIM_BIND_BACKUPS does the same
+    --restore             put the newest run back
+    --restore-from STAMP  an older one
 
     ./bind <game> write --backup-dir ~/OneDrive/backups/<game>
+    ./bind wt write --restore --restore-from 20260918
 
-Putting one back is War Thunder's only, so far — the rest are a restore away
-from having it, since the MANIFEST already says where every file belongs.
+A cloud folder or an external disk is a reasonable choice for `--backup-dir`;
+the game's own directory is not.
 
-    ./bind wt write --restore                          the newest run
-    ./bind wt write --restore --restore-from 20260918   an older one
+Putting one back is War Thunder's only, so far. The `MANIFEST` already says
+where every file belongs, so the rest are a restore away from having it.
 
-Three fields decide placement:
+### What decides placement
 
 **`urgency`** — when you touch it. Nothing at `ON_THE_RAMP` can take a control
 your thumb rests on; nothing at `IN_A_TURN` can be given one you must let go of
@@ -84,8 +95,8 @@ the grip to reach.
     IN_THE_AIR    somewhere in the cruise
     ON_THE_RAMP   canopy open, engine off
 
-**`prefer`** — a control you have chosen, by its label in the device map. Placed
-before urgency is considered, so it survives regeneration.
+**`prefer`** — a control you have chosen, by its label in the device map.
+Placed before urgency is considered, so it survives regeneration.
 
     Need('Gear', 'button', ['ID_GEAR'], prefer='Keyboard B1 button')
 
@@ -145,11 +156,6 @@ hardware, counted rather than guessed.
 
 1. `games/<name>/harvest.py` — read and print; `--json` writes the cache. Find
    the game with `core.game`, write with `core.vocab.save`.
-
-   Three of the five older harvests do not meet this: Falcon BMS, War Thunder
-   and MSFS write their cache unconditionally and serialise it themselves
-   rather than through `core.vocab.save`. `./bind <game> harvest` hides the
-   difference; the contract is still owed.
 2. Measure what the files do not say. Record it in the code with its evidence,
    and mark what is still inference.
 3. `games/<name>/plan.py` — `NEEDS` of `core.needs.Need`, a writer, and
@@ -158,13 +164,12 @@ hardware, counted rather than guessed.
    take the flag from `core.backup.add_argument`.
 4. `games/<name>/README.md` — six headings: where it lives, how to run it, the
    format, measured, still a guess, gotchas.
-   A test in `tests/test_formats.py` for whatever the writer does to the
-   game's own text — what it must remove as well as add, and whatever the
-   format will not forgive. Write the fixture, then break the writer and check
-   the test notices.
-5. A row in `bind`, naming which script and flags each verb maps to. A verb the
+5. A test in `tests/test_formats.py` for whatever the writer does to the game's
+   own text — what it must remove as well as add, and whatever the format will
+   not forgive. Write the fixture, then break the writer and check the test
+   notices.
+6. A row in `bind`, naming which script and flags each verb maps to. A verb the
    game has no answer for is left out and the reason goes in `GAPS`, so a gap
    reads as a fact about the game rather than an omission.
 
-A writer must remove as well as add and change: a binding dropped from `NEEDS`
-has to disappear from the game's config.
+The rest of what an adapter owes is in `ARCHITECTURE.md`.
