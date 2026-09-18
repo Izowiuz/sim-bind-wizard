@@ -27,6 +27,7 @@ BMS installs *inside* Falcon 4.0's Proton prefix, not as a Steam app:
     ./plan.py --audit        ranked callbacks not placed
     ./plan.py --free         what is unbound
     ./plan.py --sheet --html the kneeboard
+    ./plan.py --tui          walk the layout and write what you keep
     ./plan.py --write        writes BMS - VIRPIL.key
     ./plan.py --write-axes   writes DeviceDefaults.txt, moves the binary aside
 

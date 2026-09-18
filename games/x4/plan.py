@@ -37,6 +37,7 @@ from core import backup                                     # noqa: E402
 from core import devmap                                     # noqa: E402
 from core import game                                       # noqa: E402
 from core import needs as corneeds                          # noqa: E402
+from core import review as creview                          # noqa: E402
 from core import sheet as csheet                            # noqa: E402
 from core import vocab                                      # noqa: E402
 from core.needs import (IN_A_TURN, ON_APPROACH,             # noqa: E402
@@ -350,8 +351,8 @@ def source(slot, axis=False):
 
 def build():
     devs = devmap.by_role('stick', 'throttle')
-    placed, unmet, free = corneeds.allocate(NEEDS, devs)
-    return devs, placed, unmet, free, axis_plan(devs)
+    return corneeds.Layout(devs, *corneeds.allocate(NEEDS, devs),
+                           axes=axis_plan(devs))
 
 
 # ----------------------------------------------------------------- writing --
@@ -445,8 +446,11 @@ def write(devs, placed, axes, backup_dir=None, name=None):
     print(f'backed up to {dest}')
 
     open(path, 'w', encoding='utf-8').write(new)
-    print(f'{os.path.basename(path)}: removed {len(dropped)}, '
-          f'wrote {len(wanted)} on slots '
+    # The whole path, not the basename: the profile lives six directories
+    # into a Proton prefix and "inputmap_3.xml" does not tell you which of
+    # the three X4 keeps, nor that it is the one under compatdata.
+    print(f'wrote {path}')
+    print(f'  removed {len(dropped)}, wrote {len(wanted)} on slots '
           + ', '.join(f'{r}={slot[r]}' for r in sorted(devs)))
     return len(wanted)
 
@@ -518,6 +522,37 @@ def _sheet():
     return sh
 
 
+# ---------------------------------------------------------------- the review --
+
+def _describe(p):
+    """[(which part of the control, what it does)] for the review pane.
+
+    X4 scopes a binding by which id it is, so one button carries up to three
+    meanings and each wants its context named -- the same reason `_sheet()`
+    puts the context in the axis row's `does`.
+    """
+    out = []
+    for button, payload in p.slots:
+        part = p.ctrl.direction(button) or 'press'
+        for ctx, pair in zip(CTX, payload):
+            if pair:
+                out.append((part, f'{ctx}: {harvest.readable(pair[1])}'))
+    return out
+
+
+def tui(args):
+    layout = build()
+
+    def write_kept(kept):
+        n = write(kept.devices, kept.placed, kept.axes,
+                  args.backup_dir, args.profile)
+        return [f'{n} binding(s) written']
+
+    creview.run(layout, 'X4 Foundations',
+                f'VIRPIL · {args.profile or PROFILE}',
+                describe=_describe, write=write_kept)
+
+
 # ------------------------------------------------------------------- output --
 
 def main():
@@ -529,6 +564,8 @@ def main():
                    help='the same in columns, for a second screen')
     p.add_argument('--write', action='store_true',
                    help='into the game (close X4 first)')
+    p.add_argument('--tui', action='store_true',
+                   help='review the layout and write what you keep')
     p.add_argument('--profile', help=f'which file to write (default {PROFILE})')
     backup.add_argument(p, 'x4')
     args = p.parse_args()
@@ -550,6 +587,10 @@ def main():
         if args.html:
             print('wrote %s (%d rows, %d axes)'
                   % sh.html(os.path.join(HERE, 'kneeboard.html')))
+        return
+
+    if args.tui:
+        tui(args)
         return
 
     if args.write:

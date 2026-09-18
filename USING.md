@@ -10,8 +10,48 @@ Configs the game reads are **outputs**. Edit `NEEDS` and regenerate.
 
     ./bind <game>              what it would bind, and where
     ./bind <game> why          and why each control was chosen
-    ./bind <game> write        into the game
+    ./bind <game> tui          walk it, keep what you want, write that
+    ./bind <game> write        all of it, into the game
     ./bind <game> sheet        refresh the kneeboard
+
+`tui` is `write` with a say in it. Every need is a row, whether the planner
+found it a home or not, and each row is in one of three states:
+
+    (unset)   nothing on it
+    ?         the planner put it there and you have not looked yet
+    +         yours: you confirmed it, or you chose it yourself
+
+    c / C   confirm this one / every proposal
+    p / P   put the planner's choice on this one / into every gap
+    RETURN  press the control you want it on
+    l       or pick one from a list, with no hardware
+    x       clear it — the control goes back on the free list
+    w       write everything that has a control
+
+`P` only ever fills gaps, so it cannot undo a choice of yours; that is what
+makes it safe to press at any point.
+
+`RETURN` waits for you to press the control. What it does with the press
+depends on the need: one wanting four directions takes the whole hat in the
+hat's own order, so press whichever corner is under your thumb; one wanting a
+single binding goes **exactly where you pressed**, so the second detent of a
+trigger is the second detent. The screen says which of the two you are in
+before you press anything.
+
+Which stick is which is worked out from the USB ids, so nothing asks you to
+identify them first, and nothing is opened until you press RETURN. If a
+control cannot take that need it says why: wrong shape, too few buttons, or
+which other need is already sitting on it.
+
+`l` does the same from a list, for when the sticks are not plugged in. Neither
+applies the reach rules -- someone choosing by hand has already decided the
+reach is worth it.
+
+`?` is a note to yourself, not a switch: a proposal you never confirmed is
+still written. Clearing with `x` is how you say no.
+
+DCS answers `capture` instead. Its own wizard is where all of this came from,
+for a game whose bindings live in a results file.
 
 `./bind` with no arguments lists the games and which verbs each answers to.
 The scripts under `games/<game>/` do the same work and take their own flags;

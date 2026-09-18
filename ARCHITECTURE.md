@@ -24,6 +24,7 @@
                               (ALLOCATION.md describes what it does)
       core/vocab.py           load a harvest's output; save it
       core/backup.py          copy what a writer is about to replace; put it back
+      core/review.py          the plan on screen: keep or drop each binding
       core/sheet.py           Sheet, Row, AxisRow -> markdown and html
       core/sheet-template.html
       core/capture.py         the js protocol: Device, wait_input, detect_roles
@@ -89,6 +90,7 @@ in scope in those two files.
 | shapes, reach tiers, urgency floor, scoring, passes | `core/needs` |
 | loading a vocabulary, cached or reparsed | `core/vocab` |
 | keeping a copy of what a writer replaces | `core/backup` |
+| what the reviewer kept, and the table it is kept in | `core/review` |
 | hardware that does not exist | `tests/fake` |
 | kneeboard rendering | `core/sheet` |
 | the action vocabulary and its readable names | `games/<g>/harvest` |
@@ -186,6 +188,91 @@ as a second line under the plain-English name; several render a column each.
 `load` returns the cache when it exists, otherwise calls `build` for a game
 cheap enough to reparse, otherwise exits telling you to run the harvest.
 
+## core.review
+
+    run(layout, title, subtitle='', describe=, write=)
+
+One screen for every game, and it is DCS's `run_table` generalised rather than
+anything new. The shape is worth stating because none of it is the obvious
+design:
+
+| | |
+|---|---|
+| the rows are **needs**, not bindings | a need with nothing on it is still a row, and clearing one leaves it where it was |
+| **three** states, not two | `(unset)` · `?` proposed · `+` yours |
+| proposing fills the **gaps only** | it never overwrites what you chose, which is what makes `P` safe to press at any moment |
+| choosing it yourself means **yours** | no confirming a decision you just made by hand |
+| `?` is advisory, **not a filter** | a proposal nobody looked at is still written; the mark says you did not check it |
+
+    c / C   confirm this one / every proposal
+    p / P   put the planner's choice on this one / into every gap
+    RETURN  press the control you want it on
+    l       or pick one from a list, with no hardware
+    x       clear it — the control goes back to the free list
+    w       write everything that has a control
+
+Pressing a control reads `/dev/input/js*` through `core.capture`, the same way
+the two capture wizards do. `Review.took()` is everything that happens once the
+kernel says which button went down, so the only untestable part of it is the
+read itself.
+
+What a press resolves to depends on how much the need has to place, and
+`Review.honours_press()` is the whole rule:
+
+| the need | what it gets | why |
+|---|---|---|
+| several bindings | the whole control, in its own direction order | four directions are the control's business, not the corner you touched |
+| `on` set | the direction `on` names | a speedbrake is fore/aft whatever hat it lands on — the lie `on` exists to stop |
+| one binding | **the position you pressed** | `slots_for` picks for a need that said nothing; a press said something |
+
+That last row was wrong until it was tried: pressing the second detent of a
+trigger bound the first, because `slots_for` takes the click or the first
+position when a need has one binding to place. Right for the allocator, which
+is guessing; wrong the moment somebody presses a thing by hand. A contact that
+carries no binding -- a rest or travel contact -- still falls back, and says
+so rather than binding where you pressed.
+
+Which `js` node is which role is settled by USB id rather than by asking you
+to press something: `/proc/bus/input/devices` gives vendor and product per
+node, and that pair is what `devicemap` matches on anyway. The wizards have to
+ask because they run before anything knows what hardware you have; here the
+map is already loaded. Nothing is opened until the first `RETURN`, so
+reviewing a layout with the sticks unplugged costs nothing.
+
+Pressing can land anywhere, so unlike the list every refusal says what was
+wrong -- not in the map, carries no binding, wrong shape, too few buttons, or
+carrying some other need by name. Shape is reported before occupancy: a hat
+that is the wrong shape would not work even if it were free.
+
+Rows group by urgency, not by device: urgency belongs to the need, so a row
+keeps its place when you clear it or move it elsewhere. Grouping by device
+made rows jump between sections while you worked.
+
+A game supplies only what the core cannot know -- `describe(placement)`
+returning `[(which part of the control, what it does)]`, because a payload is
+a BMS callback, a War Thunder `(air, heli)` pair or an X4 `(kind, id)` per
+context, and only the adapter can read its own.
+
+`write` is handed a `Layout` narrowed to the needs that ended up with a
+control. That is the whole reason `Layout.but()` exists and the reason BMS and
+War Thunder had to stop deriving their writers' tables inside `build()`: a
+table computed from the whole plan cannot be narrowed afterwards.
+
+Writers report by printing, and some warn on stderr. Under curses that would
+land on the screen being drawn, so the write call runs inside
+`redirect_stdout`/`redirect_stderr` and the output is replayed as log lines --
+cheaper than teaching six writers to return text they already print.
+
+Colour is used where the terminal has it, in the four base colours that read
+on a light background as well as a dark one, and never yellow. Without colour
+the same meanings fall back to bold and dim. `core/tui.py` draws in bold and
+reverse only, for a light-themed terminal; this keeps that intent without
+keeping the letter of it.
+
+DCS is not on this screen. Its bindings live in a results file where each one
+carries a `proposed` flag, and its own table is where all of the above came
+from. The generic one would have to invent the same state twice.
+
 ## core.backup
 
     stamp()                     '20260918-214917'
@@ -267,7 +354,11 @@ the right reason.
 
     harvest.py    in: the game's files.  out: vocabulary + ranking JSON
                   no arguments prints a summary; --json writes the cache
-    plan.py       NEEDS: list[Need]; build(); a writer; --sheet, --html, --why
+    plan.py       NEEDS: list[Need]
+                  build() -> core.needs.Layout
+                  a writer taking the placements it is given, not build()'s
+                  _describe(placement) and --tui, for core.review
+                  --sheet, --html, --why
                   a writer copies through core.backup.save and takes
                   --backup-dir from core.backup.add_argument
     README.md     where it lives · how to run it · the format ·
@@ -276,6 +367,10 @@ the right reason.
 A writer must **remove** as well as add and change: a binding dropped from
 `NEEDS` has to disappear from the game's config, or it stays live alongside
 whatever replaced it.
+
+A writer must take **the placements it is handed**, not call `build()` for
+itself. Two did, and the review screen -- whose entire job is to write some of
+a plan and not the rest -- could not exist until they stopped.
 
 A writer must leave **nothing behind** in the game's directories. What it
 replaces goes to `core.backup`, never to a sibling file: the game reads that

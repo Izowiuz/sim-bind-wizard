@@ -200,7 +200,10 @@ def device_offsets(controls):
     return roles
 
 
-def main():
+def main(argv=None, layout=None):
+    """Write the preset. `layout` is a plan somebody else already narrowed --
+    what the review screen hands over when only some bindings were kept --
+    and without it the whole plan is computed here as before."""
     ap = argparse.ArgumentParser()
     ap.add_argument('--dry-run', action='store_true',
                     help='print the plan and the resolved ids, write nothing')
@@ -214,11 +217,13 @@ def main():
                     help='write the resulting machine.blk to PATH for review '
                          'instead of touching the real one')
     backup.add_argument(ap, 'warthunder')
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     import plan
     global AXES, BUTTONS
-    AXES[:], BUTTONS[:] = plan.build()[:2]
+    lay = plan.build() if layout is None else layout
+    AXES[:] = lay.axes
+    BUTTONS[:] = plan.button_table(lay.placed)
     if args.why:
         os.execv(sys.executable, [sys.executable,
                                   os.path.join(os.path.dirname(

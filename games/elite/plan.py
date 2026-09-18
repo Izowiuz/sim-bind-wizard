@@ -35,6 +35,7 @@ if CORE not in sys.path:
 from core import backup                                     # noqa: E402
 from core import devmap                                     # noqa: E402
 from core import needs as corneeds                          # noqa: E402
+from core import review as creview                          # noqa: E402
 from core import sheet as csheet                            # noqa: E402
 from core import vocab                                      # noqa: E402
 from core.needs import (IN_A_TURN, ON_APPROACH,             # noqa: E402
@@ -382,8 +383,8 @@ def build():
     # job is to reserve a control -- `Head look` over the throttle mini-stick,
     # which the axes below take -- has `wanted == 0` and binds nothing, and
     # dropping it let a button need claim the mini-stick's click.
-    placed, unmet, free = corneeds.allocate(list(NEEDS), devs)
-    return devs, placed, unmet, free, axis_plan(devs)
+    return corneeds.Layout(devs, *corneeds.allocate(list(NEEDS), devs),
+                           axes=axis_plan(devs))
 
 
 # ----------------------------------------------------------------- writing --
@@ -422,6 +423,30 @@ def write(devs, placed, axes, preset=None, backup_dir=None):
     for line in mod.generate(results, base, bindings, preset or PRESET,
                              backup_dir):
         print(line)
+
+
+# ---------------------------------------------------------------- the review --
+
+def _describe(p):
+    """[(part of the control, what it does)] -- a function name carries its own
+    context in Elite, so the column says which."""
+    out = []
+    for button, payload in p.slots:
+        part = p.ctrl.direction(button) or 'press'
+        for ctx, func in zip(CTX, payload):
+            if func:
+                out.append((part, f'{ctx}: {harvest.readable(func)}'))
+    return out
+
+
+def tui(args):
+    def write_kept(kept):
+        write(kept.devices, kept.placed, kept.axes, args.preset,
+              args.backup_dir)
+
+    creview.run(build(), 'Elite Dangerous',
+                f'VIRPIL · {args.preset or PRESET}',
+                describe=_describe, write=write_kept)
 
 
 # ---------------------------------------------------------------- the sheet --
@@ -489,6 +514,8 @@ def main():
     p.add_argument('--write', action='store_true',
                    help="into the game's Bindings folder")
     p.add_argument('--preset', help=f'which preset to write (default {PRESET})')
+    p.add_argument('--tui', action='store_true',
+                   help='review the layout and write what you keep')
     backup.add_argument(p, 'elite')
     a = p.parse_args()
 
@@ -513,6 +540,9 @@ def main():
         print('wrote %s (%d rows, %d axes)'
               % _sheet().html(os.path.join(HERE, 'kneeboard.html')))
         did = True
+    if a.tui:
+        tui(a)
+        return
     if a.write:
         write(devs, placed, axes, a.preset, a.backup_dir)
         did = True

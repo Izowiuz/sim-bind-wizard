@@ -18,6 +18,7 @@ Matching the two is the whole job, and the reasoning prints with `--why`.
 """
 
 import argparse
+import importlib.util
 import os
 import sys
 
@@ -34,7 +35,9 @@ if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
 from core import devmap                                     # noqa: E402
+from core import backup
 from core import needs as corneeds
+from core import review as creview
 from core import vocab
 from core import sheet as csheet                          # noqa: E402
 from core.needs import (IN_A_TURN, ON_APPROACH, IN_THE_AIR,  # noqa: E402,F401
@@ -355,14 +358,9 @@ def axis_of(devs, want):
     return None, None
 
 
-def build():
-    """The tables wt-bind-preset.py consumes: (name, role, idx, inverse, props)
-    and (role, idx, action, where)."""
-    devs = devmap.by_role('stick', 'throttle')
-    flat = [n for n in NEEDS if n.first_shape != 'axis']
-    chosen, unmet, free = corneeds.allocate(flat, devs)
-    axes, buttons = [], []
-
+def axis_plan(devs):
+    """[(name, role, index, inverse, props)] -- what wt-bind-preset writes."""
+    axes = []
     for name, want, inverse in AXIS_NEEDS:
         role, a = axis_of(devs, want)
         if a is None:
@@ -374,11 +372,26 @@ def build():
         props = {'innerDeadzone': dead}
         props.update(AXIS_PROPS.get(name, {}))
         axes.append((name, role, a.index, inverse, props))
+    return axes
 
-    placed, emitted = [], set()
-    for p in chosen:
-        used = [b for b, _v in p.slots]
-        placed.append((p.need, p.role, p.ctrl, used))
+
+def build():
+    devs = devmap.by_role('stick', 'throttle')
+    flat = [n for n in NEEDS if n.first_shape != 'axis']
+    return corneeds.Layout(devs, *corneeds.allocate(flat, devs),
+                           axes=axis_plan(devs))
+
+
+def button_table(placed):
+    """[(role, local index, action, where)] for the placements given.
+
+    Computed inside `build()` before, which tied the preset writer to the
+    whole plan; it takes `placed` so a reviewer can hand it a subset. The
+    clash check below is per-context and has to run over whatever set is
+    actually going to be written, which is the other reason it moved here.
+    """
+    buttons, emitted = [], set()
+    for p in placed:
         for local, pair in p.slots:
             for action in pair if isinstance(pair, tuple) else (pair,):
                 if not action:
@@ -399,7 +412,7 @@ def build():
                 print(f'!! {role} button {idx} ({ctx}): '
                       f'{seen[key]} and {action}', file=sys.stderr)
             seen[key] = action
-    return axes, buttons, placed, unmet, free
+    return buttons
 
 
 def wt_offsets():
@@ -428,6 +441,40 @@ def en(action):
     return ACTIONS.get(action, (action, ''))[0]
 
 
+def _describe(p):
+    """[(which part, what it does)] -- War Thunder keeps air and helicopter as
+    separate contexts, so one control carries one of each without clashing."""
+    out = []
+    for local, pair in p.slots:
+        part = p.ctrl.direction(local) or 'press'
+        actions = pair if isinstance(pair, tuple) else (pair,)
+        for ctx, action in zip(('Air', 'Heli'), actions):
+            if action:
+                out.append((part, f'{ctx}: {en(action)}'))
+    return out
+
+
+def tui(args):
+    """The review, writing through wt-bind-preset.py.
+
+    War Thunder is the one game whose writer is a separate script, so the
+    layout the reviewer kept is handed to its `main()` rather than to a
+    `write()` here -- that script owns machine.blk and nothing else should
+    learn the format.
+    """
+    spec = importlib.util.spec_from_file_location(
+        'wtpreset', os.path.join(HERE, 'wt-bind-preset.py'))
+    preset = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(preset)
+
+    def write_kept(kept):
+        argv = ['--backup-dir', args.backup_dir] if args.backup_dir else []
+        preset.main(argv, layout=kept)
+
+    creview.run(build(), 'War Thunder', 'air simulator + helicopters · VIRPIL',
+                describe=_describe, write=write_kept)
+
+
 def _sheet():
     """The kneeboard, in the core's shape.
 
@@ -436,7 +483,8 @@ def _sheet():
     at a glance, and it is why the context list is part of the contract rather
     than something each game solves again.
     """
-    axes, buttons, placed, unmet, free = build()
+    _devs, placed, unmet, free, axes = build()
+    buttons = button_table(placed)
     off = wt_offsets()
     devs = devices()
 
@@ -513,7 +561,14 @@ def main():
     ap.add_argument('--html', nargs='?', const='kneeboard.html', metavar='PATH',
                     help='write the same thing laid out in columns, for a'
                          ' second screen')
+    ap.add_argument('--tui', action='store_true',
+                    help='review the layout and write what you keep')
+    backup.add_argument(ap, 'warthunder')
     args = ap.parse_args()
+
+    if args.tui:
+        tui(args)
+        return
 
     # Both, when both are asked for. An early return here meant
     # `--sheet --html` silently wrote one file and left the other stale --
@@ -534,11 +589,14 @@ def main():
     if did:
         return
 
-    axes, buttons, placed, unmet, free = build()
+    _devs, placed, unmet, free, axes = build()
+    buttons = button_table(placed)
 
     print(f'{len(placed)} needs matched, {len(buttons)} bindings, '
           f'{len(axes)} axes\n')
-    for need, role, c, used in placed:
+    for p_ in placed:
+        need, role, c = p_.need, p_.role, p_.ctrl
+        used = [b for b, _v in p_.slots]
         where = c.direction(used[0]) if len(used) == 1 else ''
         print(f'  {need.what:24s} {role:8s} {c.kind:9s} {str(used):18s} '
               f'{c.label}' + (f' — {where}' if where else ''))

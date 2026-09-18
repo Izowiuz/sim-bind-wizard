@@ -72,7 +72,8 @@ def hat4(label, first, dirs=('up', 'right', 'down', 'left'), **kw):
 
 
 def trigger(label, first, stages=('first detent', 'second detent'), **kw):
-    return control('trigger', label, [first, first + 1],
+    return control('trigger', label,
+                   list(range(first, first + len(stages))),
                    stages=list(stages), **kw)
 
 

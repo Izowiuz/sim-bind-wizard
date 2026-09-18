@@ -18,7 +18,8 @@ The install supplies the ranking:
     ./plan.py                 the layout
     ./plan.py --why           and the evidence for each choice
     ./plan.py --sheet --html  the kneeboard
-    ./plan.py --write         into the profiles (close Steam first)
+    ./plan.py --tui           walk the layout and write what you keep
+    ./plan.py --write         all of it (close Steam first)
     ./plan.py --write --backup-dir PATH
 
 Every profile it touches is copied into `<repo>/backups/msfs/<stamp>/` first;

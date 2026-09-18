@@ -26,7 +26,8 @@ left byte-identical.
     ./plan.py --sheet --html  the kneeboard
     ./wt-bind-preset.py --dry-run   resolved ids, writes nothing
     ./wt-bind-preset.py --render PATH   a copy for review
-    ./wt-bind-preset.py             into the game
+    ./plan.py --tui                 walk the layout, write what you keep
+    ./wt-bind-preset.py             all of it, into the game
     ./wt-bind-preset.py --restore   put the newest backup back
     ./wt-bind-preset.py --restore --restore-from 20260918-2149   an older one
 

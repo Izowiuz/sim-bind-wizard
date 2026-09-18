@@ -40,7 +40,8 @@ they are passed once.
     ./plan.py --why           and the evidence for each choice
     ./plan.py --free          what stays unbound
     ./plan.py --sheet --html  the kneeboard
-    ./plan.py --write         into the Bindings folder
+    ./plan.py --tui           walk the layout and write what you keep
+    ./plan.py --write         all of it, into the Bindings folder
 
     ./ed-bind-wizard.py             the capture TUI
     ./ed-bind-wizard.py --reset     discard the results file

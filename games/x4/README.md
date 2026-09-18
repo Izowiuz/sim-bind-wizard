@@ -29,7 +29,8 @@ zstd archives or BMS's 100 KB key file.
     ./plan.py --why          and the evidence for each choice
     ./plan.py --free         what stays unbound
     ./plan.py --sheet --html the kneeboard
-    ./plan.py --write        into the game (close X4 first)
+    ./plan.py --tui          walk the layout, keep what you want, write that
+    ./plan.py --write        all of it, into the game (close X4 first)
 
 `plan.py` writes `inputmap_3.xml`; `--profile` and `X4_PROFILE` point it
 elsewhere, `X4_SLOTS="stick=2,throttle=3"` overrides slot detection. The

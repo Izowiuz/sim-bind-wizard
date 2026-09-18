@@ -323,6 +323,69 @@ class Placement:
         return f'<Placement {self.need.what!r} -> {self.role}/{self.ctrl.label}>'
 
 
+class Layout:
+    """What a planner worked out: the one shape every adapter returns.
+
+    `build()` was in the adapter contract from the start, but its shape was
+    not, and five adapters drifted into five orders -- x4 and elite
+    `(devs, placed, unmet, free, axes)`, MSFS the same with the last two
+    swapped, BMS and War Thunder leading with their own derived tables. Every
+    one is defensible on its own and no caller outside its own file could rely
+    on any of them, which is why nothing generic could be written over the top.
+
+    The core five are here. Anything a game derives for its own writer -- BMS's
+    DX numbers, War Thunder's resolved action ids -- is a function of `placed`
+    and belongs beside that writer, not in this shape: a table computed inside
+    `build()` cannot be narrowed afterwards, and narrowing it is exactly what a
+    reviewer accepting some bindings and not others is doing.
+
+        def build():
+            devs = devmap.by_role('stick', 'throttle')
+            return Layout(devs, *allocate(NEEDS, devs), axes=axis_plan(devs))
+    """
+
+    def __init__(self, devices, placed, unplaced, free, axes=()):
+        #: {role: Device}, from devmap.by_role
+        self.devices = devices
+        #: [Placement], most urgent first
+        self.placed = list(placed)
+        #: [Need] that found no home
+        self.unplaced = list(unplaced)
+        #: [(role, control)] with every button still spare
+        self.free = list(free)
+        #: game-shaped; the core counts it and passes it on, nothing more
+        self.axes = list(axes)
+
+    def __iter__(self):
+        """(devices, placed, unplaced, free, axes), so a caller may still
+        unpack it into five names."""
+        return iter((self.devices, self.placed, self.unplaced,
+                     self.free, self.axes))
+
+    def __repr__(self):
+        return (f'<Layout {len(self.placed)} placed, {len(self.unplaced)} '
+                f'unplaced, {len(self.free)} free, {len(self.axes)} axes>')
+
+    def but(self, placed):
+        """The same layout with a different set of placements.
+
+        What a reviewer hands a writer: everything else about the plan is
+        unchanged, and only the bindings that were accepted go in.
+        """
+        return Layout(self.devices, placed, self.unplaced, self.free,
+                      self.axes)
+
+    def by_device(self):
+        """[(role, [Placement])] -- placements grouped for display, in the
+        order a reader expects: stick first, and inside it by urgency."""
+        out = {}
+        for p in self.placed:
+            out.setdefault(p.role, []).append(p)
+        for group in out.values():
+            group.sort(key=lambda p: (p.need.urgency, p.ctrl.label))
+        return sorted(out.items())
+
+
 def allocate(needs, devices, usable=None, reach=None):
     """(placements, unplaced, free), most urgent first.
 

@@ -14,7 +14,7 @@ author's own stick plugged in is not a test.
 import unittest
 
 import fake
-from core.needs import (Need, allocate, reach_tier,
+from core.needs import (Layout, Need, allocate, reach_tier,
                         IN_A_TURN, ON_APPROACH, IN_THE_AIR, ON_THE_RAMP)
 
 
@@ -306,6 +306,52 @@ class Rejections(unittest.TestCase):
         placed, _un, _free = allocate(
             [Need('Gear', 'button', ['GEAR'])], devs)
         self.assertEqual('Real button', placed[0].ctrl.label)
+
+
+class LayoutShape(unittest.TestCase):
+    """The one shape every adapter returns. Five of them used to disagree,
+    which is why nothing generic could be written over the top."""
+
+    def layout(self):
+        devs = {'stick': fake.device('stick', [
+            fake.button('Thumb button', 0, reach=fake.THUMB),
+            fake.button('Panel button', 1, reach=fake.PANEL),
+            fake.hat4('Spare hat', 2, reach=fake.PANEL),
+        ])}
+        needs = [Need('Gear', 'button', ['GEAR'], urgency=ON_APPROACH),
+                 Need('Canopy', 'button', ['CANOPY'], urgency=ON_THE_RAMP),
+                 Need('Trim', 'hat8', ['A'] * 8)]
+        return Layout(devs, *allocate(needs, devs), axes=[('pitch', 'stick')])
+
+    def test_it_unpacks_in_the_canonical_order(self):
+        devices, placed, unplaced, free, axes = self.layout()
+        self.assertEqual(['stick'], list(devices))
+        self.assertEqual(2, len(placed))
+        self.assertEqual(['Trim'], [n.what for n in unplaced])
+        self.assertEqual([('pitch', 'stick')], axes)
+        self.assertTrue(all(len(f) == 2 for f in free))
+
+    def test_but_swaps_the_placements_and_keeps_the_rest(self):
+        # What a reviewer hands a writer: only the accepted bindings go in,
+        # and nothing else about the plan changes.
+        full = self.layout()
+        one = [p for p in full.placed if p.need.what == 'Gear']
+        cut = full.but(one)
+        self.assertEqual(['Gear'], [p.need.what for p in cut.placed])
+        self.assertEqual(full.devices, cut.devices)
+        self.assertEqual(full.axes, cut.axes)
+        self.assertEqual([n.what for n in full.unplaced],
+                         [n.what for n in cut.unplaced])
+        self.assertEqual(2, len(full.placed), 'the original is untouched')
+
+    def test_by_device_groups_and_orders_by_urgency(self):
+        rows = self.layout().by_device()
+        self.assertEqual(['stick'], [role for role, _ps in rows])
+        self.assertEqual(['Gear', 'Canopy'],
+                         [p.need.what for p in rows[0][1]])
+
+    def test_a_layout_says_what_it_holds(self):
+        self.assertIn('2 placed', repr(self.layout()))
 
 
 class Devices(unittest.TestCase):

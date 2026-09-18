@@ -37,6 +37,7 @@ if CORE not in sys.path:
 
 from core import backup                                     # noqa: E402
 from core import devmap                                     # noqa: E402
+from core import review as creview                          # noqa: E402
 from core import needs as corneeds
 from core import vocab
 from core import sheet as csheet                          # noqa: E402
@@ -230,11 +231,8 @@ def axis_plan(devs):
 def build():
     devs = devmap.by_role('stick', 'throttle')
     flat = [n for n in NEEDS if n.first_shape != 'axis']
-    placed, unmet, free = corneeds.allocate(flat, devs)
-    # bindings_for() works in (need, role, control) triples and does its own
-    # slot arithmetic, so hand it that shape rather than rewrite it
-    rows = [(p.need, p.role, p.ctrl, p.points) for p in placed]
-    return devs, rows, unmet, axis_plan(devs), free
+    return corneeds.Layout(devs, *corneeds.allocate(flat, devs),
+                           axes=axis_plan(devs))
 
 
 def find_profiles(devs):
@@ -309,7 +307,8 @@ def bindings_for(devs, placed, axes):
     def add(role, bucket, action, info, code):
         out.setdefault((role, bucket), []).append((action, info, code))
 
-    for need, role, c, _s in placed:
+    for p in placed:
+        need, role, c = p.need, p.role, p.ctrl
         order = list(c.buttons) or ([c.push] if c.push is not None else [])
         for ctx, ids in (('flight', need.plane), ('flight', need.heli),
                          ('global', need.glob)):
@@ -342,6 +341,10 @@ def write(devs, placed, axes, backup_dir=None):
                           into=backup_dir)
     print(f'  backed up to {dest}')
 
+    # Named once, because four profiles under one 70-character Steam userdata
+    # path would be four lines of the same directory.
+    print(f'  writing into {os.path.dirname(profiles[0][0])}')
+
     plan = bindings_for(devs, placed, axes)
     total = missing = 0
     for path, role, bucket in profiles:
@@ -363,6 +366,32 @@ def write(devs, placed, axes, backup_dir=None):
     return total
 
 
+def _describe(p):
+    """[(button code, what it does)] -- MSFS splits its vocabulary three ways
+    and the same button often carries a different action in each."""
+    need, c = p.need, p.ctrl
+    out = []
+    for ctx, ids in (('plane', need.plane), ('heli', need.heli),
+                     ('glob', need.glob)):
+        for i, action in enumerate(ids):
+            if i >= len(c.bindable_buttons):
+                break
+            b = c.buttons[i] if i < len(c.buttons) else c.push
+            out.append((f'{ctx} {button_code(b)[0]}', action))
+    if need.push and c.push is not None:
+        out.append((f'glob {button_code(c.push)[0]}', need.push))
+    return out
+
+
+def tui(args):
+    def write_kept(kept):
+        n = write(kept.devices, kept.placed, kept.axes, args.backup_dir)
+        return [f'{n} binding(s) written']
+
+    creview.run(build(), 'MSFS 2024', 'VIRPIL',
+                describe=_describe, write=write_kept)
+
+
 def _sheet():
     """The kneeboard, in the core's shape.
 
@@ -376,7 +405,7 @@ def _sheet():
     diff cost a second reader of the game's files that could disagree with the
     planner about what is bound.
     """
-    devs, placed, unmet, axes, free = build()
+    devs, placed, unmet, free, axes = build()
     CTX = {'plane': 'Aeroplane', 'heli': 'Helicopter', 'glob': 'Global'}
 
     sh = csheet.Sheet('Kneeboard MSFS 2024',
@@ -384,7 +413,8 @@ def _sheet():
                       ident='Button', contexts=tuple(CTX.values()),
                       devices={r: d.product for r, d in devs.items()})
 
-    for need, role, c, _pts in placed:
+    for p in placed:
+        need, role, c = p.need, p.role, p.ctrl
         order = list(c.buttons) or ([c.push] if c.push is not None else [])
         cells = {}
         for ctx, ids in (('plane', need.plane), ('heli', need.heli),
@@ -428,9 +458,11 @@ def main():
                     help='the same in columns, for a second screen')
     ap.add_argument('--write', action='store_true',
                     help='fill the profiles in (Steam must be closed)')
+    ap.add_argument('--tui', action='store_true',
+                    help='review the layout and write what you keep')
     backup.add_argument(ap, 'msfs')
     args = ap.parse_args()
-    devs, placed, unmet, axes, free = build()
+    devs, placed, unmet, free, axes = build()
 
     # Both, when both are asked for -- see the same fix in War Thunder.
     did = False
@@ -444,6 +476,9 @@ def main():
         did = True
     if did:
         return
+    if args.tui:
+        tui(args)
+        return
     if args.write:
         n = write(devs, placed, axes, args.backup_dir)
         print(f'  {n} bindings written')
@@ -455,7 +490,8 @@ def main():
         return
 
     print(f'{len(placed)} controls, {len(axes)} axis bindings\n')
-    for need, role, c, s in placed:
+    for p in placed:
+        need, role, c, s = p.need, p.role, p.ctrl, p.points
         print(f'  {need.what:20s} {role:8s} {c.kind:9s} {c.label}')
         for ctx, ids in (('plane', need.plane), ('heli', need.heli),
                          ('glob', need.glob)):

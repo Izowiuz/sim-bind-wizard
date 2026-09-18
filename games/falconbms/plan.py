@@ -44,6 +44,7 @@ if CORE not in sys.path:
 from core import backup                                     # noqa: E402
 from core import devmap                                     # noqa: E402
 from core import needs as corneeds
+from core import review as creview
 from core import vocab
 from core import sheet as csheet                          # noqa: E402
 from core.needs import (IN_A_TURN, ON_APPROACH, IN_THE_AIR,  # noqa: E402,F401
@@ -410,11 +411,8 @@ def find_axis(dev, how, what):
                  if what in (a.label or '').lower()), None)
 
 
-def build():
-    """(axes, binds, placed, unmet, free) -- binds are ready-to-write DX lines."""
-    devs, placed, unmet, free = assign()
-    off = dx_offsets()
-
+def axis_plan(devs):
+    """[(name, role, axis, dinput index)] -- the axes BMS will be told about."""
     axes = []
     for name, role, how, what in AXIS_NEEDS:
         dev = devs[role]
@@ -424,7 +422,22 @@ def build():
         di = dinput_axis(dev, a)
         if di:
             axes.append((name, role, a, di))
+    return axes
 
+
+def build():
+    devs, placed, unmet, free = assign()
+    return corneeds.Layout(devs, placed, unmet, free, axes=axis_plan(devs))
+
+
+def dx_binds(placed):
+    """Ready-to-write DX lines for the placements given.
+
+    This was computed inside `build()`, which meant the key file could only be
+    written from the whole plan. It takes `placed` so a reviewer who accepted
+    some bindings and not others has something to hand it.
+    """
+    off = dx_offsets()
     binds, seen = [], {}
     for p in placed:
         for local, call in p.slots:
@@ -440,7 +453,7 @@ def build():
             binds.append({'need': p.need, 'role': p.role, 'ctrl': p.ctrl,
                           'local': local, 'dx': dx, 'press': press,
                           'release': release, 'where': where})
-    return axes, binds, placed, unmet, free
+    return binds
 
 
 # ------------------------------------------------------------------- writing
@@ -515,13 +528,13 @@ def write_keeping(path, text, nl):
 KEYFILE_OUT = 'BMS - VIRPIL.key'
 
 
-def write_key(bms, backup_dir=None, when=None):
+def write_key(bms, backup_dir=None, when=None, placed=None):
     """Build our key file from the shipped Full one, so every keyboard binding
     and every comment in it survives; only the DX block is ours."""
     src = bms / 'User' / 'Config' / 'BMS - Full.key'
     dst = bms / 'User' / 'Config' / KEYFILE_OUT
     when = when or backup.stamp()
-    _axes, binds, _p, _u, _f = build()
+    binds = dx_binds(build().placed if placed is None else placed)
     body, nl = read_keeping(src)
     # the first line's description names the file inside BMS's own UI
     body = body.replace('"BMS - Full"', f'"{KEYFILE_OUT[:-4]}"', 1)
@@ -574,7 +587,7 @@ def write_axes(bms, backup_dir=None, when=None):
     cfg = bms / 'User' / 'Config'
     defaults = cfg / 'DeviceDefaults.txt'
     when = when or backup.stamp()
-    axes, _b, _p, _u, _f = build()
+    axes = build().axes
     devs = devices()
 
     per = {}
@@ -626,6 +639,33 @@ def write_axes(bms, backup_dir=None, when=None):
     print('above says exactly which physical axis each one is.')
 
 
+# --------------------------------------------------------------- the review
+
+def _describe(p):
+    """[(DX number, callback)] -- what BMS will actually be told."""
+    out = []
+    for b in dx_binds([p]):
+        what = b['press']
+        if b['release']:
+            what = f'{what}  (release: {b["release"]})'
+        out.append((f'DX{b["dx"]}', what))
+    return out
+
+
+def tui(args):
+    bms = harvest.bms_dir()
+
+    def write_kept(kept):
+        # The same pair `./bind bms write` runs, under one stamp. Only the key
+        # file is narrowed: the axis defaults were never up for review.
+        when = backup.stamp()
+        write_key(bms, args.backup_dir, when, kept.placed)
+        write_axes(bms, args.backup_dir, when)
+
+    creview.run(build(), 'Falcon BMS', f'VIRPIL · {KEYFILE_OUT}',
+                describe=_describe, write=write_kept)
+
+
 # -------------------------------------------------------------------- output
 
 def wrap(text, width, indent):
@@ -642,7 +682,8 @@ def wrap(text, width, indent):
 
 
 def show(why=False, free_only=False):
-    axes, binds, placed, unmet, free = build()
+    _devs, placed, unmet, free, axes = build()
+    binds = dx_binds(placed)
     off = dx_offsets()
 
     if not free_only:
@@ -700,7 +741,7 @@ def show(why=False, free_only=False):
 
 def audit():
     """Which callbacks the vendors put on hardware and we did not."""
-    _a, binds, _p, _u, _f = build()
+    binds = dx_binds(build().placed)
     mine = set()
     for b in binds:
         mine.add(b['press'])
@@ -776,7 +817,8 @@ def _sheet():
     reads as a second line under the plain-English name. War Thunder passes
     ('Air', 'Helicopter') to the same builder and gets a column each.
     """
-    axes, binds, placed, unmet, free = build()
+    _devs, placed, unmet, free, axes = build()
+    binds = dx_binds(placed)
     devs = devices()
     off = dx_offsets()
 
@@ -834,12 +876,18 @@ def main():
     p.add_argument('--write-axes', action='store_true',
                    help='write the axis defaults (untested, see README)')
     p.add_argument('--bms-dir', help='override the BMS install')
+    p.add_argument('--tui', action='store_true',
+                   help='review the layout and write what you keep')
     backup.add_argument(p, 'falconbms')
     a = p.parse_args()
 
     if a.bms_dir:
         os.environ['BMS_DIR'] = a.bms_dir
     bms = harvest.bms_dir()
+
+    if a.tui:
+        tui(a)
+        return
 
     did = False
     if a.audit:

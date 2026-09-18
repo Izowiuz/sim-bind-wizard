@@ -25,7 +25,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 #: verb -> (script, fixed arguments). Order here is the order they print in.
-VERBS = ('harvest', 'plan', 'why', 'free', 'sheet', 'write', 'capture')
+VERBS = ('harvest', 'plan', 'why', 'free', 'sheet', 'tui', 'write', 'capture')
 
 GAMES = {
     'falconbms': {
@@ -36,6 +36,7 @@ GAMES = {
         'why':     ('plan.py', ('--why',)),
         'free':    ('plan.py', ('--free',)),
         'sheet':   ('plan.py', ('--sheet', '--html')),
+        'tui':     ('plan.py', ('--tui',)),
         # one layout, two files: the key file and the axis mapping
         'write':   ('plan.py', ('--write', '--write-axes')),
     },
@@ -48,6 +49,7 @@ GAMES = {
         'free':    ('plan.py', ('--unused',)),
         'sheet':   ('plan.py', ('--sheet', 'KNEEBOARD.md',
                                 '--html', 'kneeboard.html')),
+        'tui':     ('plan.py', ('--tui',)),
         'write':   ('wt-bind-preset.py', ()),
     },
     'msfs': {
@@ -58,6 +60,7 @@ GAMES = {
         'why':     ('plan.py', ('--why',)),
         'free':    ('plan.py', ('--free',)),
         'sheet':   ('plan.py', ('--sheet', '--html')),
+        'tui':     ('plan.py', ('--tui',)),
         'write':   ('plan.py', ('--write',)),
     },
     'x4': {
@@ -68,6 +71,7 @@ GAMES = {
         'why':     ('plan.py', ('--why',)),
         'free':    ('plan.py', ('--free',)),
         'sheet':   ('plan.py', ('--sheet', '--html')),
+        'tui':     ('plan.py', ('--tui',)),
         'write':   ('plan.py', ('--write',)),
     },
     'dcs': {
@@ -89,6 +93,7 @@ GAMES = {
         'why':     ('plan.py', ('--why',)),
         'free':    ('plan.py', ('--free',)),
         'sheet':   ('plan.py', ('--sheet', '--html')),
+        'tui':     ('plan.py', ('--tui',)),
         'write':   ('plan.py', ('--write',)),
         'capture': ('ed-bind-wizard.py', ()),
     },
@@ -99,6 +104,7 @@ GAMES = {
 GAPS = {
     ('dcs', 'harvest'): 'inside the capture wizard',
     ('dcs', 'free'): 'no flag for it',
+    ('dcs', 'tui'): 'its capture wizard already is one — ./bind dcs capture',
     ('falconbms', 'capture'): 'no capture wizard',
     ('warthunder', 'capture'): 'no capture wizard',
     ('msfs', 'capture'): 'no capture wizard',
