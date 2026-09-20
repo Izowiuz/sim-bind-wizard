@@ -32,6 +32,7 @@ import importlib.util
 import os
 import re
 import sys
+import typing
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CORE = os.environ.get('SIM_BIND_WIZARD') or os.path.normpath(
@@ -42,6 +43,7 @@ if not os.path.isdir(CORE):
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import adapter                                    # noqa: E402
 from core import backup                                     # noqa: E402
 from core import devmap                                     # noqa: E402
 from core import game                                       # noqa: E402
@@ -57,15 +59,11 @@ _spec = importlib.util.spec_from_file_location(
 harvest = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(harvest)
 
-#: Reparsing four 46 KB XML files costs nothing, so the cache is optional --
-#: this is the game core/vocab.py's `build=` escape hatch was written for.
-VOCAB = vocab.load(HERE, 'x4-actions.json', key='vocabulary',
-                   build=harvest.vocabulary)
-
-#: The profile the plan owns. X4 writes the game's own binding changes into
-#: `inputmap.xml`, the working copy, so a named profile is the only place a
-#: generated layout survives being edited in the menu.
-PROFILE = os.environ.get('X4_PROFILE', 'inputmap_3.xml')
+#: The profile the plan owns when nothing says otherwise. X4 writes the
+#: game's own binding changes into `inputmap.xml`, the working copy, so a
+#: named profile is the only place a generated layout survives being edited
+#: in the menu.
+DEFAULT_PROFILE = 'inputmap_3.xml'
 
 #: sim-device-map's HID axis names to X4's. The first six are DirectInput's own
 #: and pass straight through; Slider and Dial become SLIDER1 and SLIDER2 in
@@ -260,7 +258,7 @@ NEEDS = [
 ]
 
 
-def unknown():
+def unknown(vocabulary):
     """Ids in NEEDS or AXIS_NEEDS that the game will not accept a binding for.
 
     The vocabulary is read from the game's own files, so a typo or an id
@@ -271,12 +269,12 @@ def unknown():
     for n in NEEDS:
         for slot in n.bindings:
             for pair in slot:
-                if pair and pair[1] not in VOCAB.get(pair[0], ()):
+                if pair and pair[1] not in vocabulary.get(pair[0], ()):
                     bad.append((n.what, pair[0], pair[1]))
-        if n.push and n.push[1] not in VOCAB.get(n.push[0], ()):
+        if n.push and n.push[1] not in vocabulary.get(n.push[0], ()):
             bad.append((n.what, n.push[0], n.push[1]))
     for ident, _role, _how in AXIS_NEEDS:
-        if ident not in VOCAB.get(RANGE, ()):
+        if ident not in vocabulary.get(RANGE, ()):
             bad.append(('axis', RANGE, ident))
     return bad
 
@@ -310,7 +308,7 @@ def axis_plan(devs):
     return out
 
 
-def slots(devs, profile=None):
+def slots(devs, profile):
     """{role: X4 slot number}.
 
     X4 names a device by its position in enumeration order and keeps no device
@@ -330,7 +328,7 @@ def slots(devs, profile=None):
         return forced
 
     profs = harvest.profiles()
-    name = profile or PROFILE
+    name = profile
     if name not in profs:
         sys.exit(f'{name} is not in the profile folder; have '
                  + ', '.join(sorted(profs)))
@@ -356,12 +354,6 @@ def source(slot, axis=False):
     """INPUT_SOURCE_JOYBUTTONS_2 and friends. Slot 1 carries no suffix."""
     stem = 'INPUT_SOURCE_JOYAXES' if axis else 'INPUT_SOURCE_JOYBUTTONS'
     return stem if slot == 1 else f'{stem}_{slot}'
-
-
-def build():
-    devs = devmap.by_role('stick', 'throttle')
-    return corneeds.Layout(devs, *corneeds.allocate(NEEDS, devs),
-                           axes=axis_plan(devs))
 
 
 # ----------------------------------------------------------------- writing --
@@ -428,19 +420,26 @@ def rewrite(text, wanted, ours):
     return text[:close] + block + text[close:], dropped
 
 
-def profile_path(name=None):
-    return os.path.join(harvest.profile_dir(), name or PROFILE)
+def profile_path(name):
+    return os.path.join(harvest.profile_dir(), name)
 
 
-def write(devs, placed, axes, backup_dir=None, name=None):
+def contents(devs, placed, axes, profile):
+    """(path, the profile's whole new text, what went in, what came out).
+
+    Computes and returns; `core.adapter` does the backing up and the writing.
+    Every line whose source is one of our slots is dropped before ours go in,
+    which is how a binding cut from `NEEDS` stops answering -- the clause no
+    signature can state, and the one `tests/test_formats.py` holds.
+    """
     if game.running('X4', 'X4.exe'):
-        sys.exit('X4 is running -- it rewrites these files on exit. '
-                 'Quit the game first.')
-    slot = slots(devs, name)
-    path = profile_path(name)
+        raise SystemExit('X4 is running -- it rewrites these files on exit. '
+                         'Quit the game first.')
+    slot = slots(devs, profile)
+    path = profile_path(profile)
     if not os.path.exists(path):
-        sys.exit(f'{path} does not exist -- save a profile of that name in the '
-                 'game once so X4 creates it.')
+        raise SystemExit(f'{path} does not exist -- save a profile of that '
+                         'name in the game once so X4 creates it.')
     text = open(path, encoding='utf-8').read()
 
     ours = set()
@@ -450,18 +449,7 @@ def write(devs, placed, axes, backup_dir=None, name=None):
 
     wanted = lines_for(devs, placed, axes, slot)
     new, dropped = rewrite(text, wanted, ours)
-
-    dest, _ = backup.save('x4', path, into=backup_dir)
-    print(f'backed up to {dest}')
-
-    open(path, 'w', encoding='utf-8').write(new)
-    # The whole path, not the basename: the profile lives six directories
-    # into a Proton prefix and "inputmap_3.xml" does not tell you which of
-    # the three X4 keeps, nor that it is the one under compatdata.
-    print(f'wrote {path}')
-    print(f'  removed {len(dropped)}, wrote {len(wanted)} on slots '
-          + ', '.join(f'{r}={slot[r]}' for r in sorted(devs)))
-    return len(wanted)
+    return path, new, wanted, dropped, slot
 
 
 # ---------------------------------------------------------------- the sheet --
@@ -482,9 +470,9 @@ def context_of(ident):
     return 'Ship' 
 
 
-def _sheet():
-    devs, placed, unmet, free, axes = build()
-    slot = slots(devs)
+def _sheet(layout, profile):
+    devs, placed, unmet, free, axes = layout
+    slot = slots(devs, profile)
     sh = csheet.Sheet(
         'Kneeboard X4', 'X4 Foundations · VIRPIL',
         ident='Code', contexts=CTX,
@@ -519,8 +507,8 @@ def _sheet():
     sh.unplaced = [(n.what, n.shape if isinstance(n.shape, str)
                     else '/'.join(n.shape)) for n in unmet]
     sh.note('Writing it', [
-        ('Profile', f'{PROFILE} — X4 puts menu edits in inputmap.xml, so a '
-                    'named profile is the only place this survives.'),
+        ('Profile', f'{profile} — X4 puts menu edits in inputmap.xml, so '
+                    'a named profile is the only place this survives.'),
         ('Slots', ', '.join(f'{r} = {s}' for r, s in sorted(slot.items()))
                   + '. Enumeration order, not stable: re-read after '
                     'plugging something in.'),
@@ -549,100 +537,119 @@ def _describe(p):
     return out
 
 
-def tui(args):
-    layout = build()
+# -------------------------------------------------------------- the adapter --
 
-    def write_kept(kept):
-        n = write(kept.devices, kept.placed, kept.axes,
-                  args.backup_dir, args.profile)
-        return [f'{n} binding(s) written']
+@typing.final
+class X4(adapter.Planner):
+    """X4 Foundations, on the VIRPIL pair."""
 
-    creview.run(layout, 'X4 Foundations',
-                f'VIRPIL · {args.profile or PROFILE}',
-                describe=_describe, write=write_kept,
-                paths=[('profile dir', harvest.profile_dir()),
-                       ('writes', profile_path(args.profile)),
-                       ('backups', backup.dir_for('x4', args.backup_dir))])
+    game = 'x4'
+    title = 'X4 Foundations'
+    CACHE = {'x4-actions.json': 'vocabulary'}
 
 
-# ------------------------------------------------------------------- output --
+    @property
+    @typing.override
+    def NEEDS(self) -> list:
+        """The literal stays at module scope -- it is most of this file, and
+        moving it into the class body would bury every other change.
 
-def main():
-    p = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('--why', action='store_true', help='print why each control was chosen')
-    p.add_argument('--free', action='store_true', help='list controls left unbound')
-    p.add_argument('--sheet', action='store_true', help='write KNEEBOARD.md')
-    p.add_argument('--html', action='store_true',
-                   help='write kneeboard.html')
-    p.add_argument('--write', action='store_true',
-                   help='write the whole layout into the game')
-    p.add_argument('--tui', action='store_true',
-                   help='review the layout, write what you keep')
-    p.add_argument('--profile', help=f'profile to write (default {PROFILE})')
-    backup.add_argument(p, 'x4')
-    args = p.parse_args()
+        A property rather than a class attribute because pyright rejects the
+        second as an override of an abstract property, and because two of the
+        six derive their needs and could never be a constant anyway.
+        """
+        return NEEDS
 
-    bad = unknown()
-    if bad:
-        for what, kind, ident in bad:
-            print(f'!! {what}: the game has no {kind} called {ident}',
-                  file=sys.stderr)
-        sys.exit('the vocabulary disagrees with NEEDS; run ./harvest.py --json')
+    def __init__(self, profile=None, slots=None, backup_dir=None):
+        self.profile = profile or os.environ.get('X4_PROFILE',
+                                                 DEFAULT_PROFILE)
+        self.forced_slots = slots or os.environ.get('X4_SLOTS', '')
+        self.backup_dir = backup_dir
+        self.subtitle = f'VIRPIL · {self.profile}'
+        # Reparsing four 46 KB XML files costs nothing, so the cache is
+        # optional -- this is the game core/vocab.py's `build=` was written
+        # for. It is read here rather than at import, so that importing this
+        # module defines classes and reads nothing: the contract test then
+        # tells a clone with no cache from an adapter that is broken.
+        self.vocab = self.cache('x4-actions.json', build=harvest.vocabulary)
 
-    devs, placed, unmet, free, axes = build()
+    @typing.override
+    def build(self):
+        devs = devmap.by_role('stick', 'throttle')
+        return corneeds.Layout(devs, *corneeds.allocate(self.NEEDS, devs),
+                               axes=axis_plan(devs))
 
-    if args.sheet or args.html:
-        sh = _sheet()
-        if args.sheet:
-            print('wrote %s (%d rows, %d axes)'
-                  % sh.markdown(os.path.join(HERE, 'KNEEBOARD.md')))
-        if args.html:
-            print('wrote %s (%d rows, %d axes)'
-                  % sh.html(os.path.join(HERE, 'kneeboard.html')))
-        return
+    @typing.override
+    def unknown(self):
+        return unknown(self.vocab)
 
-    if args.tui:
-        tui(args)
-        return
+    @typing.override
+    def describe(self, placement):
+        return _describe(placement)
 
-    if args.write:
-        write(devs, placed, axes, args.backup_dir, args.profile)
-        return
+    @typing.override
+    def sheet(self, layout):
+        return _sheet(layout, self.profile)
 
-    if args.free:
-        for role, c in free:
-            print(f'  {role:9} {c.label:34} {c.kind:10} {c.reach or ""}')
-        return
+    @typing.override
+    def write_layout(self, layout):
+        path, new, wanted, dropped, slot = contents(
+            layout.devices, layout.placed, layout.axes, self.profile)
+        print(f'  removed {len(dropped)}, wrote {len(wanted)} on slots '
+              + ', '.join(f'{r}={slot[r]}'
+                          for r in sorted(layout.devices)))
+        # The whole path, not the basename: the profile sits six directories
+        # into a Proton prefix, and "inputmap_3.xml" says neither which of
+        # the three X4 keeps nor that it is the one under compatdata.
+        print(f'  {path}')
+        return {path: new}
 
-    slot = slots(devs, args.profile)
-    print(f'{PROFILE}  ' + '  '.join(f'{r} = slot {s}'
-                                     for r, s in sorted(slot.items())))
-    print()
-    for p_ in sorted(placed, key=lambda p_: (p_.need.urgency, p_.role)):
-        n = p_.need
-        print(f'  {n.what:24} {p_.role:9} {n.first_shape:9} {p_.ctrl.label}')
-        for button, payload in p_.slots:
-            part = p_.ctrl.direction(button) or 'press'
-            for ctx, pair in zip(CTX, payload):
-                if pair:
-                    print(f'      {part:9} {harvest.code(button)
-                                            .replace("INPUT_XBUTTON_", ""):14}'
-                          f' {ctx:8} {harvest.readable(pair[1])}')
-        if args.why:
-            print(f'      {"":9} [{corneeds.URGENCY_NAME[n.urgency]}]'
-                  f'{" relaxed" if n.relaxed else ""}'
-                  f'{"  " + n.note if n.note else ""}')
-    print()
-    for ident, role, a in axes:
-        print(f'  {harvest.readable(ident):28} {role:9} '
-              f'{AXIS_CODE[a.hid]:8} {a.label}')
-    if unmet:
-        print()
-        print(f'{len(unmet)} unplaced: '
-              + ', '.join(f'{n.what} (wanted {n.first_shape})' for n in unmet))
+    @typing.override
+    def arguments(self, parser):
+        parser.add_argument('--profile',
+                            help=f'profile to write (default {self.profile})')
+
+    @typing.override
+    def paths(self, args):
+        return [('profile dir', harvest.profile_dir()),
+                ('writes', profile_path(self.profile)),
+                ('backups', backup.dir_for('x4', self.backup_dir))]
+
+    @typing.override
+    def show(self, layout, why=False):
+        devs, placed, unmet, _free, axes = layout
+        slot = slots(devs, self.profile)
+        out = [f'{self.profile}  '
+               + '  '.join(f'{r} = slot {s}'
+                           for r, s in sorted(slot.items())), '']
+        for p_ in sorted(placed, key=lambda p_: (p_.need.urgency, p_.role)):
+            n = p_.need
+            out.append(f'  {n.what:24} {p_.role:9} {n.first_shape:9} '
+                       f'{p_.ctrl.label}')
+            for button, payload in p_.slots:
+                part = p_.ctrl.direction(button) or 'press'
+                for ctx, pair in zip(CTX, payload):
+                    if pair:
+                        code = harvest.code(button).replace(
+                            'INPUT_XBUTTON_', '')
+                        out.append(f'      {part:9} {code:14} {ctx:8} '
+                                   f'{harvest.readable(pair[1])}')
+            if why:
+                out.append(f'      {"":9} '
+                           f'[{corneeds.URGENCY_NAME[n.urgency]}]'
+                           f'{" relaxed" if n.relaxed else ""}'
+                           f'{"  " + n.note if n.note else ""}')
+        out.append('')
+        for ident, role, a in axes:
+            out.append(f'  {harvest.readable(ident):28} {role:9} '
+                       f'{AXIS_CODE[a.hid]:8} {a.label}')
+        if unmet:
+            out.append('')
+            out.append(f'{len(unmet)} unplaced: '
+                       + ', '.join(f'{n.what} (wanted {n.first_shape})'
+                                   for n in unmet))
+        return out
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(adapter.run(X4))

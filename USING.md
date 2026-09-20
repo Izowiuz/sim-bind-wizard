@@ -154,22 +154,28 @@ hardware, counted rather than guessed.
 
 ### Steps
 
-1. `games/<name>/harvest.py` — read and print; `--json` writes the cache. Find
-   the game with `core.game`, write with `core.vocab.save`.
+1. `games/<name>/harvest.py` — a `core.adapter.Harvest` subclass. `read()`
+   returns `{filename: {section: data}}` and `summary()` the lines a bare run
+   prints. `--json` and the writing come from the base.
 2. Measure what the files do not say. Record it in the code with its evidence,
    and mark what is still inference.
-3. `games/<name>/plan.py` — `NEEDS` of `core.needs.Need`, a writer, and
-   `_sheet()` returning a `core.sheet.Sheet`. Read the vocabulary through
-   `core.vocab.load`, copy what you replace through `core.backup.save`, and
-   take the flag from `core.backup.add_argument`.
+3. `games/<name>/plan.py` — a `core.adapter.Planner` subclass: `NEEDS` of
+   `core.needs.Need`, `build()` returning a `core.needs.Layout`, `describe()`,
+   `show()`, `sheet()`, and `write_layout()` returning `{path: contents}`.
+   The flags, the backups and the writing come from the base, so a missing
+   one is a `TypeError` naming it rather than a game that behaves differently
+   from the others.
 4. `games/<name>/README.md` — six headings: where it lives, how to run it, the
    format, measured, still a guess, gotchas.
 5. A test in `tests/test_formats.py` for whatever the writer does to the game's
-   own text — what it must remove as well as add, and whatever the format will
-   not forgive. Write the fixture, then break the writer and check the test
-   notices.
-6. A row in `bind`, naming which script and flags each verb maps to. A verb the
-   game has no answer for is left out and the reason goes in `GAPS`, so a gap
-   reads as a fact about the game rather than an omission.
+   own text — above all that it **removes** as well as adds, which is the one
+   clause no interface can state. Write the fixture, then break the writer and
+   check the test notices.
+6. A row in `bind`, naming which script and flags each verb maps to. The game
+   itself needs no row: `bind` reads `games/` for that. A verb the game has no
+   answer for is left out and the reason goes in `GAPS`, so a gap reads as a
+   fact about the game rather than an omission.
 
-The rest of what an adapter owes is in `ARCHITECTURE.md`.
+`tests/test_contract.py` checks the rest, and checks it on a clone with no
+game installed and nothing harvested. `ARCHITECTURE.md` says what each of the
+three enforcement moments catches.

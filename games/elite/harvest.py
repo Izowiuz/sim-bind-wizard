@@ -38,6 +38,7 @@ import collections
 import os
 import re
 import sys
+import typing
 import xml.etree.ElementTree as ET
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -47,6 +48,7 @@ if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
 from core import game                                       # noqa: E402
+from core import adapter                                    # noqa: E402
 from core import vocab                                      # noqa: E402
 
 APPID = '359320'
@@ -202,67 +204,87 @@ def readable(name):
     return ' '.join(out)
 
 
-def main():
-    p = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('--vocab', action='store_true',
-                   help='every function, by kind')
-    p.add_argument('--grep', metavar='WORD', help='functions matching a word')
-    p.add_argument('--json', action='store_true', help='write the cache')
-    p.add_argument('--schemes-dir', help='override the ControlSchemes lookup')
-    a = p.parse_args()
+@typing.final
+class EliteHarvest(adapter.Harvest):
+    """Elite's function vocabulary and its factory ranking."""
 
-    path = a.schemes_dir
-    v = vocabulary(path)
-    rank = ranking(path)
-    profiles = hotas(path)
+    game = 'elite'
+    files = {'ed-actions.json': ('vocabulary',),
+             'ed-rank.json': ('ranking', 'profiles')}
 
-    if a.grep:
-        for kind in ('button', 'axis'):
-            for f in v.get(kind, ()):
-                if a.grep.lower() in f.lower():
-                    r = rank.get(f, {})
-                    print(f'  {kind:7} {f:38} {r.get("votes", 0):2}/'
-                          f'{len(profiles)}  {r.get("where") or ""}')
-        return
+    @typing.override
+    def arguments(self, parser):
+        parser.add_argument('--vocab', action='store_true',
+                            help='every function, by kind')
+        parser.add_argument('--grep', metavar='WORD',
+                            help='functions matching a word')
+        parser.add_argument('--schemes-dir',
+                            help='override the ControlSchemes lookup')
 
-    if a.vocab:
-        for kind in ('button', 'axis'):
-            print(f'--- {kind} ({len(v.get(kind, ()))})')
-            for f in v.get(kind, ()):
-                print(f'  {f}')
-        return
+    @typing.override
+    def read(self, args):
+        self.args = args
+        path = args.schemes_dir
+        self.where = schemes_dir(path)
+        self.v = vocabulary(path)
+        self.rank = ranking(path)
+        self.profiles = hotas(path)
+        return {'ed-actions.json': {'vocabulary': self.v},
+                'ed-rank.json': {'ranking': self.rank,
+                                 'profiles': sorted(self.profiles)}}
 
-    print(schemes_dir(path))
-    print()
-    print(f'vocabulary  {len(v.get("button", ()))} button, '
-          f'{len(v.get("axis", ()))} axis')
-    print(f'ranking     {len(rank)} functions, from '
-          f'{len(profiles)} HOTAS presets')
-    print()
-    split = [n for n, r in profiles.items()
-             if len({role_of(c.get('Device'))
-                     for fn in r for c in fn
-                     if c.get('Device') not in (None, '{NoDevice}', '',
-                                                'Keyboard', 'Mouse')}) > 1]
-    print(f'of those, {len(split)} name the stick and throttle separately:')
-    for n in sorted(split):
-        print(f'  {n}')
-    print()
-    print('most bound')
-    for f, r in sorted(rank.items(), key=lambda x: -x[1]['votes'])[:18]:
-        kind = 'axis' if f in v.get('axis', ()) else 'button'
-        where = ' '.join(f'{k} {n}' for k, n in sorted(r['where'].items()))
-        print(f'  {readable(f)[:36]:38} {kind:7} {r["votes"]:2}/'
-              f'{len(profiles)}  {where}')
+    @typing.override
+    def summary(self, data):
+        """What to print. `--grep` and `--vocab` narrow it; they do not
+        cancel the write.
 
-    if a.json:
-        print()
-        vocab.save(HERE, 'ed-actions.json', vocabulary=v)
-        vocab.save(HERE, 'ed-rank.json', ranking=rank,
-                   profiles=sorted(profiles))
+        They used to `return` before `--json` was consulted, so
+        `./harvest.py --vocab --json` printed and wrote nothing -- while X4,
+        which checked `--json` first, wrote. Two adapters, the same two
+        flags, opposite meanings. The order lives in `core.adapter` now and
+        there is only one of it.
+        """
+        v, rank, profiles = self.v, self.rank, self.profiles
+        if self.args.grep:
+            out = []
+            for kind in ('button', 'axis'):
+                for f in v.get(kind, ()):
+                    if self.args.grep.lower() in f.lower():
+                        r = rank.get(f, {})
+                        out.append(f'  {kind:7} {f:38} '
+                                   f'{r.get("votes", 0):2}/{len(profiles)}'
+                                   f'  {r.get("where") or ""}')
+            return out
+
+        if self.args.vocab:
+            out = []
+            for kind in ('button', 'axis'):
+                out.append(f'--- {kind} ({len(v.get(kind, ()))})')
+                out += [f'  {f}' for f in v.get(kind, ())]
+            return out
+
+        out = [str(self.where), '',
+               f'vocabulary  {len(v.get("button", ()))} button, '
+               f'{len(v.get("axis", ()))} axis',
+               f'ranking     {len(rank)} functions, from '
+               f'{len(profiles)} HOTAS presets', '']
+        split = [n for n, r in profiles.items()
+                 if len({role_of(c.get('Device'))
+                         for fn in r for c in fn
+                         if c.get('Device') not in (None, '{NoDevice}', '',
+                                                    'Keyboard', 'Mouse')}) > 1]
+        out.append(f'of those, {len(split)} name the stick and throttle '
+                   'separately:')
+        out += [f'  {n}' for n in sorted(split)]
+        out += ['', 'most bound']
+        for f, r in sorted(rank.items(),
+                           key=lambda x: (-x[1]['votes'], x[0]))[:18]:
+            kind = 'axis' if f in v.get('axis', ()) else 'button'
+            where = ' '.join(f'{k} {n}' for k, n in sorted(r['where'].items()))
+            out.append(f'  {readable(f)[:36]:38} {kind:7} '
+                       f'{r["votes"]:2}/{len(profiles)}  {where}')
+        return out
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(EliteHarvest().main())

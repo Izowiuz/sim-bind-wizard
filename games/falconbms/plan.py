@@ -27,6 +27,7 @@ NOTES
 import argparse
 import os
 import sys
+import typing
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 #: the shared core. Sibling directory by default; SIM_BIND_WIZARD overrides it.
@@ -39,6 +40,7 @@ if not os.path.isdir(CORE):
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import adapter                                    # noqa: E402
 from core import backup                                     # noqa: E402
 from core import devmap                                     # noqa: E402
 from core import needs as corneeds
@@ -49,6 +51,13 @@ from core.needs import (IN_A_TURN, ON_APPROACH, IN_THE_AIR,  # noqa: E402,F401
                         ON_THE_RAMP)
 import harvest                                              # noqa: E402
 
+#: Filled by `FalconBms.__init__`, never at import. Importing this module
+#: has to define classes and read nothing, so that a clone with no harvested
+#: cache is told apart from an adapter that is broken. `Need.votes` is a
+#: property and `dx_offsets()` a function, so both read these only after an
+#: adapter exists to fill them.
+ACTIONS, DEVICES, VOTES = {}, [], {}
+
 DX_PER_DEVICE = 32
 #: g_nHotasPinkyShiftMagnitude. We do not use the shifted layer -- see README --
 #: but the writer has to know the number to keep out of its way.
@@ -56,9 +65,6 @@ SHIFT = 256
 
 
 
-ACTIONS = vocab.load(HERE, 'bms-actions.json', key='actions')
-DEVICES = vocab.load(HERE, 'bms-actions.json', key='devices')
-VOTES = dict(vocab.load(HERE, 'bms-rank.json', key='votes'))
 
 
 class Need(corneeds.Need):
@@ -423,11 +429,6 @@ def axis_plan(devs):
     return axes
 
 
-def build():
-    devs, placed, unmet, free = assign()
-    return corneeds.Layout(devs, placed, unmet, free, axes=axis_plan(devs))
-
-
 def dx_binds(placed):
     """Ready-to-write DX lines for the placements given.
 
@@ -519,33 +520,32 @@ def read_keeping(path):
     return raw.replace('\r\n', '\n'), nl
 
 
-def write_keeping(path, text, nl):
-    path.write_bytes(text.replace('\n', nl).encode('latin-1'))
-
-
 KEYFILE_OUT = 'BMS - VIRPIL.key'
 
 
-def write_key(bms, backup_dir=None, when=None, placed=None):
-    """Build our key file from the shipped Full one, so every keyboard binding
-    and every comment in it survives; only the DX block is ours."""
+def key_file(bms, placed):
+    """(path, the key file's whole new text, lines to print).
+
+    Built from the shipped Full one, so every keyboard binding and every
+    comment in it survives; only the DX block is ours.
+
+    It used to take `placed=None` and call `build()` for itself when nobody
+    passed any -- which meant a reviewer who cleared half the plan and pressed
+    `w` got all of it written anyway. There is no such argument now: the
+    placements are the only thing this is given.
+    """
     src = bms / 'User' / 'Config' / 'BMS - Full.key'
     dst = bms / 'User' / 'Config' / KEYFILE_OUT
-    when = when or backup.stamp()
-    binds = dx_binds(build().placed if placed is None else placed)
+    binds = dx_binds(placed)
     body, nl = read_keeping(src)
     # the first line's description names the file inside BMS's own UI
     body = body.replace('"BMS - Full"', f'"{KEYFILE_OUT[:-4]}"', 1)
-    dest, saved = backup.save('falconbms', dst, into=backup_dir, when=when)
-    if saved:
-        print(f'backed up  {dest}')
-    write_keeping(dst, body.rstrip('\n') + '\n' + dx_lines(binds) + '\n', nl)
-    print(f'wrote      {dst}')
-    print(f'           {len(binds)} DX bindings')
-    print()
-    print('Pick it in the Alternative Launcher (falcon-bms launcher) under')
-    print(f'Keyfile, or in BMS Setup -> Controllers: "{KEYFILE_OUT[:-4]}".')
-    return dst
+    text = body.rstrip('\n') + '\n' + dx_lines(binds) + '\n'
+    return dst, text.replace('\n', nl), [
+        f'           {len(binds)} DX bindings',
+        '',
+        'Pick it in the Alternative Launcher (falcon-bms launcher) under',
+        f'Keyfile, or in BMS Setup -> Controllers: "{KEYFILE_OUT[:-4]}".']
 
 
 AXIS_HEADER = '# ---- VIRPIL, written by falconbms-bind-wizard ----'
@@ -579,14 +579,18 @@ def _strip_stub(txt, guid, product):
     return '\n'.join(out)
 
 
-def write_axes(bms, backup_dir=None, when=None):
-    """Write our devices into DeviceDefaults.txt and move the binary mapping out
-    of the way so BMS rebuilds it from them."""
+def axis_files(bms, axes):
+    """({path: contents}, lines to print) for the axis half of a write.
+
+    `DeviceDefaults.txt` gets our block; the binary mapping is handed back as
+    MOVE, because BMS rebuilds it from the defaults only when it is GONE --
+    renaming it in place left the game's own config folder full of
+    `.dat.<stamp>.bak`, in a directory the game reads.
+    """
     cfg = bms / 'User' / 'Config'
     defaults = cfg / 'DeviceDefaults.txt'
-    when = when or backup.stamp()
-    axes = build().axes
     devs = devices()
+    said = []
 
     per = {}
     for name, role, a, di in axes:
@@ -607,7 +611,7 @@ def write_axes(bms, backup_dir=None, when=None):
     txt, nl = read_keeping(defaults)
     if AXIS_HEADER in txt:
         txt = txt[:txt.index(AXIS_HEADER)].rstrip('\n')
-        print('replaced the previous VIRPIL block')
+        said.append('replaced the previous VIRPIL block')
     for role, items in per.items():
         dev = devs[role]
         pid, vid = dev.usb.split(':')
@@ -615,26 +619,20 @@ def write_axes(bms, backup_dir=None, when=None):
         before = txt
         txt = _strip_stub(txt, guid, dev.product)
         if txt != before:
-            print(f'removed    the game\'s own stub for {dev.product}')
-    dest, _ = backup.save('falconbms', defaults, into=backup_dir, when=when)
-    print(f'backed up  {dest}')
-    write_keeping(defaults, txt.rstrip('\n') + '\n' + '\n'.join(block) + '\n',
-                  nl)
-    print(f'wrote      {defaults}')
+            said.append(f'removed    the game\'s own stub for {dev.product}')
 
-    # The binary mapping has to be GONE, not replaced, for BMS to rebuild it
-    # from the defaults -- so these move into the backup rather than being
-    # renamed in place, where they used to pile up as .dat.<stamp>.bak.
-    gone, moved = backup.save('falconbms', *(cfg / n for n in
-                                             ('axismapping.dat',
-                                              'axismapping_tmp.dat')),
-                              into=backup_dir, move=True, when=when)
-    for name, _orig in moved:
-        print(f'moved away {name} -> {gone}')
-    print()
-    print('BMS should rebuild the binary from the defaults on next start.')
-    print('If it does not, set these nine by hand in the Launcher — the plan')
-    print('above says exactly which physical axis each one is.')
+    body = txt.rstrip('\n') + '\n' + '\n'.join(block) + '\n'
+    files = {defaults: adapter.Text(body.replace('\n', nl),
+                                    encoding='latin-1')}
+    for name in ('axismapping.dat', 'axismapping_tmp.dat'):
+        if (cfg / name).exists():
+            files[cfg / name] = adapter.MOVE
+
+    said += ['',
+             'BMS should rebuild the binary from the defaults on next start.',
+             'If it does not, set these nine by hand in the Launcher — the '
+             'plan', 'above says exactly which physical axis each one is.']
+    return files, said
 
 
 # --------------------------------------------------------------- the review
@@ -648,26 +646,6 @@ def _describe(p):
             what = f'{what}  (release: {b["release"]})'
         out.append((f'DX{b["dx"]}', what))
     return out
-
-
-def tui(args):
-    bms = harvest.bms_dir()
-
-    def write_kept(kept):
-        # The same pair `./bind bms write` runs, under one stamp. Only the key
-        # file is narrowed: the axis defaults were never up for review.
-        when = backup.stamp()
-        write_key(bms, args.backup_dir, when, kept.placed)
-        write_axes(bms, args.backup_dir, when)
-
-    cfg = bms / 'User' / 'Config'
-    creview.run(build(), 'Falcon BMS', f'VIRPIL · {KEYFILE_OUT}',
-                describe=_describe, write=write_kept,
-                paths=[('game', str(bms)),
-                       ('writes', str(cfg / KEYFILE_OUT)),
-                       ('and', str(cfg / 'DeviceDefaults.txt')),
-                       ('backups',
-                        backup.dir_for('falconbms', args.backup_dir))])
 
 
 # -------------------------------------------------------------------- output
@@ -685,67 +663,70 @@ def wrap(text, width, indent):
     return f'\n{indent}'.join(out)
 
 
-def show(why=False, free_only=False):
-    _devs, placed, unmet, free, axes = build()
+def show(layout, why=False, free_only=False):
+    _devs, placed, unmet, free, axes = layout
+    out = []
     binds = dx_binds(placed)
     off = dx_offsets()
 
     if not free_only:
-        print('AXES')
+        out.append('AXES')
         for name, role, a, di in axes:
-            print(f'  {name:<16} {role:<9} {di:<8} {a.label}')
+            out.append(f'  {name:<16} {role:<9} {di:<8} {a.label}')
             note = AXIS_NOTE.get(name)
             if why and note:
-                print(f'{"":<19}{wrap(note, 56, " " * 19)}')
-        print()
+                out.append(f'{"":<19}{wrap(note, 56, " " * 19)}')
+        out.append("")
 
         by_need = {}
         for b in binds:
             by_need.setdefault(id(b['need']), []).append(b)
-        print('BUTTONS')
+        out.append('BUTTONS')
         for need, role, ctrl, s in ((p.need, p.role, p.ctrl, p.points)
                                     for p in placed):
             mine = by_need.get(id(need), [])
             if not mine:
-                print(f'  {need.what}')
-                print(f'!!    {ctrl.label} was chosen but carries nothing — '
+                out.append(f'  {need.what}')
+                out.append(f'!!    {ctrl.label} was chosen but carries nothing — '
                       'a bug in slots_for')
                 continue
-            print(f'  {need.what}')
-            print(f'{"":<4}{ctrl.label}  ({role}, {ctrl.reach})')
+            out.append(f'  {need.what}')
+            out.append(f'{"":<4}{ctrl.label}  ({role}, {ctrl.reach})')
             for b in sorted(mine, key=lambda b: b['dx']):
                 d = ctrl.direction(b['local']) or 'press'
                 extra = f'   / release: {b["release"]}' if b['release'] else ''
-                print(f'      DX{b["dx"]:<4} {d:<8} {b["press"]}{extra}')
+                out.append(f'      DX{b["dx"]:<4} {d:<8} {b["press"]}{extra}')
             if why:
-                print(f'      why    {need.votes}/22 vendor profiles bind this; '
+                out.append(f'      why    {need.votes}/22 vendor profiles bind this; '
                       f'wants a {need.shape}, score {s}')
                 if need.dev and need.dev != role:
-                    print(f'             COMPROMISE: belongs on the {need.dev}, '
+                    out.append(f'             COMPROMISE: belongs on the {need.dev}, '
                           f'nothing of that shape was left there')
                 if need.relaxed:
-                    print('             took a control better than its urgency '
+                    out.append('             took a control better than its urgency '
                           'earns, because nothing plainer was left')
                 if need.note:
-                    print(f'{"":<13}{wrap(need.note, 60, " " * 13)}')
-            print()
+                    out.append(f'{"":<13}{wrap(need.note, 60, " " * 13)}')
+            out.append("")
 
         if unmet:
-            print('NOT PLACED')
+            out.append('NOT PLACED')
             for n in unmet:
-                print(f'  {n.what:<28} wanted a {n.shape}')
-            print()
+                out.append(f'  {n.what:<28} wanted a {n.shape}')
+            out.append("")
 
-    print('STILL FREE')
+    out.append('STILL FREE')
     for role, c in free:
         n = len(c.bindable_buttons)
         dx = ', '.join(f'DX{off[role] + b}' for b in c.bindable_buttons)
-        print(f'  {c.label:<28} {c.kind:<10} {role:<9} {n} button(s)  {dx}')
+        out.append(f'  {c.label:<28} {c.kind:<10} {role:<9} {n} button(s)  {dx}')
+    return out
 
 
-def audit():
+def audit(layout):
     """Which callbacks the vendors put on hardware and we did not."""
-    binds = dx_binds(build().placed)
+    out = []
+    binds = dx_binds(layout.placed)
     mine = set()
     for b in binds:
         mine.add(b['press'])
@@ -754,22 +735,23 @@ def audit():
 
     bad = [c for c in sorted(mine) if c not in ACTIONS]
     if bad:
-        print('NOT IN THE KEY FILE — these would be silently ignored:')
+        out.append('NOT IN THE KEY FILE — these would be silently ignored:')
         for c in bad:
-            print(f'  {c}')
-        print()
+            out.append(f'  {c}')
+        out.append("")
 
     missed = [(cb, n) for cb, n in sorted(VOTES.items(), key=lambda x: -x[1])
               if cb not in mine and n >= 8]
     mfd = [c for c, _ in missed if 'OSB' in c or 'BRT' in c]
-    print(f'placed {len(mine)} callbacks')
-    print(f'ranked but not placed: {len(missed)}'
+    out.append(f'placed {len(mine)} callbacks')
+    out.append(f'ranked but not placed: {len(missed)}'
           f'  ({len(mfd)} of them MFD buttons, which need an MFD panel)')
     for cb, n in missed:
         if cb in mfd:
             continue
         a = ACTIONS.get(cb, {})
-        print(f'  {n:>3}  {cb:<28} {a.get("desc", "(gone from the key file)")[:52]}')
+        out.append(f'  {n:>3}  {cb:<28} {a.get("desc", "(gone from the key file)")[:52]}')
+    return out
 
 
 #: What to look at once, on the ramp, because it could not be settled offline.
@@ -812,16 +794,14 @@ COMPROMISES = [
                        'every other dropdown. Check all four tabs before '
                        'concluding a device is dead.'),
 ]
-
-
-def _sheet():
+def _sheet(layout):
     """Everything a kneeboard needs, in the core's shape.
 
     BMS has one aircraft, so there is one unnamed context and the callback
     reads as a second line under the plain-English name. War Thunder passes
     ('Air', 'Helicopter') to the same builder and gets a column each.
     """
-    _devs, placed, unmet, free, axes = build()
+    _devs, placed, unmet, free, axes = layout
     binds = dx_binds(placed)
     devs = devices()
     off = dx_offsets()
@@ -857,65 +837,106 @@ def _sheet():
     return sh
 
 
-def sheet(path):
-    return _sheet().markdown(path)
+# -------------------------------------------------------------- the adapter --
+
+@typing.final
+class FalconBms(adapter.Planner):
+    """Falcon BMS 4.38, F-16C, on the VIRPIL pair."""
+
+    game = 'falconbms'
+    title = 'Falcon BMS'
+    CACHE = {'bms-actions.json': ('actions', 'devices'),
+             'bms-rank.json': 'votes'}
+    #: BMS's own word for the install predates the family's. Both spellings
+    #: reach the same constructor parameter rather than one of them being
+    #: laundered through os.environ, which is what used to happen.
+    ALIASES = {'game_dir': ('--bms-dir',)}
 
 
-def html_sheet(path):
-    return _sheet().html(path)
+    @property
+    @typing.override
+    def NEEDS(self) -> list:
+        """The literal stays at module scope -- it is most of this file, and
+        moving it into the class body would bury every other change.
 
+        A property rather than a class attribute because pyright rejects the
+        second as an override of an abstract property, and because two of the
+        six derive their needs and could never be a constant anyway.
+        """
+        return NEEDS
 
-def main():
-    p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('--why', action='store_true', help='print why each control was chosen')
-    p.add_argument('--free', action='store_true', help='list controls left unbound')
-    p.add_argument('--audit', action='store_true',
-                   help='list ranked callbacks left unplaced')
-    p.add_argument('--sheet', action='store_true', help='write KNEEBOARD.md')
-    p.add_argument('--html', action='store_true',
-                   help='write kneeboard.html')
-    p.add_argument('--write', action='store_true', help='write the key file')
-    p.add_argument('--write-axes', action='store_true',
-                   help='write the axis defaults (untested)')
-    p.add_argument('--bms-dir', help='the BMS install directory')
-    p.add_argument('--tui', action='store_true',
-                   help='review the layout, write what you keep')
-    backup.add_argument(p, 'falconbms')
-    a = p.parse_args()
+    def __init__(self, game_dir=None, backup_dir=None):
+        if game_dir:
+            os.environ['BMS_DIR'] = game_dir
+        self.bms = harvest.bms_dir()
+        self.backup_dir = backup_dir
+        self.subtitle = f'VIRPIL · {KEYFILE_OUT}'
+        ACTIONS.update(self.cache('bms-actions.json', key='actions'))
+        DEVICES[:] = self.cache('bms-actions.json', key='devices')
+        VOTES.update(self.cache('bms-rank.json'))
 
-    if a.bms_dir:
-        os.environ['BMS_DIR'] = a.bms_dir
-    bms = harvest.bms_dir()
+    @typing.override
+    def build(self):
+        devs, placed, unmet, free = assign()
+        return corneeds.Layout(devs, placed, unmet, free,
+                               axes=axis_plan(devs))
 
-    if a.tui:
-        tui(a)
-        return
+    @typing.override
+    def describe(self, placement):
+        return _describe(placement)
 
-    did = False
-    if a.audit:
-        audit()
-        did = True
-    if a.sheet:
-        path, nb, na = sheet(os.path.join(HERE, 'KNEEBOARD.md'))
-        print(f'wrote {path}: {nb} bindings, {na} axes')
-        did = True
-    if a.html:
-        path, nb, na = html_sheet(os.path.join(HERE, 'kneeboard.html'))
-        print(f'wrote {path}: {nb} bindings, {na} axes')
-        did = True
-    # One stamp for both, so `./bind bms write` -- which is --write and
-    # --write-axes together -- leaves one run folder rather than two.
-    when = backup.stamp()
-    if a.write:
-        write_key(bms, a.backup_dir, when)
-        did = True
-    if a.write_axes:
-        write_axes(bms, a.backup_dir, when)
-        did = True
-    if not did:
-        show(why=a.why, free_only=a.free)
+    @typing.override
+    def sheet(self, layout):
+        return _sheet(layout)
+
+    @typing.override
+    def show(self, layout, why=False):
+        return show(layout, why=why)
+
+    @typing.override
+    def free(self, layout):
+        return show(layout, free_only=True)
+
+    @typing.override
+    def write_layout(self, layout):
+        """The key file and the axis defaults, in one run.
+
+        BMS needed two writes for one layout: `--write` did the key file and
+        `--write-axes` the rest, and `./bind bms write` passed both to hide
+        it. One layout is one write now, and `--write-axes` remains for the
+        axis half on its own.
+        """
+        dst, text, said = key_file(self.bms, layout.placed)
+        files, more = axis_files(self.bms, layout.axes)
+        files[dst] = adapter.Text(text, encoding='latin-1')
+        for line in said + more:
+            print(line)
+        return files
+
+    @typing.override
+    def extra(self, args, layout):
+        if args.audit:
+            return audit(layout)
+        if args.write_axes:
+            files, said = axis_files(self.bms, layout.axes)
+            return said + self.lay_down(files)
+        return None
+
+    @typing.override
+    def arguments(self, parser):
+        parser.add_argument('--audit', action='store_true',
+                            help='list ranked callbacks left unplaced')
+        parser.add_argument('--write-axes', action='store_true',
+                            help='write only the axis defaults')
+
+    @typing.override
+    def paths(self, args):
+        cfg = self.bms / 'User' / 'Config'
+        return [('game', str(self.bms)),
+                ('writes', str(cfg / KEYFILE_OUT)),
+                ('and', str(cfg / 'DeviceDefaults.txt')),
+                ('backups', backup.dir_for('falconbms', self.backup_dir))]
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(adapter.run(FalconBms))

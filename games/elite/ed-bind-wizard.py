@@ -269,8 +269,15 @@ def resolve_devices(results):
     return out
 
 
-def generate(results, base, bindings_dir, preset_name, backup_dir=None):
-    """Build the .binds file. Returns human-readable summary lines."""
+def render(results, base, bindings_dir, preset_name):
+    """(path, the preset's whole text, summary lines). Writes nothing.
+
+    Split out of `generate()` so the planner can hand the text to
+    `core.adapter`, which owns the backing up and the writing for every game.
+    `ET.tostring(..., encoding='unicode', xml_declaration=True)` is byte for
+    byte what `tree.write(..., encoding='utf-8', xml_declaration=True)`
+    produced here before.
+    """
     devs = resolve_devices(results)
     lines = [f"device ids: stick={devs['stick']['id']} "
              f"throttle={devs['throttle']['id']}"]
@@ -338,14 +345,8 @@ def generate(results, base, bindings_dir, preset_name, backup_dir=None):
         bound.append(func)
 
     out = os.path.join(bindings_dir, f"{preset_name}.4.2.binds")
-    # The game keeps its own numbered `.binds.N.backup` copies, but only of
-    # presets IT wrote; ours was replaced in place with nothing kept, so a
-    # deadzone tuned in game and then regenerated over was simply gone.
-    dest, kept = backup.save("elite", out, into=backup_dir)
-    if kept:
-        lines.append(f"backed up the previous preset -> {dest}")
     ET.indent(tree, space="\t")
-    tree.write(out, encoding="utf-8", xml_declaration=True)
+    text = ET.tostring(root, encoding="unicode", xml_declaration=True)
 
     lines.append(f"wrote {len(bound)} bindings -> {out}")
     if created:
@@ -355,6 +356,24 @@ def generate(results, base, bindings_dir, preset_name, backup_dir=None):
         lines.append(f"skipped in wizard (base bindings only): "
                      f"{', '.join(skipped)}")
     lines.append(f"In game: Options -> Controls -> preset '{preset_name}'")
+    return out, text, lines
+
+
+def generate(results, base, bindings_dir, preset_name, backup_dir=None):
+    """Build the .binds file and write it. Returns summary lines.
+
+    The wizard's own path. `plan.py` goes through `render()` instead, because
+    `core.adapter` does its backing up and its writing.
+    """
+    out, text, lines = render(results, base, bindings_dir, preset_name)
+    # The game keeps its own numbered `.binds.N.backup` copies, but only of
+    # presets IT wrote; ours was replaced in place with nothing kept, so a
+    # deadzone tuned in game and then regenerated over was simply gone.
+    dest, kept = backup.save("elite", out, into=backup_dir)
+    if kept:
+        lines.insert(1, f"backed up the previous preset -> {dest}")
+    with open(out, "w", encoding="utf-8", newline="") as f:
+        f.write(text)
     return lines
 
 

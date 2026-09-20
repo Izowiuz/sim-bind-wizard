@@ -24,6 +24,7 @@ import argparse
 import importlib.util
 import os
 import sys
+import typing
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 #: the shared hardware map. Sibling directory by default; SIM_DEVICE_MAP
@@ -37,6 +38,7 @@ if not os.path.isdir(CORE):
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import adapter                                    # noqa: E402
 from core import devmap                                     # noqa: E402
 from core import backup
 from core import needs as corneeds
@@ -47,12 +49,10 @@ from core.needs import (IN_A_TURN, ON_APPROACH, IN_THE_AIR,  # noqa: E402,F401
                         ON_THE_RAMP)
 
 
-ACTIONS = vocab.load(HERE, 'wt-actions.json', key='actions')
-try:
-    FACTORY = dict(vocab.load(HERE, 'wt-factory-rank.json', key='actions'))
-except SystemExit:
-    FACTORY = {}          # only used to annotate --why, so it may be absent
-
+#: Filled by `WarThunder.__init__`, never at import -- see the note in
+#: games/falconbms/plan.py. The rank file may be absent: it only annotates
+#: `--why`, so `__init__` shrugs where the actions file is fatal.
+ACTIONS, FACTORY = {}, {}
 
 def is_heli(action):
     """War Thunder is not consistent: most helicopter actions carry
@@ -378,13 +378,6 @@ def axis_plan(devs):
     return axes
 
 
-def build():
-    devs = devmap.by_role('stick', 'throttle')
-    flat = [n for n in NEEDS if n.first_shape != 'axis']
-    return corneeds.Layout(devs, *corneeds.allocate(flat, devs),
-                           axes=axis_plan(devs))
-
-
 def button_table(placed):
     """[(role, local index, action, where)] for the placements given.
 
@@ -457,48 +450,7 @@ def _describe(p):
     return out
 
 
-def preset_writer():
-    """wt-bind-preset.py, imported.
-
-    It stays a separate script because it owns machine.blk -- 490 lines of
-    .blk parsing, plus a restore and a render nobody else has a use for. What
-    it should not also own is the *verb*: every other planner in the family
-    answers `--write` itself, and this one delegating is what makes that true
-    here too.
-    """
-    spec = importlib.util.spec_from_file_location(
-        'wtpreset', os.path.join(HERE, 'wt-bind-preset.py'))
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def write(args, layout=None):
-    """Into the game, through the script that knows the format."""
-    argv = ['--backup-dir', args.backup_dir] if args.backup_dir else []
-    preset_writer().main(argv, layout=layout)
-
-
-def tui(args):
-    """The review, writing through wt-bind-preset.py.
-
-    War Thunder is the one game whose writer is a separate script, so the
-    layout the reviewer kept is handed to its `main()` rather than to a
-    `write()` here -- that script owns machine.blk and nothing else should
-    learn the format.
-    """
-    def write_kept(kept):
-        write(args, layout=kept)
-
-    preset = preset_writer()
-    creview.run(build(), 'War Thunder', 'air simulator + helicopters · VIRPIL',
-                describe=_describe, write=write_kept,
-                paths=[('game', preset.GAME_DIR), ('saves', preset.SAVES),
-                       ('backups',
-                        backup.dir_for('warthunder', args.backup_dir))])
-
-
-def _sheet():
+def _sheet(layout):
     """The kneeboard, in the core's shape.
 
     Two contexts here, so each gets a column: one button doing different
@@ -506,7 +458,7 @@ def _sheet():
     at a glance, and it is why the context list is part of the contract rather
     than something each game solves again.
     """
-    _devs, placed, unmet, free, axes = build()
+    _devs, placed, unmet, free, axes = layout
     buttons = button_table(placed)
     off = wt_offsets()
     devs = devices()
@@ -567,105 +519,170 @@ def _sheet():
     return sh
 
 
-def sheet(path):
-    return _sheet().markdown(path)
+# -------------------------------------------------------------- the adapter --
+
+class Preset(typing.Protocol):
+    """What this planner calls on `wt-bind-preset.py`.
+
+    A sidecar is loaded by path, so its name is not importable and everything
+    across that seam is `Any` -- a typo in a function name or a swapped
+    argument reaches the game before anything notices. Naming the surface
+    here gets those checked at the call site.
+
+    What it does NOT check is that the script really has these: a `cast` is
+    a promise, not a proof, and pyright cannot verify one against a module it
+    was never able to import. That half stays an AttributeError, which is at
+    least loud.
+    """
+
+    GAME_DIR: str
+    SAVES: str
+
+    def targets_under(self, saves: str) -> list[str]: ...
+
+    def compose(self, layout, targets: list[str],
+                say=...) -> tuple[list[str], dict, dict]: ...
+
+    def blk_with(self, target: str, block: list[str]) -> str: ...
 
 
-def html_sheet(path):
-    return _sheet().html(path)
+@typing.final
+class WarThunder(adapter.Planner):
+    """War Thunder, air simulator and helicopters, on the VIRPIL pair."""
+
+    game = 'warthunder'
+    title = 'War Thunder'
+    subtitle = 'air simulator + helicopters · VIRPIL'
+    CACHE = {'wt-actions.json': 'actions',
+             'wt-factory-rank.json': 'actions'}
 
 
-def main():
-    ap = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--why', action='store_true', help='print why each control was chosen')
-    ap.add_argument('--unused', action='store_true', help='list controls left unbound')
-    ap.add_argument('--sheet', nargs='?', const='KNEEBOARD.md', metavar='PATH',
-                    help='write KNEEBOARD.md')
-    ap.add_argument('--html', nargs='?', const='kneeboard.html', metavar='PATH',
-                    help='write kneeboard.html')
-    ap.add_argument('--tui', action='store_true',
-                    help='review the layout, write what you keep')
-    ap.add_argument('--write', action='store_true',
-                    help='write the whole layout into the game')
-    backup.add_argument(ap, 'warthunder')
-    args = ap.parse_args()
+    @property
+    @typing.override
+    def NEEDS(self) -> list:
+        """The literal stays at module scope -- it is most of this file, and
+        moving it into the class body would bury every other change.
 
-    if args.tui:
-        tui(args)
-        return
+        A property rather than a class attribute because pyright rejects the
+        second as an override of an abstract property, and because two of the
+        six derive their needs and could never be a constant anyway.
+        """
+        return NEEDS
 
-    if args.write:
-        write(args)
-        return
+    def __init__(self, game_dir=None, saves=None, backup_dir=None):
+        self.backup_dir = backup_dir
+        ACTIONS.update(self.cache('wt-actions.json'))
+        try:
+            FACTORY.update(self.cache('wt-factory-rank.json'))
+        except vocab.Missing:
+            pass          # only annotates --why, so it may be absent
+        # The writer owns machine.blk and where the install is; these were
+        # module constants in it with no override at all.
+        self.writer = typing.cast(Preset,
+                                  self.sidecar('wt-bind-preset.py'))
+        if game_dir:
+            self.writer.GAME_DIR = game_dir
+        if saves:
+            self.writer.SAVES = saves
 
-    # Both, when both are asked for. An early return here meant
-    # `--sheet --html` silently wrote one file and left the other stale --
-    # and the kneeboards are the only regression baseline this repo has.
-    did = False
-    if args.html:
-        path, nb, na = html_sheet(args.html if os.path.isabs(args.html)
-                                  else os.path.join(HERE, args.html))
-        print(f'wrote {path}: {nb} bindings, {na} axes')
-        did = True
+    @typing.override
+    def build(self):
+        devs = devmap.by_role('stick', 'throttle')
+        flat = [n for n in self.NEEDS if n.first_shape != 'axis']
+        return corneeds.Layout(devs, *corneeds.allocate(flat, devs),
+                               axes=axis_plan(devs))
 
-    if args.sheet:
-        path, nb, na = sheet(os.path.join(HERE, args.sheet)
-                             if not os.path.isabs(args.sheet) else args.sheet)
-        print(f'wrote {path}: {nb} bindings, {na} axes')
-        did = True
+    @typing.override
+    def describe(self, placement):
+        return _describe(placement)
 
-    if did:
-        return
+    @typing.override
+    def sheet(self, layout):
+        return _sheet(layout)
 
-    _devs, placed, unmet, free, axes = build()
-    buttons = button_table(placed)
+    @typing.override
+    def write_layout(self, layout):
+        """Every machine.blk of the account, from one composed block.
 
-    print(f'{len(placed)} needs matched, {len(buttons)} bindings, '
-          f'{len(axes)} axes\n')
-    for p_ in placed:
-        need, role, c = p_.need, p_.role, p_.ctrl
-        used = [b for b, _v in p_.slots]
-        where = c.direction(used[0]) if len(used) == 1 else ''
-        print(f'  {need.what:24s} {role:8s} {c.kind:9s} {str(used):18s} '
-              f'{c.label}' + (f' — {where}' if where else ''))
-        if args.why:
-            shape = (need.shape if isinstance(need.shape, str)
-                     else '/'.join(need.shape))
-            bits = [f'wants {shape}',
-                    corneeds.URGENCY_NAME[need.urgency]]
-            if need.suits:
-                bits.append(f'suits {need.suits}'
-                            + (' ✓' if need.suits in c.suits else ' ✗'))
-            # reach used to be printed only for the reflex ones; it is worth
-            # seeing every time, because it is what the floor acts on
-            bits.append(f'reach: {c.reach}')
-            if need.prefer:
-                bits.append(f'pinned to {need.prefer!r}')
-            if need.relaxed:
-                bits.append('took a better control than its urgency earns')
-            print(f'      {", ".join(bits)}')
-            if need.note:
-                print(f'      {need.note}')
-            f = max((FACTORY.get(a, 0) for a in need.air), default=0)
-            if f:
-                print(f'      factory HOTAS profiles binding this: {f}/29')
-            print()
+        The script that owns the format still composes it; what it no longer
+        does is open anything. It used to call `plan.build()` for itself when
+        nobody handed it a layout, which is the clause this contract has been
+        asking for since it was written.
+        """
+        targets = self.writer.targets_under(self.writer.SAVES)
+        block, _dev, _names = self.writer.compose(layout, targets)
+        return {t: self.writer.blk_with(t, block) for t in targets}
 
-    if unmet:
-        print(f'\n{len(unmet)} needs found no control:')
-        for n in unmet:
-            print(f'  {n.what:24s} wanted {"/".join(n.shape)}'
-                  + (f', {n.suits}' if n.suits else '')
-                  + (', reachable without regripping' if n.reflex else ''))
+    @typing.override
+    def arguments(self, parser):
+        parser.add_argument('--unused', dest='free', action='store_true',
+                            help='list controls left unbound')
 
-    if args.unused or free:
-        print(f'\n{len(free)} controls left free:')
-        for role, c in free:
-            print(f'  {role:8s} {c.kind:9s} {str(c.buttons):18s} {c.label}'
-                  f'   [{c.reach}]')
+    @typing.override
+    def paths(self, args):
+        return [('game', self.writer.GAME_DIR),
+                ('saves', self.writer.SAVES),
+                ('backups', backup.dir_for('warthunder', self.backup_dir))]
+
+    @typing.override
+    def show(self, layout, why=False):
+        _devs, placed, unmet, free, axes = layout
+        buttons = button_table(placed)
+        out = [f'{len(placed)} needs matched, {len(buttons)} bindings, '
+               f'{len(axes)} axes', '']
+        for p_ in placed:
+            need, role, c = p_.need, p_.role, p_.ctrl
+            used = [b for b, _v in p_.slots]
+            where = c.direction(used[0]) if len(used) == 1 else ''
+            out.append(f'  {need.what:24s} {role:8s} {c.kind:9s} '
+                       f'{str(used):18s} {c.label}'
+                       + (f' — {where}' if where else ''))
+            if why:
+                shape = (need.shape if isinstance(need.shape, str)
+                         else '/'.join(need.shape))
+                bits = [f'wants {shape}',
+                        corneeds.URGENCY_NAME[need.urgency]]
+                if need.suits:
+                    bits.append(f'suits {need.suits}'
+                                + (' ✓' if need.suits in c.suits else ' ✗'))
+                # reach used to be printed only for the reflex ones; it is
+                # worth seeing every time, because it is what the floor
+                # acts on
+                bits.append(f'reach: {c.reach}')
+                if need.prefer:
+                    bits.append(f'pinned to {need.prefer!r}')
+                if need.relaxed:
+                    bits.append('took a better control than its urgency '
+                                'earns')
+                out.append(f'      {", ".join(bits)}')
+                if need.note:
+                    out.append(f'      {need.note}')
+                f = max((FACTORY.get(a, 0) for a in need.air), default=0)
+                if f:
+                    out.append('      factory HOTAS profiles binding this: '
+                               f'{f}/29')
+                out.append('')
+
+        if unmet:
+            out.append('')
+            out.append(f'{len(unmet)} needs found no control:')
+            for n in unmet:
+                out.append(f'  {n.what:24s} wanted {"/".join(n.shape)}'
+                           + (f', {n.suits}' if n.suits else '')
+                           + (', reachable without regripping'
+                              if n.reflex else ''))
+        if free:
+            out += [''] + self.free(layout)
+        return out
+
+    @typing.override
+    def free(self, layout):
+        out = [f'{len(layout.free)} controls left free:']
+        for role, c in layout.free:
+            out.append(f'  {role:8s} {c.kind:9s} {str(c.buttons):18s} '
+                       f'{c.label}   [{c.reach}]')
+        return out
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(adapter.run(WarThunder))

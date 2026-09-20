@@ -1183,36 +1183,47 @@ def joystick_dir(cfg, aircraft):
                         input_id(cfg, aircraft), "joystick")
 
 
-def generate(results, cfg, aircraft, backup_dir=None):
-    """Build and install the per-device diff.lua files. Returns summary."""
+def render_all(results, cfg, aircraft):
+    """({path: the diff.lua text}, summary lines). Writes nothing.
+
+    Split out of `generate()` so `propose.py` can hand the text to
+    `core.adapter`, which owns the backing up and the writing for every game
+    in the family. `generate()` remains the wizard's own path.
+    """
     if dcs_running():
         raise RuntimeError("DCS is running — quit the game first "
                            "(it overwrites Config/Input on exit)")
     devs = resolve_devices(results)
     diffs = build_diffs(results, aircraft, devs)
     out_dir = joystick_dir(cfg, aircraft)
-    os.makedirs(out_dir, exist_ok=True)
-    paths = [os.path.join(out_dir, info["dcs_id"] + ".diff.lua")
-             for info in devs.values()]
-    # One folder per run rather than a single `.bak` per file: the old one was
-    # overwritten every time, so a run you wanted undone had already eaten the
-    # copy of what came before it.
-    dest, kept = backup.save("dcs", *paths, into=backup_dir)
-    lines = []
+    files, lines = {}, []
     for role, info in devs.items():
         path = os.path.join(out_dir, info["dcs_id"] + ".diff.lua")
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(render_diff(diffs[role]))
+        files[path] = render_diff(diffs[role])
         n = (len(diffs[role]["axisDiffs"]) + len(diffs[role]["keyDiffs"]))
         lines.append("%s: %d entries -> %s" % (role, n, path))
-    if kept:
-        lines.append("backed up %d file(s) -> %s" % (len(kept), dest))
     stale = os.path.join(cfg["saved_games"], "Config", "Input", aircraft,
                          "joystick")
     if os.path.normpath(stale) != os.path.normpath(out_dir) and \
             os.path.isdir(stale):
         lines.append("note: DCS does not read %s — leftovers from an "
                      "older run there can be deleted" % stale)
+    return files, lines
+
+
+def generate(results, cfg, aircraft, backup_dir=None):
+    """Build and install the per-device diff.lua files. Returns summary."""
+    files, lines = render_all(results, cfg, aircraft)
+    os.makedirs(os.path.dirname(next(iter(files))), exist_ok=True)
+    # One folder per run rather than a single `.bak` per file: the old one was
+    # overwritten every time, so a run you wanted undone had already eaten the
+    # copy of what came before it.
+    dest, kept = backup.save("dcs", *files, into=backup_dir)
+    for path, text in files.items():
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+    if kept:
+        lines.append("backed up %d file(s) -> %s" % (len(kept), dest))
     lines.append("Start DCS and check Options -> Controls -> %s" % aircraft)
     return lines
 

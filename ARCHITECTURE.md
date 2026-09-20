@@ -18,6 +18,10 @@
 
     sim-bind-wizard/
       bind                    verb -> (game, script, flags); forwards the rest
+                              (the games come off the filesystem, not a list)
+      core/adapter.py         the contract itself: Harvest, Adapter, Planner,
+                              Proposer, and the guard that rejects a bad
+                              override at class definition
       core/devmap.py          find the map; pick a device per role
       core/game.py            Steam libraries, install dirs, prefixes, is-it-running
       core/needs.py           Need, Placement, allocate; shapes, reach, urgency
@@ -29,10 +33,12 @@
       core/sheet-template.html
       core/capture.py         the js protocol: Device, wait_input, detect_roles
       core/tui.py             the curses shell the capture wizards draw in
-      games/<game>/harvest.py
-      games/<game>/plan.py
+      games/<game>/harvest.py     a Harvest subclass
+      games/<game>/plan.py        an Adapter subclass (DCS: propose.py)
       games/<game>/README.md
       tests/run.py            every test; stdlib unittest, nothing to install
+      tests/test_contract.py  the adapter contract, on a clone with no data
+      tests/test_types.py     pyright, when it is installed
       tests/fake.py           hardware that does not exist, out of devicemap's
                               own classes
       tests/test_*.py
@@ -359,43 +365,59 @@ the right reason.
 
 ## Adapter contract
 
-    harvest.py    in: the game's files.  out: vocabulary + ranking JSON
-                  no arguments prints a summary; --json writes the cache
-    plan.py       NEEDS: list[Need]
-                  build() -> core.needs.Layout
-                  a writer taking the placements it is given, not build()'s
-                  _describe(placement) and --tui, for core.review
-                  --sheet, --html, --why
-                  a writer copies through core.backup.save and takes
-                  --backup-dir from core.backup.add_argument
-    README.md     where it lives · how to run it · the format ·
-                  measured · still a guess · gotchas
+The contract is `core/adapter.py`, not this section. What used to be listed
+here drifted from the code twice -- once into five shapes of `build()`, once
+into three harvests that never met their own first line -- so the listing is
+gone and the classes are the statement:
 
-A writer must **remove** as well as add and change: a binding dropped from
-`NEEDS` has to disappear from the game's config, or it stays live alongside
-whatever replaced it.
+    Harvest(abc.ABC)          in: the game's files.  out: the cache
+    Adapter(abc.ABC)          the planner surface
+    ├── Planner(Adapter)      its writer takes the layout it is handed
+    │   └── X4  Msfs  FalconBms  Elite  WarThunder
+    └── Proposer(Adapter)     it seeds a file a capture wizard confirms
+        └── Dcs
 
-A planner must answer **`--write` itself**, whatever it delegates to. War
-Thunder's `machine.blk` and DCS's `diff.lua` are written by separate scripts
-that own those formats and keep the verbs only a writer needs -- a dry run, a
-render, a restore -- but `plan.py --write` is what `bind` calls, in every
-game. Before that, the dispatch table absorbed the difference, which made it
-look like a fact about the games rather than a gap in two adapters.
+Three moments enforce it, and they are deliberately not one:
 
-A writer must take **the placements it is handed**, not call `build()` for
-itself. Two did, and the review screen -- whose entire job is to write some of
-a plan and not the rest -- could not exist until they stopped.
+| when | what it catches |
+|---|---|
+| class definition | an override that cannot be called the way the base promised; an override of a `@final` member; an `@override` that overrides nothing |
+| instantiation | a subclass with an abstract member left unimplemented, named |
+| `pyright` | return types, parameter types, an `@override` naming nothing |
 
-A writer must leave **nothing behind** in the game's directories. What it
-replaces goes to `core.backup`, never to a sibling file: the game reads that
-folder, and four of the six writers here have a scar from it.
+**Only the third can be absent from a clone**, which is why the first covers
+arity on its own rather than leaving it to the checker. `tests/test_types.py`
+runs it and skips when it is not installed.
 
-`measured` and `still a guess` are separate headings so a reader knows which
-claims are load-bearing.
+A clause the base can *provide* it provides, and then there is nothing to
+check: the common flags exist because `Adapter.parser` adds them, `--json`
+exists because `Harvest.main` does, the cache goes through `core.vocab.save`
+because that is what writes it, and a writer's output is backed up and laid
+down by `Adapter.lay_down` -- which also refuses to finish if an undeclared
+file appeared in the game's directory while the writer ran.
 
-Three of the five standalone harvests do not meet the first line of the
-contract: Falcon BMS, War Thunder and MSFS write their cache unconditionally,
-have no `--json`, and serialise it themselves rather than through
-`core.vocab.save`. `./bind <game> harvest` hides the difference; the contract
-is still owed. (DCS has no `harvest.py`: its harvest is inside the capture
-wizard.)
+### What no interface can say
+
+Two clauses are facts about *contents*, not about shape, and no language
+expresses them. They are tests, and they would be tests in any language.
+
+**A writer must remove as well as add.** A binding dropped from `NEEDS` has
+to disappear from the game's config, or it stays live alongside whatever
+replaced it -- and nothing says so, which is what makes this the one worth
+holding. The six do it two ways: x4 and War Thunder own a region of the file
+and replace it whole; BMS and Elite rebuild theirs from the one the game
+shipped; MSFS strips our device from whatever the plan stopped naming, which
+it did not do until `tests/test_formats.py` was made to say so. DCS is not
+under this clause at all -- its writer builds from the capture wizard's
+results file, not from `NEEDS`, and `--reseed` is its equivalent.
+
+**A writer must take the placements it is handed**, not call `build()` for
+itself. Two did, and the review screen -- whose entire job is to write some
+of a plan and not the rest -- could not exist until they stopped. Python has
+no `private` to stop the call, so `tests/test_contract.py` reads the compiled
+function for it: `'build' in fn.__code__.co_names` is a fact about the
+emitted bytecode, where a grep over the source would trip on a comment.
+
+`measured` and `still a guess` are separate headings in a game's README so a
+reader knows which claims are load-bearing; that one is checkable and
+checked.

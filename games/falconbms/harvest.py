@@ -43,7 +43,14 @@ DEFAULT_BMS = Path.home() / (
     ".local/share/Steam/steamapps/compatdata/429530/pfx/drive_c/Falcon BMS 4.38"
 )
 
+import typing                                                # noqa: E402
+
 HERE = Path(__file__).resolve().parent
+CORE = os.environ.get('SIM_BIND_WIZARD') or str(HERE.parent.parent)
+if CORE not in sys.path:
+    sys.path.insert(0, CORE)
+
+from core import adapter                                    # noqa: E402
 
 # A full key line: callback, sound, <unused>, key, mod, combo key, combo mod, flag, "description"
 KEY_LINE = re.compile(
@@ -180,62 +187,80 @@ def harvest_devices(path):
     return out
 
 
-def main():
-    argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter).parse_args()
-    bms = bms_dir()
-    keyfile = bms / "User" / "Config" / "BMS - Full.key"
-    archive = bms / "Hotas" / "Archive"
-    sorting = bms / "User" / "Config" / "DeviceSorting.txt"
+@typing.final
+class FalconBmsHarvest(adapter.Harvest):
+    """BMS's callback vocabulary and the twenty-two vendor profiles."""
 
-    if not keyfile.exists():
-        sys.exit(f"no key file at {keyfile} — set BMS_DIR to the BMS install")
+    game = "falconbms"
+    files = {"bms-actions.json": ("devices", "actions"),
+             "bms-rank.json": ("profiles", "votes", "placement",
+                               "not_in_keyfile")}
 
-    actions = harvest_actions(keyfile)
-    votes, placement, profiles = harvest_rank(archive)
-    devices = harvest_devices(sorting)
+    @typing.override
+    def read(self, args):
+        self.bms = bms_dir()
+        keyfile = self.bms / "User" / "Config" / "BMS - Full.key"
+        archive = self.bms / "Hotas" / "Archive"
+        sorting = self.bms / "User" / "Config" / "DeviceSorting.txt"
 
-    for cb, a in actions.items():
-        a["votes"] = votes.get(cb, 0)
-        a["placement"] = dict(placement.get(cb, {}))
+        if not keyfile.exists():
+            raise SystemExit(f"no key file at {keyfile} — set BMS_DIR to "
+                             "the BMS install")
 
-    unknown = sorted(set(votes) - set(actions))
+        actions = harvest_actions(keyfile)
+        votes, placement, profiles = harvest_rank(archive)
+        devices = harvest_devices(sorting)
 
-    (HERE / "bms-actions.json").write_text(
-        json.dumps({"devices": devices, "actions": actions}, indent=1, ensure_ascii=False)
-    )
-    (HERE / "bms-rank.json").write_text(
-        json.dumps(
-            {
+        for cb, a in actions.items():
+            a["votes"] = votes.get(cb, 0)
+            a["placement"] = dict(placement.get(cb, {}))
+
+        self.votes, self.placement = votes, placement
+        # Most-voted first, ties by name: `Counter.most_common()` leaves ties
+        # in insertion order, which is whatever order the profiles happened
+        # to be read in.
+        order = sorted(votes.items(), key=lambda kv: (-kv[1], kv[0]))
+        return {
+            "bms-actions.json": {"devices": devices, "actions": actions},
+            "bms-rank.json": {
                 "profiles": profiles,
-                "votes": votes.most_common(),
+                "votes": order,
                 "placement": {k: dict(v) for k, v in placement.items()},
-                "not_in_keyfile": unknown,
+                "not_in_keyfile": sorted(set(votes) - set(actions)),
             },
-            indent=1,
-            ensure_ascii=False,
-        )
-    )
+        }
 
-    print(f"BMS      {bms}")
-    print(f"actions  {len(actions)} bindable callbacks")
-    print(f"sections {len(set(a['section'] for a in actions.values()))}"
-          f" / {len(set(a['subsection'] for a in actions.values()))} subsections")
-    print(f"ranking  {len(profiles)} vendor profiles, {len(votes)} callbacks ever on hardware")
-    if unknown:
-        print(f"         {len(unknown)} ranked callbacks no longer in the key file: "
-              + ", ".join(unknown[:6]) + ("..." if len(unknown) > 6 else ""))
-    print("devices")
-    for d in devices:
-        print(f"  DX {d['dx_range'][0]:>3}-{d['dx_range'][1]:<3} {d['usb']}  {d['name']}")
-    print()
-    print("top of the ranking")
-    for cb, n in votes.most_common(15):
-        a = actions.get(cb)
-        where = ", ".join(f"{k} x{v}" for k, v in placement[cb].most_common(3))
-        print(f"  {n:>3}  {cb:<28} {(a['desc'] if a else '(gone from key file)')[:44]:<46} {where}")
+    @typing.override
+    def summary(self, data):
+        actions = data["bms-actions.json"]["actions"]
+        devices = data["bms-actions.json"]["devices"]
+        rank = data["bms-rank.json"]
+        unknown = rank["not_in_keyfile"]
+        out = [f"BMS      {self.bms}",
+               f"actions  {len(actions)} bindable callbacks",
+               f"sections {len(set(a['section'] for a in actions.values()))}"
+               f" / {len(set(a['subsection'] for a in actions.values()))}"
+               " subsections",
+               f"ranking  {len(rank['profiles'])} vendor profiles, "
+               f"{len(rank['votes'])} callbacks ever on hardware"]
+        if unknown:
+            out.append(f"         {len(unknown)} ranked callbacks no longer "
+                       "in the key file: " + ", ".join(unknown[:6])
+                       + ("..." if len(unknown) > 6 else ""))
+        out.append("devices")
+        for d in devices:
+            out.append(f"  DX {d['dx_range'][0]:>3}-{d['dx_range'][1]:<3} "
+                       f"{d['usb']}  {d['name']}")
+        out += ["", "top of the ranking"]
+        for cb, n in rank["votes"][:15]:
+            a = actions.get(cb)
+            where = ", ".join(f"{k} x{v}"
+                              for k, v in self.placement[cb].most_common(3))
+            out.append(f"  {n:>3}  {cb:<28} "
+                       f"{(a['desc'] if a else '(gone from key file)')[:44]:<46}"
+                       f" {where}")
+        return out
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(FalconBmsHarvest().main())

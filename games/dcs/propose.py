@@ -30,6 +30,7 @@ import json
 import os
 import re
 import sys
+import typing
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CORE = os.environ.get('SIM_BIND_WIZARD') or os.path.normpath(
@@ -40,6 +41,7 @@ if not os.path.isdir(CORE):
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import adapter                                    # noqa: E402
 from core import backup                                     # noqa: E402
 from core import devmap                                     # noqa: E402
 from core import needs as corneeds                          # noqa: E402
@@ -432,7 +434,8 @@ def load_cfg(module, game_dir=None):
     """The wizard remembers where the game is in the results file; reuse that
     rather than making you pass it again."""
     try:
-        cfg = dict(json.load(open(results_path()))['_config'])
+        with open(results_path(), encoding='utf-8') as f:
+            cfg = dict(json.load(f)['_config'])
     except (OSError, KeyError):
         cfg = {}
     if game_dir:
@@ -456,15 +459,21 @@ def candidates(module, cmds, guide):
 
 
 def place(module, cmds, guide, chosen):
-    """[(need, (role, control) or (role, [axis]) or None, score)], unplaced.
+    """-> core.needs.Layout.
 
     The matching is `core.needs.allocate`. What stays here is what the core
     cannot know: which commands form one family, which of them wants an axis,
     and that a trigger's stages are separately named.
+
+    It used to return `[(need, spot, score)], unplaced` -- a fourth shape of
+    the same five values, which is the drift `core.needs.Layout` exists to
+    stop. The axis entries go in `Layout.axes`, which is game-shaped by
+    contract; the free list, which this threw away, is kept, and that is
+    where `--free` comes from.
     """
     devs = devmap.by_role('stick', 'throttle')
     needs = families(cmds, guide, chosen)
-    out = []
+    claims, axes = [], []
 
     # A trigger has stages and more than one command wants it: on the Su-25T
     # the cannon and the selected weapon both belong there, lighter pull first.
@@ -498,18 +507,19 @@ def place(module, cmds, guide, chosen):
                 named[spare[0]] = n
             for b, n in named.items():
                 n.borrowed = b
-                out.append((n, (role, ctrl), 200))
+                claims.append(corneeds.Placement(
+                    n, role, ctrl, [(b, n.bindings[0])], 200))
                 needs.remove(n)
 
     # Axes never go through the allocator, in any game in the family.
     buttons = []
     for need in needs:
         if need.shape == 'axis':
-            out.append((need, resolve_axis(devs, need, cmds), None))
+            axes.append((need, resolve_axis(devs, need, cmds)))
         else:
             buttons.append(need)
 
-    placed, still, _free = corneeds.allocate(
+    placed, still, free = corneeds.allocate(
         buttons, devs, reach=REACH,
         usable=(lambda r, c: c is not claimed) if claimed else None)
 
@@ -521,8 +531,23 @@ def place(module, cmds, guide, chosen):
         # choice is the authoritative one.
         if len(pl.need.bindings) == 1 and pl.slots:
             pl.need.borrowed = pl.slots[0][0]
-        out.append((pl.need, (pl.role, pl.ctrl), pl.points))
-    return out, still
+    return corneeds.Layout(devs, claims + list(placed), still, free,
+                           axes=axes)
+
+
+def rows(layout):
+    """[(need, spot, score)] -- the shape the listing and --check read.
+
+    The order is the one `place()` appended in before it returned a Layout,
+    and the one the listing has always printed: the trigger claims, then the
+    axes, then whatever the allocator placed. `points == 200` is the claim
+    marker `place()` sets, and it was the same magic number before.
+    """
+    claims = [p for p in layout.placed if p.points == 200]
+    rest = [p for p in layout.placed if p.points != 200]
+    return ([(p.need, (p.role, p.ctrl), p.points) for p in claims]
+            + [(n, spot, None) for n, spot in layout.axes]
+            + [(p.need, (p.role, p.ctrl), p.points) for p in rest])
 
 
 def propose(module, key, game_dir=None):
@@ -532,8 +557,8 @@ def propose(module, key, game_dir=None):
         sys.exit(f'no such module: {key} (have {", ".join(ac)})')
     cmds = module.harvest_commands(cfg, key, ac[key]['factory_dir'])
     guide = module.build_guide(cmds)
-    out, unplaced = place(module, cmds, guide, candidates(module, cmds, guide))
-    return cmds, guide, out, unplaced
+    layout = place(module, cmds, guide, candidates(module, cmds, guide))
+    return cmds, guide, layout
 
 
 def seed(module, cmds, guide, chosen=None):
@@ -544,7 +569,7 @@ def seed(module, cmds, guide, chosen=None):
     """
     if chosen is None:
         chosen = candidates(module, cmds, guide)
-    out, _unplaced = place(module, cmds, guide, chosen)
+    out = rows(place(module, cmds, guide, chosen))
     recs = {}
     for need, pair, _s in out:
         if not pair:
@@ -825,175 +850,188 @@ def audit(module, key, cmds, guide):
     return out
 
 
-def main():
-    ap = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('-a', '--aircraft', default='FA-18C',
-                    help='which module (default FA-18C)')
-    ap.add_argument('--game-dir', help='the DCS install directory')
-    ap.add_argument('--why', action='store_true',
-                    help='print why each control was chosen')
-    ap.add_argument('--sheet', nargs='?', const='', metavar='PATH',
-                    help='write KNEEBOARD-<module>.md')
-    ap.add_argument('--html', nargs='?', const='', metavar='PATH',
-                    help='write kneeboard-<module>.html')
-    ap.add_argument('--reseed', action='store_true',
-                    help='discard this module\'s bindings and lay it out fresh')
-    ap.add_argument('--audit', action='store_true',
-                    help='list bindings that no longer match the hardware')
-    ap.add_argument('--check', action='store_true',
-                    help='compare against the results file')
-    ap.add_argument('--write', action='store_true',
-                    help='write the whole layout into the game')
-    backup.add_argument(ap, 'dcs')
-    args = ap.parse_args()
+# -------------------------------------------------------------- the adapter --
 
-    module = wizard()
+class Wizard(typing.Protocol):
+    """What this proposer calls on `dcs-bind-wizard.py`.
 
-    if args.write:
-        cfg = load_cfg(module, args.game_dir)
-        aircraft = args.aircraft or cfg.get('aircraft')
-        if not aircraft:
-            sys.exit('pass -a (e.g. -a FA-18C); the wizard remembers it after '
-                     'the first run')
-        try:
-            for line in write(module, cfg, aircraft, args.backup_dir):
-                print(line)
-        except (RuntimeError, OSError, ValueError) as e:
-            sys.exit(f'ERROR: {e}')
-        return
+    See the note on `Preset` in games/warthunder/plan.py: this gets the call
+    sites checked, not the promise that the script has them.
+    """
 
-    if args.reseed:
-        cfg = load_cfg(module, args.game_dir)
-        ac = module.discover_aircraft(cfg)
-        keys = [args.aircraft] if args.aircraft else list(ac)
-        for k in keys:
-            if k not in ac:
-                sys.exit(f'no such module: {k} (have {", ".join(ac)})')
-        when = backup.stamp()
-        first = True
-        for k in keys:
-            cmds = module.harvest_commands(cfg, k, ac[k]['factory_dir'])
-            guide = module.build_guide(cmds)
-            dest, before, after = reseed(module, k, cmds, guide,
-                                         args.backup_dir, when)
-            if first:
-                print(f'  backed up to {dest}')
-                first = False
-            print(f'  {k:9s} {before} bindings -> {after}, all marked ?')
-        print('  open the wizard and walk the list: c confirms one, C the '
-              'section')
-        return
+    def discover_aircraft(self, cfg: dict) -> dict: ...
 
-    if args.audit:
-        cfg = load_cfg(module, args.game_dir)
-        ac = module.discover_aircraft(cfg)
-        bad = []
-        keys = [args.aircraft] if args.aircraft else list(ac)
-        for k in keys:
-            if k not in ac:
-                continue
-            cmds = module.harvest_commands(cfg, k, ac[k]['factory_dir'])
-            guide = module.build_guide(cmds)
-            for name, r, why in audit(module, k, cmds, guide):
-                bad.append((k, name, r, why))
-        for k, name, r, why in bad:
-            where = (f'{r["role"]} BTN{r["index"] + 1}'
-                     if r['type'] == 'button'
-                     else f'{r["role"]} axis {r["index"]}')
-            print(f'  {k:8s} {name[:44]:46s} {where:16s} {why}')
-        print(f'\n  {len(bad)} binding(s) worth a second look')
-        return
+    def harvest_commands(self, cfg: dict, aircraft_key: str,
+                         factory_dir: str) -> dict: ...
 
-    if args.sheet is not None or args.html is not None:
-        cfg = load_cfg(module, args.game_dir)
-        ac = module.discover_aircraft(cfg)
-        cmds = module.harvest_commands(cfg, args.aircraft,
-                                       ac[args.aircraft]['factory_dir'])
-        guide = module.build_guide(cmds)
-        if args.sheet is not None:
-            path = args.sheet or os.path.join(
-                HERE, f'KNEEBOARD-{args.aircraft}.md')
-            p, n = write_sheet(module, args.aircraft, cmds, guide, path)
-            print(f'wrote {p}: {n} bindings')
-        if args.html is not None:
-            path = args.html or os.path.join(
-                HERE, f'kneeboard-{args.aircraft}.html')
-            p, n = write_html(module, args.aircraft, cmds, guide, path)
-            print(f'wrote {p}: {n} bindings')
-        return
+    def build_guide(self, commands: dict) -> dict: ...
 
-    cmds, guide, out, unplaced = propose(module, args.aircraft, args.game_dir)
+    def render_all(self, results: dict, cfg: dict,
+                   aircraft: str) -> tuple[dict, list[str]]: ...
 
-    placed = [(n, p, s) for n, p, s in out if p]
-    print(f'{args.aircraft}: {len(placed)} controls proposed, '
-          f'{len(unplaced)} unplaced\n')
-    for need, pair, s in out:
-        if need.shape == 'axis':
-            role, axs = pair if pair else (None, [])
-            a = axs[0] if axs else None
-            name0 = cmds[need.bindings[0]]['name'].lower()
-            if a:
-                where = f'{role} axis {a.index} — {a.label}'
-            elif name0 == 'thrust':
-                where = 'left unbound — the two engines are bound separately'
-            else:
-                where = 'no axis on this hardware'
-            print(f'  {need.what[:38]:40s} {where}')
-            print()
-            continue
-        if pair is None:
-            continue
-        role, c = pair
-        print(f'  {need.what[:38]:40s} {role:8s} {c.kind:9s} {c.label}')
-        spots = lay_out(module, c, need.bindings, cmds,
-                        press_only=len(need.bindings) == 1
-                        and len(c.bindable_buttons) > 1,
-                        borrowed=need.borrowed)
-        for h in need.bindings:
-            b = spots.get(h)
-            where = c.direction(b) if b is not None else '?'
-            print(f'      {cmds[h]["name"][:46]:48s} -> {str(b):>3s} '
-                  f'{where}')
-        if args.why:
-            print(f'      wants {need.shape}'
-                  + (f', {need.dev}' if need.dev else '')
-                  + f", {['in a turn', 'on approach', 'in the air',
-                            'on the ramp'][need.urgency]}"
-                  + f'   {need.rank} factory profiles   score {s}')
-            print(f'      {guide[need.bindings[0]]["place"][:74]}')
-            if need.shape == 'latch':
-                # the line above is the module's own advice, and we just went
-                # against it on purpose; say so rather than leave it looking
-                # like the proposal missed it
-                print('      OVERRIDDEN: the module is right that this is a '
-                      'panel switch, but the')
-                print('      trigger lever holds its position the way the real '
-                      'one does, so the')
-                print('      guard position IS the switch position.')
-        print()
 
-    if unplaced:
-        print(f'{len(unplaced)} found no control:')
-        for n in unplaced:
-            print(f'  {n.what[:40]:42s} wanted {n.shape}'
-                  + (f' on the {n.dev}' if n.dev else ''))
+@typing.final
+class Dcs(adapter.Proposer):
+    """DCS World, one module at a time.
 
-    if args.check:
+    A `Proposer` rather than a `Planner` because its writer reads the capture
+    wizard's results file: a binding somebody confirmed at the stick is better
+    evidence than one this proposed, and the review screen the other five use
+    is the wizard itself.
+
+    It is also why the adapters had to become classes. The needs here are
+    derived from the module's own command vocabulary, so they are a function
+    of `--aircraft`; `NEEDS` as a module constant could never mean both the
+    Hornet's and the Su-25T's, which is why `propose.py` had neither `NEEDS`
+    nor `build()` until now.
+    """
+
+    game = 'dcs'
+    title = 'DCS World'
+    CACHE = {'dcs-actions.json': 'aircraft'}
+    #: `-a` is what this has always been typed as, and `./bind dcs plan
+    #: -a su-25T` is in the top-level README.
+    ALIASES = {'aircraft': ('-a',)}
+
+    def __init__(self, aircraft='FA-18C', game_dir=None, backup_dir=None):
+        self.aircraft = aircraft or 'FA-18C'
+        self.backup_dir = backup_dir
+        self.subtitle = self.aircraft
+        self.module = typing.cast(Wizard,
+                                  self.sidecar('dcs-bind-wizard.py'))
+        self.cfg = load_cfg(self.module, game_dir)
+        # The cache first, the install only if it has nothing for this
+        # module. Running a module's default.lua through a Lua interpreter
+        # costs a second or two and needs DCS on the machine; cached, this
+        # opens on a clone with no game installed -- which is what the other
+        # five already offered.
+        got = self.cache('dcs-actions.json',
+                         build=lambda: {}).get(self.aircraft)
+        if got is None:
+            ac = self.module.discover_aircraft(self.cfg)
+            if self.aircraft not in ac:
+                raise SystemExit(f'no such module: {self.aircraft} '
+                                 f'(have {", ".join(sorted(ac))})')
+            cmds = self.module.harvest_commands(
+                self.cfg, self.aircraft, ac[self.aircraft]['factory_dir'])
+            got = {'commands': cmds, 'guide': self.module.build_guide(cmds)}
+        self.cmds, self.guide = got['commands'], got['guide']
+        self._needs = families(self.cmds, self.guide,
+                               candidates(self.module, self.cmds, self.guide))
+
+    @property
+    @typing.override
+    def NEEDS(self):
+        """Derived from this module's own commands, so it is a property."""
+        return self._needs
+
+    @typing.override
+    def build(self):
+        return place(self.module, self.cmds, self.guide,
+                     candidates(self.module, self.cmds, self.guide))
+
+    @typing.override
+    def describe(self, placement):
+        return [(str(b), self.cmds[h]['name'])
+                for b, h in placement.slots if h in self.cmds]
+
+    @typing.override
+    def seed(self, layout):
+        path = results_path()
+        data = json.load(open(path))
+        data.setdefault('aircraft', {})[self.aircraft] = seed(
+            self.module, self.cmds, self.guide)
+        return {path: json.dumps(data, indent=2)}
+
+    @typing.override
+    def write_game(self):
+        results = json.load(open(results_path()))
+        files, said = self.module.render_all(results, self.cfg, self.aircraft)
+        for line in said:
+            print(line)
+        return files
+
+    @typing.override
+    def write_sheets(self, layout, markdown=None, html=None):
+        """DCS renders from its own template, not the core's.
+
+        Its placeholders are per-device (`__STICK__`, `__THROTTLE__`) where
+        the core's are `__PANELS__`, and the core sheet has no `?` for a
+        proposal -- see ARCHITECTURE.md.
+        """
+        out = []
+        if markdown is not None:
+            path = markdown or os.path.join(
+                HERE, f'KNEEBOARD-{self.aircraft}.md')
+            pth, n = write_sheet(self.module, self.aircraft, self.cmds,
+                                 self.guide, path)
+            out.append(f'wrote {pth}: {n} bindings')
+        if html is not None:
+            path = html or os.path.join(
+                HERE, f'kneeboard-{self.aircraft}.html')
+            pth, n = write_html(self.module, self.aircraft, self.cmds,
+                                self.guide, path)
+            out.append(f'wrote {pth}: {n} bindings')
+        for line in out:
+            print(line)
+        return out
+
+    @typing.override
+    def arguments(self, parser):
+        parser.add_argument('--reseed', action='store_true',
+                            help="discard this module's bindings and lay it "
+                                 'out fresh')
+        parser.add_argument('--audit', action='store_true',
+                            help='list bindings that no longer match the '
+                                 'hardware')
+        parser.add_argument('--check', action='store_true',
+                            help='compare against the results file')
+
+    @typing.override
+    def paths(self, args):
+        return [('game', self.cfg.get('game_dir', '(not recorded)')),
+                ('results', results_path()),
+                ('backups', backup.dir_for('dcs', self.backup_dir))]
+
+    @typing.override
+    def extra(self, args, layout):
+        if args.reseed:
+            return self.write_seed(layout) + [
+                '  open the wizard and walk the list: c confirms one, '
+                'C the section']
+        if args.audit:
+            out = []
+            for name, r, why in audit(self.module, self.aircraft,
+                                      self.cmds, self.guide):
+                where = (f'{r["role"]} BTN{r["index"] + 1}'
+                         if r['type'] == 'button'
+                         else f'{r["role"]} axis {r["index"]}')
+                out.append(f'  {self.aircraft:8s} {name[:44]:46s} '
+                           f'{where:16s} {why}')
+            out.append(f'\n  {len(out)} binding(s) worth a second look')
+            return out
+        if args.check:
+            # The listing and then the comparison: `--check` has always
+            # printed both, because the second only means something next to
+            # the first.
+            return self.show(layout, why=args.why) + self.check(layout)
+        return None
+
+    def check(self, layout):
+        """The proposal against what is in the results file."""
         have = json.load(open(results_path()))['aircraft'].get(
-            args.aircraft, {})
+            self.aircraft, {})
         mine = {}
-        for need, pair, _ in out:
+        for need, pair, _ in rows(layout):
             if not pair or need.shape == 'axis':
                 continue                 # (role, [axis]) has no buttons
             role, c = pair
-            for h, b in lay_out(module, c, need.bindings, cmds,
+            for h, b in lay_out(self.module, c, need.bindings, self.cmds,
                                 press_only=len(need.bindings) == 1
                                 and len(c.bindable_buttons) > 1).items():
                 mine[h] = (role, b)
+        out = ['', '--- against what you bound by hand ---']
         same = diff = 0
-        print('\n--- against what you bound by hand ---')
         for h, v in have.items():
             if not isinstance(v, dict) or v.get('type') != 'button':
                 continue
@@ -1004,11 +1042,75 @@ def main():
                 same += 1
             else:
                 diff += 1
-                print(f'  {v["name"][:40]:42s} you: {got[0]} {got[1]:<3} '
-                      f'proposed: {mine[h][0]} {mine[h][1]}')
-        print(f'\n  {same} identical, {diff} different, '
-              f'{len(mine)} proposed in total')
+                out.append(f'  {v["name"][:40]:42s} you: {got[0]} '
+                           f'{got[1]:<3} proposed: {mine[h][0]} {mine[h][1]}')
+        out.append(f'\n  {same} identical, {diff} different, '
+                   f'{len(mine)} proposed in total')
+        return out
+
+    @typing.override
+    def show(self, layout, why=False):
+        out, unplaced = rows(layout), layout.unplaced
+        placed = [(n, p, s) for n, p, s in out if p]
+        lines = [f'{self.aircraft}: {len(placed)} controls proposed, '
+                 f'{len(unplaced)} unplaced', '']
+        for need, pair, s in out:
+            if need.shape == 'axis':
+                role, axs = pair if pair else (None, [])
+                a = axs[0] if axs else None
+                name0 = self.cmds[need.bindings[0]]['name'].lower()
+                if a:
+                    where = f'{role} axis {a.index} — {a.label}'
+                elif name0 == 'thrust':
+                    where = ('left unbound — the two engines are bound '
+                             'separately')
+                else:
+                    where = 'no axis on this hardware'
+                lines.append(f'  {need.what[:38]:40s} {where}')
+                lines.append('')
+                continue
+            if pair is None:
+                continue
+            role, c = pair
+            lines.append(f'  {need.what[:38]:40s} {role:8s} {c.kind:9s} '
+                         f'{c.label}')
+            spots = lay_out(self.module, c, need.bindings, self.cmds,
+                            press_only=len(need.bindings) == 1
+                            and len(c.bindable_buttons) > 1,
+                            borrowed=need.borrowed)
+            for h in need.bindings:
+                b = spots.get(h)
+                w = c.direction(b) if b is not None else '?'
+                lines.append(f'      {self.cmds[h]["name"][:46]:48s} '
+                             f'-> {str(b):>3s} {w}')
+            if why:
+                lines.append(f'      wants {need.shape}'
+                             + (f', {need.dev}' if need.dev else '')
+                             + f", {['in a turn', 'on approach',
+                                     'in the air',
+                                     'on the ramp'][need.urgency]}"
+                             + f'   {need.rank} factory profiles   score {s}')
+                lines.append(f'      '
+                             f'{self.guide[need.bindings[0]]["place"][:74]}')
+                if need.shape == 'latch':
+                    # the line above is the module's own advice, and we just
+                    # went against it on purpose; say so rather than leave it
+                    # looking like the proposal missed it
+                    lines.append('      OVERRIDDEN: the module is right that '
+                                 'this is a panel switch, but the')
+                    lines.append('      trigger lever holds its position the '
+                                 'way the real one does, so the')
+                    lines.append('      guard position IS the switch '
+                                 'position.')
+            lines.append('')
+
+        if unplaced:
+            lines.append(f'{len(unplaced)} found no control:')
+            for n in unplaced:
+                lines.append(f'  {n.what[:40]:42s} wanted {n.shape}'
+                             + (f' on the {n.dev}' if n.dev else ''))
+        return lines
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(adapter.run(Dcs))

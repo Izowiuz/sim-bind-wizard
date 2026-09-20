@@ -16,7 +16,44 @@ belongs in `.gitignore`.
 
 import json
 import os
-import sys
+
+
+class Missing(SystemExit):
+    """There is no cache, and no `build` to make one on the spot.
+
+    A fact about this machine -- nobody has run the harvest here -- and not
+    about the code. The distinction is the whole reason this is a class:
+    `tests/test_contract.py` skips on this and fails on `Stale`, where before
+    both arrived as the same bare `SystemExit` and a contract violation was
+    indistinguishable from a clone nobody had harvested on.
+
+    It subclasses `SystemExit` so that every `except SystemExit` already
+    written against this module keeps working, and so an uncaught one still
+    prints its message and exits 1 exactly as `sys.exit` did.
+    """
+
+
+class Stale(SystemExit):
+    """A cache is there, and it is not the shape the planner asked for.
+
+    Always a fault: either someone's working copy predates a change to the
+    harvest, or a harvest and a planner disagree about what they call a
+    section. Both are worth stopping for, which is why this is not `Missing`.
+
+    It used to surface as a bare `KeyError` from the subscript below, which
+    named the key and nothing else -- not the file, not the game, and not what
+    to do about it.
+    """
+
+
+def _game(directory):
+    """Which game a cache belongs to, for the message.
+
+    The directory is always `games/<game>/`, and `<game>` is the word `bind`
+    dispatches on, so the reader gets a command they can paste rather than a
+    path they have to translate.
+    """
+    return os.path.basename(os.path.normpath(directory)) or '<game>'
 
 
 def load(directory, filename, key=None, build=None):
@@ -26,16 +63,43 @@ def load(directory, filename, key=None, build=None):
     for a game cheap enough to reparse; leave it out and a missing cache is an
     error telling you to run the harvest.
     """
+    game = _game(directory)
     path = os.path.join(directory, filename) if filename else None
     if path and os.path.exists(path):
-        data = json.load(open(path, encoding='utf-8'))
-        return data[key] if key else data
+        try:
+            with open(path, encoding='utf-8') as f:
+                data = json.load(f)
+        except json.JSONDecodeError as e:
+            # A harvest interrupted part-way leaves a truncated file behind,
+            # and the next run reads it rather than the game.
+            raise Stale(f'{filename} will not parse: {e}\n'
+                        f'Run ./bind {game} harvest') from e
+        if key is None:
+            return data
+        if not isinstance(data, dict) or key not in data:
+            # Named, not listed: a cache with no envelope has its whole
+            # vocabulary at the top level, and printing three thousand keys
+            # buries the one sentence that says what to do.
+            if not isinstance(data, dict):
+                held = f'a {type(data).__name__}'
+            elif len(data) > 6:
+                held = (', '.join(sorted(data)[:6])
+                        + f', and {len(data) - 6} more')
+            else:
+                held = ', '.join(sorted(data))
+            raise Stale(f'{filename} has no "{key}" section -- it holds '
+                        f'{held}.\nThe cache and the planner disagree about '
+                        f'its shape.\nRun ./bind {game} harvest')
+        return data[key]
     if build is not None:
+        # `key` is applied only if the built data happens to carry it: a cache
+        # wraps its sections in an envelope and a live `build()` return does
+        # not, so the same call has to yield the same shape either way.
         data = build()
         return data[key] if key and isinstance(data, dict) and key in data \
             else data
-    sys.exit(f'{filename} is missing -- it is built from the installed game, '
-             'not kept in the repo.\nRun ./harvest.py --json')
+    raise Missing(f'{filename} is missing -- it is built from the installed '
+                  f'game, not kept in the repo.\nRun ./bind {game} harvest')
 
 
 def save(directory, filename, **sections):

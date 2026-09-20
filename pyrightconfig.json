@@ -1,0 +1,74 @@
+{
+  "include": [
+    "core",
+    "games",
+    "tests",
+    "bind"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "backups",
+    "**/node_modules"
+  ],
+  "pythonVersion": "3.13",
+  "pythonPlatform": "Linux",
+  "typeCheckingMode": "standard",
+  "reportMissingModuleSource": "none",
+  "executionEnvironments": [
+    {
+      "root": "games/dcs",
+      "extraPaths": [
+        ".",
+        "../..",
+        "../../../sim-device-map"
+      ]
+    },
+    {
+      "root": "games/elite",
+      "extraPaths": [
+        ".",
+        "../..",
+        "../../../sim-device-map"
+      ]
+    },
+    {
+      "root": "games/falconbms",
+      "extraPaths": [
+        ".",
+        "../..",
+        "../../../sim-device-map"
+      ]
+    },
+    {
+      "root": "games/msfs",
+      "extraPaths": [
+        ".",
+        "../..",
+        "../../../sim-device-map"
+      ]
+    },
+    {
+      "root": "games/warthunder",
+      "extraPaths": [
+        ".",
+        "../..",
+        "../../../sim-device-map"
+      ]
+    },
+    {
+      "root": "games/x4",
+      "extraPaths": [
+        ".",
+        "../..",
+        "../../../sim-device-map"
+      ]
+    },
+    {
+      "root": ".",
+      "extraPaths": [
+        ".",
+        "../sim-device-map"
+      ]
+    }
+  ]
+}

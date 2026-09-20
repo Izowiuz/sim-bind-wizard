@@ -42,11 +42,20 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 #: verb -> (script, fixed arguments). Order here is the order they print in.
 VERBS = ('harvest', 'plan', 'why', 'free', 'sheet', 'tui', 'write', 'capture')
 
-GAMES = {
+#: game -> {alias, verb: (script, fixed arguments)}. The games themselves are
+#: not listed here: `discover()` reads `games/` for those, so a new folder is
+#: visible without anybody editing this file. What stays written out is which
+#: flags a verb maps to, because asking an adapter would mean constructing
+#: one, and constructing reads caches and the device map -- `./bind` with no
+#: arguments has to stay instant on a clone where nothing is harvested.
+#:
+#: `tests/test_contract.py` checks every row against the adapter's real
+#: parser, and checks that every verb withheld has a reason in GAPS. The
+#: table can be incomplete; it can no longer be wrong.
+VERB_ROWS = {
     'falconbms': {
-        'title': 'Falcon BMS',
         'alias': ('bms',),
-        'harvest': ('harvest.py', ()),
+        'harvest': ('harvest.py', ('--json',)),
         'plan':    ('plan.py', ()),
         'why':     ('plan.py', ('--why',)),
         'free':    ('plan.py', ('--free',)),
@@ -56,9 +65,8 @@ GAMES = {
         'write':   ('plan.py', ('--write', '--write-axes')),
     },
     'warthunder': {
-        'title': 'War Thunder',
         'alias': ('wt',),
-        'harvest': ('harvest.py', ()),
+        'harvest': ('harvest.py', ('--json',)),
         'plan':    ('plan.py', ()),
         'why':     ('plan.py', ('--why',)),
         'free':    ('plan.py', ('--unused',)),
@@ -68,9 +76,8 @@ GAMES = {
         'write':   ('plan.py', ('--write',)),
     },
     'msfs': {
-        'title': 'MSFS 2024',
         'alias': (),
-        'harvest': ('harvest.py', ()),
+        'harvest': ('harvest.py', ('--json',)),
         'plan':    ('plan.py', ()),
         'why':     ('plan.py', ('--why',)),
         'free':    ('plan.py', ('--free',)),
@@ -79,7 +86,6 @@ GAMES = {
         'write':   ('plan.py', ('--write',)),
     },
     'x4': {
-        'title': 'X4 Foundations',
         'alias': (),
         'harvest': ('harvest.py', ('--json',)),
         'plan':    ('plan.py', ()),
@@ -90,16 +96,16 @@ GAMES = {
         'write':   ('plan.py', ('--write',)),
     },
     'dcs': {
-        'title': 'DCS World',
         'alias': (),
+        'harvest': ('harvest.py', ('--json',)),
         'plan':    ('propose.py', ()),
         'why':     ('propose.py', ('--why',)),
+        'free':    ('propose.py', ('--free',)),
         'sheet':   ('propose.py', ('--sheet', '--html')),
         'write':   ('propose.py', ('--write',)),
         'capture': ('dcs-bind-wizard.py', ()),
     },
     'elite': {
-        'title': 'Elite Dangerous',
         'alias': ('ed',),
         'harvest': ('harvest.py', ('--json',)),
         'plan':    ('plan.py', ()),
@@ -112,11 +118,40 @@ GAMES = {
     },
 }
 
+
+def discover():
+    """{game: title} -- every folder under games/, titled by its README.
+
+    The title is the first line of `games/<game>/README.md`, which is a
+    contract clause a test already enforces, so it is a heading that cannot
+    quietly go missing.
+    """
+    root = os.path.join(HERE, 'games')
+    out = {}
+    for name in sorted(os.listdir(root)):
+        if name.startswith('.') or not os.path.isdir(
+                os.path.join(root, name)):
+            continue
+        title = name
+        try:
+            with open(os.path.join(root, name, 'README.md'),
+                      encoding='utf-8') as f:
+                first = f.readline().strip()
+            if first.startswith('# '):
+                title = first[2:].strip()
+        except OSError:
+            pass
+        out[name] = title
+    return out
+
+
+TITLES = discover()
+GAMES = {g: dict(VERB_ROWS.get(g, {}), title=t) for g, t in TITLES.items()}
+
+
 #: Where a verb is missing, why -- printed in the table so a gap reads as a
 #: fact about the game rather than as an omission here.
 GAPS = {
-    ('dcs', 'harvest'): 'inside the capture wizard',
-    ('dcs', 'free'): 'no flag for it',
     ('dcs', 'tui'): 'its capture wizard already is one — ./bind dcs capture',
     ('falconbms', 'capture'): 'no capture wizard',
     ('warthunder', 'capture'): 'no capture wizard',
@@ -130,7 +165,7 @@ def resolve(name):
     if name in GAMES:
         return name
     for game, spec in GAMES.items():
-        if name in spec['alias']:
+        if name in spec.get('alias', ()):
             return game
     return None
 
@@ -147,7 +182,8 @@ def table():
               + f'  {spec["title"]}')
     print()
     print('· available   – not offered')
-    aliases = [(a, g) for g, s in sorted(GAMES.items()) for a in s['alias']]
+    aliases = [(a, g) for g, s in sorted(GAMES.items())
+               for a in s.get('alias', ())]
     if aliases:
         print('aliases: ' + ', '.join(f'{a} = {g}' for a, g in aliases))
     if GAPS:

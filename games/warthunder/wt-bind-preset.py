@@ -214,67 +214,51 @@ def device_offsets(controls):
     return roles
 
 
-def main(argv=None, layout=None):
-    """Write the preset. `layout` is a plan somebody else already narrowed --
-    what the review screen hands over when only some bindings were kept --
-    and without it the whole plan is computed here as before."""
-    ap = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--dry-run', action='store_true',
-                    help='print the plan and the resolved ids, write nothing')
-    ap.add_argument('--restore', action='store_true',
-                    help='put the files of a backup back')
-    ap.add_argument('--restore-from', metavar='STAMP',
-                    help='which backup --restore uses (default the newest)')
-    ap.add_argument('--why', action='store_true',
-                    help='print why each control was chosen, then exit')
-    ap.add_argument('--render', metavar='PATH',
-                    help='write the resulting machine.blk to PATH for review '
-                         'instead of touching the real one')
-    backup.add_argument(ap, 'warthunder')
-    args = ap.parse_args(argv)
+def targets_under(saves):
+    """Every machine.blk of this install. They move together.
 
-    import plan
-    global AXES, BUTTONS
-    lay = plan.build() if layout is None else layout
-    AXES[:] = lay.axes
-    BUTTONS[:] = plan.button_table(lay.placed)
-    if args.why:
-        os.execv(sys.executable, [sys.executable,
-                                  os.path.join(os.path.dirname(
-                                      os.path.abspath(__file__)), 'plan.py'),
-                                  '--why'])
-
-    # War Thunder rewrites machine.blk on exit -- never edit it underneath a
-    # running game.
-    try:
-        running = subprocess.run(['pgrep', '-f', f'{GAME_DIR}/linux64/'],
-                                 capture_output=True, text=True).stdout.strip()
-    except FileNotFoundError:
-        running = ''
-    if running and not (args.dry_run or args.render):
-        sys.exit('error: War Thunder is running -- quit the game first, it '
-                 'overwrites machine.blk on exit')
-
-    targets = [p for p in (
-        os.path.join(SAVES, 'last/production/machine.blk'),
-        *[os.path.join(SAVES, d, 'production/machine.blk')
-          for d in sorted(os.listdir(SAVES)) if d.isdigit()],
+    One account's worth of the same layout: writing half of them, or
+    restoring half, is a state the game was never in.
+    """
+    found = [p for p in (
+        os.path.join(saves, 'last/production/machine.blk'),
+        *[os.path.join(saves, d, 'production/machine.blk')
+          for d in sorted(os.listdir(saves)) if d.isdigit()],
     ) if os.path.isfile(p)]
-    if not targets:
-        sys.exit(f'error: no machine.blk under {SAVES}')
+    if not found:
+        raise SystemExit(f'error: no machine.blk under {saves}')
+    return found
 
-    if args.restore:
-        # Every machine.blk of a run goes back together: they are one account's
-        # worth of the same layout, and restoring half of them is a state the
-        # game was never in.
-        src, done = backup.restore('warthunder', args.restore_from,
-                                   args.backup_dir)
-        for path in done:
-            print(f'  restored {path}')
-        print(f'  from {src}')
-        return
+
+def blk_with(target, block):
+    """`target`'s whole text, with its controls{} block replaced by this one.
+
+    Only that block is ours. Everything else in machine.blk comes back byte
+    for byte, including the file's own line ending -- the per-axis
+    multipliers that are a slider in the game's own UI live out there.
+    """
+    txt, eol = read_blk(target)
+    s, e, _ = extract_controls(txt)
+    lines = txt.split('\n')
+    return eol.join(lines[:s] + block + lines[e:])
+
+
+def compose(layout, targets, say=print):
+    """(the new controls{} block, device offsets, the game's action names).
+
+    Everything `main()` used to do between reading the vocabulary and having
+    the block ready, and nothing else: no argparse, no writing. `plan.py`
+    asks for this and hands the result to `core.adapter`, which owns the
+    backing up and the writing for every game in the family.
+
+    War Thunder was the likeliest to keep writing for itself, being the one
+    whose writer is a separate script -- so it is the one where the split
+    matters most.
+    """
+    global AXES, BUTTONS
+    import plan
+    AXES[:] = layout.axes
+    BUTTONS[:] = plan.button_table(layout.placed)
 
     lang = json.load(open(ACTIONS_JSON, encoding='utf-8'))
     known_actions, known_axes = lang['actions'], lang['controls']
@@ -284,8 +268,8 @@ def main(argv=None, layout=None):
     dev = device_offsets(targets and controls)
 
     for role, d in dev.items():
-        print(f'{role:9s} {d["name"]}')
-        print(f'          axes {d["axes_off"]}..{d["axes_off"] + d["axes"] - 1}'
+        say(f'{role:9s} {d["name"]}')
+        say(f'          axes {d["axes_off"]}..{d["axes_off"] + d["axes"] - 1}'
               f'   buttons {d["btn_off"]}..{d["btn_off"] + d["buttons"] - 1}'
               f'   connected={d["connected"]}')
 
@@ -304,7 +288,7 @@ def main(argv=None, layout=None):
             problems.append(f'{role} has no axis {idx}')
     if problems:
         for p in sorted(set(problems)):
-            print(f'  !! {p}')
+            say(f'  !! {p}')
         sys.exit('refusing to write: the plan does not match this install')
 
     # ---- conflicts: one physical button, two actions in one context ------
@@ -329,7 +313,7 @@ def main(argv=None, layout=None):
             key = (role, idx, c)
             if key in seen and seen[key] != action:
                 # same action twice (a two-position switch) is intentional
-                print(f'  ?? {role} button {idx} ({c}): '
+                say(f'  ?? {role} button {idx} ({c}): '
                       f'{seen[key]} and {action}')
             seen[key] = action
 
@@ -374,9 +358,9 @@ def main(argv=None, layout=None):
         if action not in order:
             order.append(action)
     if dropped:
-        print('  -- joystick bindings cleared (nothing in the plan wants them):')
+        say('  -- joystick bindings cleared (nothing in the plan wants them):')
         for a in sorted(dropped):
-            print(f'       {a}   {lang["actions"].get(a, [a])[0]}')
+            say(f'       {a}   {lang["actions"].get(a, [a])[0]}')
 
     for role, idx, action, _ in BUTTONS:
         wt = dev[role]['btn_off'] + idx
@@ -428,7 +412,7 @@ def main(argv=None, layout=None):
                             sv += '.0'
                     new.append(('val', k, t, sv))
                 if k in old and old[k][1] != new[-1][3]:
-                    print(f'  -- {name}.{k}: {old[k][1]} -> {new[-1][3]}')
+                    say(f'  -- {name}.{k}: {old[k][1]} -> {new[-1][3]}')
             elif k in old:
                 new.append(('val', k, old[k][0], old[k][1]))
         if inverse:
@@ -458,7 +442,7 @@ def main(argv=None, layout=None):
                           if not (x[0] == 'val' and x[1] == 'axisId')]
         freed.append(name)
     if freed:
-        print('  -- axes released (the plan no longer wants them): '
+        say('  -- axes released (the plan no longer wants them): '
               + ', '.join(sorted(freed)))
 
     new_axes = [('blk', n, existing[n]) for n in sorted(existing)]
@@ -477,9 +461,74 @@ def main(argv=None, layout=None):
     block = ['  controls{'] + body + ['  }']
 
     n_btn = len({(r, i) for r, i, _, _ in BUTTONS})
-    n_act = len(planned)
-    print(f'\nplan: {n_act} actions across {n_btn} physical buttons, '
-          f'{len(AXES)} axis assignments')
+    say(f'\nplan: {len(planned)} actions across {n_btn} physical buttons, '
+        f'{len(AXES)} axis assignments')
+    return block, dev, known_actions
+
+
+def main(argv=None, layout=None):
+    """Write the preset. `layout` is a plan somebody else already narrowed --
+    what the review screen hands over when only some bindings were kept --
+    and without it the whole plan is computed here as before."""
+    ap = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('--dry-run', action='store_true',
+                    help='print the plan and the resolved ids, write nothing')
+    ap.add_argument('--restore', action='store_true',
+                    help='put the files of a backup back')
+    ap.add_argument('--restore-from', metavar='STAMP',
+                    help='which backup --restore uses (default the newest)')
+    ap.add_argument('--why', action='store_true',
+                    help='print why each control was chosen, then exit')
+    ap.add_argument('--render', metavar='PATH',
+                    help='write the resulting machine.blk to PATH for review '
+                         'instead of touching the real one')
+    backup.add_argument(ap, 'warthunder')
+    args = ap.parse_args(argv)
+
+    import plan
+    global AXES, BUTTONS
+    lay = plan.build() if layout is None else layout
+    AXES[:] = lay.axes
+    BUTTONS[:] = plan.button_table(lay.placed)
+    if args.why:
+        os.execv(sys.executable, [sys.executable,
+                                  os.path.join(os.path.dirname(
+                                      os.path.abspath(__file__)), 'plan.py'),
+                                  '--why'])
+
+    # War Thunder rewrites machine.blk on exit -- never edit it underneath a
+    # running game.
+    try:
+        running = subprocess.run(['pgrep', '-f', f'{GAME_DIR}/linux64/'],
+                                 capture_output=True, text=True).stdout.strip()
+    except FileNotFoundError:
+        running = ''
+    if running and not (args.dry_run or args.render):
+        sys.exit('error: War Thunder is running -- quit the game first, it '
+                 'overwrites machine.blk on exit')
+
+    targets = targets_under(SAVES)
+
+    if args.restore:
+        # Every machine.blk of a run goes back together: they are one account's
+        # worth of the same layout, and restoring half of them is a state the
+        # game was never in.
+        src, done = backup.restore('warthunder', args.restore_from,
+                                   args.backup_dir)
+        for path in done:
+            print(f'  restored {path}')
+        print(f'  from {src}')
+        return
+
+    # This script's own entry point still needs a plan when nobody handed
+    # it one -- that is what `./wt-bind-preset.py` with no arguments means.
+    # It asks the adapter for it rather than a module-level `build()`, which
+    # no longer exists: the needs and the install are the adapter's.
+    import plan
+    lay = plan.WarThunder().build() if layout is None else layout
+    block, dev, known_actions = compose(lay, targets)
 
     if args.dry_run:
         for role, idx, action, where in BUTTONS:
@@ -495,20 +544,16 @@ def main(argv=None, layout=None):
         return
 
     if args.render:
-        txt, eol = read_blk(targets[0])
-        s_, e_, _ = extract_controls(txt)
-        lines = txt.split('\n')
-        write_blk(args.render, lines[:s_] + block + lines[e_:], eol)
+        with open(args.render, 'w', encoding='utf-8', newline='') as f:
+            f.write(blk_with(targets[0], block))
         print(f'  rendered {args.render} (nothing else was touched)')
         return
 
     dest, _ = backup.save('warthunder', *targets, into=args.backup_dir)
     print(f'  backed up to {dest}')
     for t in targets:
-        txt, eol = read_blk(t)
-        s, e, _ = extract_controls(txt)
-        lines = txt.split('\n')
-        write_blk(t, lines[:s] + block + lines[e:], eol)
+        with open(t, 'w', encoding='utf-8', newline='') as f:
+            f.write(blk_with(t, block))
         print(f'  wrote {t}')
 
 

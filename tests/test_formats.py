@@ -15,39 +15,42 @@ imported at all, so those tests skip with a reason rather than fail -- on a
 fresh clone that is the honest answer.
 """
 
-import importlib.util
 import os
-import sys
 import tempfile
 import unittest
 
 import fake                                                  # noqa: F401
+from core import adapter                                     # noqa: E402
+from core import vocab                                       # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def planner(game, script='plan.py'):
-    """A game's writer, or None if this clone cannot import it."""
-    here = os.path.join(REPO, 'games', game)
-    was = os.getcwd()
+def planner(game, script=None):
+    """A game's writer, or None if this clone cannot import it.
+
+    Three jobs once: chdir into the game directory, put it on `sys.path`,
+    and swallow the exit an import took when no harvest had been run here.
+    The first two moved to `core.adapter.load`, which `bind` and the contract
+    test want as well; the third is simply gone -- importing an adapter
+    defines classes and reads nothing now, so the only thing left to catch is
+    a game whose planner is not there at all.
+
+    It also stops guessing filenames. `core.adapter.planner` reads the
+    directory for the file that defines the adapter, so `games/dcs` being
+    `propose.py` is not a special case anybody has to remember.
+    """
     try:
-        os.chdir(here)
-        if here not in sys.path:
-            sys.path.insert(0, here)
-        spec = importlib.util.spec_from_file_location(
-            f'{game}_{script}', os.path.join(here, script))
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        return mod
-    except (SystemExit, ImportError, FileNotFoundError):
+        return adapter.load(game, script)
+    except (FileNotFoundError, vocab.Missing):
         return None
-    finally:
-        os.chdir(was)
 
 
 X4 = planner('x4')
 MSFS = planner('msfs')
 BMS = planner('falconbms')
+ED = planner('elite', 'ed-bind-wizard.py')
+WT = planner('warthunder', 'wt-bind-preset.py')
 
 
 @unittest.skipUnless(X4, 'x4: run ./bind x4 harvest first')
@@ -119,6 +122,21 @@ class X4Rewrite(unittest.TestCase):
 
 @unittest.skipUnless(MSFS, 'msfs: run ./bind msfs harvest first')
 class MsfsProfiles(unittest.TestCase):
+
+    #: One joystick binding, one keyboard binding, one unbound action.
+    PROFILE = (
+        '<?xml version="1.0"?>\n<Device>\n'
+        '  <Context ContextName="PLANE">\n'
+        '    <Action ActionName="KEY_GEAR_TOGGLE">\n'
+        '      <Primary>\n'
+        '        <KEY Information="Joystick Button 5">22</KEY>\n'
+        '      </Primary>\n    </Action>\n'
+        '    <Action ActionName="KEY_KEYBOARD_ONLY">\n'
+        '      <Primary>\n        <KEY Information="Key">65</KEY>\n'
+        '      </Primary>\n    </Action>\n'
+        '    <Action ActionName="KEY_FLAPS_UP"/>\n'
+        '  </Context>\n</Device>\n')
+
     """Finding the real profiles, and putting a binding in one."""
 
     def setUp(self):
@@ -183,6 +201,26 @@ class MsfsProfiles(unittest.TestCase):
         self.assertNotIn('BTN_9', out)
         self.assertEqual(1, out.count('<Primary>'))
 
+    def test_a_binding_dropped_from_the_plan_stops_answering(self):
+        """The clause no interface can state, and the one whose breakage is
+        invisible: a need cut from NEEDS simply keeps working in the game.
+
+        MSFS really did this. `bind_into` added and replaced and never
+        removed, so an action the plan stopped naming kept its <Primary>
+        block through every regeneration.
+        """
+        text = MSFS.unbind_ours(self.PROFILE, {'KEY_FLAPS_UP'})
+        self.assertNotIn('Joystick Button 5', text,
+                         'the dropped action is still on the stick')
+
+    def test_what_is_not_ours_survives_the_stripping(self):
+        # An MSFS profile is one device's, so every joystick binding in it is
+        # one this tool wrote -- but a keyboard fallback in the same file is
+        # not, and neither is an action the plan still names.
+        text = MSFS.unbind_ours(self.PROFILE, {'KEY_GEAR_TOGGLE'})
+        self.assertIn('Information="Key"', text)
+        self.assertIn('Joystick Button 5', text)
+
     def test_an_action_the_profile_does_not_have_is_reported(self):
         out, ok = MSFS.bind_into('<Action ActionName="OTHER"/>\n',
                                  'KEY_MISSING', 'Joystick', 'BTN_1')
@@ -198,6 +236,106 @@ class MsfsProfiles(unittest.TestCase):
         self.assertIn('<Footer>and me</Footer>', out)
 
 
+@unittest.skipUnless(WT, 'warthunder: run ./bind wt harvest first')
+class WarThunderBlock(unittest.TestCase):
+    """The plan owns the whole `controls{}` block, so it removes by
+    replacing it.
+
+    Stripping only the PLANNED actions meant the plan could add and change
+    but never remove: drop something from NEEDS and its old button stayed
+    bound. Everything outside that block -- the keyboard half, the per-axis
+    multipliers that are a slider in the game's own UI -- has to come back
+    untouched, including the file's own line ending.
+    """
+
+    BLK = ('gameVersion:i=1\r\n'
+           '  controls{\r\n'
+           '    hotkeys{\r\n'
+           '      ID_STALE{\r\n'
+           '      }\r\n'
+           '    }\r\n'
+           '  }\r\n'
+           'rudderMultiplier:r=1.0\r\n')
+
+    def setUp(self):
+        self.path = os.path.join(tempfile.mkdtemp(), 'machine.blk')
+        with open(self.path, 'w', encoding='utf-8', newline='') as f:
+            f.write(self.BLK)
+
+    def test_a_binding_dropped_from_the_plan_stops_answering(self):
+        out = WT.blk_with(self.path, ['  controls{', '  }'])
+        self.assertNotIn('ID_STALE', out)
+
+    def test_everything_outside_the_block_comes_back(self):
+        out = WT.blk_with(self.path, ['  controls{', '  }'])
+        self.assertIn('gameVersion:i=1', out)
+        self.assertIn('rudderMultiplier:r=1.0', out,
+                      'a slider in the game own UI was eaten')
+
+    def test_the_file_keeps_its_line_ending(self):
+        out = WT.blk_with(self.path, ['  controls{', '  }'])
+        # Every newline in the result is a CRLF, not just some of them:
+        # writing LF rewrites the whole file and makes the backup useless
+        # for seeing what actually changed.
+        self.assertEqual(out.count('\n'), out.count('\r\n'))
+
+
+class RebuiltFromScratch(unittest.TestCase):
+    """Three writers remove by never carrying anything over.
+
+    x4 and War Thunder edit a file in place, so they have to strip what is
+    theirs before writing; BMS and Elite build their file from the one the
+    game shipped every time, so a binding dropped from `NEEDS` is gone
+    because it was never put back. Both are answers to the same clause, and
+    the second is only true for as long as nobody adds an "update in place"
+    shortcut -- which is what these hold.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    @unittest.skipUnless(BMS, 'falconbms: run ./bind bms harvest first')
+    def test_bms_writes_only_what_the_plan_asks_for(self):
+        import pathlib as pl
+        cfg = pl.Path(self.tmp) / 'User' / 'Config'
+        cfg.mkdir(parents=True)
+        (cfg / 'BMS - Full.key').write_bytes(
+            b'SimDoNothing -1 0 0 0 0 0 -1 "-- SECTION --"\r\n'
+            b'SimStale 0 -1 -2 0 0x0 -1\r\n')
+        # The device table is filled by FalconBms.__init__, and this calls
+        # the writer without one. Naming it here is the point: the cache is
+        # read when an adapter is built, not when the module is imported.
+        BMS.DEVICES[:] = vocab.load(
+            os.path.join(REPO, 'games', 'falconbms'),
+            'bms-actions.json', key='devices')
+        dst, text, _said = BMS.key_file(pl.Path(self.tmp), [])
+        self.assertIn('SimDoNothing', text, 'the shipped file survives')
+        self.assertEqual(1, text.count('SimStale'),
+                         'a DX line in the shipped file is not duplicated')
+        # The block we append carries a header comment whatever happens;
+        # what an empty plan may not produce is a binding LINE.
+        lines = text.splitlines()
+        at = next(i for i, ln in enumerate(lines) if 'VIRPIL layout' in ln)
+        self.assertEqual([], [ln for ln in lines[at:]
+                              if ln.strip()
+                              and not ln.lstrip().startswith('#')],
+                         'an empty plan still wrote a binding')
+
+    @unittest.skipUnless(ED, 'elite: run ./bind ed harvest first')
+    def test_elite_reverts_to_the_base_preset(self):
+        base = os.path.join(self.tmp, 'base.binds')
+        with open(base, 'w', encoding='utf-8') as f:
+            f.write('<Root PresetName="Base">'
+                    '<UseBoostJuice>'
+                    '<Primary Device="Keyboard" Key="Key_Tab"/>'
+                    '</UseBoostJuice></Root>')
+        out, text, _lines = ED.render({'_devices': {}}, base, self.tmp, 'Mine')
+        self.assertTrue(out.endswith('Mine.4.2.binds'))
+        self.assertNotIn('Joy_', text,
+                         'an empty plan put a joystick binding in anyway')
+        self.assertIn('Key_Tab', text, 'the base binding is the fallback')
+
+
 @unittest.skipUnless(BMS, 'falconbms: run ./bind bms harvest first')
 class BmsText(unittest.TestCase):
     """BMS config files are latin-1 and CRLF, and both matter."""
@@ -211,6 +349,20 @@ class BmsText(unittest.TestCase):
         p.write_bytes(raw)
         return p
 
+    def laid_down(self, path, text, nl):
+        """What `core.adapter` writes for a BMS file of this shape.
+
+        The writer no longer opens anything -- it hands back the text and the
+        encoding, and the base lays it down. So the round trip that used to
+        be `read_keeping` / `write_keeping` is now `read_keeping` and one
+        `adapter.Text`, and it is that pairing which has to preserve the
+        bytes.
+        """
+        body = adapter.Text(text.replace('\n', nl), encoding='latin-1')
+        with open(path, 'w', encoding=body.encoding, newline='') as f:
+            f.write(body.text)
+        return path.read_bytes()
+
     def test_crlf_survives_a_round_trip(self):
         # Writing LF rewrites the whole file, which turns a one-line change
         # into a diff the size of the file and makes the backup useless for
@@ -219,21 +371,18 @@ class BmsText(unittest.TestCase):
         text, nl = BMS.read_keeping(p)
         self.assertEqual('\r\n', nl)
         self.assertEqual('one\ntwo\n', text)
-        BMS.write_keeping(p, text, nl)
-        self.assertEqual(b'one\r\ntwo\r\n', p.read_bytes())
+        self.assertEqual(b'one\r\ntwo\r\n', self.laid_down(p, text, nl))
 
     def test_an_lf_file_stays_lf(self):
         p = self.path('x.key', b'one\ntwo\n')
         text, nl = BMS.read_keeping(p)
         self.assertEqual('\n', nl)
-        BMS.write_keeping(p, text, nl)
-        self.assertEqual(b'one\ntwo\n', p.read_bytes())
+        self.assertEqual(b'one\ntwo\n', self.laid_down(p, text, nl))
 
     def test_latin1_bytes_are_not_mangled(self):
         p = self.path('x.key', b'caf\xe9\r\n')
         text, nl = BMS.read_keeping(p)
-        BMS.write_keeping(p, text, nl)
-        self.assertEqual(b'caf\xe9\r\n', p.read_bytes())
+        self.assertEqual(b'caf\xe9\r\n', self.laid_down(p, text, nl))
 
     def test_the_games_own_stub_is_taken_out_so_the_device_appears_once(self):
         guid = '3344E843-0000-0000-0000-504944564944'

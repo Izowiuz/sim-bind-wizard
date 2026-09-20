@@ -48,10 +48,12 @@ import html
 import os
 import re
 import sys
+import typing
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 '..', '..'))
 from core import game                                       # noqa: E402
+from core import adapter                                    # noqa: E402
 from core import vocab                                      # noqa: E402
 
 #: Steam appid, and where inside the prefix X4 keeps its profiles. Finding the
@@ -281,70 +283,86 @@ def slots(prof):
     return out
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--vocab', action='store_true',
-                    help='what X4 will accept a binding for')
-    ap.add_argument('--grep', metavar='WORD',
-                    help='vocabulary entries matching a word')
-    ap.add_argument('--json', action='store_true',
-                    help='cache the vocabulary next to this file, the way the '
-                         'other games do. X4 does not need it -- reparsing four '
-                         '46 KB XML files is free where War Thunder unpacks '
-                         'zstd archives -- but the interface is the same '
-                         'everywhere so a planner need not know the difference')
-    a = ap.parse_args()
+@typing.final
+class X4Harvest(adapter.Harvest):
+    """X4's action vocabulary, its device slots and its profile names.
 
-    path = profile_dir()
-    profs = profiles(path)
-    print(f'{path}\n')
-    for name, p in profs.items():
-        joy = sum(1 for k, i, s, c in p['rows'] if 'JOY' in s)
-        print(f'  {name:<16} v{p["version"]:<4} {p["name"]:<20} '
-              f'{len(p["rows"]):>4} bindings, {joy} on a joystick')
+    The cache is optional here -- reparsing four 46 KB XML files is free,
+    where War Thunder unpacks zstd archives -- but `--json` means the same
+    thing in every game, so a planner never has to know the difference.
+    """
 
-    v = vocabulary(profs)
-    print(f'\nvocabulary  ' + ', '.join(f'{len(ids)} {k}' for k, ids in v.items()))
+    game = 'x4'
+    files = {'x4-actions.json': ('vocabulary', 'slots', 'profiles')}
 
-    for name, prof in profs.items():
-        sl = slots(prof)
-        if not sl:
-            continue
-        print(f'\ndevice slots in {name} ({prof["name"]})')
-        for slot, st in sorted(sl.items()):
-            print(f'  JOY{slot:<4} {st["guess"]:<9} '
-                  f'axes {",".join(st["axes"]) or "-":<22}'
-                  f' codes: {st["named"]} named / {st["numeric"]} numeric')
+    @typing.override
+    def arguments(self, parser):
+        parser.add_argument('--vocab', action='store_true',
+                            help='what X4 will accept a binding for')
+        parser.add_argument('--grep', metavar='WORD',
+                            help='vocabulary entries matching a word')
 
-    print('\nbutton codes')
-    for i in (0, 6, 9, 10, 11, 12, 30):
-        tag = '  <- measured' if i in (6, 12, 30) else ''
-        print(f'  js {i:<3} {code(i)}{tag}')
-    if NAMES_INFERRED:
-        print('  !! the eleven names rest on one measured point (js 6 = BACK).')
-        print('     One more bind settles it: js 9 should be RIGHT_THUMB.')
-    else:
-        print('  names confirmed: js 6 = BACK and js 9 = RIGHT_THUMB both held')
+    @typing.override
+    def read(self, args):
+        self.args = args
+        self.where = profile_dir()
+        self.profs = profiles(self.where)
+        self.v = vocabulary(self.profs)
+        # `slots()` ran twice for every profile: once for the display and
+        # once for the cache. Once is enough, and the two can no longer
+        # disagree.
+        self.slots = {n: slots(pr) for n, pr in self.profs.items()}
+        return {'x4-actions.json': {
+            'vocabulary': self.v,
+            'slots': self.slots,
+            'profiles': {n: pr['name'] for n, pr in self.profs.items()}}}
 
-    if a.json:
-        print()
-        vocab.save(os.path.dirname(os.path.abspath(__file__)), 'x4-actions.json',
-                   vocabulary=v, slots={n: slots(pr) for n, pr in profs.items()},
-                   profiles={n: pr['name'] for n, pr in profs.items()})
+    @typing.override
+    def summary(self, data):
+        out = [f'{self.where}', '']
+        for name, p in self.profs.items():
+            joy = sum(1 for k, i, s, c in p['rows'] if 'JOY' in s)
+            out.append(f'  {name:<16} v{p["version"]:<4} {p["name"]:<20} '
+                       f'{len(p["rows"]):>4} bindings, {joy} on a joystick')
+        out.append('')
+        out.append('vocabulary  '
+                   + ', '.join(f'{len(ids)} {k}' for k, ids in self.v.items()))
+        for name, sl in self.slots.items():
+            if not sl:
+                continue
+            out.append('')
+            out.append(f'device slots in {name} '
+                       f'({self.profs[name]["name"]})')
+            for slot, st in sorted(sl.items()):
+                out.append(f'  JOY{slot:<4} {st["guess"]:<9} '
+                           f'axes {",".join(st["axes"]) or "-":<22}'
+                           f' codes: {st["named"]} named / '
+                           f'{st["numeric"]} numeric')
+        out += ['', 'button codes']
+        for i in (0, 6, 9, 10, 11, 12, 30):
+            tag = '  <- measured' if i in (6, 12, 30) else ''
+            out.append(f'  js {i:<3} {code(i)}{tag}')
+        if NAMES_INFERRED:
+            out.append('  !! the eleven names rest on one measured point '
+                       '(js 6 = BACK).')
+            out.append('     One more bind settles it: js 9 should be '
+                       'RIGHT_THUMB.')
+        else:
+            out.append('  names confirmed: js 6 = BACK and js 9 = '
+                       'RIGHT_THUMB both held')
 
-    if a.grep:
-        print()
-        for kind, ids in v.items():
-            for i in ids:
-                if a.grep.lower() in i.lower():
-                    print(f'  {kind:<7} {i:<52} {readable(i)}')
-    elif a.vocab:
-        for kind, ids in v.items():
-            print(f'\n== {kind} ({len(ids)})')
-            for i in ids:
-                print(f'   {i:<54} {readable(i)}')
+        if self.args.grep:
+            out.append('')
+            for kind, ids in self.v.items():
+                for i in ids:
+                    if self.args.grep.lower() in i.lower():
+                        out.append(f'  {kind:<7} {i:<52} {readable(i)}')
+        elif self.args.vocab:
+            for kind, ids in self.v.items():
+                out += ['', f'== {kind} ({len(ids)})']
+                out += [f'   {i:<54} {readable(i)}' for i in ids]
+        return out
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(X4Harvest().main())

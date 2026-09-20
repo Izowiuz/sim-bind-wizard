@@ -39,7 +39,15 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 
+import typing
+
 HERE = os.path.dirname(os.path.abspath(__file__))
+CORE = os.environ.get('SIM_BIND_WIZARD') or os.path.normpath(
+    os.path.join(HERE, '..', '..'))
+if CORE not in sys.path:
+    sys.path.insert(0, CORE)
+
+from core import adapter                                    # noqa: E402
 
 CANDIDATES = [
     '~/.local/share/Steam/steamapps/common/MSFS2024',
@@ -136,31 +144,54 @@ def harvest(game_dir):
     return actions, rank, seen_profiles
 
 
-def main():
-    ap = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--game-dir')
-    args = ap.parse_args()
+@typing.final
+class MsfsHarvest(adapter.Harvest):
+    """MSFS's action vocabulary and its per-category ranking.
 
-    game = find_game(args.game_dir)
-    print(f'game: {game}')
-    actions, rank, counts = harvest(game)
+    `msfs-actions.json` gains an "actions" envelope here. It was the one
+    cache in the family whose top level WAS the data, because it was written
+    by hand with `json.dump`; `core.vocab.save` writes the sections it is
+    given and so can never emit a bare mapping. The cache is derived from
+    the installed game and gitignored, so the migration is one `--json` run
+    -- but `games/msfs/plan.py` had to learn the key in the same commit, or
+    it reads a cache that is there and shaped wrong.
+    """
 
-    a_path = os.path.join(HERE, 'msfs-actions.json')
-    json.dump({k: sorted(v['contexts']) for k, v in sorted(actions.items())},
-              open(a_path, 'w', encoding='utf-8'), ensure_ascii=False, indent=0)
-    print(f'{os.path.basename(a_path)}: {len(actions)} actions')
+    game = 'msfs'
+    files = {'msfs-actions.json': ('actions',),
+             'msfs-rank.json': ('profiles', 'rank')}
 
-    r_path = os.path.join(HERE, 'msfs-rank.json')
-    json.dump({'profiles': dict(counts),
-               'rank': {c: k.most_common() for c, k in rank.items()}},
-              open(r_path, 'w', encoding='utf-8'), ensure_ascii=False, indent=0)
-    for c, n in sorted(counts.items()):
-        top = rank[c].most_common(1)
-        print(f'  {c:16s} {n:3d} profiles, {len(rank[c]):4d} actions bound'
-              + (f', top: {top[0][0]} ({top[0][1]})' if top else ''))
+    @typing.override
+    def arguments(self, parser):
+        parser.add_argument('--game-dir', help='where MSFS is installed')
+
+    @typing.override
+    def read(self, args):
+        self.where = find_game(args.game_dir)
+        actions, rank, counts = harvest(self.where)
+        self.counts, self.rank = counts, rank
+        return {
+            'msfs-actions.json': {
+                'actions': {k: sorted(v['contexts'])
+                            for k, v in sorted(actions.items())}},
+            'msfs-rank.json': {
+                'profiles': dict(counts),
+                # Ties by name, so two harvests of one install agree.
+                'rank': {c: sorted(k.items(), key=lambda kv: (-kv[1], kv[0]))
+                         for c, k in rank.items()}},
+        }
+
+    @typing.override
+    def summary(self, data):
+        out = [f'game: {self.where}',
+               f"{len(data['msfs-actions.json']['actions'])} actions"]
+        for c, n in sorted(self.counts.items()):
+            top = self.rank[c].most_common(1)
+            out.append(f'  {c:16s} {n:3d} profiles, '
+                       f'{len(self.rank[c]):4d} actions bound'
+                       + (f', top: {top[0][0]} ({top[0][1]})' if top else ''))
+        return out
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(MsfsHarvest().main())

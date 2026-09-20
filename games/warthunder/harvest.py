@@ -52,7 +52,15 @@ try:
 except ImportError:
     sys.exit('needs python-zstandard: pip install zstandard')
 
+import typing
+
 HERE = os.path.dirname(os.path.abspath(__file__))
+CORE = os.environ.get('SIM_BIND_WIZARD') or os.path.normpath(
+    os.path.join(HERE, '..', '..'))
+if CORE not in sys.path:
+    sys.path.insert(0, CORE)
+
+from core import adapter                                    # noqa: E402
 
 CANDIDATES = [
     '~/.local/share/Steam/steamapps/common/War Thunder',
@@ -265,34 +273,53 @@ def harvest(game_dir):
     return actions, controls, rank, n_profiles
 
 
-def main():
-    ap = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--game-dir', help='where War Thunder is installed')
-    args = ap.parse_args()
+@typing.final
+class WarThunderHarvest(adapter.Harvest):
+    """War Thunder's vocabulary and factory ranking."""
 
-    game = find_game(args.game_dir)
-    print(f'game: {game}')
-    actions, controls, rank, n = harvest(game)
+    game = 'warthunder'
+    files = {'wt-actions.json': ('actions', 'controls'),
+             'wt-factory-rank.json': ('n', 'actions', 'axes')}
 
-    a_path = os.path.join(HERE, 'wt-actions.json')
-    json.dump({'actions': actions, 'controls': controls},
-              open(a_path, 'w', encoding='utf-8'), ensure_ascii=False, indent=0)
-    print(f'{a_path}: {len(actions)} actions, {len(controls)} axis names')
+    @typing.override
+    def arguments(self, parser):
+        parser.add_argument('--game-dir',
+                            help='where War Thunder is installed')
 
-    if n:
-        r_path = os.path.join(HERE, 'wt-factory-rank.json')
-        acts = [(k, v) for k, v in rank.most_common() if k.startswith('ID_')]
-        axes = [(k, v) for k, v in rank.most_common() if not k.startswith('ID_')]
-        json.dump({'n': n, 'actions': acts, 'axes': axes},
-                  open(r_path, 'w', encoding='utf-8'), ensure_ascii=False,
-                  indent=0)
-        print(f'{r_path}: {n} factory joystick profiles')
-    else:
-        print('no factory profiles decoded -- the ranking was left alone',
-              file=sys.stderr)
+    @typing.override
+    def read(self, args):
+        self.where = find_game(args.game_dir)
+        actions, controls, rank, self.n = harvest(self.where)
+        out = {'wt-actions.json': {'actions': actions, 'controls': controls}}
+        if self.n:
+            # Most-voted first, and ties by name. `Counter.most_common()`
+            # leaves ties in insertion order, and the votes are counted out
+            # of a set -- so the same install produced a different file on
+            # every run, which made the cache churn and made any comparison
+            # of two harvests meaningless. The ranking itself never changed.
+            order = sorted(rank.items(), key=lambda kv: (-kv[1], kv[0]))
+            out['wt-factory-rank.json'] = {
+                'n': self.n,
+                'actions': [(k, v) for k, v in order if k.startswith('ID_')],
+                'axes': [(k, v) for k, v in order
+                         if not k.startswith('ID_')]}
+        return out
+
+    @typing.override
+    def summary(self, data):
+        lines = [f'game: {self.where}']
+        vocab = data['wt-actions.json']
+        lines.append(f"{len(vocab['actions'])} actions, "
+                     f"{len(vocab['controls'])} axis names")
+        if self.n:
+            lines.append(f'{self.n} factory joystick profiles')
+        else:
+            # Not fatal: the ranking only annotates --why, and a clone with
+            # no zstandard or a patched archive still gets a vocabulary.
+            print('no factory profiles decoded -- the ranking was left alone',
+                  file=sys.stderr)
+        return lines
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(WarThunderHarvest().main())
