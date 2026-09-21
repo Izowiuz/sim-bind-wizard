@@ -38,6 +38,7 @@ if not os.path.isdir(CORE):
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import actions as cactions                        # noqa: E402
 from core import adapter                                    # noqa: E402
 from core import devmap                                     # noqa: E402
 from core import backup
@@ -105,13 +106,18 @@ class Need(corneeds.Need):
         def pad(xs):
             return list(xs) + [None] * (n - len(xs))
 
-        pair = None
-        if push is not None or heli_push is not None:
-            pair = (push, heli_push or push)
-        super().__init__(what, shape,
-                         bindings=list(zip(pad(self.air), pad(self.heli))),
-                         push=pair, urgency=urgency, suits=suits, dev=device,
-                         prefer=prefer, on=on, note=note)
+        # A slot is a list of Binds now, not an (air, heli) pair. The
+        # context stopped riding in the payload because it belongs to the
+        # action -- `Action.mode` carries it, and `contexts()` still works
+        # it out from the name for everything that asks.
+        clicks = [x for x in (push, heli_push or push) if x]
+        super().__init__(
+            what, shape,
+            bindings=[[cactions.Bind(a) for a in pair if a]
+                      for pair in zip(pad(self.air), pad(self.heli))],
+            push=[cactions.Bind(x) for x in clicks] if clicks else None,
+            urgency=urgency, suits=suits, dev=device,
+            prefer=prefer, on=on, note=note)
 
     @property
     def device(self):
@@ -388,10 +394,8 @@ def button_table(placed):
     """
     buttons, emitted = [], set()
     for p in placed:
-        for local, pair in p.slots:
-            for action in pair if isinstance(pair, tuple) else (pair,):
-                if not action:
-                    continue
+        for local, binds in p.slots:
+            for action in (b.action for b in binds):
                 key = (p.role, local, action)
                 if key in emitted:      # shared actions sit in both lists
                     continue
@@ -441,12 +445,11 @@ def _describe(p):
     """[(which part, what it does)] -- War Thunder keeps air and helicopter as
     separate contexts, so one control carries one of each without clashing."""
     out = []
-    for local, pair in p.slots:
+    for local, binds in p.slots:
         part = p.ctrl.direction(local) or 'press'
-        actions = pair if isinstance(pair, tuple) else (pair,)
-        for ctx, action in zip(('Air', 'Heli'), actions):
-            if action:
-                out.append((part, f'{ctx}: {en(action)}'))
+        for b in binds:
+            ctx = 'Heli' if is_heli(b.action) else 'Air'
+            out.append((part, f'{ctx}: {en(b.action)}'))
     return out
 
 
@@ -591,6 +594,18 @@ class WarThunder(adapter.Planner):
         flat = [n for n in self.NEEDS if n.first_shape != 'axis']
         return corneeds.Layout(devs, *corneeds.allocate(flat, devs),
                                axes=axis_plan(devs))
+
+    @typing.override
+    def catalogue(self):
+        # `contexts()` already answers air/heli/both off the name, and the
+        # English half of the localised pair is the name. A cache with no
+        # ranking section leaves FACTORY empty, which is a 0 and not a gap.
+        return [cactions.Action(ident, (names[0] if names else ident),
+                                kind='button',
+                                mode='/'.join(contexts(ident)),
+                                rank=FACTORY.get(ident, 0))
+                for ident, names in sorted(ACTIONS.items())]
+
 
     @typing.override
     def describe(self, placement):

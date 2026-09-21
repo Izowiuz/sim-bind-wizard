@@ -63,9 +63,6 @@ X4 Foundations · VIRPIL. Generated — do not edit, regenerate.
 | RIGHT_SHOULDER | Middle finger hat — right | Target view | — | — |
 | BACK | Middle finger hat — down | External view | Map reset rotation | — |
 | START | Middle finger hat — left | Cycle view | — | — |
-| 48 | Mode selector — 4 | — | — | — |
-| 49 | Mode selector — 3 | — | — | — |
-| 50 | Mode selector — 2 | — | — | — |
 | 51 | Mode selector — 1 | — | Map pan to rotate | — |
 | A | Pinky button — press | Boost | — | FP run |
 | LEFT_THUMB | Right side dial — push | Zoomgoggles | — | — |

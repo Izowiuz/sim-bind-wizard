@@ -57,6 +57,8 @@ X4 = planner('x4')
 MSFS = planner('msfs')
 BMS = planner('falconbms')
 ED = planner('elite', 'ed-bind-wizard.py')
+#: the planner itself, not the writer -- `context_of` lives there
+EDPLAN = planner('elite')
 WT = planner('warthunder', 'wt-bind-preset.py')
 
 
@@ -244,6 +246,33 @@ class MsfsProfiles(unittest.TestCase):
 
 
 @unittest.skipUnless(WT, 'warthunder: run ./bind wt harvest first')
+@unittest.skipUnless(EDPLAN, 'elite: run ./bind elite harvest first')
+class EliteContexts(unittest.TestCase):
+    """Which context a function answers in, read off its name.
+
+    Frontier names an SRV twin `X_Buggy` or `BuggyX` and almost everything
+    follows one of the two. Two do not, and no rule will ever find them --
+    they are here so that a refactor cannot quietly drop them and leave two
+    kneeboard rows claiming the ship function is an SRV one.
+    """
+
+    def test_a_plain_function_is_the_ship_s(self):
+        self.assertEqual('Ship', EDPLAN.context_of('PrimaryFire'))
+
+    def test_both_spellings_of_a_twin_are_the_srv_s(self):
+        self.assertEqual('SRV', EDPLAN.context_of('SelectTarget_Buggy'))
+        self.assertEqual('SRV', EDPLAN.context_of('BuggyPrimaryFireButton'))
+
+    def test_the_two_that_no_rule_reaches(self):
+        # `HeadlightsBuggyButton` is the twin of `ShipSpotLightToggle` and
+        # `ToggleDriveAssist` of `ToggleFlightAssist`. Nothing in either
+        # pair of names is shared.
+        self.assertEqual('SRV', EDPLAN.context_of('HeadlightsBuggyButton'))
+        self.assertEqual('SRV', EDPLAN.context_of('ToggleDriveAssist'))
+        self.assertEqual('Ship', EDPLAN.context_of('ShipSpotLightToggle'))
+        self.assertEqual('Ship', EDPLAN.context_of('ToggleFlightAssist'))
+
+
 class WarThunderBlock(unittest.TestCase):
     """The plan owns the whole `controls{}` block, so it removes by
     replacing it.

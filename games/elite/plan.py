@@ -38,6 +38,7 @@ if not os.path.isdir(CORE):
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import actions as cactions                        # noqa: E402
 from core import adapter                                    # noqa: E402
 from core import backup                                     # noqa: E402
 from core import devmap                                     # noqa: E402
@@ -121,8 +122,13 @@ class Need(corneeds.Need):
             return list(xs) + [None] * (n - len(xs))
 
         flat = [f for f in self.ship + self.srv if f]
+        # A slot is a list of Binds now. The context used to be the
+        # position in the tuple; it is read off the name instead, which is
+        # the rule `srv_twin` already encodes and the only one Elite has.
         super().__init__(what, shape,
-                         bindings=list(zip(pad(self.ship), pad(self.srv))),
+                         bindings=[[cactions.Bind(f) for f in pair if f]
+                                   for pair in zip(pad(self.ship),
+                                                   pad(self.srv))],
                          push=push, urgency=urgency, suits=suits, dev=device,
                          prefer=prefer, on=on, rank=votes(*flat), note=note)
 
@@ -328,7 +334,7 @@ def unknown(needs):
     bad = []
     for n in needs:
         for slot in n.bindings:
-            for f in slot:
+            for f in (b.action for b in slot):
                 if f and f not in allf:
                     bad.append((n.what, f))
         if n.push and n.push not in allf:
@@ -394,7 +400,7 @@ def as_results(devs, placed, axes):
     out = {}
     for p in placed:
         for button, payload in p.slots:
-            for func in payload:
+            for func in (b.action for b in payload):
                 if func:
                     out[func] = {'role': p.role, 'type': 'button',
                                  'index': button, 'sign': 1}
@@ -429,7 +435,8 @@ def _describe(p):
     out = []
     for button, payload in p.slots:
         part = p.ctrl.direction(button) or 'press'
-        for ctx, func in zip(CTX, payload):
+        for func in (b.action for b in payload):
+            ctx = context_of(func)
             if func:
                 out.append((part, f'{ctx}: {harvest.readable(func)}'))
     return out
@@ -438,6 +445,29 @@ def _describe(p):
 # ---------------------------------------------------------------- the sheet --
 
 CTX = ('Ship', 'SRV')
+
+
+#: SRV functions whose names do not say so. `srv_twin` builds the two forms
+#: Frontier normally uses -- `X_Buggy` and `BuggyX` -- and everything else
+#: follows one of them. These two do not, and no rule will find them:
+#: `HeadlightsBuggyButton` is the SRV twin of `ShipSpotLightToggle` and
+#: `ToggleDriveAssist` of `ToggleFlightAssist`, and nothing in either pair
+#: of names is shared. Read off a written-out list because they were found
+#: by somebody who knew the game, which is the only way they can be found.
+SRV_BY_HAND = frozenset(('HeadlightsBuggyButton', 'ToggleDriveAssist'))
+
+
+def context_of(function):
+    """Which of CTX a function answers in, read off the name.
+
+    `srv_twin` builds the two forms the game uses, so recognising one is
+    that rule read backwards -- plus the two it cannot reach. The context
+    used to be the position in the payload tuple, which meant the core
+    could not tell and every screen had to be handed the answer.
+    """
+    return ('SRV' if function.endswith('_Buggy')
+            or function.startswith('Buggy')
+            or function in SRV_BY_HAND else 'Ship')
 
 
 def _sheet(layout):
@@ -450,7 +480,8 @@ def _sheet(layout):
     for p in sorted(placed, key=lambda p: (p.role, p.ctrl.label)):
         for button, payload in p.slots:
             by_ctx = {}
-            for ctx, func in zip(CTX, payload):
+            for func in (b.action for b in payload):
+                ctx = context_of(func)
                 if func:
                     by_ctx[ctx] = harvest.readable(func)
             if not by_ctx:
@@ -565,6 +596,23 @@ class Elite(adapter.Planner):
                 for what, func in unknown(self._needs)]
 
     @typing.override
+    def catalogue(self):
+        """Every function there is evidence the game accepts.
+
+        From `vouched()` rather than from `VOCAB`, for the reason its own
+        docstring gives: the thirty shipped presets are not the whole list.
+        `NightVisionToggle` is a real ship function that works in game,
+        appears in none of them, and this plan has bound it all along -- a
+        catalogue built from the presets alone would drop it off the screen.
+        """
+        axes = set(VOCAB.get('axis', ())) | AXES
+        return [cactions.Action(fn, harvest.readable(fn),
+                                kind='axis' if fn in axes else 'button',
+                                rank=(RANK.get(fn) or {}).get('votes', 0))
+                for fn in sorted(vouched() | axes)]
+
+
+    @typing.override
     def describe(self, placement):
         return _describe(placement)
 
@@ -607,7 +655,8 @@ class Elite(adapter.Planner):
                        f'{p_.ctrl.label}')
             for button, payload in p_.slots:
                 part = p_.ctrl.direction(button) or 'press'
-                for ctx, func in zip(CTX, payload):
+                for func in (b.action for b in payload):
+                    ctx = context_of(func)
                     if func:
                         out.append(f'      {part:9} Joy_{button + 1:<4} '
                                    f'{ctx:5} {harvest.readable(func)}')

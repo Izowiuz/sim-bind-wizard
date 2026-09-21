@@ -429,7 +429,7 @@ class Review:
         if button is not None and self.honours_press(need, ctrl, button):
             buttons = [button]
         slots = [(b, v) for b, v in zip(buttons, need.bindings)
-                 if v is not None]
+                 if v]
         if need.push is not None and ctrl.push is not None:
             slots.append((ctrl.push, need.push))
         placed = corneeds.Placement(need, role, ctrl, slots, 0)

@@ -47,6 +47,7 @@ import sys
 import time
 import typing
 
+from core import actions as cactions
 from core import backup
 from core import needs as corneeds
 from core import sheet as csheet
@@ -328,6 +329,16 @@ class Adapter(abc.ABC):
     @abc.abstractmethod
     def build(self) -> corneeds.Layout:
         """The whole plan, in the one shape every adapter returns."""
+
+    @abc.abstractmethod
+    def catalogue(self) -> list[cactions.Action]:
+        """Everything this game can be told to do, in the core's shape.
+
+        The vocabulary a harvest cached, translated once here so that every
+        reader above -- a screen, a listing, a sheet -- asks the same
+        question of all six games. `NEEDS` is a hand-picked slice of this.
+        """
+
 
     @abc.abstractmethod
     def describe(self, placement) -> list[tuple[str, str]]:

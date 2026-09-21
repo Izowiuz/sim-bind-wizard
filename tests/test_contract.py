@@ -256,6 +256,8 @@ class NothingIsLeftBehind(unittest.TestCase):
             @property
             def NEEDS(self): return ['one']
             def build(self): return corneeds.Layout({}, [], [], [])
+            def catalogue(self): return []
+
             def describe(self, placement): return []
             def show(self, layout, why=False): return []
             def sheet(self, layout):
@@ -381,6 +383,56 @@ class TheFrontDoorTellsTheTruth(unittest.TestCase):
             with self.subTest(game=game, verb=verb):
                 self.assertNotIn(verb, self.bind.GAMES[game],
                                  f'GAPS says "{why}" but the table offers it')
+
+
+class EveryGameHasACatalogue(unittest.TestCase):
+    """The vocabulary, in one shape, from all six.
+
+    What it does NOT assert is that a game has categories, modes or ranks:
+    four of the six have no categories and X4 counts nothing, and a test
+    demanding them would push somebody into deriving one.
+    """
+
+    def catalogue(self, game):
+        return built(live(game)).catalogue()
+
+    def test_it_is_not_empty(self):
+        for game in adapter.games():
+            with self.subTest(game=game):
+                self.assertTrue(self.catalogue(game))
+
+    def test_every_id_appears_once(self):
+        for game in adapter.games():
+            with self.subTest(game=game):
+                cat = self.catalogue(game)
+                self.assertEqual(len(cat), len({a.id for a in cat}))
+
+    def test_every_action_is_a_button_or_an_axis(self):
+        for game in adapter.games():
+            with self.subTest(game=game):
+                kinds = {a.kind for a in self.catalogue(game)}
+                self.assertLessEqual(kinds, {'button', 'axis'})
+
+    def test_nothing_carries_an_empty_name(self):
+        # A blank row is unusable, and the fallback to the id exists so it
+        # cannot happen however thin a cache is.
+        for game in adapter.games():
+            with self.subTest(game=game):
+                self.assertTrue(all(a.name for a in self.catalogue(game)))
+
+    def test_it_holds_what_the_hand_written_list_binds(self):
+        # The point of the whole thing: the curated list is a slice of the
+        # catalogue. A miss means the translation dropped a section of the
+        # cache, which is exactly the bug this shape is meant to end.
+        for game in ('x4', 'elite', 'warthunder'):
+            with self.subTest(game=game):
+                obj = built(live(game))
+                known = {a.id for a in obj.catalogue()}
+                named = {x for n in obj.NEEDS for slot in n.bindings
+                         for x in (slot if isinstance(slot, tuple)
+                                   else (slot,))
+                         if isinstance(x, str) and x}
+                self.assertEqual(set(), named - known)
 
 
 class RunDirectly(unittest.TestCase):

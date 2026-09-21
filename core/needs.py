@@ -455,8 +455,11 @@ def allocate(needs, devices, usable=None, reach=None):
             role, ctrl = pool[best]
             need.relaxed = not floor
             buttons = slots_for(need, ctrl)
+            # `if v` rather than `is not None`: a payload is now a
+            # list of Binds and an empty one means this direction was
+            # left alone, which is what `None` used to say.
             slots = [(b, v) for b, v in zip(buttons, need.bindings)
-                     if v is not None]
+                     if v]
             if need.push is not None and ctrl.push is not None:
                 slots.append((ctrl.push, need.push))
             placed.append(Placement(need, role, ctrl, slots, best_s))

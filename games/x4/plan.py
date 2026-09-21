@@ -42,6 +42,7 @@ if not os.path.isdir(CORE):
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import actions as cactions                        # noqa: E402
 from core import adapter                                    # noqa: E402
 from core import backup                                     # noqa: E402
 from core import devmap                                     # noqa: E402
@@ -77,11 +78,25 @@ ACTION, STATE, RANGE = 'action', 'state', 'range'
 
 
 def A(name):
-    return (ACTION, 'INPUT_ACTION_' + name)
+    return 'INPUT_ACTION_' + name
 
 
 def S(name):
-    return (STATE, 'INPUT_STATE_' + name)
+    return 'INPUT_STATE_' + name
+
+
+def kind_of(ident):
+    """`action`, `state` or `range`, read off the id.
+
+    X4's ids carry it, so it never had to travel in the payload beside
+    them -- and once a payload is a list of Binds there is nowhere for it
+    to travel anyway. It is a property of the action, not of binding it.
+    """
+    for kind, prefix in ((ACTION, 'INPUT_ACTION_'), (STATE, 'INPUT_STATE_'),
+                         (RANGE, 'INPUT_RANGE_')):
+        if ident.startswith(prefix):
+            return kind
+    return ACTION
 
 
 class Need(corneeds.Need):
@@ -101,11 +116,17 @@ class Need(corneeds.Need):
         def pad(xs):
             return list(xs) + [None] * (n - len(xs))
 
-        super().__init__(what, shape,
-                         bindings=list(zip(pad(self.ship), pad(self.map),
-                                           pad(self.foot))),
-                         push=push, urgency=urgency, suits=suits, dev=device,
-                         prefer=prefer, on=on, note=note)
+        # A slot is a list of Binds now. X4 scopes a binding by which id
+        # it is, and `context_of` reads that off the name, so the context
+        # stopped needing a position in the payload.
+        super().__init__(
+            what, shape,
+            bindings=[[cactions.Bind(i) for i in triple if i]
+                      for triple in zip(pad(self.ship), pad(self.map),
+                                        pad(self.foot))],
+            push=cactions.Bind(push) if push else None,
+            urgency=urgency, suits=suits, dev=device,
+            prefer=prefer, on=on, note=note)
 
     @property
     def device(self):
@@ -264,11 +285,13 @@ def unknown(vocabulary):
     bad = []
     for n in NEEDS:
         for slot in n.bindings:
-            for pair in slot:
-                if pair and pair[1] not in vocabulary.get(pair[0], ()):
-                    bad.append((n.what, pair[0], pair[1]))
-        if n.push and n.push[1] not in vocabulary.get(n.push[0], ()):
-            bad.append((n.what, n.push[0], n.push[1]))
+            for ident in (b.action for b in slot):
+                if ident not in vocabulary.get(kind_of(ident), ()):
+                    bad.append((n.what, kind_of(ident), ident))
+        if n.push is not None:
+            ident = n.push.action
+            if ident not in vocabulary.get(kind_of(ident), ()):
+                bad.append((n.what, kind_of(ident), ident))
     for ident, _role, _how in AXIS_NEEDS:
         if ident not in vocabulary.get(RANGE, ()):
             bad.append(('axis', RANGE, ident))
@@ -377,9 +400,8 @@ def lines_for(devs, placed, axes, slot):
         src = source(slot[p.role])
         for button, payload in p.slots:
             code = harvest.code(button)
-            for pair in payload:
-                if pair:
-                    out.append((pair[0], pair[1], src, code))
+            for ident in (b.action for b in payload):
+                out.append((kind_of(ident), ident, src, code))
     for ident, role, a in axes:
         out.append((RANGE, ident, source(slot[role], axis=True),
                     'INPUT_JOYAXIS_' + AXIS_CODE[a.hid]))
@@ -478,10 +500,9 @@ def _sheet(layout, profile):
         cells = {}
         for button, payload in p.slots:
             by_ctx = cells.setdefault(button, {})
-            for ctx, pair in zip(CTX, payload):
-                if pair:
-                    by_ctx.setdefault(ctx, []).append(
-                        harvest.readable(pair[1]))
+            for ident in (b.action for b in payload):
+                by_ctx.setdefault(context_of(ident), []).append(
+                    harvest.readable(ident))
         for button, by_ctx in sorted(cells.items()):
             sh.add(csheet.Row(
                 p.role, p.ctrl.label,
@@ -527,9 +548,9 @@ def _describe(p):
     out = []
     for button, payload in p.slots:
         part = p.ctrl.direction(button) or 'press'
-        for ctx, pair in zip(CTX, payload):
-            if pair:
-                out.append((part, f'{ctx}: {harvest.readable(pair[1])}'))
+        for ident in (b.action for b in payload):
+            out.append((part,
+                        f'{context_of(ident)}: {harvest.readable(ident)}'))
     return out
 
 
@@ -580,6 +601,19 @@ class X4(adapter.Planner):
         return unknown(self.vocab)
 
     @typing.override
+    def catalogue(self):
+        # `range` is X4's word for an axis; `action` and `state` are both
+        # buttons to anything outside this file. The mode comes free --
+        # X4 scopes a binding by which id it is, and `context_of` already
+        # reads that off the name for the kneeboard.
+        return [cactions.Action(ident, harvest.readable(ident),
+                                kind='axis' if kind == 'range' else 'button',
+                                mode=context_of(ident))
+                for kind, ids in sorted(self.vocab.items())
+                for ident in ids]
+
+
+    @typing.override
     def describe(self, placement):
         return _describe(placement)
 
@@ -624,12 +658,12 @@ class X4(adapter.Planner):
                        f'{p_.ctrl.label}')
             for button, payload in p_.slots:
                 part = p_.ctrl.direction(button) or 'press'
-                for ctx, pair in zip(CTX, payload):
-                    if pair:
-                        code = harvest.code(button).replace(
-                            'INPUT_XBUTTON_', '')
-                        out.append(f'      {part:9} {code:14} {ctx:8} '
-                                   f'{harvest.readable(pair[1])}')
+                for ident in (b.action for b in payload):
+                    code = harvest.code(button).replace(
+                        'INPUT_XBUTTON_', '')
+                    out.append(f'      {part:9} {code:14} '
+                               f'{context_of(ident):8} '
+                               f'{harvest.readable(ident)}')
             if why:
                 out.append(f'      {"":9} '
                            f'[{corneeds.URGENCY_NAME[n.urgency]}]'

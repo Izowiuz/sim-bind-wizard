@@ -40,6 +40,7 @@ if not os.path.isdir(CORE):
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import actions as cactions                        # noqa: E402
 from core import adapter                                    # noqa: E402
 from core import backup                                     # noqa: E402
 from core import devmap                                     # noqa: E402
@@ -67,6 +68,28 @@ SHIFT = 256
 
 
 
+def _binds(calls):
+    """BMS's own `calls` shape, as lists of Binds.
+
+    A call is one callback, or a `(press, release)` pair for a switch that
+    has to be told what to do when you let go -- the MRM/SRM override is
+    the only one, twice. That is one binding with two halves rather than
+    two actions, which is what `Bind.edge` is for.
+    """
+    out = []
+    for c in calls:
+        if not c:
+            out.append([])
+        elif isinstance(c, tuple):
+            press, release = c
+            out.append([cactions.Bind(press)]
+                       + ([cactions.Bind(release, edge=cactions.RELEASE)]
+                          if release else []))
+        else:
+            out.append([cactions.Bind(c)])
+    return out
+
+
 class Need(corneeds.Need):
     """The core's Need plus the one thing only BMS has: a second layer.
 
@@ -76,7 +99,7 @@ class Need(corneeds.Need):
     """
 
     def __init__(self, what, shape, calls=(), shift=False, **kw):
-        super().__init__(what, shape, bindings=calls, **kw)
+        super().__init__(what, shape, bindings=_binds(calls), **kw)
         self.shift = shift
 
     @property
@@ -84,12 +107,9 @@ class Need(corneeds.Need):
         return self.bindings
 
     def callbacks(self):
-        out = []
-        for c in list(self.bindings) + ([self.push] if self.push else []):
-            if isinstance(c, tuple):
-                out.extend(x for x in c if x)
-            elif c:
-                out.append(c)
+        out = [b.action for slot in self.bindings for b in slot]
+        if self.push:
+            out.append(self.push)
         return out
 
     @property
@@ -439,11 +459,17 @@ def dx_binds(placed):
     off = dx_offsets()
     binds, seen = [], {}
     for p in placed:
-        for local, call in p.slots:
-            if not call:
+        for local, payload in p.slots:
+            if not payload:
                 continue
             dx = off[p.role] + local + (SHIFT if p.need.shift else 0)
-            press, release = call if isinstance(call, tuple) else (call, None)
+            if isinstance(payload, str):        # the push, a bare callback
+                press, release = payload, None
+            else:
+                press = next((b.action for b in payload
+                              if b.edge == cactions.PRESS), None)
+                release = next((b.action for b in payload
+                                if b.edge == cactions.RELEASE), None)
             where = f'{p.ctrl.label} — {p.ctrl.direction(local) or "press"}'
             if dx in seen:
                 print(f'!! DX {dx} wanted by {seen[dx]} and {p.need.what}',
@@ -883,6 +909,18 @@ class FalconBms(adapter.Planner):
         devs, placed, unmet, free = assign()
         return corneeds.Layout(devs, placed, unmet, free,
                                axes=axis_plan(devs))
+
+    @typing.override
+    def catalogue(self):
+        # The one harvest that already keeps a full record per action, so
+        # this is a rename and nothing else. `subsection` is the finer of
+        # the two panels BMS names and the one worth grouping by.
+        return [cactions.Action(call, rec.get('desc') or call, kind='button',
+                                category=(rec.get('subsection')
+                                          or rec.get('section')),
+                                rank=rec.get('votes') or 0)
+                for call, rec in sorted(ACTIONS.items())]
+
 
     @typing.override
     def describe(self, placement):

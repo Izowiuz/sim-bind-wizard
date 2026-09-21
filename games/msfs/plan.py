@@ -38,6 +38,7 @@ if not os.path.isdir(CORE):
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import actions as cactions                        # noqa: E402
 from core import adapter                                    # noqa: E402
 from core import backup                                     # noqa: E402
 from core import devmap                                     # noqa: E402
@@ -94,10 +95,19 @@ class Need(corneeds.Need):
         def pad(xs):
             return list(xs) + [None] * (n - len(xs))
 
-        super().__init__(what, shape,
-                         bindings=list(zip(pad(self.plane), pad(self.heli),
-                                           pad(self.glob))),
-                         push=push, urgency=urgency, suits=suits, dev=device,
+        # A slot is a list of Binds, each carrying which file it goes
+        # into. MSFS's split is not a property of the action -- the same
+        # id can be an aeroplane binding in one profile and a global one
+        # in another -- so it rides on the Bind.
+        super().__init__(
+            what, shape,
+            bindings=[[cactions.Bind(a, mode=m)
+                       for a, m in zip(triple, ('plane', 'heli', 'glob'))
+                       if a]
+                      for triple in zip(pad(self.plane), pad(self.heli),
+                                        pad(self.glob))],
+            push=(cactions.Bind(push, mode='glob') if push else None),
+            urgency=urgency, suits=suits, dev=device,
                          note=note)
 
     @property
@@ -329,19 +339,16 @@ def bindings_for(devs, placed, axes):
     def add(role, bucket, action, info, code):
         out.setdefault((role, bucket), []).append((action, info, code))
 
+    # From `slots`, never from the control: the core decides which button
+    # each binding lands on -- including putting a lone one on the click --
+    # and re-deriving the order here disagreed with it and threw away any
+    # button chosen by hand in the review.
     for p in placed:
-        need, role, c = p.need, p.role, p.ctrl
-        order = list(c.buttons) or ([c.push] if c.push is not None else [])
-        for ctx, ids in (('flight', need.plane), ('flight', need.heli),
-                         ('global', need.glob)):
-            for i, action in enumerate(ids):
-                if i >= len(order):
-                    break
-                info, code = button_code(order[i])
-                add(role, ctx, action, info, code)
-        if need.push and c.push is not None:
-            info, code = button_code(c.push)
-            add(role, 'global', need.push, info, code)
+        for button, payload in p.slots:
+            info, code = button_code(button)
+            for b in (payload if isinstance(payload, list) else [payload]):
+                add(p.role, 'global' if b.mode == 'glob' else 'flight',
+                    b.action, info, code)
 
     for ctx, action, role, ax in axes:
         pair = AXIS_CODE.get(ax.hid)
@@ -398,17 +405,10 @@ def contents(devs, placed, axes):
 def _describe(p):
     """[(button code, what it does)] -- MSFS splits its vocabulary three ways
     and the same button often carries a different action in each."""
-    need, c = p.need, p.ctrl
     out = []
-    for ctx, ids in (('plane', need.plane), ('heli', need.heli),
-                     ('glob', need.glob)):
-        for i, action in enumerate(ids):
-            if i >= len(c.bindable_buttons):
-                break
-            b = c.buttons[i] if i < len(c.buttons) else c.push
-            out.append((f'{ctx} {button_code(b)[0]}', action))
-    if need.push and c.push is not None:
-        out.append((f'glob {button_code(c.push)[0]}', need.push))
+    for button, payload in p.slots:
+        for b in (payload if isinstance(payload, list) else [payload]):
+            out.append((f'{b.mode} {button_code(button)[0]}', b.action))
     return out
 
 
@@ -434,23 +434,20 @@ def _sheet(layout):
                       devices={r: d.product for r, d in devs.items()})
 
     for p in placed:
-        need, role, c = p.need, p.role, p.ctrl
-        order = list(c.buttons) or ([c.push] if c.push is not None else [])
+        role, c = p.role, p.ctrl
         cells = {}
-        for ctx, ids in (('plane', need.plane), ('heli', need.heli),
-                         ('glob', need.glob)):
-            for i, action in enumerate(ids):
-                if i >= len(order):
-                    break
-                cells.setdefault(order[i], {}).setdefault(CTX[ctx], []).append(action)
-        if need.push and c.push is not None:
-            cells.setdefault(c.push, {}).setdefault('Global', []).append(need.push)
+        for button, payload in p.slots:
+            for b in (payload if isinstance(payload, list) else [payload]):
+                (cells.setdefault(button, {})
+                      .setdefault(CTX[b.mode], []).append(b.action))
+        # The push is in `slots` already -- the allocator appends it --
+        # so it needs no second pass here.
         for btn, by_ctx in sorted(cells.items()):
             info, _code = button_code(btn)
             sh.add(csheet.Row(role, c.label,
                               part=c.direction(btn) or 'press',
                               ident=info.replace('Joystick Button ', '#'),
-                              does=need.what, bindings=by_ctx))
+                              does=p.need.what, bindings=by_ctx))
 
     for ctx, action, role, ax in axes:
         pair = AXIS_CODE.get(ax.hid)
@@ -513,6 +510,23 @@ class Msfs(adapter.Planner):
                                axes=axis_plan(devs, self.actions))
 
     @typing.override
+    def catalogue(self):
+        # `rank` is per category and an action can sit under several, so
+        # the highest count wins: bound by 54 aeroplane profiles and no
+        # helicopter one is still worth 54.
+        votes = {}
+        for _cat, pairs in (self.rank.get('rank') or {}).items():
+            for name, n in pairs:
+                votes[name] = max(votes.get(name, 0), n)
+        return [cactions.Action(
+                    name, name.removeprefix('AXIS:'),
+                    kind='axis' if name.startswith('AXIS:') else 'button',
+                    mode=', '.join(sorted(ctxs)) or None,
+                    rank=votes.get(name, 0))
+                for name, ctxs in sorted(self.actions.items())]
+
+
+    @typing.override
     def describe(self, placement):
         return _describe(placement)
 
@@ -543,18 +557,13 @@ class Msfs(adapter.Planner):
         for p in placed:
             need, role, c = p.need, p.role, p.ctrl
             out.append(f'  {need.what:20s} {role:8s} {c.kind:9s} {c.label}')
-            for ctx, ids in (('plane', need.plane), ('heli', need.heli),
-                             ('glob', need.glob)):
-                for i, a in enumerate(ids):
-                    if i < len(c.bindable_buttons):
-                        b = c.buttons[i] if i < len(c.buttons) else c.push
-                        d = c.direction(b) or ''
-                        out.append(f'      {ctx:5s} {a:44s} -> '
-                                   f'{button_code(b)[0]}'
-                                   f'{"  " + d if d else ""}')
-            if need.push and c.push is not None:
-                out.append(f'      glob  {need.push:44s} -> '
-                           f'{button_code(c.push)[0]}  push')
+            for button, payload in p.slots:
+                d = c.direction(button) or ''
+                for b in (payload if isinstance(payload, list)
+                          else [payload]):
+                    out.append(f'      {b.mode:5s} {b.action:44s} -> '
+                               f'{button_code(button)[0]}'
+                               f'{"  " + d if d else ""}')
             if why:
                 cat, n = rank_of(self.rank, (need.plane or need.heli
                                              or need.glob or [''])[0])

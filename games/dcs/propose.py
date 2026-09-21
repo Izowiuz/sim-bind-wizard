@@ -40,6 +40,7 @@ if not os.path.isdir(CORE):
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import actions as cactions                        # noqa: E402
 from core import adapter                                    # noqa: E402
 from core import backup                                     # noqa: E402
 from core import devmap                                     # noqa: E402
@@ -131,8 +132,15 @@ class Need(corneeds.Need):
 
     def __init__(self, what, shape, members, dev=None, urgency=IN_THE_AIR,
                  rank=0):
-        super().__init__(what, shape, bindings=list(members), dev=dev,
-                         urgency=urgency, rank=rank)
+        # A slot is a list of Binds now. DCS has no contexts and no
+        # release half, so every slot is exactly one -- `members` is the
+        # list of command hashes the family covers.
+        super().__init__(what, shape,
+                         bindings=[[cactions.Bind(h)] for h in members],
+                         dev=dev, urgency=urgency, rank=rank)
+        #: the hashes, in order, for the places that still think in them:
+        #: `lay_out` matches each command against the module's own prose.
+        self.members = list(members)
         #: a button assigned outside the allocator: a trigger stage or a
         #: borrowed spare position
         self.borrowed = None
@@ -319,7 +327,7 @@ def lay_out(module, ctrl, members, cmds, press_only=False, borrowed=None):
 
 def resolve_axis(devs, need, cmds):
     """Which axis on which device a flight or slew command belongs to."""
-    name = cmds[need.bindings[0]]['name']
+    name = cmds[need.members[0]]['name']
     want = AXIS_FOR.get(name.split(' - ')[0].strip())
     if want == 'stick-x':
         return ('stick', devs['stick'].axes(kind='stick-x'))
@@ -474,7 +482,7 @@ def place(module, cmds, guide, chosen):
     # control is then vetoed for everybody else.
     claimed = None
     trigger_needs = [n for n in needs if n.shape == 'trigger'
-                     and len(n.bindings) == 1]
+                     and len(n.members) == 1]
     if len(trigger_needs) > 1:
         spot = next(((r, c) for r, d in sorted(devs.items())
                      for c in d.groups(bindable=True)
@@ -485,7 +493,7 @@ def place(module, cmds, guide, chosen):
             free = list(ctrl.buttons)
             named, rest = {}, []
             for n in trigger_needs:
-                st = stage_of(cmds[n.bindings[0]])
+                st = stage_of(cmds[n.members[0]])
                 if st is not None and st < len(free) and free[st] not in named:
                     named[free[st]] = n
                 else:
@@ -499,7 +507,8 @@ def place(module, cmds, guide, chosen):
             for b, n in named.items():
                 n.borrowed = b
                 claims.append(corneeds.Placement(
-                    n, role, ctrl, [(b, n.bindings[0])], 200))
+                    n, role, ctrl,
+                    [(b, [cactions.Bind(n.members[0])])], 200))
                 needs.remove(n)
 
     # Axes never go through the allocator, in any game in the family.
@@ -520,7 +529,7 @@ def place(module, cmds, guide, chosen):
         # where a need has ONE command the core already chose the button --
         # the control's click, or a spare position it borrowed -- and that
         # choice is the authoritative one.
-        if len(pl.need.bindings) == 1 and pl.slots:
+        if len(pl.need.members) == 1 and pl.slots:
             pl.need.borrowed = pl.slots[0][0]
     return corneeds.Layout(devs, claims + list(placed), still, free,
                            axes=axes)
@@ -570,15 +579,15 @@ def seed(module, cmds, guide, chosen=None):
             axes = what
             if not axes:
                 continue
-            name = cmds[need.bindings[0]]['name']
-            recs[need.bindings[0]] = {
+            name = cmds[need.members[0]]['name']
+            recs[need.members[0]] = {
                 'name': name, 'role': role, 'type': 'axis',
                 'index': axes[0].index, 'invert': _inverted(name),
                 'proposed': True}
             continue
         ctrl = what
-        spots = lay_out(module, ctrl, need.bindings, cmds,
-                        press_only=len(need.bindings) == 1
+        spots = lay_out(module, ctrl, need.members, cmds,
+                        press_only=len(need.members) == 1
                         and len(ctrl.bindable_buttons) > 1,
                         borrowed=need.borrowed)
         for h, b in spots.items():
@@ -922,9 +931,24 @@ class Dcs(adapter.Proposer):
                      candidates(self.module, self.cmds, self.guide))
 
     @typing.override
+    def catalogue(self):
+        # Keyed by the wizard's command hash, because that is what every
+        # DCS record uses and what its results file is written against.
+        # The richest of the six: name, kind, category and votes are all
+        # in the cache already.
+        return [cactions.Action(h, c.get('name') or h,
+                                kind=('axis' if c.get('kind') == 'axis'
+                                      else 'button'),
+                                category=c.get('category'),
+                                rank=c.get('votes') or 0)
+                for h, c in sorted(self.cmds.items())]
+
+
+    @typing.override
     def describe(self, placement):
-        return [(str(b), self.cmds[h]['name'])
-                for b, h in placement.slots if h in self.cmds]
+        return [(str(button), self.cmds[b.action]['name'])
+                for button, payload in placement.slots
+                for b in payload if b.action in self.cmds]
 
     @typing.override
     def seed(self, layout):
@@ -1017,8 +1041,8 @@ class Dcs(adapter.Proposer):
             if not pair or need.shape == 'axis':
                 continue                 # (role, [axis]) has no buttons
             role, c = pair
-            for h, b in lay_out(self.module, c, need.bindings, self.cmds,
-                                press_only=len(need.bindings) == 1
+            for h, b in lay_out(self.module, c, need.members, self.cmds,
+                                press_only=len(need.members) == 1
                                 and len(c.bindable_buttons) > 1).items():
                 mine[h] = (role, b)
         out = ['', '--- against what you bound by hand ---']
@@ -1049,7 +1073,7 @@ class Dcs(adapter.Proposer):
             if need.shape == 'axis':
                 role, axs = pair if pair else (None, [])
                 a = axs[0] if axs else None
-                name0 = self.cmds[need.bindings[0]]['name'].lower()
+                name0 = self.cmds[need.members[0]]['name'].lower()
                 if a:
                     where = f'{role} axis {a.index} — {a.label}'
                 elif name0 == 'thrust':
@@ -1065,11 +1089,11 @@ class Dcs(adapter.Proposer):
             role, c = pair
             lines.append(f'  {need.what[:38]:40s} {role:8s} {c.kind:9s} '
                          f'{c.label}')
-            spots = lay_out(self.module, c, need.bindings, self.cmds,
-                            press_only=len(need.bindings) == 1
+            spots = lay_out(self.module, c, need.members, self.cmds,
+                            press_only=len(need.members) == 1
                             and len(c.bindable_buttons) > 1,
                             borrowed=need.borrowed)
-            for h in need.bindings:
+            for h in need.members:
                 b = spots.get(h)
                 w = c.direction(b) if b is not None else '?'
                 lines.append(f'      {self.cmds[h]["name"][:46]:48s} '
@@ -1082,7 +1106,7 @@ class Dcs(adapter.Proposer):
                                      'on the ramp'][need.urgency]}"
                              + f'   {need.rank} factory profiles   score {s}')
                 lines.append(f'      '
-                             f'{self.guide[need.bindings[0]]["place"][:74]}')
+                             f'{self.guide[need.members[0]]["place"][:74]}')
                 if need.shape == 'latch':
                     # the line above is the module's own advice, and we just
                     # went against it on purpose; say so rather than leave it
