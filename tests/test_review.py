@@ -538,6 +538,61 @@ class Rows(unittest.TestCase):
         self.assertTrue(any(r.kind == 'head' for r in rows))
 
 
+class BindsUnderTheAction(unittest.TestCase):
+    """What a need binds belongs under its row, not in the footer.
+
+    The panel at the bottom showed `describe(p)` for whichever row the
+    cursor was on, so you had to move onto a row to learn what it does and
+    could never see two at once. X4 puts six lines there for one hat.
+    """
+
+    def rv(self):
+        return made(describe=lambda p: [('up', 'Ship: one'),
+                                        ('down', 'Ship: two')])
+
+    def test_each_bind_is_a_row_under_its_need(self):
+        rv = self.rv()
+        rows = rv.rows()
+        i = next(i for i, r in enumerate(rows)
+                 if r.kind == 'need' and r.need.what == 'Gear')
+        under = [r for r in rows[i + 1:i + 3]]
+        self.assertTrue(all(r.kind == 'bind' for r in under))
+        self.assertIn('Ship: one', under[0].text)
+        self.assertIn('up', under[0].text)
+
+    def test_a_bind_row_cannot_be_selected(self):
+        # It is the answer to the row above, not a thing you put anywhere.
+        rows = self.rv().rows()
+        self.assertTrue(all(r.kind == 'need'
+                            for r in rows if r.selectable))
+        self.assertTrue(any(r.kind == 'bind' for r in rows))
+
+    def test_a_need_with_nothing_on_it_has_no_bind_rows(self):
+        rv = self.rv()
+        gear = by(rv, 'Gear')
+        rv.clear(gear)
+        rows = rv.rows()
+        i = next(i for i, r in enumerate(rows)
+                 if r.kind == 'need' and r.need is gear)
+        self.assertNotEqual('bind', rows[i + 1].kind)
+
+    def test_the_footer_no_longer_repeats_them(self):
+        rv = self.rv()
+        row = next(r for r in rv.rows()
+                   if r.kind == 'need' and r.need.what == 'Gear')
+        self.assertEqual([], review._detail(rv, row))
+
+    def test_the_footer_still_explains_a_need_with_no_control(self):
+        # That one is not a binding, so it has nowhere else to go.
+        rv = self.rv()
+        gear = by(rv, 'Gear')
+        rv.clear(gear)
+        row = next(r for r in rv.rows()
+                   if r.kind == 'need' and r.need is gear)
+        self.assertTrue(any('free control' in ln
+                            for ln in review._detail(rv, row)))
+
+
 class WhatItFound(unittest.TestCase):
     """The header line and the map screen: which device is which, and where
     the game was found."""

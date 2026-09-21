@@ -65,12 +65,14 @@ class Row:
     """One line of the table. `kind` decides what it answers to."""
 
     def __init__(self, kind, text, need=None):
-        self.kind = kind                # 'head' | 'need' | 'gap'
+        self.kind = kind                # 'head' | 'need' | 'bind' | 'gap'
         self.text = text
         self.need = need
 
     @property
     def selectable(self):
+        # A `bind` is the answer to the row above it, not a thing you put
+        # anywhere, so moving skips it.
         return self.kind == 'need'
 
 
@@ -110,6 +112,16 @@ class Review:
         """(yours, proposed, unset)."""
         m = [self.mark[n] for n in self.needs]
         return m.count(MINE), m.count(PROPOSED), m.count(UNSET)
+
+    def binds(self, need):
+        """[(part of the control, what it does)] -- the game's own answer.
+
+        `describe` is the adapter's hook and this is the only caller, so it
+        is also the only place that has to cope with a need sitting on
+        nothing.
+        """
+        p = self.at[need]
+        return self.describe(p) if p is not None else []
 
     def where(self, need):
         """The one-line answer to 'what is this on?'."""
@@ -427,6 +439,12 @@ class Review:
             out.append(Row('head', corneeds.URGENCY_NAME[urgency].upper()))
             for need in [n for n in self.needs if n.urgency == urgency]:
                 out.append(Row('need', need.what, need=need))
+                # What it binds, under it. This was the footer's job, which
+                # meant moving onto a row to learn what it does and never
+                # seeing two at once -- and X4 puts six lines there for one
+                # hat, so the footer was the wrong size for the answer.
+                for part, what in self.binds(need):
+                    out.append(Row('bind', f'{part:10} {what}', need=need))
             out.append(Row('gap', ''))
         return out
 
@@ -479,7 +497,10 @@ def _detail(rv, row):
     p = rv.at[need]
     out = []
     if p is not None:
-        out.extend(f'  {part:14} {what}' for part, what in rv.describe(p))
+        # Nothing: what it binds is on the tree now, under the row. What is
+        # left here is the case with no control, which is not a binding and
+        # has nowhere else to go.
+        pass
     else:
         plan = rv.plan.get(need)
         out.append(f'  wanted {need.first_shape}, {need.wanted} button(s)')
@@ -518,6 +539,8 @@ def _draw(scr, rv, sel, state, theme):
         y = 3 + i - top
         if row.kind == 'head':
             _put(scr, y, 0, f' {row.text}', theme.head)
+        elif row.kind == 'bind':
+            _put(scr, y, 6, row.text[:w - 7], theme.meta)
         elif row.kind == 'need':
             # The state name is the tone name, so this screen and the map ask
             # the theme the same question and get the same answer.
