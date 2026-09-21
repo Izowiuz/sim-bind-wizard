@@ -32,7 +32,8 @@
       core/sheet.py           Sheet, Row, AxisRow -> markdown and html
       core/sheet-template.html
       core/capture.py         the js protocol: Device, wait_input, detect_roles
-      core/tui.py             the curses shell the capture wizards draw in
+      core/tui.py             the curses shell every screen draws in,
+                              and Theme, which is what colour it draws in
       games/<game>/harvest.py     a Harvest subclass
       games/<game>/plan.py        an Adapter subclass (DCS: propose.py)
       games/<game>/README.md
@@ -222,7 +223,9 @@ The header names the device behind each role. `devmap.by_role` keys on the
 map's `kind`, so two sticks make you choose one with `SIM_DEVICE_ROLES` -- and
 once you have, a row reading "stick" no longer says which. `m` has the rest:
 the paths a game supplies through `paths=`, then every control in the map with
-its buttons, axes, reach and whatever need sits on it.
+its buttons, axes, reach and whatever need sits on it -- each control in
+the colour of the need it is carrying, so the map answers "what is still
+free" without being read.
 
 Pressing a control reads `/dev/input/js*` through `core.capture`, the same way
 the two capture wizards do. `Review.took()` is everything that happens once the
@@ -276,11 +279,39 @@ land on the screen being drawn, so the write call runs inside
 `redirect_stdout`/`redirect_stderr` and the output is replayed as log lines --
 cheaper than teaching six writers to return text they already print.
 
-Colour is used where the terminal has it, in the four base colours that read
-on a light background as well as a dark one, and never yellow. Without colour
-the same meanings fall back to bold and dim. `core/tui.py` draws in bold and
-reverse only, for a light-themed terminal; this keeps that intent without
-keeping the letter of it.
+Colour is a `Theme` in `core/tui.py`, and its tones are named for what a
+thing IS rather than for the colour it comes out as: `mine`, `proposed`,
+`unset`, `head`, `subhead`, `meta`, `note`, `plain`, `sel`. A screen asks for
+`theme.mine`, or `theme[name]` when the line it is drawing carries its own
+tone.
+
+`head`, `subhead` and `meta` are one ladder: the section, the thing it names,
+the detail under it. On the map that is `WHERE` / `profile dir` / the path,
+and `DEVICE MAP` / `stick R-VPC Stick WarBRD-D` / its ids and counts. All
+three in the same blue is a listing you have to read from the top to know
+where you are.
+
+The three row states are tone names too, and that is the point rather than a
+coincidence -- `mark[need]` can be handed straight to the theme, so the need
+table and the device map cannot drift apart. A control on the map wears the
+state of the need sitting on it, which makes green the same claim on both
+screens. `map_lines()` therefore returns `(tone, text)` and not bare lines:
+the pager cannot tell a device heading from a control carrying something, and
+that is the one thing only the map knows.
+
+Every control on the map also carries the table's own `?`/`+` mark, and the
+map opens with a legend drawn in the four colours it explains -- one line per
+tone, because a line carries one. Colour went in first and said nothing on
+its own: some rows were simply a different colour from the others. The mark
+says which, the legend says what the mark means, and the colour is left to do
+the thing it is good at, which is being seen without being read.
+
+Four base colours, and never yellow. They draw on the terminal's own
+background -- `use_default_colors` hands the palette back rather than painting
+one -- and these wizards run on a light terminal as often as a dark one;
+yellow on white does not read. Without colour every tone falls back to bold,
+dim or reverse, which is all `core/tui.py` ever used, so a terminal with no
+colour and the capture wizards both look exactly as they did.
 
 DCS is not on this screen. Its bindings live in a results file where each one
 carries a `proposed` flag, and its own table is where all of the above came

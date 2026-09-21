@@ -17,9 +17,81 @@ import curses
 import time
 
 
+class Theme:
+    """What each meaning on the screen looks like, worked out once.
+
+    Tones are named for what a thing IS, never for the colour it comes out
+    as. `mine` is green on a need's row in the review table and green again
+    on the control that need is sitting on, and this class is the single
+    place that decides so -- a screen asks for `theme.mine`, or `theme[name]`
+    when the line it is drawing carries its own tone.
+
+    `head`, `subhead` and `meta` are one ladder and are meant to be read as
+    one: the section, the thing the section names, and the detail under it.
+    A listing that puts all three in the same blue is a listing you have to
+    read from the top to know where you are.
+
+    Base colours only, and never yellow. These draw on the terminal's own
+    background -- `use_default_colors` hands the palette back rather than
+    painting one -- and the wizards in this family run on a light terminal as
+    often as a dark one. Green, red, blue and magenta read on both; yellow on
+    white does not.
+
+    With no colour at all every tone falls back to bold, dim or reverse,
+    which is all these screens ever had and is still what a terminal without
+    colour gets.
+    """
+
+    #: The four that read on a light terminal and a dark one. Named here
+    #: and nowhere else: past this point the code says what it means.
+    BLUE, GREEN, RED, MAGENTA = (curses.COLOR_BLUE, curses.COLOR_GREEN,
+                                 curses.COLOR_RED, curses.COLOR_MAGENTA)
+
+    def __init__(self, colour=False):
+        self.colour = colour
+        self._pairs = 0
+        norm, bold, dim, rev = (curses.A_NORMAL, curses.A_BOLD,
+                                curses.A_DIM, curses.A_REVERSE)
+        # Each tone reads: the colour it wants, what it adds where the
+        # terminal has one, and what it falls back to where it has not.
+        self.title = self._tone(None, bold, bold)
+        self.head = self._tone(self.BLUE, bold, bold)
+        self.subhead = self._tone(self.BLUE, norm, norm)
+        self.mine = self._tone(self.GREEN, norm, bold)
+        self.proposed = self._tone(self.MAGENTA, norm, norm)
+        self.unset = self._tone(self.RED, norm, dim)
+        self.note = self._tone(self.MAGENTA, norm, norm)
+        self.meta = self._tone(None, dim, dim)
+        self.plain = self._tone(None, norm, norm)
+        self.sel = self._tone(None, rev, rev)
+
+    def _tone(self, colour, lit, dull):
+        """One tone: a colour pair where there is colour, else the fallback.
+
+        Pairs are numbered in the order they are asked for, which is why no
+        caller ever sees a pair number -- there is nothing useful to say
+        about 3 that `theme.unset` does not say better.
+        """
+        if not self.colour:
+            return dull
+        if colour is None:
+            return lit
+        self._pairs += 1
+        curses.init_pair(self._pairs, colour, -1)
+        return curses.color_pair(self._pairs) | lit
+
+    def __getitem__(self, tone):
+        """A tone by its name, for a line that carries its own."""
+        return getattr(self, tone)
+
+
 class Tui:
-    def __init__(self, scr):
+    def __init__(self, scr, theme=None):
         self.scr = scr
+        #: how this screen draws. A Tui built without one gets the colourless
+        #: theme, which is what `setup` falls back to anyway on a terminal
+        #: that has no colour.
+        self.theme = theme or Theme()
         self.title = ""
         self.lines = []
 
@@ -111,9 +183,11 @@ def setup(scr):
 
     `set_escdelay` is what makes ESC answer at once rather than after the
     terminal's escape timeout, and it is missing on older Pythons. Colour is
-    started only so `use_default_colors` can hand the terminal's own palette
-    back -- these wizards draw in bold and reverse, never in colour, because
-    the terminal they run in is light-themed.
+    started so `use_default_colors` can hand the terminal's own palette back,
+    and the `Theme` laid over it is where every screen gets its attributes.
+    The capture wizards still come out in bold and reverse -- they ask for
+    `title` and `meta` and that is what those tones are -- but the review
+    screen, which has more than two things to say, gets colour for them.
     """
     curses.curs_set(0)
     scr.nodelay(True)
@@ -122,9 +196,12 @@ def setup(scr):
         curses.set_escdelay(50)
     except AttributeError:
         pass
+    colour = False
     try:
-        curses.start_color()
-        curses.use_default_colors()
+        if curses.has_colors():
+            curses.start_color()
+            curses.use_default_colors()
+            colour = True
     except curses.error:
         pass
-    return Tui(scr)
+    return Tui(scr, Theme(colour))

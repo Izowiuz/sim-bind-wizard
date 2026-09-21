@@ -52,37 +52,13 @@ from core import tui as ctui
 #: What a row can be. `MINE` covers both "I confirmed the proposal" and "I
 #: chose this myself": once you have looked at it, where it came from stops
 #: mattering.
+#:
+#: They are also tone names in `core.tui.Theme`, which is not a coincidence
+#: and is worth keeping: a state can be handed straight to the theme, so the
+#: row for a need and the control that need sits on cannot drift apart.
 UNSET, PROPOSED, MINE = 'unset', 'proposed', 'mine'
 
 MARK = {UNSET: ' ', PROPOSED: '?', MINE: '+'}
-
-#: Base colours only, and never yellow: these are drawn on the terminal's own
-#: background (`use_default_colors`), and the wizards in this family run on a
-#: light one as often as a dark one. Green, red, blue and magenta read on both;
-#: yellow on white does not. Without colour at all the same meanings fall back
-#: to bold and dim, which is what `core/tui.py` has always used.
-GREEN, RED, BLUE, MAGENTA = 1, 2, 3, 4
-
-
-def _paint():
-    """Colour pairs if the terminal has them, else a table of plain attrs."""
-    try:
-        if not curses.has_colors():
-            raise curses.error
-        curses.start_color()
-        curses.use_default_colors()
-        for pair, colour in ((GREEN, curses.COLOR_GREEN),
-                             (RED, curses.COLOR_RED),
-                             (BLUE, curses.COLOR_BLUE),
-                             (MAGENTA, curses.COLOR_MAGENTA)):
-            curses.init_pair(pair, colour, -1)
-        return {GREEN: curses.color_pair(GREEN),
-                RED: curses.color_pair(RED),
-                BLUE: curses.color_pair(BLUE) | curses.A_BOLD,
-                MAGENTA: curses.color_pair(MAGENTA)}
-    except curses.error:
-        return {GREEN: curses.A_BOLD, RED: curses.A_DIM,
-                BLUE: curses.A_BOLD, MAGENTA: curses.A_NORMAL}
 
 
 class Row:
@@ -249,25 +225,50 @@ class Review:
 
     def map_lines(self):
         """The device map as the review sees it, with what sits on each
-        control -- the answer to "is that really a hat, and what is on it"."""
+        control -- the answer to "is that really a hat, and what is on it".
+
+        `[(tone, text)]` rather than bare lines. The pager cannot tell a
+        device heading from a control carrying something, and the tone is the
+        one thing only this method knows; naming it here is also what keeps
+        the two screens honest, because a control wears the state of the need
+        on it and that state is the same word the table draws its row with.
+
+        Every control also carries the table's own `?`/`+` mark. Colour was
+        the only thing saying which controls were spoken for, and a colour
+        nobody has been taught is just some of the rows being a different
+        colour -- so the mark says it in text, the legend says what the mark
+        means, and the colour is left to do what it is good at, which is
+        being seen without being read.
+        """
         out = []
         if self.paths:
-            out.append('WHERE')
+            out.append(('head', 'WHERE'))
             # Each path on its own line: a Proton prefix is 90 characters
             # before it says anything, and a truncated path answers nothing.
             for label, path in self.paths:
-                out.append(f'  {label}')
-                out.extend(f'    {ln}' for ln in _fold(str(path)))
-            out.append('')
-        out.append('DEVICE MAP')
+                out.append(('subhead', f'  {label}'))
+                out.extend(('meta', f'    {ln}') for ln in _fold(str(path)))
+            out.append(('plain', ''))
+        out.append(('head', 'DEVICE MAP'))
+        # The legend is four lines because a line carries one tone, and a
+        # legend that is not drawn in the colours it explains explains
+        # nothing. This is the screen somebody opens to find a spare
+        # control, so what the colours mean is what they came for.
+        out.append(('mine', f'  {MARK[MINE]} yours'))
+        out.append(('proposed', f'  {MARK[PROPOSED]} the planner\'s,'
+                                f' not yet checked'))
+        out.append(('plain', f'  {MARK[UNSET]} free'))
+        out.append(('meta', f'  {MARK[UNSET]} carries no binding at all'))
         for role, dev in self.devices():
-            out.append('')
-            out.append(f'  {role}  {dev.product}')
-            out.append(f'    {dev.slug} · usb {dev.usb or "?"}'
-                       + (f' · serial {dev.serial}' if dev.serial else ''))
-            out.append(f'    {dev.n_buttons} buttons, {dev.n_axes} axes'
-                       f' · {dev.path}')
-            out.append('')
+            ids = f'    {dev.slug} · usb {dev.usb or "?"}'
+            if dev.serial:
+                ids += f' · serial {dev.serial}'
+            out.append(('plain', ''))
+            out.append(('subhead', f'  {role}  {dev.product}'))
+            out.append(('meta', ids))
+            out.append(('meta', f'    {dev.n_buttons} buttons,'
+                                f' {dev.n_axes} axes · {dev.path}'))
+            out.append(('plain', ''))
             for ctrl in dev.groups():
                 held = self.who_has(role, ctrl)
                 parts = [','.join(str(b) for b in ctrl.buttons)]
@@ -276,11 +277,22 @@ class Review:
                 if ctrl.axes:
                     parts.append('ax' + ','.join(str(a) for a in ctrl.axes))
                 btns = ' '.join(x for x in parts if x)
-                out.append(f'    {ctrl.kind:10} {ctrl.label[:26]:26} '
-                           f'{(btns or "-")[:16]:16} '
-                           f'{(ctrl.reach or ""):24.24} '
-                           + (held.what if held else
-                              ('' if ctrl.bindable else '(carries nothing)')))
+                # Carrying something -> that need's state, mark and
+                # colour alike, which is exactly how the table draws it.
+                # Free and bindable -> plain, because a spare control is the
+                # normal case and colouring the normal case says nothing.
+                # Bindable by nothing -> as dim as the ids above it, which
+                # is what it is worth.
+                state = self.mark[held] if held else None
+                tone = state or ('plain' if ctrl.bindable else 'meta')
+                out.append((tone,
+                            f'  {MARK[state] if state else " "} '
+                            f'{ctrl.kind:10} {ctrl.label[:26]:26} '
+                            f'{(btns or "-")[:16]:16} '
+                            f'{(ctrl.reach or ""):24.24} '
+                            + (held.what if held else
+                               ('' if ctrl.bindable
+                                else '(carries nothing)'))))
         return out
 
     # -------------------------------------------------------------- writing
@@ -473,7 +485,7 @@ def _detail(rv, row):
     return out
 
 
-def _draw(scr, rv, sel, state, paint):
+def _draw(scr, rv, sel, state, theme):
     h, w = scr.getmaxyx()
     rows = rv.rows()
     detail = 5
@@ -487,24 +499,25 @@ def _draw(scr, rv, sel, state, paint):
 
     scr.erase()
     head = rv.title + (f'  ·  {rv.subtitle}' if rv.subtitle else '')
-    _put(scr, 0, 0, head, curses.A_BOLD)
+    _put(scr, 0, 0, head, theme.title)
     mine, prop, unset = rv.counts()
     tally = f'{mine} yours · {prop} proposed · {unset} unset'
-    _put(scr, 0, max(0, w - len(tally) - 1), tally, paint[BLUE])
+    _put(scr, 0, max(0, w - len(tally) - 1), tally, theme.head)
     # Which device each role IS, always on screen: a row saying "stick" does
     # not say which stick, and with two of them you had to choose one.
-    _put(scr, 1, 0, rv.device_line(), paint[BLUE])
+    _put(scr, 1, 0, rv.device_line(), theme.head)
     _put(scr, 2, 0, '─' * (w - 1))
 
     for i in range(top, min(len(rows), top + visible)):
         row = rows[i]
         y = 3 + i - top
         if row.kind == 'head':
-            _put(scr, y, 0, f' {row.text}', paint[BLUE])
+            _put(scr, y, 0, f' {row.text}', theme.head)
         elif row.kind == 'need':
+            # The state name is the tone name, so this screen and the map ask
+            # the theme the same question and get the same answer.
             st = rv.mark[row.need]
-            attr = curses.A_REVERSE if i == sel else paint[
-                {MINE: GREEN, PROPOSED: MAGENTA, UNSET: RED}[st]]
+            attr = theme.sel if i == sel else theme[st]
             line = f'{MARK[st]} {row.text[:28]:28} {rv.where(row.need)}'
             _put(scr, y, 2, line[:w - 3], attr)
 
@@ -512,7 +525,7 @@ def _draw(scr, rv, sel, state, paint):
     for j, line in enumerate(
             _detail(rv, rows[sel] if 0 <= sel < len(rows) else None)[:detail]):
         _put(scr, h - detail + j, 0, line)
-    _put(scr, h - 3, 0, rv.status[:w - 1], paint[MAGENTA])
+    _put(scr, h - 3, 0, rv.status[:w - 1], theme.note)
     for i, line in enumerate(KEYS):
         _put(scr, h - len(KEYS) + i, 0, line[:w - 1])
     scr.refresh()
@@ -580,7 +593,7 @@ class Sticks:
 
 
 def _pager(scr, tui, title, lines):
-    """Show lines, scroll them, leave on ESC or q.
+    """Show `(tone, text)` lines, scroll them, leave on ESC or q.
 
     `core/tui.py` keeps a transcript and repaints its tail, which is right for
     a capture prompt and wrong for a listing longer than the screen -- the
@@ -593,9 +606,9 @@ def _pager(scr, tui, title, lines):
         page = max(1, h - 3)
         top = max(0, min(top, max(0, len(lines) - page)))
         scr.erase()
-        _put(scr, 0, 0, title, curses.A_BOLD)
-        for i, line in enumerate(lines[top:top + page]):
-            _put(scr, 1 + i, 0, line)
+        _put(scr, 0, 0, title, tui.theme.title)
+        for i, (tone, text) in enumerate(lines[top:top + page]):
+            _put(scr, 1 + i, 0, text, tui.theme[tone])
         more = f'{top + 1}-{min(len(lines), top + page)} of {len(lines)}'
         _put(scr, h - 1, 0,
              f'↑↓ jk scroll · SPACE page · g/G first/last · '
@@ -631,7 +644,6 @@ def run(layout, title, subtitle='', describe=None, write=None, paths=()):
 
 def _loop(scr, rv, write, sticks):
     tui = ctui.setup(scr)
-    paint = _paint()
     state = {'top': 0}
     rows = rv.rows()
     sel = next((i for i, r in enumerate(rows) if r.selectable), 0)
@@ -649,7 +661,7 @@ def _loop(scr, rv, write, sticks):
         rows = rv.rows()
         if sel >= len(rows) or not rows[sel].selectable:
             move(0)
-        _draw(scr, rv, sel, state, paint)
+        _draw(scr, rv, sel, state, tui.theme)
         k = tui.key(0.5)
         if k is None:
             continue

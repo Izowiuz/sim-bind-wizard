@@ -11,13 +11,15 @@ overwrites, choosing by hand needs no confirming, and `?` is a note to
 yourself rather than a filter.
 """
 
+import curses
 import re
 import unittest
 
 import fake
 from core import needs as corneeds
 from core import review
-from core.review import UNSET, PROPOSED, MINE
+from core import tui as ctui
+from core.review import UNSET, PROPOSED, MINE, MARK
 from core.needs import Layout, Need, allocate, IN_A_TURN, ON_THE_RAMP
 
 
@@ -42,6 +44,17 @@ def made(needs=None, devs=None, **kw):
     lay = Layout(devs, *allocate(list(needs or PLAN), devs),
                  axes=[('pitch', 'stick')])
     return review.Review(lay, 'Test', 'fake hardware', **kw)
+
+
+def map_text(rv):
+    """The map screen as one string. It comes back as (tone, text) pairs,
+    and most of these tests are asking about the text."""
+    return '\n'.join(text for _tone, text in rv.map_lines())
+
+
+def map_tone(rv, word):
+    """The tone of the first map line mentioning `word`."""
+    return next(tone for tone, text in rv.map_lines() if word in text)
 
 
 def by(rv, what):
@@ -513,18 +526,18 @@ class WhatItFound(unittest.TestCase):
         self.assertIn('throttle L-VPC VMAX Prime Throttle', line)
 
     def test_the_map_screen_says_where_the_game_was_found(self):
-        lines = '\n'.join(self.two_sticks().map_lines())
+        lines = map_text(self.two_sticks())
         self.assertIn('WHERE', lines)
         self.assertIn('/games/thing', lines)
 
     def test_a_game_that_names_no_paths_gets_no_where_section(self):
         rv = made()
-        self.assertNotIn('WHERE', '\n'.join(rv.map_lines()))
+        self.assertNotIn('WHERE', map_text(rv))
 
     def test_the_map_screen_lists_every_control_with_what_is_on_it(self):
         rv = made()
         gear = by(rv, 'Gear')
-        lines = '\n'.join(rv.map_lines())
+        lines = map_text(rv)
         self.assertIn(rv.at[gear].ctrl.label, lines)
         self.assertIn('Gear', lines)
         self.assertIn('Thumb hat', lines, 'a control nobody took is listed')
@@ -533,16 +546,95 @@ class WhatItFound(unittest.TestCase):
         devs = stick(fake.control('unwired', 'Phantom', [0]),
                      fake.button('Real', 1, reach=fake.PANEL))
         rv = made([Need('Gear', 'button', ['GEAR'])], devs=devs)
-        phantom = [ln for ln in rv.map_lines() if 'Phantom' in ln][0]
+        phantom = map_text(rv).splitlines()
+        phantom = [ln for ln in phantom if 'Phantom' in ln][0]
         self.assertIn('carries nothing', phantom)
+        self.assertEqual('meta', map_tone(rv, 'Phantom'),
+                         'and it is drawn as dim as the ids above it')
 
     def test_it_shows_the_axes_of_a_control_that_has_no_buttons(self):
         devs = stick(fake.ministick('Mini-stick', 3, push=0,
                                     reach=fake.THUMB))
         rv = made([Need('Gear', 'button', ['GEAR'])], devs=devs)
-        line = [ln for ln in rv.map_lines() if 'Mini-stick' in ln][0]
+        line = [ln for ln in map_text(rv).splitlines()
+                if 'Mini-stick' in ln][0]
         self.assertIn('ax3,4', line)
         self.assertIn('+0', line)
+
+    def test_a_control_wears_the_state_of_the_need_sitting_on_it(self):
+        # The point of the tones: the map and the table cannot disagree
+        # about a binding, because they name its state with the same word.
+        rv = made()
+        gear = by(rv, 'Gear')
+        label = rv.at[gear].ctrl.label
+        self.assertEqual(PROPOSED, map_tone(rv, label))
+        rv.confirm(gear)
+        self.assertEqual(MINE, map_tone(rv, label))
+        rv.clear(gear)
+        self.assertEqual('plain', map_tone(rv, label),
+                         'handed back, and back to an ordinary spare control')
+
+    def test_a_section_heading_on_the_map_is_a_heading(self):
+        rv = made()
+        self.assertEqual('head', map_tone(rv, 'DEVICE MAP'))
+        self.assertEqual('meta', map_tone(rv, 'buttons,'),
+                         'ids and counts are true but never the answer')
+
+    def test_the_map_is_three_levels_deep_and_looks_it(self):
+        # WHERE / profile dir / the path itself are a section, the thing it
+        # names and the detail under it -- and all three in one blue is a
+        # listing you have to read from the top to know where you are.
+        rv = self.two_sticks()
+        self.assertEqual('head', map_tone(rv, 'WHERE'))
+        self.assertEqual('subhead', map_tone(rv, 'game'))
+        self.assertEqual('meta', map_tone(rv, '/games/thing'))
+        self.assertEqual('subhead', map_tone(rv, 'WarBRD'),
+                         'a device is named under DEVICE MAP, not beside it')
+
+    def test_every_control_carries_the_table_s_own_mark(self):
+        # The colours went in before anything said what they meant, which
+        # left some rows simply being a different colour. The mark says it.
+        rv = made()
+        gear = by(rv, 'Gear')
+        label = rv.at[gear].ctrl.label
+        self.assertIn(f'{MARK[PROPOSED]} button     {label}', map_text(rv))
+        rv.confirm(gear)
+        self.assertIn(f'{MARK[MINE]} button     {label}', map_text(rv))
+        rv.clear(gear)
+        self.assertIn(f'{MARK[UNSET]} button     {label}', map_text(rv))
+
+    def test_the_map_says_what_its_colours_mean(self):
+        # A legend drawn in the colours it explains: one line per tone,
+        # because a line carries one.
+        rv = made()
+        legend = {tone: text for tone, text in rv.map_lines()
+                  if text.strip() in ('+ yours', "? the planner's,"
+                                      ' not yet checked', 'free',
+                                      'carries no binding at all')}
+        self.assertEqual({'mine', 'proposed', 'plain', 'meta'},
+                         set(legend), 'each of the four, in its own tone')
+
+
+class Theming(unittest.TestCase):
+    """The palette is asked for by meaning, never by colour."""
+
+    def test_every_tone_falls_back_to_a_plain_attribute(self):
+        # No terminal here at all, which is the case `colour=False` covers:
+        # nothing in Theme may touch curses until there is colour to set up.
+        th = ctui.Theme()
+        self.assertEqual(curses.A_BOLD, th.mine)
+        self.assertEqual(curses.A_DIM, th.unset)
+        self.assertEqual(curses.A_REVERSE, th.sel)
+        self.assertEqual(0, th._pairs, 'no colour pair was allocated')
+
+    def test_the_three_row_states_are_all_tones(self):
+        # map_lines() hands the pager a name and _draw hands it a state;
+        # both arrive at __getitem__, so the two vocabularies must match.
+        th = ctui.Theme()
+        for state in (UNSET, PROPOSED, MINE):
+            self.assertEqual(getattr(th, state), th[state])
+        for tone in ('head', 'meta', 'plain'):
+            self.assertEqual(getattr(th, tone), th[tone])
 
 
 class Folding(unittest.TestCase):

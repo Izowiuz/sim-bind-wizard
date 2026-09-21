@@ -1,1 +1,0 @@
-Colors in "map" view.
