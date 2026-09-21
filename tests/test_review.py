@@ -546,9 +546,21 @@ class BindsUnderTheAction(unittest.TestCase):
     could never see two at once. X4 puts six lines there for one hat.
     """
 
-    def rv(self):
-        return made(describe=lambda p: [('up', 'Ship: one'),
-                                        ('down', 'Ship: two')])
+    def rv(self, showing=True):
+        """`h` off to start with, so a test about bind rows turns it on.
+
+        That is the default the screen has: the list of what a game can do
+        is what you come here to read, and the binds go under it on ask.
+        """
+        rv = made(describe=lambda p: [('up', 'Ship: one'),
+                                      ('down', 'Ship: two')])
+        rv.show_binds = showing
+        return rv
+
+    def test_they_are_hidden_to_start_with(self):
+        rv = self.rv(showing=False)
+        self.assertEqual([], [r for r in rv.rows() if r.kind == 'bind'])
+        self.assertTrue([r for r in rv.rows() if r.kind == 'need'])
 
     def test_each_bind_is_a_row_under_its_need(self):
         rv = self.rv()
@@ -597,8 +609,10 @@ class FilteringAndFolding(unittest.TestCase):
     """`f` narrows the action level, `h` hides what is under it."""
 
     def rv(self):
-        return made(describe=lambda p: [('up', 'Ship: one'),
-                                        ('down', 'Ship: two')])
+        rv = made(describe=lambda p: [('up', 'Ship: one'),
+                                      ('down', 'Ship: two')])
+        rv.show_binds = True
+        return rv
 
     def names(self, rv):
         return [r.text for r in rv.rows() if r.kind == 'need']
@@ -643,6 +657,54 @@ class FilteringAndFolding(unittest.TestCase):
         rv.show_binds = False
         self.assertEqual([], [r for r in rv.rows() if r.kind == 'bind'])
         self.assertEqual(3, len(self.names(rv)))
+
+
+class TheFilterSaysSoOnScreen(unittest.TestCase):
+    """A narrowed list has to say it is narrowed.
+
+    The status line said it once, on the keystroke, and then the next
+    movement cleared it -- so a screen showing three of thirty-one rows
+    looked exactly like a game with three needs.
+    """
+
+    def test_nothing_is_said_when_nothing_is_narrowed(self):
+        self.assertEqual('', made().narrowed())
+
+    def test_it_names_the_filter_and_counts_what_is_left(self):
+        rv = made()
+        rv.filter = 'gear'
+        said = rv.narrowed()
+        self.assertIn('gear', said)
+        self.assertIn('1', said, 'one of the three matched')
+        self.assertIn('3', said, 'out of three')
+
+    def test_the_rule_carries_it_without_anything_painting_over(self):
+        # The first attempt drew the label and then the rule, which covered
+        # it -- and every test passed, because they all asked `narrowed()`
+        # rather than what reached the screen. Segments cannot overlap, so
+        # the whole failure is gone rather than merely watched for.
+        rv = made()
+        rv.filter = 'gear'
+        segs = review._rule(rv, 80)
+        self.assertIn('gear', ''.join(t for _x, t, _n in segs))
+        ends = [x + len(t) for x, t, _n in segs]
+        starts = [x for x, _t, _n in segs]
+        self.assertEqual(sorted(starts), starts, 'segments run left to right')
+        self.assertTrue(all(e <= s for e, s in zip(ends, starts[1:])),
+                        'and none begins before the one before it ends')
+
+    def test_with_no_filter_the_rule_is_just_a_rule(self):
+        segs = review._rule(made(), 80)
+        self.assertEqual(1, len(segs))
+        self.assertEqual(79, len(segs[0][1]))
+
+    def test_a_filter_that_matches_nothing_says_so_too(self):
+        # The one case where the screen is empty, which is also the one
+        # where "why is this empty" most needs answering.
+        rv = made()
+        rv.filter = 'no such thing'
+        self.assertIn('no such thing', rv.narrowed())
+        self.assertIn('0', rv.narrowed())
 
 
 class WhatItFound(unittest.TestCase):

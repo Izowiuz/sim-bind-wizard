@@ -99,8 +99,11 @@ class Review:
         #: need's own name, not against what it binds: the question `f`
         #: answers is "where is the row for X".
         self.filter = ''
-        #: whether `h` is showing what sits under each action.
-        self.show_binds = True
+        #: whether `h` is showing what sits under each action. Off to
+        #: start with: the list of what a game can do is the thing you come
+        #: here to read, and a plan that binds two actions to a button puts
+        #: two lines under every row of it before you have asked.
+        self.show_binds = False
 
         #: what the planner worked out, per need. A need it could not place
         #: has none, and `p` on that row has nothing to offer.
@@ -443,6 +446,19 @@ class Review:
         return (not self.filter
                 or self.filter.lower() in need.what.lower())
 
+    def narrowed(self):
+        """What `f` is hiding, for the header. '' when it is hiding nothing.
+
+        The status line said this once, on the keystroke, and the next
+        movement cleared it -- so a screen showing three rows of thirty-one
+        looked exactly like a game that has three. It has to stay up for as
+        long as it is true.
+        """
+        if not self.filter:
+            return ''
+        shown = sum(1 for n in self.needs if self.matches(n))
+        return f'find {self.filter!r} · {shown} of {len(self.needs)}'
+
     def rows(self):
         out = []
         for urgency in sorted({n.urgency for n in self.needs}):
@@ -508,6 +524,28 @@ def _put(scr, y, x, text, attr=curses.A_NORMAL):
             pass
 
 
+def _rule(rv, width):
+    """[(column, text, tone)] for the line under the header.
+
+    Cut into pieces that do not overlap rather than drawn as a rule with a
+    label painted on top: the label went on first once and the rule simply
+    covered it, and nothing on screen said so. Segments cannot do that to
+    each other.
+
+    The filter goes here because this is where the eye lands when the list
+    below is empty, which is exactly when "why is nothing here" needs
+    answering. `note` is the status line's tone, so it reads as something
+    in force rather than as chrome.
+    """
+    narrowed = rv.narrowed()
+    if not narrowed:
+        return [(0, '─' * (width - 1), 'plain')]
+    label = f' {narrowed} '
+    return [(0, '──', 'plain'),
+            (2, label, 'note'),
+            (2 + len(label), '─' * max(0, width - 3 - len(label)), 'plain')]
+
+
 def _detail(rv, row):
     """The three lines under the table, about the row you are on."""
     if row is None or row.kind != 'need':
@@ -551,7 +589,8 @@ def _draw(scr, rv, sel, state, theme):
     # Which device each role IS, always on screen: a row saying "stick" does
     # not say which stick, and with two of them you had to choose one.
     _put(scr, 1, 0, rv.device_line(), theme.head)
-    _put(scr, 2, 0, '─' * (w - 1))
+    for x, text, tone in _rule(rv, w):
+        _put(scr, 2, x, text, theme[tone])
 
     for i in range(top, min(len(rows), top + visible)):
         row = rows[i]
