@@ -109,6 +109,8 @@ class Tui:
                 return "enter"
             if c == 27:
                 return "esc"
+            if c in (8, 127, curses.KEY_BACKSPACE):
+                return "backspace"
             if c == curses.KEY_UP:
                 return "up"
             if c == curses.KEY_DOWN:

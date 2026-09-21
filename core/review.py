@@ -95,6 +95,12 @@ class Review:
         #: file should say which file.
         self.paths = list(paths)
         self.status = ''
+        #: what `f` narrowed the action level to. Matched against the
+        #: need's own name, not against what it binds: the question `f`
+        #: answers is "where is the row for X".
+        self.filter = ''
+        #: whether `h` is showing what sits under each action.
+        self.show_binds = True
 
         #: what the planner worked out, per need. A need it could not place
         #: has none, and `p` on that row has nothing to offer.
@@ -433,17 +439,29 @@ class Review:
 
     # ----------------------------------------------------------------- rows
 
+    def matches(self, need):
+        return (not self.filter
+                or self.filter.lower() in need.what.lower())
+
     def rows(self):
         out = []
         for urgency in sorted({n.urgency for n in self.needs}):
+            band = [n for n in self.needs
+                    if n.urgency == urgency and self.matches(n)]
+            if not band:
+                # The heading stays for what is there, not for what the
+                # filter took away -- an empty band is a line you scroll
+                # past to reach the rows you asked for.
+                continue
             out.append(Row('head', corneeds.URGENCY_NAME[urgency].upper()))
-            for need in [n for n in self.needs if n.urgency == urgency]:
+            for need in band:
                 out.append(Row('need', need.what, need=need))
                 # What it binds, under it. This was the footer's job, which
                 # meant moving onto a row to learn what it does and never
                 # seeing two at once -- and X4 puts six lines there for one
                 # hat, so the footer was the wrong size for the answer.
-                for part, what in self.binds(need):
+                for part, what in (self.binds(need)
+                                   if self.show_binds else ()):
                     out.append(Row('bind', f'{part:10} {what}', need=need))
             out.append(Row('gap', ''))
         return out
@@ -455,7 +473,8 @@ class Review:
 #: and `q quit` fell off the end of the screen that documents them. Moving
 #: comes first -- it is what you need before any of the rest is reachable.
 KEYS = ('↑/↓ j/k move · g/G first/last · RETURN press it · l from list',
-        'c/C confirm · p/P from plan · x/X clear · m map · w write · q quit')
+        'c/C confirm · p/P from plan · x/X clear · f find · h binds',
+        'm map · w write · q quit')
 
 
 def _fold(path, width=74):
@@ -620,6 +639,34 @@ class Sticks:
         self.opened = False
 
 
+def _ask(scr, tui, prompt, start=''):
+    """Read a line on the bottom row. -> the text, or None on ESC.
+
+    `core/tui.py` has no text entry -- the capture wizards never needed one
+    and `sim-device-map`'s Tui cannot be imported here -- so this is the
+    smallest thing that answers the question. ESC is None rather than the
+    empty string, because emptying the filter and abandoning the typing are
+    different answers and `f` offers both.
+    """
+    text = start
+    while True:
+        h, w = scr.getmaxyx()
+        _put(scr, h - 1, 0, ' ' * (w - 1))
+        _put(scr, h - 1, 0, f'{prompt}{text}_'[:w - 1], curses.A_REVERSE)
+        scr.refresh()
+        k = tui.key(0.5)
+        if k is None:
+            continue
+        if k == 'enter':
+            return text
+        if k == 'esc':
+            return None
+        if k == 'backspace':
+            text = text[:-1]
+        elif len(k) == 1 and k.isprintable():
+            text += k
+
+
 def _pager(scr, tui, title, lines):
     """Show `(tone, text)` lines, scroll them, leave on ESC or q.
 
@@ -726,6 +773,21 @@ def _loop(scr, rv, write, sticks):
             rv.status = _by_press(tui, rv, need, sticks)
         elif k in ('l', 'L') and need is not None:
             rv.status = _by_hand(tui, rv, need)
+        elif k in ('f', 'F'):
+            # Typed and confirmed: narrow to it. Confirmed with nothing in
+            # it: show everything again. ESC: leave the filter as it was.
+            got = _ask(scr, tui, 'find: ', rv.filter)
+            if got is not None:
+                rv.filter = got
+                state['top'] = 0
+                move(-len(rv.rows()))
+                rv.status = (f'showing what matches {got!r}' if got
+                             else 'showing everything')
+        elif k in ('h', 'H'):
+            rv.show_binds = not rv.show_binds
+            state['top'] = 0
+            rv.status = ('showing what each one binds'
+                         if rv.show_binds else 'binds hidden')
         elif k in ('m', 'M'):
             _pager(scr, tui, f'{rv.title} — device map', rv.map_lines())
         elif k in ('w', 'W'):

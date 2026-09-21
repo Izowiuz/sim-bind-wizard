@@ -593,6 +593,58 @@ class BindsUnderTheAction(unittest.TestCase):
                             for ln in review._detail(rv, row)))
 
 
+class FilteringAndFolding(unittest.TestCase):
+    """`f` narrows the action level, `h` hides what is under it."""
+
+    def rv(self):
+        return made(describe=lambda p: [('up', 'Ship: one'),
+                                        ('down', 'Ship: two')])
+
+    def names(self, rv):
+        return [r.text for r in rv.rows() if r.kind == 'need']
+
+    def test_the_filter_narrows_the_action_level(self):
+        rv = self.rv()
+        rv.filter = 'gear'
+        self.assertEqual(['Gear'], self.names(rv))
+
+    def test_it_does_not_care_about_case(self):
+        rv = self.rv()
+        rv.filter = 'GEAR'
+        self.assertEqual(['Gear'], self.names(rv))
+
+    def test_the_heading_stays(self):
+        # Filtering is not flattening: a row still says which band it is in.
+        rv = self.rv()
+        rv.filter = 'gear'
+        self.assertTrue([r for r in rv.rows() if r.kind == 'head'])
+
+    def test_a_band_with_no_match_brings_no_heading(self):
+        # The heading stays for what is there, not for what is not.
+        rv = self.rv()
+        rv.filter = 'gear'
+        heads = [r.text for r in rv.rows() if r.kind == 'head']
+        self.assertEqual(1, len(heads))
+
+    def test_binds_follow_their_action_through_the_filter(self):
+        rv = self.rv()
+        rv.filter = 'gear'
+        self.assertEqual(2, len([r for r in rv.rows()
+                                 if r.kind == 'bind']))
+
+    def test_an_empty_filter_shows_everything(self):
+        rv = self.rv()
+        rv.filter = 'gear'
+        rv.filter = ''
+        self.assertEqual(3, len(self.names(rv)))
+
+    def test_folding_hides_the_binds_and_keeps_the_actions(self):
+        rv = self.rv()
+        rv.show_binds = False
+        self.assertEqual([], [r for r in rv.rows() if r.kind == 'bind'])
+        self.assertEqual(3, len(self.names(rv)))
+
+
 class WhatItFound(unittest.TestCase):
     """The header line and the map screen: which device is which, and where
     the game was found."""
