@@ -61,6 +61,40 @@ def by(rv, what):
     return next(n for n in rv.needs if n.what == what)
 
 
+def at(rv, need):
+    """Where a need ended up.
+
+    Every caller has just put it somewhere and then reads the control off
+    the answer, so nothing is this test failing rather than a case to
+    handle. Saying that once beats an Optional at two dozen call sites.
+    """
+    p = rv.at[need]
+    assert p is not None, f'{need.what} is sitting on nothing'
+    return p
+
+
+def owns(rv, role, button):
+    """The control owning a raw kernel button number.
+
+    Every caller names a button the fake map has, so None is the test
+    failing rather than an answer worth asserting on.
+    """
+    c = rv.control_at(role, button)
+    assert c is not None, f'the map has no button {button} on the {role}'
+    return c
+
+
+def refused(rv, need, role, ctrl):
+    """Why this need may not go on this control.
+
+    `why_not` answers None for one that may, and every caller here is about
+    a refusal -- so None is the test failing, not an answer to assert on.
+    """
+    no = rv.why_not(need, role, ctrl)
+    assert no is not None, f'{need.what} was allowed onto it'
+    return no
+
+
 class Starting(unittest.TestCase):
     def test_a_plan_arrives_proposed_and_not_yours(self):
         # Nothing to confirm is nothing to review: the whole point of the
@@ -113,7 +147,7 @@ class Clearing(unittest.TestCase):
 
     def test_the_control_it_had_becomes_free_again(self):
         rv = made()
-        had = rv.at[by(rv, 'Gear')].ctrl.label
+        had = at(rv, by(rv, 'Gear')).ctrl.label
         self.assertNotIn(had, [c.label for _r, c in rv.free()])
         rv.clear(by(rv, 'Gear'))
         self.assertIn(had, [c.label for _r, c in rv.free()])
@@ -134,15 +168,15 @@ class Clearing(unittest.TestCase):
         rv = made()
         trim = by(rv, 'Trim')
         rv.confirm(trim)
-        was = rv.at[trim].ctrl.label
+        was = at(rv, trim).ctrl.label
         rv.clear_all()
         self.assertEqual(MINE, rv.mark[trim])
-        self.assertEqual(was, rv.at[trim].ctrl.label)
+        self.assertEqual(was, at(rv, trim).ctrl.label)
         self.assertEqual((1, 0, 2), rv.counts())
 
     def test_the_controls_the_proposals_had_come_back_free(self):
         rv = made()
-        had = rv.at[by(rv, 'Gear')].ctrl.label
+        had = at(rv, by(rv, 'Gear')).ctrl.label
         rv.clear_all()
         self.assertIn(had, [c.label for _r, c in rv.free()])
 
@@ -163,11 +197,11 @@ class Proposing(unittest.TestCase):
     def test_it_puts_the_planners_choice_back(self):
         rv = made()
         gear = by(rv, 'Gear')
-        was = rv.at[gear].ctrl.label
+        was = at(rv, gear).ctrl.label
         rv.clear(gear)
         rv.propose(gear)
         self.assertEqual(PROPOSED, rv.mark[gear])
-        self.assertEqual(was, rv.at[gear].ctrl.label)
+        self.assertEqual(was, at(rv, gear).ctrl.label)
 
     def test_it_will_not_overwrite_something_you_chose(self):
         # The rule that makes "propose all" safe to press at any moment.
@@ -177,7 +211,7 @@ class Proposing(unittest.TestCase):
         role, ctrl = rv.fits(gear)[-1]
         rv.assign(gear, role, ctrl)
         self.assertIn('yours already', rv.propose(gear))
-        self.assertEqual(ctrl.label, rv.at[gear].ctrl.label)
+        self.assertEqual(ctrl.label, at(rv, gear).ctrl.label)
 
     def test_it_says_so_when_the_planner_had_nothing(self):
         rv = made([Need('Trim', 'hat8', ['A'] * 8)])
@@ -186,7 +220,7 @@ class Proposing(unittest.TestCase):
     def test_it_refuses_a_control_someone_else_took_meanwhile(self):
         rv = made()
         gear, canopy = by(rv, 'Gear'), by(rv, 'Canopy')
-        wanted = rv.at[gear].ctrl
+        wanted = at(rv, gear).ctrl
         rv.clear(gear)
         rv.assign(canopy, 'stick', wanted)      # by hand, onto Gear's control
         self.assertIn('is taken now', rv.propose(gear))
@@ -262,9 +296,9 @@ class ByPress(unittest.TestCase):
         # A hat has four buttons and one identity: pressing any of them takes
         # the whole control, because a need wants a control.
         rv = self.rv
-        self.assertEqual('Thumb hat', rv.control_at('stick', 0).label)
-        self.assertEqual('Thumb hat', rv.control_at('stick', 3).label)
-        self.assertEqual('Thumb hat', rv.control_at('stick', 4).label,
+        self.assertEqual('Thumb hat', owns(rv, 'stick', 0).label)
+        self.assertEqual('Thumb hat', owns(rv, 'stick', 3).label)
+        self.assertEqual('Thumb hat', owns(rv, 'stick', 4).label,
                          'the click too')
 
     def test_a_button_in_no_control_resolves_to_nothing(self):
@@ -273,7 +307,7 @@ class ByPress(unittest.TestCase):
 
     def test_a_button_the_map_does_not_know_is_refused_by_name(self):
         self.assertIn('not in the device map',
-                      self.rv.why_not(self.gear, 'stick', None))
+                      refused(self.rv, self.gear, 'stick', None))
 
     def test_a_control_that_carries_nothing_is_refused(self):
         devs = stick(fake.control('unwired', 'Phantom', [0]),
@@ -282,11 +316,11 @@ class ByPress(unittest.TestCase):
         phantom = next(c for c in rv.layout.devices['stick']._groups
                        if c.label == 'Phantom')
         self.assertIn('carries no binding',
-                      rv.why_not(by(rv, 'Gear'), 'stick', phantom))
+                      refused(rv, by(rv, 'Gear'), 'stick', phantom))
 
     def test_the_wrong_shape_is_refused_and_both_shapes_are_named(self):
         trim = by(self.rv, 'Trim')                  # wants a hat4
-        why = self.rv.why_not(trim, 'stick', self.ctrl('Pinky button'))
+        why = refused(self.rv, trim, 'stick', self.ctrl('Pinky button'))
         self.assertIn('button', why)
         self.assertIn('hat4', why)
 
@@ -295,7 +329,7 @@ class ByPress(unittest.TestCase):
                                    reach=fake.PANEL))
         rv = made([Need('Trim', 'hat4', ['U', 'R', 'D', 'L'])], devs=devs)
         three = rv.layout.devices['stick'].groups(bindable=True)[0]
-        why = rv.why_not(by(rv, 'Trim'), 'stick', three)
+        why = refused(rv, by(rv, 'Trim'), 'stick', three)
         self.assertIn('3', why)
         self.assertIn('4', why)
 
@@ -304,7 +338,7 @@ class ByPress(unittest.TestCase):
         # here -- it is genuinely occupied, and the message has to say by what.
         rv, gear = self.rv, self.gear
         canopy = by(rv, 'Canopy')
-        why = rv.why_not(gear, 'stick', rv.at[canopy].ctrl)
+        why = refused(rv, gear, 'stick', at(rv, canopy).ctrl)
         self.assertIn('Canopy', why)
         self.assertIn('x clears it', why)
 
@@ -313,12 +347,12 @@ class ByPress(unittest.TestCase):
         # shape matters more than who happens to be sitting on it, because it
         # would not work even if it were free.
         rv, gear = self.rv, self.gear
-        why = rv.why_not(gear, 'stick', rv.at[by(rv, 'Trim')].ctrl)
+        why = refused(rv, gear, 'stick', at(rv, by(rv, 'Trim')).ctrl)
         self.assertIn('wants button', why)
 
     def test_moving_a_need_onto_the_control_it_already_has_is_fine(self):
         rv, gear = self.rv, self.gear
-        self.assertIsNone(rv.why_not(gear, 'stick', rv.at[gear].ctrl))
+        self.assertIsNone(rv.why_not(gear, 'stick', at(rv, gear).ctrl))
 
     def test_a_control_that_fits_and_is_free_is_accepted(self):
         rv, gear = self.rv, self.gear
@@ -329,7 +363,7 @@ class ByPress(unittest.TestCase):
     def test_who_has_names_the_holder_and_nothing_once_it_is_cleared(self):
         rv = self.rv
         trim = by(rv, 'Trim')
-        held = rv.at[trim].ctrl
+        held = at(rv, trim).ctrl
         self.assertIs(trim, rv.who_has('stick', held))
         rv.clear(trim)
         self.assertIsNone(rv.who_has('stick', held))
@@ -349,15 +383,15 @@ class Took(unittest.TestCase):
         said = rv.took(gear, role, ctrl.bindable_buttons[0])
         self.assertIn('(yours)', said)
         self.assertEqual(MINE, rv.mark[gear])
-        self.assertEqual(ctrl.label, rv.at[gear].ctrl.label)
+        self.assertEqual(ctrl.label, at(rv, gear).ctrl.label)
 
     def test_pressing_any_button_of_a_control_takes_the_whole_control(self):
         rv = made([Need('Trim', 'hat4', ['U', 'R', 'D', 'L'])])
         trim = by(rv, 'Trim')
         rv.clear(trim)
         rv.took(trim, 'stick', 2)                   # the third of four
-        self.assertEqual('Thumb hat', rv.at[trim].ctrl.label)
-        self.assertEqual([0, 1, 2, 3], [b for b, _v in rv.at[trim].slots])
+        self.assertEqual('Thumb hat', at(rv, trim).ctrl.label)
+        self.assertEqual([0, 1, 2, 3], [b for b, _v in at(rv, trim).slots])
 
     def test_pressing_an_unmapped_button_changes_nothing(self):
         rv, gear = self.rv, self.gear
@@ -374,14 +408,14 @@ class Took(unittest.TestCase):
     def test_pressing_a_control_another_need_has_changes_nothing(self):
         rv, gear = self.rv, self.gear
         canopy = by(rv, 'Canopy')
-        held = rv.at[canopy].ctrl.buttons[0]
+        held = at(rv, canopy).ctrl.buttons[0]
         rv.clear(gear)
         self.assertIn('Canopy', rv.took(gear, 'stick', held))
         self.assertEqual(UNSET, rv.mark[gear])
 
     def test_pressing_the_control_it_already_has_is_harmless(self):
         rv, gear = self.rv, self.gear
-        here = rv.at[gear].ctrl.buttons[0]
+        here = at(rv, gear).ctrl.buttons[0]
         self.assertIn('(yours)', rv.took(gear, 'stick', here))
         self.assertEqual(MINE, rv.mark[gear])
 
@@ -404,7 +438,7 @@ class WhereThePressLands(unittest.TestCase):
             fire = by(rv, 'Fire')
             rv.clear(fire)
             rv.took(fire, 'stick', press)
-            self.assertEqual([press], [b for b, _v in rv.at[fire].slots],
+            self.assertEqual([press], [b for b, _v in at(rv, fire).slots],
                              f'pressing {press}')
 
     def test_and_the_status_names_the_position_it_went_to(self):
@@ -420,7 +454,7 @@ class WhereThePressLands(unittest.TestCase):
         trim = by(rv, 'Trim')
         rv.clear(trim)
         rv.took(trim, 'stick', 2)
-        self.assertEqual([0, 1, 2, 3], [b for b, _v in rv.at[trim].slots])
+        self.assertEqual([0, 1, 2, 3], [b for b, _v in at(rv, trim).slots])
 
     def test_an_on_claim_beats_the_press(self):
         # `on` says a speedbrake is fore/aft whatever hat it lands on. Letting
@@ -429,8 +463,8 @@ class WhereThePressLands(unittest.TestCase):
         sb = by(rv, 'Speedbrake')
         rv.clear(sb)
         rv.took(sb, 'stick', 3)                     # 'left'
-        landed = rv.at[sb].slots[0][0]
-        ctrl = rv.at[sb].ctrl
+        landed = at(rv, sb).slots[0][0]
+        ctrl = at(rv, sb).ctrl
         self.assertEqual('up', ctrl.direction(landed))
 
     def test_a_contact_that_carries_no_binding_is_not_used(self):
@@ -443,13 +477,13 @@ class WhereThePressLands(unittest.TestCase):
         flaps = by(rv, 'Flaps')
         rv.clear(flaps)
         said = rv.took(flaps, 'stick', 2)
-        self.assertNotIn(2, [b for b, _v in rv.at[flaps].slots])
+        self.assertNotIn(2, [b for b, _v in at(rv, flaps).slots])
         self.assertIn('carries no binding', said)
 
     def test_honours_press_says_why_in_each_case(self):
         rv = self.trigger_plan()
         fire = by(rv, 'Fire')
-        ctrl = rv.at[fire].ctrl
+        ctrl = at(rv, fire).ctrl
         self.assertTrue(rv.honours_press(fire, ctrl, 1))
         many = Need('Trim', 'trigger', ['A', 'B'])
         self.assertFalse(rv.honours_press(many, ctrl, 1), 'wants the control')
@@ -538,7 +572,7 @@ class WhatItFound(unittest.TestCase):
         rv = made()
         gear = by(rv, 'Gear')
         lines = map_text(rv)
-        self.assertIn(rv.at[gear].ctrl.label, lines)
+        self.assertIn(at(rv, gear).ctrl.label, lines)
         self.assertIn('Gear', lines)
         self.assertIn('Thumb hat', lines, 'a control nobody took is listed')
 
@@ -566,7 +600,7 @@ class WhatItFound(unittest.TestCase):
         # about a binding, because they name its state with the same word.
         rv = made()
         gear = by(rv, 'Gear')
-        label = rv.at[gear].ctrl.label
+        label = at(rv, gear).ctrl.label
         self.assertEqual(PROPOSED, map_tone(rv, label))
         rv.confirm(gear)
         self.assertEqual(MINE, map_tone(rv, label))
@@ -596,7 +630,7 @@ class WhatItFound(unittest.TestCase):
         # left some rows simply being a different colour. The mark says it.
         rv = made()
         gear = by(rv, 'Gear')
-        label = rv.at[gear].ctrl.label
+        label = at(rv, gear).ctrl.label
         self.assertIn(f'{MARK[PROPOSED]} button     {label}', map_text(rv))
         rv.confirm(gear)
         self.assertIn(f'{MARK[MINE]} button     {label}', map_text(rv))

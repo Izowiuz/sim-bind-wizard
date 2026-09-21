@@ -17,6 +17,7 @@ fresh clone that is the honest answer.
 
 import os
 import tempfile
+import typing
 import unittest
 
 import fake                                                  # noqa: F401
@@ -26,8 +27,14 @@ from core import vocab                                       # noqa: E402
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def planner(game, script=None):
+def planner(game, script=None) -> typing.Any:
     """A game's writer, or None if this clone cannot import it.
+
+    Typed `Any` on purpose. A module imported from a path is a bare
+    `ModuleType` to a checker -- it cannot see `rewrite` or `blk_with` or
+    any of the rest -- so the only thing a precise `ModuleType | None` buys
+    is a complaint on every line of every test here, about the None that
+    the class-level `skipUnless` has already answered for.
 
     Three jobs once: chdir into the game directory, put it on `sys.path`,
     and swallow the exit an import took when no harvest had been run here.

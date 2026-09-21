@@ -290,7 +290,8 @@ class WarThunderHarvest(adapter.Harvest):
     def read(self, args):
         self.where = find_game(args.game_dir)
         actions, controls, rank, self.n = harvest(self.where)
-        out = {'wt-actions.json': {'actions': actions, 'controls': controls}}
+        out: dict[str, dict] = {
+            'wt-actions.json': {'actions': actions, 'controls': controls}}
         if self.n:
             # Most-voted first, and ties by name. `Counter.most_common()`
             # leaves ties in insertion order, and the votes are counted out

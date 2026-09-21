@@ -20,8 +20,9 @@
       bind                    verb -> (game, script, flags); forwards the rest
                               (the games come off the filesystem, not a list)
       core/adapter.py         the contract itself: Harvest, Adapter, Planner,
-                              Proposer, and the guard that rejects a bad
-                              override at class definition
+                              Proposer, the guard that rejects a bad override
+                              at class definition, and from_file, which every
+                              import of a sibling script by path goes through
       core/devmap.py          find the map; pick a device per role
       core/game.py            Steam libraries, install dirs, prefixes, is-it-running
       core/needs.py           Need, Placement, allocate; shapes, reach, urgency

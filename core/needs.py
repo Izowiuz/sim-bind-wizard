@@ -14,6 +14,7 @@ without the allocator knowing the difference.
 """
 
 import sys
+import typing
 
 
 # ---------------------------------------------------------------- vocabulary
@@ -356,9 +357,14 @@ class Layout:
         #: game-shaped; the core counts it and passes it on, nothing more
         self.axes = list(axes)
 
-    def __iter__(self):
+    def __iter__(self) -> typing.Iterator[typing.Any]:
         """(devices, placed, unplaced, free, axes), so a caller may still
-        unpack it into five names."""
+        unpack it into five names.
+
+        `Any` because an iterator has one element type and these five are
+        not one type; a checker otherwise joins them and then objects to
+        whichever name is used for what it actually is.
+        """
         return iter((self.devices, self.placed, self.unplaced,
                      self.free, self.axes))
 

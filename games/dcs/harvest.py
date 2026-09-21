@@ -36,7 +36,6 @@ NOTES
 # the failure would have been silent -- a reordered member list lands a trim
 # hat's directions on different buttons and nothing raises.
 
-import importlib.util
 import json
 import os
 import sys
@@ -59,20 +58,9 @@ RESULTS = os.path.join(HERE, 'dcs-bind-wizard-results.json')
 
 def wizard():
     """The capture wizard, which owns the reading of a module."""
-    where = os.path.join(HERE, 'dcs-bind-wizard.py')
-    spec = importlib.util.spec_from_file_location('dcs_harvest_wizard', where)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f'{where} cannot be loaded as a module')
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod
-    argv, sys.argv = sys.argv, ['dcs-bind-wizard']
-    try:
-        spec.loader.exec_module(mod)
-    except SystemExit:
-        pass
-    finally:
-        sys.argv = argv
-    return mod
+    return adapter.from_file('dcs_harvest_wizard',
+                             os.path.join(HERE, 'dcs-bind-wizard.py'),
+                             argv=['dcs-bind-wizard'])
 
 
 def where_is_the_game(game_dir=None):

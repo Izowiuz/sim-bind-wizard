@@ -27,8 +27,6 @@ like an unharvested clone.
 fails even on a machine that has never seen the game.
 """
 
-import importlib.machinery
-import importlib.util
 import inspect
 import os
 import re
@@ -70,12 +68,7 @@ COMMON = ('--why', '--free', '--sheet', '--html', '--tui', '--write',
 
 def bind():
     """The front door, imported. It has no `.py`, hence the loader."""
-    loader = importlib.machinery.SourceFileLoader(
-        'bindscript', os.path.join(REPO, 'bind'))
-    spec = importlib.util.spec_from_loader('bindscript', loader)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+    return adapter.from_file('bindscript', os.path.join(REPO, 'bind'))
 
 
 def reaches(fn, name, mod, seen=None):

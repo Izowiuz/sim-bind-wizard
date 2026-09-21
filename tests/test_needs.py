@@ -19,8 +19,16 @@ from core.needs import (Layout, Need, allocate, reach_tier,
 
 
 def one(placed, what):
-    """The placement for a need, by its name."""
-    return next((p for p in placed if p.need.what == what), None)
+    """The placement for a need, by its name.
+
+    Every caller has just asked the allocator to place that need and then
+    reads `.ctrl` or `.slots` off the answer, so nothing here is the test
+    failing rather than a case to handle -- and saying so once beats an
+    Optional at ten call sites.
+    """
+    p = next((p for p in placed if p.need.what == what), None)
+    assert p is not None, f'the allocator placed nothing for {what}'
+    return p
 
 
 class Reach(unittest.TestCase):

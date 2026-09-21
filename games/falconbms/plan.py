@@ -622,8 +622,11 @@ def axis_files(bms, axes):
             said.append(f'removed    the game\'s own stub for {dev.product}')
 
     body = txt.rstrip('\n') + '\n' + '\n'.join(block) + '\n'
-    files = {defaults: adapter.Text(body.replace('\n', nl),
-                                    encoding='latin-1')}
+    #: {path: Text or str, or MOVE for a file that must be gone} -- the
+    #: writer contract in core/adapter.py, and MOVE is None, so the value
+    #: type has to be spelled out or the first entry decides it.
+    files: dict = {defaults: adapter.Text(body.replace('\n', nl),
+                                          encoding='latin-1')}
     for name in ('axismapping.dat', 'axismapping_tmp.dat'):
         if (cfg / name).exists():
             files[cfg / name] = adapter.MOVE

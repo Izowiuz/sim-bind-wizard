@@ -24,7 +24,6 @@ NOTES
 
 import argparse
 import collections
-import importlib.util
 import json
 import os
 import sys
@@ -49,10 +48,7 @@ from core import vocab                                      # noqa: E402
 from core.needs import (IN_A_TURN, ON_APPROACH,             # noqa: E402
                         IN_THE_AIR, ON_THE_RAMP)
 
-_spec = importlib.util.spec_from_file_location(
-    'edharvest', os.path.join(HERE, 'harvest.py'))
-harvest = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(harvest)
+harvest = adapter.from_file('edharvest', os.path.join(HERE, 'harvest.py'))
 
 #: The capture wizard's own file: device ids, axis maps, and whatever was
 #: confirmed at the stick. The plan reads it and never writes it.

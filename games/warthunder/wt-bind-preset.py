@@ -489,7 +489,12 @@ def main(argv=None, layout=None):
 
     import plan
     global AXES, BUTTONS
-    lay = plan.build() if layout is None else layout
+    # The planner owns the layout, and since the ABC switch it owns it as a
+    # method: `plan.build()` was module-level until then and this call was
+    # left behind, so running this script on its own died on the first line
+    # that needed a plan. Constructing the planner loads a second, inert copy
+    # of this file as its writer, which is what owning the format costs.
+    lay = plan.WarThunder().build() if layout is None else layout
     AXES[:] = lay.axes
     BUTTONS[:] = plan.button_table(lay.placed)
     if args.why:

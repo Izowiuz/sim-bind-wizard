@@ -28,7 +28,6 @@ NOTES
 # binding by hand -- and ordered by urgency alone.
 
 import argparse
-import importlib.util
 import os
 import re
 import sys
@@ -54,10 +53,7 @@ from core import vocab                                      # noqa: E402
 from core.needs import (IN_A_TURN, ON_APPROACH,             # noqa: E402
                         IN_THE_AIR, ON_THE_RAMP)
 
-_spec = importlib.util.spec_from_file_location(
-    'x4harvest', os.path.join(HERE, 'harvest.py'))
-harvest = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(harvest)
+harvest = adapter.from_file('x4harvest', os.path.join(HERE, 'harvest.py'))
 
 #: The profile the plan owns when nothing says otherwise. X4 writes the
 #: game's own binding changes into `inputmap.xml`, the working copy, so a

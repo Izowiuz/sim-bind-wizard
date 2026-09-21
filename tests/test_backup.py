@@ -171,6 +171,9 @@ class Moving(Temp):
         where, saved = backup.save('bms', p, into=self.store, move=True,
                                    when=when)
         self.assertFalse(os.path.exists(p), 'it still had to leave')
+        # save() answers None for a run it never had to make; this one moved
+        # a file, so there is a directory.
+        assert where is not None
         self.assertEqual('first',
                          self.read(os.path.join(where, 'axismapping.dat')))
         self.assertEqual('second',

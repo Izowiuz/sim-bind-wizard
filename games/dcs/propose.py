@@ -25,7 +25,6 @@ NOTES
 import argparse
 import collections
 import datetime
-import importlib.util
 import json
 import os
 import re
@@ -53,17 +52,9 @@ from core.needs import (IN_A_TURN, ON_APPROACH,             # noqa: E402
 def wizard():
     """The wizard itself, imported for its harvest -- it is the thing that
     knows how to read a module's commands and profiles."""
-    spec = importlib.util.spec_from_file_location(
-        'dcswiz', os.path.join(HERE, 'dcs-bind-wizard.py'))
-    mod = importlib.util.module_from_spec(spec)
-    argv, sys.argv = sys.argv, ['dcs-bind-wizard']
-    try:
-        spec.loader.exec_module(mod)
-    except SystemExit:
-        pass
-    finally:
-        sys.argv = argv
-    return mod
+    return adapter.from_file('dcswiz',
+                             os.path.join(HERE, 'dcs-bind-wizard.py'),
+                             argv=['dcs-bind-wizard'])
 
 
 #: What the module's own prose is asking for. Ordered: first match wins, so

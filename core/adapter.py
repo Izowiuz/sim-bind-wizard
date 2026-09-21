@@ -39,6 +39,7 @@ there was nowhere to put per-run configuration. `__init__` is that place.
 
 import abc
 import argparse
+import importlib.machinery
 import importlib.util
 import inspect
 import os
@@ -144,6 +145,44 @@ def _guard(cls):
 
 
 # --------------------------------------------------------- what a writer says
+
+def from_file(name, path, argv=None):
+    """A module read from a file, under `name`, registered in `sys.modules`.
+
+    Six places had these five lines and only three had the guard.
+    `spec_from_file_location` answers None for a path Python will not treat
+    as a module, and a spec with no loader for one it can see but cannot
+    run; without the guard a missing or unreadable file came back as an
+    AttributeError on None rather than a sentence naming the file.
+
+    A file with no `.py` has to be handed its loader, which is the only way
+    `bind` can be imported at all.
+
+    `argv` swaps `sys.argv` around the execution and swallows the SystemExit
+    that a script with its own argument parsing raises on the way past. That
+    is what importing a sibling *script* rather than a module costs, and only
+    the ones that own a format pay it.
+    """
+    loader = None
+    if not path.endswith('.py'):
+        loader = importlib.machinery.SourceFileLoader(name, path)
+    spec = importlib.util.spec_from_file_location(name, path, loader=loader)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f'{path} cannot be loaded as a module')
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+    was = sys.argv
+    if argv is not None:
+        sys.argv = argv
+    try:
+        spec.loader.exec_module(mod)
+    except SystemExit:
+        if argv is None:
+            raise
+    finally:
+        sys.argv = was
+    return mod
+
 
 class Text:
     """A file's whole new contents, and the encoding to lay it down in.
@@ -373,23 +412,9 @@ class Adapter(abc.ABC):
         script; owning the *verb* is not, and `main()` below is why it no
         longer does.
         """
-        where = os.path.join(self.here, name)
-        spec = importlib.util.spec_from_file_location(
+        return from_file(
             f'{self.game}_{name.replace("-", "_").removesuffix(".py")}',
-            where)
-        if spec is None or spec.loader is None:
-            raise RuntimeError(f'{where} cannot be loaded as a module')
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = mod
-        was = sys.argv
-        sys.argv = [name]
-        try:
-            spec.loader.exec_module(mod)
-        except SystemExit:
-            pass
-        finally:
-            sys.argv = was
-        return mod
+            os.path.join(self.here, name), argv=[name])
 
     @typing.final
     def parser(self):
@@ -743,15 +768,9 @@ def load(game, script=None):
         os.chdir(root)
         if root not in sys.path:
             sys.path.insert(0, root)
-        where = os.path.join(root, script)
-        spec = importlib.util.spec_from_file_location(
-            f'{game}_{script.replace("-", "_").removesuffix(".py")}', where)
-        if spec is None or spec.loader is None:
-            raise RuntimeError(f'{where} cannot be loaded as a module')
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = mod
-        spec.loader.exec_module(mod)
-        return mod
+        return from_file(
+            f'{game}_{script.replace("-", "_").removesuffix(".py")}',
+            os.path.join(root, script))
     finally:
         os.chdir(was)
 
@@ -765,4 +784,5 @@ def adapters(game, script=None):
 
 
 __all__ = ['Harvest', 'Adapter', 'Planner', 'Proposer',
-           'Text', 'MOVE', 'run', 'games', 'planner', 'load', 'adapters']
+           'Text', 'MOVE', 'run', 'games', 'planner', 'load', 'adapters',
+           'from_file']

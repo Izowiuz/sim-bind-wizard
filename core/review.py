@@ -198,6 +198,10 @@ class Review:
         no = self.why_not(need, role, ctrl)
         if no:
             return f'{need.what}: {no}'
+        # `why_not` answers 'not in the device map' first of all, so a
+        # control that got past it exists. Saying so is cheaper than
+        # hoisting the check and keeping its sentence in two places.
+        assert ctrl is not None
         p = self.assign(need, role, ctrl, button)
         said = f'{need.what} -> {role}/{ctrl.label}'
         if len(need.bindings) == 1 and p.slots:
@@ -410,9 +414,10 @@ class Review:
                  if v is not None]
         if need.push is not None and ctrl.push is not None:
             slots.append((ctrl.push, need.push))
-        self.at[need] = corneeds.Placement(need, role, ctrl, slots, 0)
+        placed = corneeds.Placement(need, role, ctrl, slots, 0)
+        self.at[need] = placed
         self.mark[need] = MINE
-        return self.at[need]
+        return placed
 
     # ----------------------------------------------------------------- rows
 

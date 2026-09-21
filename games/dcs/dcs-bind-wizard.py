@@ -119,6 +119,7 @@ if not os.path.isdir(CORE):
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import adapter                                    # noqa: E402
 from core import backup                                     # noqa: E402
 from core import capture                                    # noqa: E402
 from core import game                                       # noqa: E402
@@ -1255,7 +1256,9 @@ def sync(results, cfg, aircraft):
             for h, e in parsed.get(table, {}).items():
                 items = e.get("added") or e.get("changed") or {}
                 first = items.get(1) if isinstance(items, dict) else None
-                key = (first or {}).get("key")
+                if not first:
+                    continue
+                key = first.get("key")
                 if not key:
                     continue
                 name = e.get("name", h)
@@ -1409,13 +1412,11 @@ def propose_into(bindings, results, path, commands, guide, used, tui):
     if commands is None:
         return "propose: no commands loaded"
     try:
-        import importlib.util
         import sys as _sys
-        spec = importlib.util.spec_from_file_location(
-            "dcspropose", os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                       "propose.py"))
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
+        mod = adapter.from_file(
+            "dcspropose",
+            os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         "propose.py"))
         recs = mod.seed(_sys.modules[__name__], commands, guide)
     except SystemExit as e:
         return "propose: %s" % e
