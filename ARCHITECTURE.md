@@ -382,6 +382,15 @@ A game whose vocabulary has not been harvested cannot have its planner
 imported, so those tests skip with the harvest command in the reason. Everything
 in `test_needs` and `test_backup` runs on a fresh clone.
 
+**Both ways in are covered, and they need different tests.** `./bind <game>
+<verb>` is a table and is checked as one. A script run directly is a
+*process*, so `RunDirectly` starts each planner and War Thunder's writer as
+`__main__` in its own interpreter. Nothing else reaches that: `adapter.load`
+imports a module and never runs its `main()`, so a script calling something
+the core has moved is invisible to every other test here. The two capture
+wizards open curses and read `/dev/input`, so only their import is covered --
+which is all `harvest.wizard()` and `propose.wizard()` ever do with them.
+
 **What is tested is what has a story.** Nearly every rule in `core/needs.py`
 carries a comment saying what went wrong before it existed — the airbrake that
 left the thumb, the pinky shift that lost its pin to the landing lights, the
@@ -394,6 +403,15 @@ Five tests written here passed against a deliberately broken allocator — the
 ramp need avoided the thumb by scoring, not by the floor; the capacity check
 was shadowed by the shape check — and each was rewritten until it failed for
 the right reason.
+
+`RunDirectly` was held to the same bar. `wt-bind-preset.py` called
+`plan.build()` after `build()` had become a method; the ABC commit converted
+the second of the two call sites in that file and missed the one in `main()`,
+which left the script dead on its first line that needed a plan while all 168
+tests stayed green. Putting that one line back turns `RunDirectly` red with
+the original `AttributeError` in the failure, and turns nothing else red —
+which is the measurement that says the gap was real and that this test is
+what closes it.
 
 ## Adapter contract
 

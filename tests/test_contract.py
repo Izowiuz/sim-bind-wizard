@@ -30,6 +30,7 @@ fails even on a machine that has never seen the game.
 import inspect
 import os
 import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -380,6 +381,68 @@ class TheFrontDoorTellsTheTruth(unittest.TestCase):
             with self.subTest(game=game, verb=verb):
                 self.assertNotIn(verb, self.bind.GAMES[game],
                                  f'GAPS says "{why}" but the table offers it')
+
+
+class RunDirectly(unittest.TestCase):
+    """Every script the README offers as runnable on its own, run on its own.
+
+    Nothing else here starts one as `__main__`. `adapter.load` imports the
+    module and never reaches its `main()`, and the front door is checked as
+    a verb table -- so a script calling something the core has since moved
+    is invisible to the whole suite.
+
+    That is not hypothetical. `build()` went from a function in
+    `games/warthunder/plan.py` to a method on `WarThunder`, and
+    `wt-bind-preset.py` kept calling `plan.build()`: the script was dead on
+    the first line that needed a plan, `./bind wt write` was fine because it
+    hands the writer a layout, and 168 tests stayed green. A type checker
+    found it months later; this is what should have.
+
+    `test_no_writer_reaches_build` is the opposite rule and they do not
+    overlap. A *writer* may never fetch a plan of its own, because the
+    review screen's whole job is to write some of one. A script started on
+    its own has nobody to be handed a plan by, and must.
+
+    The two capture wizards are not run here: both open curses and read
+    `/dev/input`, so there is no read-only way to start one. Only their
+    import is covered, which is all `harvest.wizard()` and
+    `propose.wizard()` ever do with them.
+    """
+
+    def ran(self, game, script, *args):
+        """The script, in its own interpreter, from its own directory --
+        which is how the README says to run it."""
+        where = os.path.join(REPO, 'games', game)
+        return subprocess.run([sys.executable, script, *args],
+                              cwd=where, capture_output=True, text=True,
+                              timeout=300)
+
+    def test_a_planner_runs_as_its_own_script(self):
+        for game in adapter.games():
+            with self.subTest(game=game):
+                # The same skip the rest of this file takes on a bare
+                # clone: no harvest, or no device map, is a fact about this
+                # machine and not about the code.
+                built(live(game))
+                done = self.ran(game, adapter.planner(game), '--why')
+                self.assertEqual(0, done.returncode,
+                                 done.stderr.strip()[-500:])
+
+    def test_the_sidecar_that_owns_a_format_runs_as_its_own_script(self):
+        # War Thunder's, because it is the one that broke. It is also the
+        # only one of the three with a verb that writes nothing: the other
+        # two own their format from inside a capture wizard.
+        built(live('warthunder'))
+        done = self.ran('warthunder', 'wt-bind-preset.py', '--dry-run')
+        self.assertEqual(0, done.returncode, done.stderr.strip()[-500:])
+
+    def test_a_capture_wizard_still_imports(self):
+        for game, script in (('dcs', 'dcs-bind-wizard.py'),
+                             ('elite', 'ed-bind-wizard.py')):
+            with self.subTest(game=game):
+                adapter.from_file(f'{game}_wizard_under_test',
+                                  os.path.join(REPO, 'games', game, script),
+                                  argv=[script])
 
 
 if __name__ == '__main__':
