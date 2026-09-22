@@ -85,6 +85,81 @@ class Theme:
         return getattr(self, tone)
 
 
+#: The frame a panel is drawn in. btop's idea: the chrome lives in the
+#: border -- title, counts and key names all in the box edge -- so none of
+#: it costs a row. Three lines of key names at the bottom of a 24-row
+#: terminal is an eighth of the screen spent on something read once.
+TL, TR, BL, BR, H, V = '╭', '╮', '╰', '╯', '─', '│'
+
+#: Hints are joined with the separator the rest of the family uses. btop
+#: notches each one into the border (`┘info ↵└`) because its hints are
+#: buttons you can click; ours are labels, so the notches cost two columns
+#: each for nothing -- at seven hints that is a hint and a half.
+SEP = ' · '
+
+
+def lid(width, title='', right=''):
+    """The top edge: what this panel is, and what it is showing.
+
+    Built as one string rather than drawn in pieces. The last two goes at
+    chrome painted one thing over another and every test passed, because
+    they asked what the text said rather than what reached the screen -- a
+    string cannot do that to itself.
+
+    Anything that will not fit is dropped whole: a border that has eaten
+    half a title says less than a plain one.
+    """
+    if width <= 0:
+        return ''
+    if width < 4:
+        return (TL + H * (width - 2) + TR) if width >= 2 else H * width
+    inner = width - 2
+    head = f'{H} {title} ' if title else H * 2
+    if len(head) > inner:
+        head = head[:inner]
+    tail = f' {right} ' if right else ''
+    if tail and len(head) + len(tail) + 1 > inner:
+        tail = ''
+    fill = H * max(0, inner - len(head) - len(tail))
+    return TL + head + fill + tail + TR
+
+
+def sill(width, keys=(), tail='', note=''):
+    """The bottom edge: which keys do what, and where you are.
+
+    `note` takes the left when there is one, and the keys give way to it.
+    A status line is the one thing down here that changes, and the keys are
+    the one thing that never does -- so it goes IN the edge rather than
+    being drawn over it, which is what happened the first two times and
+    what no test of the text could ever have caught.
+
+    Keys are dropped from the end when they will not fit, because the list
+    is written most-needed first: nothing else is reachable without moving.
+    `tail` is kept before any of them.
+    """
+    if width <= 0:
+        return ''
+    if width < 4:
+        return (BL + H * (width - 2) + BR) if width >= 2 else H * width
+    inner = width - 2
+    end = f' {tail} ' if tail else ''
+    if len(end) > inner:
+        end = ''
+    room = inner - len(end)
+    if note:
+        said = f' {note} '
+        return BL + said[:room].ljust(room, H) + end + BR
+    out = ''
+    for k in keys:
+        piece = (SEP if out else ' ') + k
+        if len(out) + len(piece) + 1 > room:
+            break
+        out += piece
+    if out:
+        out += ' '
+    return BL + out + H * max(0, room - len(out)) + end + BR
+
+
 class Tui:
     def __init__(self, scr, theme=None):
         self.scr = scr

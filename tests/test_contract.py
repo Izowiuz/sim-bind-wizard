@@ -435,6 +435,33 @@ class EveryGameHasACatalogue(unittest.TestCase):
                 self.assertEqual(set(), named - known)
 
 
+class TheDefaultVerb(unittest.TestCase):
+    """`./bind x4` with no verb opens the screen.
+
+    It printed the plan, which is the thing you read once to see whether
+    the allocator got it right. The screen is the thing you come back to.
+    """
+
+    def setUp(self):
+        self.bind = bind()
+
+    def test_a_bare_game_opens_the_review(self):
+        self.assertEqual('tui', self.bind.default_verb('x4'))
+
+    def test_a_game_with_no_review_falls_back_to_the_plan(self):
+        # DCS has none: its capture wizard already is one, which `GAPS`
+        # says in those words. Falling through to an error would make the
+        # shortest command in the family fail for one of six games.
+        self.assertNotIn('tui', self.bind.GAMES['dcs'])
+        self.assertEqual('plan', self.bind.default_verb('dcs'))
+
+    def test_every_game_has_a_default_it_can_run(self):
+        for game in self.bind.GAMES:
+            with self.subTest(game=game):
+                self.assertIn(self.bind.default_verb(game),
+                              self.bind.GAMES[game])
+
+
 class RunDirectly(unittest.TestCase):
     """Every script the README offers as runnable on its own, run on its own.
 

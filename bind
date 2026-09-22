@@ -7,7 +7,8 @@ SYNOPSIS
 
 DESCRIPTION
     With no arguments, print which verbs each game answers.
-    VERB defaults to `plan`. Anything after it is passed to the script.
+    VERB defaults to `tui`, or `plan` where a game has no review
+    screen. Anything after it is passed to the script.
 
 VERBS
     harvest   read the game's files, write the vocabulary cache
@@ -192,6 +193,20 @@ def table():
             print(f'  {game} {verb}: {why}')
 
 
+def default_verb(game):
+    """The verb a bare `./bind <game>` runs.
+
+    The screen, where there is one. It used to be `plan`, which prints the
+    layout -- the thing you read once to see whether the allocator got it
+    right, rather than the thing you come back to.
+
+    DCS has no `tui`: its capture wizard already is one, which `GAPS` says
+    in those words. Falling through to an error there would make the
+    shortest command in the family fail for one game in six.
+    """
+    return 'tui' if 'tui' in GAMES.get(game, {}) else 'plan'
+
+
 def main():
     args = sys.argv[1:]
     if not args or args[0] in ('-h', '--help'):
@@ -208,7 +223,8 @@ def main():
         return 2
 
     spec = GAMES[game]
-    verb = args[1] if len(args) > 1 and not args[1].startswith('-') else 'plan'
+    verb = (args[1] if len(args) > 1 and not args[1].startswith('-')
+            else default_verb(game))
     rest = args[2:] if len(args) > 1 and not args[1].startswith('-') \
         else args[1:]
 

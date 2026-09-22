@@ -678,26 +678,6 @@ class TheFilterSaysSoOnScreen(unittest.TestCase):
         self.assertIn('1', said, 'one of the three matched')
         self.assertIn('3', said, 'out of three')
 
-    def test_the_rule_carries_it_without_anything_painting_over(self):
-        # The first attempt drew the label and then the rule, which covered
-        # it -- and every test passed, because they all asked `narrowed()`
-        # rather than what reached the screen. Segments cannot overlap, so
-        # the whole failure is gone rather than merely watched for.
-        rv = made()
-        rv.filter = 'gear'
-        segs = review._rule(rv, 80)
-        self.assertIn('gear', ''.join(t for _x, t, _n in segs))
-        ends = [x + len(t) for x, t, _n in segs]
-        starts = [x for x, _t, _n in segs]
-        self.assertEqual(sorted(starts), starts, 'segments run left to right')
-        self.assertTrue(all(e <= s for e, s in zip(ends, starts[1:])),
-                        'and none begins before the one before it ends')
-
-    def test_with_no_filter_the_rule_is_just_a_rule(self):
-        segs = review._rule(made(), 80)
-        self.assertEqual(1, len(segs))
-        self.assertEqual(79, len(segs[0][1]))
-
     def test_a_filter_that_matches_nothing_says_so_too(self):
         # The one case where the screen is empty, which is also the one
         # where "why is this empty" most needs answering.
@@ -705,6 +685,43 @@ class TheFilterSaysSoOnScreen(unittest.TestCase):
         rv.filter = 'no such thing'
         self.assertIn('no such thing', rv.narrowed())
         self.assertIn('0', rv.narrowed())
+
+
+class TwoPanelsOrOne(unittest.TestCase):
+    """Side by side where there is room, stacked where there is not.
+
+    The detail panel used to be five lines at the bottom, and X4's `View`
+    puts six under one hat -- so the one row that needed the space was the
+    one that could not have it. A column has the height of the screen.
+    """
+
+    def test_a_wide_terminal_gets_two_panels(self):
+        listed, detail = review._layout(100, 30)
+        self.assertIsNotNone(detail)
+        self.assertEqual(listed[1], 0, 'the list starts at the left edge')
+        self.assertGreater(detail[1], listed[1] + 20)
+
+    def test_they_do_not_overlap(self):
+        listed, detail = review._layout(100, 30)
+        self.assertLessEqual(listed[1] + listed[3], detail[1])
+
+    def test_together_they_fill_the_width(self):
+        for w in (90, 100, 120, 200):
+            listed, detail = review._layout(w, 30)
+            self.assertLessEqual(detail[1] + detail[3], w)
+            self.assertGreaterEqual(detail[1] + detail[3], w - 1)
+
+    def test_a_narrow_terminal_stacks_them(self):
+        # 80 columns leaves the list about 50 wide, and
+        # `throttle · Middle finger hat` does not fit in 50.
+        listed, detail = review._layout(80, 30)
+        self.assertEqual(listed[3], detail[3], 'both full width')
+        self.assertGreater(detail[0], listed[0] + listed[2] - 1)
+
+    def test_a_short_terminal_keeps_the_list_usable(self):
+        # Stacked on a small screen, the detail must not eat the list.
+        listed, detail = review._layout(80, 14)
+        self.assertGreaterEqual(listed[2], 6)
 
 
 class WhatItFound(unittest.TestCase):
@@ -863,18 +880,27 @@ class Folding(unittest.TestCase):
 
 
 class Footer(unittest.TestCase):
-    """The line that says which keys exist has to fit the screen it is on.
+    """Which keys exist, and where a reader is told.
 
-    It did not: one 96-character line on an 80-column terminal cut off at
-    `m map`, so `w write` and `q quit` were documented nowhere a reader would
-    look. Moving is listed first because nothing else is reachable without it.
+    Two places now. The border carries the handful you reach for constantly
+    and drops the rest when it runs out of room; `?` carries everything,
+    which is where the capital forms live. So the border is allowed to be
+    incomplete and `KEYS` is not.
     """
 
     WIDTH = 80
 
-    def test_every_footer_line_fits_a_standard_terminal(self):
+    def test_every_help_line_fits_a_standard_terminal(self):
         for line in review.KEYS:
             self.assertLessEqual(len(line), self.WIDTH - 1, line)
+
+    def test_every_hint_in_the_border_is_also_in_the_help(self):
+        # Otherwise the two drift and the short list becomes the only place
+        # some key is named -- which is how `w write` went missing before.
+        listed = ' '.join(review.KEYS)
+        for hint in review.HINTS:
+            key = hint.split()[0]
+            self.assertIn(key, listed, f'{hint!r} is nowhere in `?`')
 
     def test_moving_is_documented_at_all(self):
         keys = ' '.join(review.KEYS)

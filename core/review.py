@@ -44,6 +44,7 @@ import contextlib
 import curses
 import io
 import os
+import textwrap
 
 from core import capture as ccapture
 from core import needs as corneeds
@@ -488,9 +489,22 @@ class Review:
 #: Two lines, because one was 96 characters and a terminal is 80: `w write`
 #: and `q quit` fell off the end of the screen that documents them. Moving
 #: comes first -- it is what you need before any of the rest is reachable.
-KEYS = ('↑/↓ j/k move · g/G first/last · RETURN press it · l from list',
-        'c/C confirm · p/P from plan · x/X clear · f find · h binds',
-        'm map · w write · q quit')
+#: The whole list, shown by `?`. The border carries the handful you reach
+#: for constantly; this carries everything, including the capital forms --
+#: which is most of what somebody presses `?` to find out.
+KEYS = ('  ↑↓  j/k     move                g/G   first / last',
+        '  ↵  RETURN    press a control     l     choose from a list',
+        '',
+        '  c/C  SPACE   confirm this one / every proposal',
+        "  p/P          the planner's choice here / into every gap",
+        '  x/X          clear this one / every proposal',
+        '',
+        '  f            find: narrows the list, RETURN on empty clears it',
+        '  h            show or hide what each one binds',
+        '  m            the device map, and where the game was found',
+        '  w            write everything that has a control',
+        '  ?            this',
+        '  q            quit')
 
 
 def _fold(path, width=74):
@@ -516,34 +530,57 @@ def _fold(path, width=74):
 
 
 def _put(scr, y, x, text, attr=curses.A_NORMAL):
+    """Draw, clipped to the screen.
+
+    Clipped to `w - x`, not `w - x - 1`. The spare column existed because
+    writing the bottom-right cell raises -- but that is one cell on one
+    row, and reserving a whole column for it ate the right-hand border of
+    every panel that reaches the screen edge. The `except` already covers
+    the cell it was guarding against.
+    """
     h, w = scr.getmaxyx()
     if 0 <= y < h:
         try:
-            scr.addstr(y, x, text[:max(0, w - x - 1)], attr)
+            scr.addstr(y, x, text[:max(0, w - x)], attr)
         except curses.error:
             pass
 
 
-def _rule(rv, width):
-    """[(column, text, tone)] for the line under the header.
+#: Below this the two panels stop fitting: the list needs about 52
+#: columns before `throttle · Middle finger hat` starts being cut, and the
+#: detail panel is unreadable under about 26.
+SPLIT_AT = 90
 
-    Cut into pieces that do not overlap rather than drawn as a rule with a
-    label painted on top: the label went on first once and the rule simply
-    covered it, and nothing on screen said so. Segments cannot do that to
-    each other.
+#: Where the divider sits in a list row: the mark, then the action
+#: name, then the line, then what it is bound to.
+NAME_W = 29
 
-    The filter goes here because this is where the eye lands when the list
-    below is empty, which is exactly when "why is nothing here" needs
-    answering. `note` is the status line's tone, so it reads as something
-    in force rather than as chrome.
+#: The detail panel never gets less than this, however wide the list
+#: wants to be -- under it the wrapping turns into one word per line.
+DETAIL_MIN = 26
+
+
+def _layout(width, height, wants=None):
+    """((y, x, h, w) for the list, same for the detail) -- or stacked.
+
+    Side by side where there is room. `wants` is how wide the list would
+    like to be for the rows it actually has; the rest goes to the detail
+    panel rather than to blank space, which is what a fixed split left
+    between the two.
+
+    Below `SPLIT_AT` they stack, because a list cut off mid-control-name
+    is worse than a shorter one.
     """
-    narrowed = rv.narrowed()
-    if not narrowed:
-        return [(0, '─' * (width - 1), 'plain')]
-    label = f' {narrowed} '
-    return [(0, '──', 'plain'),
-            (2, label, 'note'),
-            (2 + len(label), '─' * max(0, width - 3 - len(label)), 'plain')]
+    if width >= SPLIT_AT:
+        left = width - DETAIL_MIN
+        if wants:
+            left = max(SPLIT_AT - DETAIL_MIN, min(left, wants))
+        return (0, 0, height, left), (0, left, height, width - left)
+    # Stacked: the list keeps what it needs and the detail takes the rest,
+    # never more than a third and never less than a frame plus two lines.
+    tall = max(4, min(height // 3, 10))
+    listed = max(6, height - tall)
+    return (0, 0, listed, width), (listed, 0, height - listed, width)
 
 
 def _detail(rv, row):
@@ -568,11 +605,93 @@ def _detail(rv, row):
     return out
 
 
+#: In the sill, most-needed first: what is dropped on a narrow panel is
+#: dropped from the end, and nothing else is reachable without moving.
+HINTS = ('↑↓ move', '↵ press', 'l list', 'c keep', 'x clear',
+         'f find', 'h binds', 'm map', 'w write')
+
+
+def _side(rv, row):
+    """The detail panel's body: what the selected row is sitting on.
+
+    The device's full product name is here rather than in a header line of
+    its own. A row saying "stick" does not say WHICH stick, and this is the
+    moment that question is being asked.
+    """
+    if row is None or row.kind != 'need':
+        return []
+    need, p = row.need, rv.at[row.need]
+    out = []
+    if p is None:
+        plan = rv.plan.get(need)
+        return [('meta', f'wants {need.first_shape}, {need.wanted} button(s)'),
+                ('plain', ''),
+                ('meta', 'the planner would use ' + plan.ctrl.label
+                 if plan else 'the planner had nowhere to put it'),
+                ('plain', ''),
+                ('note', f'{len(rv.fits(need))} control(s) fit')]
+    dev = rv.layout.devices.get(p.role)
+    out.append(('head', p.role))
+    if dev is not None:
+        out.append(('meta', dev.product))
+    out += [('plain', ''), ('plain', p.ctrl.label),
+            ('meta', f'{p.ctrl.kind} · {len(p.slots)} bind(s)')]
+    if p.ctrl.reach:
+        out += [('plain', ''), ('meta', p.ctrl.reach)]
+    out.append(('plain', ''))
+    for part, what in rv.binds(need):
+        out.append(('plain', f'{part:8} {what}'))
+    return out
+
+
+def _panel(scr, theme, rect, title, right='', keys=(), tail='', note=''):
+    """Frame a box and hand back the rectangle inside it."""
+    y, x, h, w = rect
+    _put(scr, y, x, ctui.lid(w, title, right), theme.head)
+    for row in range(y + 1, y + h - 1):
+        _put(scr, row, x, ctui.V, theme.head)
+        _put(scr, row, x + w - 1, ctui.V, theme.head)
+    _put(scr, y + h - 1, x, ctui.sill(w, keys, tail, note),
+         theme.note if note else theme.head)
+    return y + 1, x + 2, h - 2, w - 4
+
+
+def _popup(scr, tui, theme, title, lines):
+    """A framed box over the middle of the screen. Leaves on any key.
+
+    Framed by the same `lid`/`sill` the panels use, so it reads as one of
+    them rather than as a different kind of thing that happens to be on
+    top. Sized to what it holds and no larger: a help box with three
+    inches of blank border says the list is longer than it is.
+    """
+    h, w = scr.getmaxyx()
+    body = [t for _tone, t in lines]
+    inner = max((len(t) for t in body), default=0)
+    bw = min(w - 2, max(len(title) + 6, inner + 4))
+    bh = min(h - 2, len(body) + 2)
+    y, x = (h - bh) // 2, (w - bw) // 2
+    while True:
+        _put(scr, y, x, ctui.lid(bw, title), theme.head)
+        for n in range(bh - 2):
+            _put(scr, y + 1 + n, x, ctui.V + ' ' * (bw - 2) + ctui.V,
+                 theme.head)
+        _put(scr, y + bh - 1, x, ctui.sill(bw, (), 'any key'), theme.head)
+        for n, (tone, text) in enumerate(lines[:bh - 2]):
+            _put(scr, y + 1 + n, x + 2, text[:bw - 4], theme[tone])
+        scr.refresh()
+        if tui.key(0.5) is not None:
+            return
+
+
 def _draw(scr, rv, sel, state, theme):
     h, w = scr.getmaxyx()
     rows = rv.rows()
-    detail = 5
-    visible = max(3, h - detail - 6)
+    # As wide as the widest row actually is, so the detail panel gets the
+    # space instead of the gap getting it.
+    wants = 4 + 2 + NAME_W + max((len(rv.where(r.need)) for r in rows
+                                  if r.kind == 'need'), default=0)
+    (ly, lx, lh, lw), side = _layout(w, h, wants)
+    visible = max(1, lh - 2)
     top = state['top']
     if sel < top:
         top = sel
@@ -581,39 +700,53 @@ def _draw(scr, rv, sel, state, theme):
     state['top'] = top
 
     scr.erase()
-    head = rv.title + (f'  ·  {rv.subtitle}' if rv.subtitle else '')
-    _put(scr, 0, 0, head, theme.title)
     mine, prop, unset = rv.counts()
-    tally = f'{mine} yours · {prop} proposed · {unset} unset'
-    _put(scr, 0, max(0, w - len(tally) - 1), tally, theme.head)
-    # Which device each role IS, always on screen: a row saying "stick" does
-    # not say which stick, and with two of them you had to choose one.
-    _put(scr, 1, 0, rv.device_line(), theme.head)
-    for x, text, tone in _rule(rv, w):
-        _put(scr, 2, x, text, theme[tone])
+    # The filter when there is one, the tally otherwise: both answer "what
+    # am I looking at", and only one of them can be true at a time.
+    right = rv.narrowed() or f'{mine} yours · {prop} ? · {unset} unset'
+    pick = [i for i, r in enumerate(rows) if r.selectable]
+    at = sum(1 for i in pick if i <= sel)
+    iy, ix, ih, iw = _panel(
+        scr, theme, (ly, lx, lh, lw),
+        rv.title + (f' · {rv.subtitle}' if rv.subtitle else ''),
+        right, HINTS, f'{at}/{len(pick)}' if pick else 'none',
+        note=rv.status)
 
-    for i in range(top, min(len(rows), top + visible)):
+    for n, i in enumerate(range(top, min(len(rows), top + visible))):
         row = rows[i]
-        y = 3 + i - top
+        y = iy + n
         if row.kind == 'head':
-            _put(scr, y, 0, f' {row.text}', theme.head)
+            _put(scr, y, ix, row.text[:iw], theme.head)
         elif row.kind == 'bind':
-            _put(scr, y, 6, row.text[:w - 7], theme.meta)
+            _put(scr, y, ix + 4, row.text[:iw - 4], theme.meta)
         elif row.kind == 'need':
-            # The state name is the tone name, so this screen and the map ask
-            # the theme the same question and get the same answer.
+            # The state name is the tone name, so this screen and the map
+            # ask the theme the same question and get the same answer.
             st = rv.mark[row.need]
             attr = theme.sel if i == sel else theme[st]
-            line = f'{MARK[st]} {row.text[:28]:28} {rv.where(row.need)}'
-            _put(scr, y, 2, line[:w - 3], attr)
+            # A divider, not a gap: at 68 columns the eye has to carry a
+            # name across 26 blank spaces to reach what it is bound to,
+            # and it loses the row on the way.
+            _put(scr, y, ix, f'{MARK[st]} {row.text[:26]:26}'[:iw], attr)
+            if iw > NAME_W + 2:
+                _put(scr, y, ix + NAME_W, ctui.V, theme.meta)
+                _put(scr, y, ix + NAME_W + 2,
+                     rv.where(row.need)[:iw - NAME_W - 2], attr)
 
-    _put(scr, h - detail - 1, 0, '─' * (w - 1))
-    for j, line in enumerate(
-            _detail(rv, rows[sel] if 0 <= sel < len(rows) else None)[:detail]):
-        _put(scr, h - detail + j, 0, line)
-    _put(scr, h - 3, 0, rv.status[:w - 1], theme.note)
-    for i, line in enumerate(KEYS):
-        _put(scr, h - len(KEYS) + i, 0, line[:w - 1])
+    row = rows[sel] if 0 <= sel < len(rows) else None
+    name = row.need.what if row and row.kind == 'need' else ''
+    dy, dx, dh, dw = _panel(scr, theme, side, name[:side[3] - 6],
+                            tail='? help')
+    n = 0
+    for tone, text in _side(rv, row):
+        # Wrapped, not cut: this panel is 26 columns and a reach reads
+        # "thumb, without releasing grip". Half of that says nothing.
+        for piece in (textwrap.wrap(text, dw) or ['']):
+            if n >= dh:
+                break
+            _put(scr, dy + n, dx, piece, theme[tone])
+            n += 1
+
     scr.refresh()
 
 
@@ -827,6 +960,9 @@ def _loop(scr, rv, write, sticks):
             state['top'] = 0
             rv.status = ('showing what each one binds'
                          if rv.show_binds else 'binds hidden')
+        elif k == '?':
+            _popup(scr, tui, tui.theme, 'keys',
+                   [('plain', line) for line in KEYS])
         elif k in ('m', 'M'):
             _pager(scr, tui, f'{rv.title} — device map', rv.map_lines())
         elif k in ('w', 'W'):
