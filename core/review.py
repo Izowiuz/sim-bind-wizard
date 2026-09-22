@@ -928,12 +928,30 @@ def overflows(body, h, w, title):
     return len(body) > box_for(body, h, w, title)[2] - 2
 
 
-def _popup(scr, tui, theme, title, lines):
-    """A framed box over the middle of the screen. Leaves on any key.
+def _box(scr, theme, title, lines, keys=(), tail='', top=0, sel=None):
+    """Draw a framed box over the middle of the screen. Returns its page.
 
-    Framed by the same `lid`/`sill` the panels use, so it reads as one of
-    them rather than as a different kind of thing that happens to be on
-    top.
+    Framed by the same `lid`/`sill` the panels use, so every box on this
+    screen -- the help, the control list, the prompt to press something --
+    reads as one kind of thing rather than three.
+    """
+    body = [t for _tone, t in lines]
+    h, w = scr.getmaxyx()
+    y, x, bh, bw = box_for(body, h, w, title)
+    page = bh - 2
+    _put(scr, y, x, ctui.lid(bw, title), theme.head)
+    for n in range(page):
+        _put(scr, y + 1 + n, x, ctui.V + ' ' * (bw - 2) + ctui.V, theme.head)
+    _put(scr, y + bh - 1, x, ctui.sill(bw, keys, tail), theme.head)
+    for n, (tone, text) in enumerate(lines[top:top + page]):
+        lit = theme.sel if sel is not None and top + n == sel else theme[tone]
+        _put(scr, y + 1 + n, x + 2, text[:bw - 4], lit)
+    scr.refresh()
+    return page
+
+
+def _popup(scr, tui, theme, title, lines):
+    """A box you read and dismiss.
 
     Scrolls rather than truncates. It used to draw `lines[:bh - 2]` and
     stop, so on a short terminal the help simply ended -- and what fell
@@ -944,23 +962,13 @@ def _popup(scr, tui, theme, title, lines):
     top = 0
     while True:
         h, w = scr.getmaxyx()
-        y, x, bh, bw = box_for(body, h, w, title)
-        page = bh - 2
+        page = box_for(body, h, w, title)[2] - 2
         more = overflows(body, h, w, title)
         top = max(0, min(top, len(body) - page)) if more else 0
-        _put(scr, y, x, ctui.lid(bw, title), theme.head)
-        for n in range(page):
-            _put(scr, y + 1 + n, x, ctui.V + ' ' * (bw - 2) + ctui.V,
-                 theme.head)
-        _put(scr, y + bh - 1, x,
-             ctui.sill(bw,
-                       ('↑↓ more', 'any other key closes') if more else (),
-                       f'{top + page} of {len(body)}' if more
-                       else 'any key to close'),
-             theme.head)
-        for n, (tone, text) in enumerate(lines[top:top + page]):
-            _put(scr, y + 1 + n, x + 2, text[:bw - 4], theme[tone])
-        scr.refresh()
+        _box(scr, theme, title, lines,
+             ('↑↓ more', 'any other key closes') if more else (),
+             f'{top + page} of {len(body)}' if more else 'any key to close',
+             top)
         k = tui.key(0.5)
         if k is None:
             continue
@@ -972,6 +980,35 @@ def _popup(scr, tui, theme, title, lines):
             top += page
         else:
             return
+
+
+def _choose(scr, tui, title, lines, tail=''):
+    """A box you pick a line out of. Returns the index, or None on ESC."""
+    sel = top = 0
+    while True:
+        h, w = scr.getmaxyx()
+        page = box_for([t for _tone, t in lines], h, w, title)[2] - 2
+        sel = max(0, min(sel, len(lines) - 1))
+        if sel < top:
+            top = sel
+        elif sel >= top + page:
+            top = sel - page + 1
+        _box(scr, tui.theme, title, lines,
+             ('↑↓ move', '↵ choose', 'ESC back'),
+             f'{sel + 1} of {len(lines)}', top, sel)
+        k = tui.key(0.5)
+        if k in ('up', 'k'):
+            sel -= 1
+        elif k in ('down', 'j'):
+            sel += 1
+        elif k == 'g':
+            sel = 0
+        elif k == 'G':
+            sel = len(lines)
+        elif k == 'enter':
+            return sel
+        elif k == 'esc':
+            return None
 
 
 def _draw(scr, rv, sel, state, theme):
@@ -1197,7 +1234,8 @@ def _pick_category(scr, tui, rv):
     have is how you end up with two.
     """
     known = rv.categories()
-    got = tui.menu('file it under', known + ['a new one...'])
+    got = _choose(scr, tui, 'file it under',
+                  [('plain', k) for k in known] + [('meta', 'a new one...')])
     if got is None:
         return None
     if got < len(known):
@@ -1372,9 +1410,9 @@ def _loop(scr, rv, write, sticks):
         elif k == 'X':
             rv.status = rv.clear_all()
         elif k == 'enter' and need is not None:
-            rv.status = _by_press(tui, rv, need, sticks)
+            rv.status = _by_press(scr, tui, rv, need, sticks)
         elif k in ('l', 'L') and need is not None:
-            rv.status = _by_hand(tui, rv, need)
+            rv.status = _by_hand(scr, tui, rv, need)
         elif k in ('f', 'F'):
             # Typed and confirmed: narrow to it. Confirmed with nothing in
             # it: show everything again. ESC: leave the filter as it was.
@@ -1422,26 +1460,37 @@ def _loop(scr, rv, write, sticks):
             move(+1)
 
 
-def _by_press(tui, rv, need, sticks):
-    """Assign by pressing the control, the way the capture wizards do."""
+def _by_press(scr, tui, rv, need, sticks):
+    """Assign by pressing the control, the way the capture wizards do.
+
+    A box rather than the transcript. `wait_input` only reads `tui` to
+    notice ESC, so the prompt can stay on screen while it blocks -- and
+    every other thing that interrupts this screen is a box.
+    """
     devices = sticks.open()
     if not devices:
         return f'no sticks to read: {sticks.why} — l picks from a list'
 
-    tui.page(f'{need.what} — press the control you want it on')
-    tui.log('')
-    for d in devices:
-        tui.log(f'  {d.role:9} {d.name}')
-    tui.log('')
-    tui.log(f'  it wants a {need.first_shape}'
-            + (f', {need.wanted} buttons' if need.wanted > 1 else ''))
+    # The product, as the map and the detail panel name it. `d.name` is
+    # the raw evdev string, which carries a vendor and a firmware date --
+    # noise here, and a second name for one stick on one screen.
+    known = rv.layout.devices
+    lines = [('head', 'DEVICES')]
+    lines += [('plain', f'  {d.role:9}  '
+                        + (known[d.role].product if d.role in known
+                           else d.name))
+              for d in devices]
+    lines += [('plain', ''), ('head', 'WANTS'),
+              ('plain', f'  {need.first_shape}'
+                        + (f', {ctui.plural(need.wanted, "button")}'
+                           if need.wanted > 1 else '')),
+              ('plain', ''), ('head', 'PRESS')]
     if len(need.bindings) == 1 and not need.on:
-        tui.log('  press the exact position you want it on')
+        lines.append(('plain', '  the exact position you want it on'))
     else:
-        tui.log('  press any position — the whole hat, trigger or encoder is')
-        tui.log('  taken, and the bindings go in its own order')
-    tui.log('')
-    tui.log('  ESC to leave it as it is')
+        lines += [('plain', '  any position; the whole control is taken'),
+                  ('plain', '  and the bindings go in its own order')]
+    _box(scr, tui.theme, need.what, lines, tail='ESC leaves it as it is')
     ccapture.drain(devices, tui)
 
     got = ccapture.wait_input(devices, want_axis=False, tui=tui)
@@ -1453,16 +1502,14 @@ def _by_press(tui, rv, need, sticks):
     return rv.took(need, dev.role, number)
 
 
-def _by_hand(tui, rv, need):
+def _by_hand(scr, tui, rv, need):
     """Choose a control for this need yourself."""
     fits = rv.fits(need)
     if not fits:
         return f'{need.what}: nothing free has that shape'
-    labels = [f'{role:9} {c.label:34} {c.kind:10} {c.reach or ""}'
+    labels = [('plain', f'{role:9} {c.label:30} {c.kind:9} {c.reach or ""}')
               for role, c in fits]
-    idx = tui.menu(f'{need.what} — wanted {need.first_shape}', labels,
-                   footer='arrows = move, RETURN = put it here, ESC = leave '
-                          'it as it is')
+    idx = _choose(scr, tui, f'{need.what} — wants {need.first_shape}', labels)
     if idx is None:
         return f'{need.what}: left as it was'
     role, ctrl = fits[idx]
