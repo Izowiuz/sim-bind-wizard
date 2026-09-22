@@ -62,14 +62,20 @@ UNSET, PROPOSED, MINE = 'unset', 'proposed', 'mine'
 
 MARK = {UNSET: ' ', PROPOSED: '?', MINE: '+'}
 
-#: What `?` means, in words, once. The map's legend and the detail panel
-#: both name this state, and they had grown two phrasings of it.
+#: What each mark means, in words, once. Three screens name them -- the
+#: help, the map's legend and the detail panel -- and between them they had
+#: grown three phrasings of the same three states.
 #:
-#: "approved" rather than "checked": `+` is reached by agreeing (`c`) or by
-#: choosing it yourself, so `?` is the absence of agreement, not the absence
-#: of a glance. Neither gates anything -- `placements()` hands a writer both
-#: -- so this says what you have not done, not what will not happen.
-PROPOSED_SAID = "the planner's, not yet approved"
+#: "proposed, not accepted" rather than "not checked": `+` is reached by
+#: accepting (`c`) or by assigning it yourself, so `?` is the absence of a
+#: decision, not of a glance. Neither gates anything -- `placements()` hands
+#: a writer both -- so these say what you have not done, not what will not
+#: happen.
+MARK_SAID = {
+    MINE: 'assigned by you',
+    PROPOSED: 'proposed, not accepted',
+    UNSET: 'unassigned',
+}
 
 
 class Row:
@@ -223,8 +229,10 @@ class Review:
             return (f'{ctrl.label} is a {ctrl.kind}; {need.what} wants '
                     f'{need.first_shape}')
         if len(ctrl.bindable_buttons) < need.wanted:
-            return (f'{ctrl.label} has {len(ctrl.bindable_buttons)} '
-                    f'bindable button(s); {need.what} needs {need.wanted}')
+            return (f'{ctrl.label} has '
+                    f'{ctui.plural(len(ctrl.bindable_buttons), "bindable "
+                                       "button")}; {need.what} needs '
+                    f'{need.wanted}')
         holder = self.who_has(role, ctrl)
         if holder is not None and holder is not need:
             return f'{ctrl.label} is carrying {holder.what} — x clears it'
@@ -307,10 +315,8 @@ class Review:
         # legend that is not drawn in the colours it explains explains
         # nothing. This is the screen somebody opens to find a spare
         # control, so what the colours mean is what they came for.
-        out.append(('mine', f'  {MARK[MINE]} yours'))
-        out.append(('proposed', f'  {MARK[PROPOSED]} {PROPOSED_SAID}'))
-        out.append(('plain', f'  {MARK[UNSET]} free'))
-        out.append(('meta', f'  {MARK[UNSET]} carries no binding at all'))
+        for state in (MINE, PROPOSED, UNSET):
+            out.append((state, f'  {MARK[state]} {MARK_SAID[state]}'))
         for role, dev in self.devices():
             ids = f'    {dev.slug} · usb {dev.usb or "?"}'
             if dev.serial:
@@ -567,7 +573,7 @@ class Review:
         if not self.filter:
             return ''
         shown = sum(1 for n in self.needs if self.matches(n))
-        return f'find {self.filter!r} · {shown} of {len(self.needs)}'
+        return f'filter {self.filter!r} · {shown} of {len(self.needs)}'
 
     def group_of(self, need):
         """What this need is filed under.
@@ -643,9 +649,9 @@ KEYS = (
     ('plain', '  got. Nothing reaches the game until w.'),
     ('plain', ''),
     ('head', 'MARKS'),
-    ('mine', '  +           assigned by you'),
-    ('proposed', '  ?           proposed, not accepted'),
-    ('meta', '  (none)      unassigned'),
+    ('mine', f'  {MARK[MINE]}           {MARK_SAID[MINE]}'),
+    ('proposed', f'  {MARK[PROPOSED]}           {MARK_SAID[PROPOSED]}'),
+    ('unset', f'  (none)      {MARK_SAID[UNSET]}'),
     ('plain', ''),
     ('head', 'MOVING'),
     ('plain', '  ↑↓  j k     previous / next entry'),
@@ -749,32 +755,10 @@ def _layout(width, height, wants=None):
     return (0, 0, listed, width), (listed, 0, height - listed, width)
 
 
-def _detail(rv, row):
-    """The three lines under the table, about the row you are on."""
-    if row is None or row.kind != 'need':
-        return []
-    need = row.need
-    p = rv.at[need]
-    out = []
-    if p is not None:
-        # Nothing: what it binds is on the tree now, under the row. What is
-        # left here is the case with no control, which is not a binding and
-        # has nowhere else to go.
-        pass
-    else:
-        plan = rv.plan.get(need)
-        out.append(f'  wanted {need.first_shape}, {need.wanted} button(s)')
-        out.append('  p would put it on ' + plan.ctrl.label if plan
-                   else '  the planner had nowhere to put it')
-        out.append(f'  {len(rv.fits(need))} free control(s) fit — RETURN to '
-                   'choose one')
-    return out
-
-
 #: In the sill, most-needed first: what is dropped on a narrow panel is
 #: dropped from the end, and nothing else is reachable without moving.
-HINTS = ('↑↓ move', '↵ press', 'l list', 'c keep', 'x clear',
-         'a add', 'r file', 'f find', 'h binds', 'm map', 'w write')
+HINTS = ('↑↓ move', '↵ assign', 'l list', 'c accept', 'x unassign',
+         'a add', 'r category', 'f filter', 'h binds', 'm map', 'w write')
 
 
 def _fit(width, text, lead=''):
@@ -788,17 +772,6 @@ def _fit(width, text, lead=''):
     bits = textwrap.wrap(text, room) if text else ['']
     pad = ' ' * len(lead)
     return [lead + bits[0]] + [pad + b for b in bits[1:]]
-
-
-#: What each way into a placement is worth saying out loud. `floored` is
-#: absent on purpose: it is the ordinary case, and a line announcing that
-#: nothing unusual happened is a line you learn to skip past.
-CAME_BY = {
-    'relaxed': 'nothing legal was left, so the floor came off',
-    'borrowed': 'a spare button on a control something else owns',
-    'pinned': 'you pinned it to this control',
-    'claimed': 'claimed outright, past the allocator',
-}
 
 
 def _side(rv, row, width=DETAIL_MIN - 4):
@@ -829,12 +802,13 @@ def _side(rv, row, width=DETAIL_MIN - 4):
     if p is None:
         plan = rv.plan.get(need)
         say('head', 'NOWHERE')
-        say('meta', f'wants {need.first_shape}, {need.wanted} button(s)')
+        say('meta', f'wants {need.first_shape}, '
+            f'{ctui.plural(need.wanted, "button")}')
         say('plain')
         say('meta', f'the planner would use {plan.ctrl.label}' if plan
             else 'the planner had nowhere to put it')
         say('plain')
-        say('note', f'{len(rv.fits(need))} control(s) fit')
+        say('note', f'{ctui.plural(len(rv.fits(need)), "control")} fit')
         return out
 
     say('head', 'WHERE')
@@ -843,7 +817,7 @@ def _side(rv, row, width=DETAIL_MIN - 4):
     if dev is not None:
         say('meta', dev.product)
     say('plain', p.ctrl.label)
-    say('meta', f'{p.ctrl.kind} · {len(p.slots)} bind(s)')
+    say('meta', f'{p.ctrl.kind} · {ctui.plural(len(p.slots), "binding")}')
     if p.ctrl.reach:
         say('meta', p.ctrl.reach)
 
@@ -870,31 +844,29 @@ def _why(rv, need, p, say):
     the only thing that still answers that after a second move.
     """
     r, plan = p.why, rv.plan.get(need)
+    # The legend's words, not new ones: three screens name these states
+    # and one wording is one thing to learn.
+    state = rv.mark[need]
+    say(state, MARK_SAID[state])
     if r is not None and r.overridden:
-        say('mine', 'you put it here')
         if plan is None:
-            say('meta', 'the planner had nowhere for it')
+            say('meta', 'planner had no control for it')
         elif plan.role == p.role and plan.ctrl is p.ctrl:
-            say('meta', 'where the planner had it too')
+            say('meta', "same as the planner's choice")
         else:
             say('meta', f'moved from {plan.ctrl.label}')
-    elif rv.mark[need] == MINE:
-        say('mine', "you kept the planner's choice")
-    else:
-        # The legend's words, not new ones. The map already names this
-        # state and a second phrasing on the same screen is two things to
-        # learn for one state.
-        say('proposed', PROPOSED_SAID)
+    elif state == MINE:
+        say('meta', 'proposal accepted')
 
     say('plain')
     say('meta', corneeds.URGENCY_NAME[need.urgency])
     if need.rank:
-        say('meta', f'{need.rank} factory profile(s) bind it')
+        say('meta', f'{ctui.plural(need.rank, "factory profile")} bind it')
     if r is None:
-        say('note', 'nobody said why')
+        say('note', 'no account recorded')
         return
-    if r.how in CAME_BY:
-        say('note', CAME_BY[r.how])
+    if r.how in corneeds.CAME_BY:
+        say('note', corneeds.CAME_BY[r.how])
 
     # Biggest first: the term that decided it should be the one read first,
     # and the order `score()` applies them in is an accident of how the
@@ -1022,7 +994,13 @@ def _draw(scr, rv, sel, state, theme):
     mine, prop, unset = rv.counts()
     # The filter when there is one, the tally otherwise: both answer "what
     # am I looking at", and only one of them can be true at a time.
-    right = rv.narrowed() or f'{mine} yours · {prop} ? · {unset} unset'
+    # Only what is there. The long form was dropped whole by `lid` for
+    # not fitting beside the title, so the counts vanished from a screen
+    # that had always carried them.
+    counts = [f'{MARK[MINE]}{mine}' if mine else '',
+              f'{MARK[PROPOSED]}{prop}' if prop else '',
+              f'{unset} {MARK_SAID[UNSET]}' if unset else '']
+    right = rv.narrowed() or ctui.SEP.join(c for c in counts if c)
     pick = [i for i, r in enumerate(rows) if r.selectable]
     at = sum(1 for i in pick if i <= sel)
     iy, ix, ih, iw = _panel(
@@ -1267,8 +1245,8 @@ def _browse(scr, tui, rv):
             top = sel - page + 1
 
         scr.erase()
-        right = (f'find {find!r} · {len(shown)} of {len(order)}' if find
-                 else f'{len(order)} the game accepts')
+        right = (f'filter {find!r} · {len(shown)} of {len(order)}'
+                 if find else f'{len(order)} the game accepts')
         _put(scr, 0, 0, ctui.lid(w, 'vocabulary', right), tui.theme.head)
         for i, a in enumerate(shown[top:top + page - 1]):
             y = 1 + i
@@ -1280,7 +1258,7 @@ def _browse(scr, tui, rv):
             if a.rank:
                 _put(scr, y, w - 12, f'{a.rank:>4} bind', tui.theme.meta)
         _put(scr, h - 1, 0,
-             ctui.sill(w, ('↑↓ move', '↵ add', 'f find', 'h reread',
+             ctui.sill(w, ('↑↓ move', '↵ add', 'f filter', 'h reread',
                            'D forget', 'q back'),
                        f'{sel + 1}/{len(shown)}' if shown else 'none',
                        note=said),
@@ -1304,7 +1282,7 @@ def _browse(scr, tui, rv):
         elif k == ' ':
             sel += page
         elif k in ('f', 'F'):
-            got = _ask(scr, tui, 'find: ', find)
+            got = _ask(scr, tui, 'filter: ', find)
             if got is not None:
                 find, sel, top = got, 0, 0
         elif k == 'h' and rv.harvest is not None:
@@ -1400,7 +1378,7 @@ def _loop(scr, rv, write, sticks):
         elif k in ('f', 'F'):
             # Typed and confirmed: narrow to it. Confirmed with nothing in
             # it: show everything again. ESC: leave the filter as it was.
-            got = _ask(scr, tui, 'find: ', rv.filter)
+            got = _ask(scr, tui, 'filter: ', rv.filter)
             if got is not None:
                 rv.filter = got
                 state['top'] = 0
@@ -1501,7 +1479,8 @@ def _write(tui, rv, write):
         rv.status = 'nothing has a control, so there is nothing to write'
         return None
     _mine, prop, _unset = rv.counts()
-    tui.page(f'{rv.title} — writing {len(kept.placed)} binding(s)')
+    tui.page(f'{rv.title} — writing '
+         f'{ctui.plural(len(kept.placed), "binding")}')
     if prop:
         tui.log(f'{prop} of them are still marked ? — proposed and not '
                 'looked at. They are written too.')

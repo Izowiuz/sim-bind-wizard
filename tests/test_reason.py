@@ -206,7 +206,10 @@ class ABindKnowsWhereItIs(unittest.TestCase):
         p = self.placed()
         spots = {b.reason.spot for _n, slot in p.slots for b in slot
                  if b.reason}
-        self.assertEqual({'in press order'}, spots)
+        # One distinct sentence, not its exact wording: this test is about
+        # repetition, and pinning the prose made it break when the words
+        # went man-terse and the rule had not moved.
+        self.assertEqual(1, len(spots), spots)
 
     def test_a_direction_the_control_renames_says_so_per_button(self):
         # A speedbrake is fore/aft whatever hat it lands on. Landing

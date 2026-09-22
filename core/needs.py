@@ -308,8 +308,7 @@ def slots_for(need, ctrl, why=None):
     if (need.slots == 1 and not need.on and need.push is None
             and ctrl.push is not None and len(ctrl.bindable_buttons) > 1):
         return said([ctrl.push],
-                    'its click: one action, and pressing a hat is the '
-                    'plainer gesture than pushing it a way')
+                    'the click; one action on a multi-button control')
     if need.on:
         picked = []
         for want in need.on:
@@ -326,18 +325,18 @@ def slots_for(need, ctrl, why=None):
             # NOT where the label suggests, and four spellings of "as
             # asked" bury the one line that says otherwise.
             return said(picked,
-                        lambda b: ('the direction it asked for'
+                        lambda b: ('as asked'
                                    if ctrl.direction(b) == asked[b]
-                                   else f'asked for {asked[b]}, which this '
-                                        f'control calls '
-                                        f'{ctrl.direction(b)!r}'))
+                                   else f'asked for {asked[b]}; this '
+                                        f'control calls it '
+                                        f'{ctrl.direction(b)}'))
         # Falling back was silent, so a four-way need on a five-position
         # selector landed on '1'..'4' while the need went on claiming it
         # was bound fore and aft.
         return said(order[:need.slots],
-                    lambda b: f'press order: the {"/".join(need.on)} it '
-                              f'asked for are not on this control')
-    return said(order[:need.slots], 'in press order')
+                    lambda b: f'press order; {"/".join(need.on)} not on '
+                              f'this control')
+    return said(order[:need.slots], 'press order')
 
 
 # ----------------------------------------------------------------- the match
@@ -381,7 +380,7 @@ def score(ctrl, need, role, floor=True, usable=None, reach=None,
     # shifted layer sits on. Shape and capacity still have to fit; a pin cannot
     # put four directions on a single button.
     if need.prefer and need.prefer == ctrl.label:
-        return part(1000, f'you pinned it to {ctrl.label}')
+        return part(1000, f'pinned to {ctrl.label}')
 
     tier = reach_tier(ctrl)
     # The ceiling yields in the relaxed pass, but only for a need the borrow
@@ -412,18 +411,18 @@ def score(ctrl, need, role, floor=True, usable=None, reach=None,
     # most-urgent-first, so the thumb positions are already spoken for by the
     # time anything from the ramp gets a look -- and it has no reason to want
     # one anyway.
-    s = part(100, 'it fits')
-    s += part(12 * tier, 'no closer to the hand than it needs')
+    s = part(100, 'shape and count fit')
+    s += part(12 * tier, 'leaves closer controls free')
     if need.dev == role:
-        s += part(40, f'the {role} it asked for')
+        s += part(40, f'on the {role}, as asked')
     elif need.dev and need.dev != role:
-        s += part(-50, f'not the {need.dev} it asked for')
+        s += part(-50, f'wrong device; wanted the {need.dev}')
     if ctrl.kind == need.first_shape:
-        s += part(20, f'a {ctrl.kind}, the shape it wanted')
+        s += part(20, f'exact shape ({ctrl.kind})')
     if need.suits and need.suits in ctrl.suits:
         s += part(25, f'suits {need.suits}')
     if need.push is not None and ctrl.push is not None:
-        s += part(15, 'a click for its press')
+        s += part(15, 'has a click')
     if not satisfies_on(need, ctrl):
         # A control whose directions merely differ is still a home -- a rocker
         # is up/down and a need asking for left/right is happy enough on it --
@@ -434,11 +433,11 @@ def score(ctrl, need, role, floor=True, usable=None, reach=None,
         # positions, not directions. Reading those as directions let Elite's
         # four panel-focus actions onto a five-position switch that HOLDS
         # whichever position it is in.
-        s += (part(-8, 'its directions are not the ones asked for')
-              if directional(ctrl)
-              else part(-60, 'no directions at all'))
+        s += (part(-8, 'directions differ') if directional(ctrl)
+              else part(-60, 'no directions'))
     spare = len(ctrl.bindable_buttons) - need.wanted
-    s += part(-4 * spare, f'{spare} button(s) left over')
+    s += part(-4 * spare,
+              f'{spare} spare button' + ('' if spare == 1 else 's'))
     return s
 
 
@@ -511,8 +510,8 @@ class Reason:
 CAME_BY = {
     'relaxed': 'reached past the floor',
     'borrowed': 'borrowed a spare button',
-    'claimed': 'claimed outright, past the allocator',
-    'yours': 'you chose it',
+    'claimed': 'claimed, not allocated',
+    'yours': 'assigned by you',
 }
 
 
@@ -542,7 +541,8 @@ def why_bits(p, out_of=None):
     out = [URGENCY_NAME[n.urgency]]
     if n.rank:
         out.append(f'{n.rank}/{out_of} factory profiles bind it' if out_of
-                   else f'{n.rank} factory profile(s) bind it')
+                   else f'{n.rank} factory profile'
+                        + ('' if n.rank == 1 else 's') + ' bind it')
     if p.ctrl.reach:
         # Printed every time, not only for the reflex ones: it is what the
         # floor acts on, so it is what a disputed placement turns on.
@@ -761,7 +761,7 @@ def allocate(needs, devices, usable=None, reach=None):
                      if v]
             if need.push is not None and ctrl.push is not None:
                 slots.append((ctrl.push, need.push))
-                spots.append((ctrl.push, 'the click it asked for'))
+                spots.append((ctrl.push, 'the click, as asked'))
             hand_out(slots, role, why, spots)
             placed.append(Placement(need, role, ctrl, slots, best_s, why))
         return left
@@ -831,19 +831,19 @@ def allocate(needs, devices, usable=None, reach=None):
         # The same two-step as the main passes, except the sum is inline up
         # there rather than in `score()`, so the terms are rebuilt here from
         # what decided them. They still have to add up to `_s`.
-        terms = [(60, 'the last pass, and this was still free')]
+        terms = [(60, 'last pass; still free')]
         lent = 12 * ((reach or MAX_REACH)[ON_THE_RAMP] - reach_tier(ctrl))
         if lent:
-            terms.append((lent, 'the best of what was left'))
+            terms.append((lent, 'best of what was left'))
         if need.dev == role:
-            terms.append((30, f'the {role} it asked for'))
+            terms.append((30, f'on the {role}, as asked'))
         if j not in taken:
-            terms.append((-15, 'nothing had opened this control yet'))
+            terms.append((-15, 'opens an untouched control'))
         why = Reason('borrowed', points=_s, parts=terms,
                      tier=reach_tier(ctrl),
                      ceiling=(reach or MAX_REACH)[need.urgency])
         slots = [(button, need.bindings[0])]
-        hand_out(slots, role, why, [(button, 'the one spare button left')])
+        hand_out(slots, role, why, [(button, 'the one spare button')])
         placed.append(Placement(need, role, ctrl, slots, _s, why))
 
     # Free means every button of it is free, not merely that no need chose it.

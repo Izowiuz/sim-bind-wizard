@@ -98,6 +98,16 @@ TL, TR, BL, BR, H, V = '╭', '╮', '╰', '╯', '─', '│'
 SEP = ' · '
 
 
+def plural(n, one, many=None):
+    """`3 bindings`, `1 binding`. Six places wrote `binding(s)` instead.
+
+    A parenthesised s is a form nobody speaks, and on a screen that is
+    otherwise man-terse it is the loudest thing on the line.
+    """
+    word = one if n == 1 else (many or one + 's')
+    return f'{n} {word}'
+
+
 def lid(width, title='', right=''):
     """The top edge: what this panel is, and what it is showing.
 

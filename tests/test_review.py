@@ -601,21 +601,17 @@ class BindsUnderTheAction(unittest.TestCase):
                  if r.kind == 'need' and r.need is gear)
         self.assertNotEqual('bind', rows[i + 1].kind)
 
-    def test_the_footer_no_longer_repeats_them(self):
-        rv = self.rv()
-        row = next(r for r in rv.rows()
-                   if r.kind == 'need' and r.need.what == 'Gear')
-        self.assertEqual([], review._detail(rv, row))
-
-    def test_the_footer_still_explains_a_need_with_no_control(self):
-        # That one is not a binding, so it has nowhere else to go.
+    def test_an_unassigned_row_still_says_what_would_fit(self):
+        # The footer these two used to check is gone -- what a row binds
+        # has been on the tree since `h` arrived, and the function had no
+        # caller left but them. The panel answers it now.
         rv = self.rv()
         gear = by(rv, 'Gear')
         rv.clear(gear)
         row = next(r for r in rv.rows()
                    if r.kind == 'need' and r.need is gear)
-        self.assertTrue(any('free control' in ln
-                            for ln in review._detail(rv, row)))
+        said = '\n'.join(t for _tone, t in review._side(rv, row, 40))
+        self.assertIn('fit', said)
 
 
 class TheDetailPanel(unittest.TestCase):
@@ -652,10 +648,10 @@ class TheDetailPanel(unittest.TestCase):
         self.assertIn('in a turn', self.text(self.rv(), 'Trim'))
 
     def test_it_gives_the_terms_the_score_was_made_of(self):
-        # Not the number: 137 says nothing to a reader. The terms say what
-        # the control was picked FOR, and they are already recorded.
+        # Not the total: 137 says nothing to a reader. The terms say what
+        # the control was picked FOR, and each carries what it was worth.
         got = self.text(self.rv(), 'Trim')
-        self.assertIn('fits', got)
+        self.assertRegex(got, r'[+-]\d+ \S')
 
     def test_it_names_the_shape_the_control_matched(self):
         self.assertIn('hat4', self.text(self.rv(), 'Trim'))
@@ -669,8 +665,11 @@ class TheDetailPanel(unittest.TestCase):
 
     # ---- the override mention ----
 
-    def test_the_planners_own_choice_is_marked_as_the_planners(self):
-        self.assertIn('planner', self.text(self.rv(), 'Trim').lower())
+    def test_it_says_whose_decision_this_was(self):
+        # In the words the map's legend and `?` use, not its own: one
+        # wording for one state, wherever it is named.
+        self.assertIn(review.MARK_SAID[PROPOSED],
+                      self.text(self.rv(), 'Trim'))
 
     def test_moving_it_by_hand_is_said_out_loud(self):
         rv = self.rv()
@@ -1190,14 +1189,16 @@ class WhatItFound(unittest.TestCase):
         # A legend drawn in the colours it explains: one line per tone,
         # because a line carries one.
         rv = made()
-        # Against the constant, not against its wording: this test is
-        # about one line per tone, and pinning the prose made it break
-        # when the words changed and the rule did not.
+        # Against the constants, not their wording: the rule is one
+        # line per state, drawn in that state's own tone, and pinning the
+        # prose made this break when the words changed and the rule
+        # had not.
+        want = {t: f'{review.MARK[t]} {review.MARK_SAID[t]}'.strip()
+                for t in (review.MINE, review.PROPOSED, review.UNSET)}
         legend = {tone: text for tone, text in rv.map_lines()
-                  if text.strip() in ('+ yours', f'? {review.PROPOSED_SAID}',
-                                      'free', 'carries no binding at all')}
-        self.assertEqual({'mine', 'proposed', 'plain', 'meta'},
-                         set(legend), 'each of the four, in its own tone')
+                  if text.strip() in want.values()}
+        self.assertEqual(set(want), set(legend),
+                         'each state, in its own tone')
 
 
 class Theming(unittest.TestCase):
