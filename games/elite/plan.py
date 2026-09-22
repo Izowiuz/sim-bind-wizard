@@ -55,29 +55,39 @@ harvest = adapter.from_file('edharvest', os.path.join(HERE, 'harvest.py'))
 #: confirmed at the stick. The plan reads it and never writes it.
 RESULTS = 'ed-bind-wizard-results.json'
 
+#: Where the judgements live. Source, not cache -- nothing derives them.
+#: Deliberately not in `CACHE`: that names what the harvest wrote, and a
+#: harvest cannot write a judgement.
+
 #: Filled by `Elite.__init__`, never at import -- see the note in
-#: games/falconbms/plan.py. `vouched()` and `votes()` are functions, so they
+#: games/falconbms/plan.py. `known()` and `votes()` are functions, so they
 #: read these only once an adapter exists.
-VOCAB, RANK, AXES = {}, {}, set()
+#: The catalogue as the harvest wrote it, and the two views of it this
+#: file asks for. Filled when an adapter is constructed, never at import:
+#: a module that reads a cache on import cannot be told apart from one that
+#: is broken, on a clone where nothing is harvested.
+CAT, RANK, AXES = [], {}, set()
 
 
-def vouched():
-    """Every function there is evidence the game accepts.
+def known():
+    """Every function the game accepts a binding for.
 
-    The shipped presets are not the whole list: `NightVisionToggle` is a real
-    ship function, written into a preset and working in game, and it appears in
-    none of the thirty. A function bound by hand in the results file has been
-    verified against the game itself, which is better evidence than a preset,
-    so it counts too.
+    This used to add whatever the results file held as well, because the
+    thirty shipped presets are LAYOUTS and cannot show a function nobody
+    bound -- and `NightVisionToggle` is exactly that, a real ship function
+    that works in game and appears in none of them.
+
+    But the results file is written by this tool. A function we misspelled
+    went in, came back as vocabulary, and then validated against itself in
+    `unknown()` -- so the one check meant to catch a typo was the one place
+    guaranteed not to.
+
+    The harvest reads the bindings file Elite keeps for itself now, which
+    lists every function it knows whether bound or not. The gap is closed
+    where it opened: 440 functions, `NightVisionToggle` among them, with
+    nothing vouching for anything.
     """
-    out = set(VOCAB.get('button', ())) | AXES
-    try:
-        with open(os.path.join(HERE, RESULTS), encoding='utf-8') as f:
-            saved = json.load(f)
-    except OSError:
-        return out
-    return out | {k for k, v in saved.items()
-                  if not k.startswith('_') and v is not None}
+    return {a.id for a in CAT}
 
 #: The preset the plan owns. The game picks a preset in its own control
 #: options and records the choice in StartPreset.4.start, which nothing here
@@ -97,7 +107,7 @@ def votes(*functions):
 #: `PitchAxisRaw` look shared when its twin is `BuggyPitchAxis`.
 def srv_twin(function):
     """The SRV form of a ship function, if the game has one."""
-    allf = vouched()
+    allf = known()
     for candidate in (f'{function}_Buggy', f'Buggy{function}'):
         if candidate in allf:
             return candidate
@@ -111,26 +121,6 @@ class Need(corneeds.Need):
     ship's meaning and the SRV's without them clashing -- the same shape War
     Thunder's air/heli pair and MSFS's plane/heli/global triple have.
     """
-
-    def __init__(self, what, shape, ship=(), srv=(), push=None, suits=None,
-                 urgency=IN_THE_AIR, device=None, prefer=None, on=None,
-                 note=''):
-        self.ship, self.srv = list(ship), list(srv)
-        n = max(len(self.ship), len(self.srv))
-
-        def pad(xs):
-            return list(xs) + [None] * (n - len(xs))
-
-        flat = [f for f in self.ship + self.srv if f]
-        # A slot is a list of Binds now. The context used to be the
-        # position in the tuple; it is read off the name instead, which is
-        # the rule `srv_twin` already encodes and the only one Elite has.
-        super().__init__(what, shape,
-                         bindings=[[cactions.Bind(f) for f in pair if f]
-                                   for pair in zip(pad(self.ship),
-                                                   pad(self.srv))],
-                         push=push, urgency=urgency, suits=suits, dev=device,
-                         prefer=prefer, on=on, rank=votes(*flat), note=note)
 
     @property
     def device(self):
@@ -174,153 +164,21 @@ AXIS_NEEDS = [
     ('CamTranslateYAxis', 'Ship', 'stick',    ('kind', 'mini-stick-y'), False),
 ]
 
-def _needs():
-    """The needs, built on demand rather than at import.
+def _needs(filename):
+    """[Need] -- the hand-written list, read rather than executed.
 
-    Two things in here read the vocabulary: `rank=votes(*flat)` in
-    `Need.__init__`, and `srv=twinned(...)`, which asks whether the
-    game has an SRV twin of each function. As a module-level literal
-    this ran before any adapter existed to fill VOCAB and RANK, which
-    made every need rank 0 and silently dropped every SRV binding --
-    and the layout changed with it, because rank feeds the score.
+    This used to BUILD them, and two parts were derived on the way: the
+    factory vote count (`votes(*flat)`) and whether the game has an SRV
+    twin of each ship function (`twinned(...)`). Both are written down now.
 
-    That is what the abstract NEEDS being a *property* is for: DCS
-    derives its needs per aircraft, and this one derives its own from
-    the game's vocabulary. Neither can be a constant.
+    That is a real change and it is the intended one. A vote count read
+    out of a cache silently reordered the plan whenever the cache was
+    refreshed -- which is exactly the hidden input the judgements are
+    leaving source to escape. Re-deriving is something to ask for rather
+    than something that happens to you.
     """
-    return [
-        # --- with something shooting at you
-        Need('Primary fire', 'trigger', ship=['PrimaryFire'],
-             srv=['BuggyPrimaryFireButton'], suits='fire', urgency=IN_A_TURN,
-             device='stick', note='13/13 factory presets, all of them on the stick'),
-
-        Need('Secondary fire', 'button', ship=['SecondaryFire'],
-             srv=['BuggySecondaryFireButton'], suits='fire', urgency=IN_A_TURN,
-             device='stick'),
-
-        Need('Boost', 'button', ship=['UseBoostJuice'],
-             urgency=IN_A_TURN, device='throttle',
-             note='13/13, and every split preset puts it on the throttle'),
-
-        Need('Select target', 'button', ship=['SelectTarget'],
-             srv=twinned('SelectTarget'), suits='lock', urgency=IN_A_TURN,
-             device='stick'),
-
-        Need('Next hostile', 'button', ship=['CycleNextHostileTarget'],
-             suits='lock', urgency=IN_A_TURN, device='stick'),
-
-        Need('Highest threat', 'button', ship=['SelectHighestThreat'],
-             suits='lock', urgency=IN_A_TURN, device='stick'),
-
-        Need('Power distribution', 'hat4',
-             ship=['IncreaseSystemsPower', 'IncreaseWeaponsPower',
-                   'ResetPowerDistribution', 'IncreaseEnginesPower'],
-             srv=twinned('IncreaseSystemsPower', 'IncreaseWeaponsPower',
-                         'ResetPowerDistribution', 'IncreaseEnginesPower'),
-             on=('up', 'right', 'down', 'left'),
-             urgency=IN_A_TURN, device='stick',
-             note='four functions at 13/13; pips are the whole of ED combat'),
-
-        Need('Fire group', 'hat2',
-             ship=['CycleFireGroupNext', 'CycleFireGroupPrevious'],
-             on=('forward', 'back'), urgency=IN_A_TURN, device='stick'),
-
-        Need('Hardpoints', 'button', ship=['DeployHardpointToggle'],
-             urgency=IN_A_TURN, device='stick'),
-
-        Need('Chaff', 'button', ship=['FireChaffLauncher'],
-             urgency=IN_A_TURN, device='throttle'),
-
-        Need('Heat sink', 'button', ship=['DeployHeatSink'],
-             urgency=IN_A_TURN, device='throttle'),
-
-        Need('Shield cell', 'button', ship=['UseShieldCell'],
-             urgency=IN_A_TURN, device='throttle'),
-
-        # --- hands busy, but there is time
-        Need('Landing gear', 'button', ship=['LandingGearToggle'],
-             suits='toggle', urgency=ON_APPROACH, device='throttle',
-             note='a toggle, so one button: ED has no separate up and down. '
-                  '9/13, four of five split presets on the throttle'),
-
-        Need('Cargo scoop', 'button', ship=['ToggleCargoScoop'],
-             srv=twinned('ToggleCargoScoop'), urgency=ON_APPROACH,
-             device='throttle'),
-
-        Need('Flight assist', 'button', ship=['ToggleFlightAssist'],
-             srv=['ToggleDriveAssist'], urgency=ON_APPROACH, device='throttle'),
-
-        Need('Speed zero', 'button', ship=['SetSpeedZero'],
-             urgency=ON_APPROACH, device='throttle'),
-
-        Need('Reverse throttle', 'button', ship=['ToggleReverseThrottleInput'],
-             srv=['BuggyToggleReverseThrottleInput'], urgency=ON_APPROACH,
-             device='throttle'),
-
-        Need('Frame shift', 'button', ship=['HyperSuperCombination'],
-             urgency=ON_APPROACH, device='throttle',
-             note='supercruise and hyperspace on one button, as the game intends'),
-
-        # --- somewhere in the cruise
-        Need('Subsystem', 'hat2',
-             ship=['CycleNextSubsystem', 'CyclePreviousSubsystem'],
-             on=('forward', 'back'), suits='sensor', urgency=IN_THE_AIR,
-             device='stick'),
-
-        Need('Target', 'hat2',
-             ship=['CycleNextTarget', 'CyclePreviousTarget'],
-             on=('right', 'left'), suits='lock', urgency=IN_THE_AIR,
-             device='stick'),
-
-        Need('Radar range', 'hat2',
-             ship=['RadarIncreaseRange', 'RadarDecreaseRange'],
-             on=('forward', 'back'), suits='sensor', urgency=IN_THE_AIR,
-             device='throttle'),
-
-        Need('Head look', 'ministick', ship=[], suits='view',
-             urgency=IN_THE_AIR, device='throttle',
-             note='binds nothing: it reserves the mini-stick, which the axes '
-                  'below take, so no button need can claim it'),
-
-        Need('Head look reset', 'button', ship=['HeadLookReset'],
-             suits='view', urgency=IN_THE_AIR, device='throttle'),
-
-        Need('Discovery scan', 'button', ship=['ExplorationFSSDiscoveryScan'],
-             urgency=IN_THE_AIR, device='throttle', note='13/13'),
-
-        Need('Night vision', 'button', ship=['NightVisionToggle'],
-             srv=twinned('NightVisionToggle'), urgency=IN_THE_AIR),
-
-        Need('Spotlight', 'button', ship=['ShipSpotLightToggle'],
-             srv=['HeadlightsBuggyButton'], urgency=IN_THE_AIR),
-
-        # What the factory presets actually put on hardware is the panel CYCLE,
-        # 13/13 and every split preset on the throttle -- not the four Focus*
-        # functions, which are 5/13 and were left on the keyboard by hand. Cycling
-        # reaches all four panels from two buttons.
-        Need('Panel', 'hat2',
-             ship=['CycleNextPanel', 'CyclePreviousPanel'],
-             on=('forward', 'back'), urgency=IN_THE_AIR, device='throttle',
-             note='13/13, every split preset on the throttle'),
-
-        Need('Panel page', 'hat2',
-             ship=['CycleNextPage', 'CyclePreviousPage'],
-             on=('right', 'left'), urgency=IN_THE_AIR, device='throttle'),
-
-        # --- canopy open, engine off
-        Need('Galaxy map', 'button', ship=['GalaxyMapOpen'],
-             srv=twinned('GalaxyMapOpen'), urgency=ON_THE_RAMP),
-
-        Need('System map', 'button', ship=['SystemMapOpen'],
-             srv=twinned('SystemMapOpen'), urgency=ON_THE_RAMP),
-
-        # Pinned deliberately. It is destructive and the borrow pass does not
-        # honour the reach FLOOR, so left to itself it took a thumb hat direction.
-        Need('Eject cargo', 'button', ship=['EjectAllCargo'],
-             srv=twinned('EjectAllCargo'), urgency=ON_THE_RAMP,
-             prefer='Big red button',
-             note='pinned away from the hand: it throws the cargo out'),
-    ]
+    return corneeds.read_needs(vocab.load(HERE, filename, key='needs'),
+                               make=Need)
 
 
 def unknown(needs):
@@ -330,7 +188,7 @@ def unknown(needs):
     function a patch renamed is an error here rather than a binding that
     silently does nothing.
     """
-    allf = vouched()
+    allf = known()
     bad = []
     for n in needs:
         for slot in n.bindings:
@@ -549,21 +407,22 @@ class Elite(adapter.Planner):
 
     game = 'elite'
     title = 'Elite Dangerous'
-    CACHE = {'ed-actions.json': 'vocabulary', 'ed-rank.json': 'ranking'}
+    BINDS = 'elite-binds.json'
+    CACHE = {'ed-actions.json': 'actions', 'ed-rank.json': 'ranking'}
 
 
     def __init__(self, preset=None, backup_dir=None):
         self.preset = preset or os.environ.get('ED_PRESET', PRESET)
         self.backup_dir = backup_dir
         self.subtitle = f'VIRPIL · {self.preset}'
-        VOCAB.update(self.cache('ed-actions.json',
-                                build=harvest.vocabulary))
+        CAT[:] = cactions.read(self.cache('ed-actions.json',
+                                          build=harvest.action_rows))
         RANK.update(self.cache('ed-rank.json', build=harvest.ranking))
-        AXES.update(VOCAB.get('axis', ()))
+        AXES.update(a.id for a in CAT if a.kind == 'axis')
         # Elite has one element per function, so a function two needs both
         # claim does not clash -- the second simply wins, silently. The
         # adapter refuses to exist rather than write that.
-        self._needs = _needs()
+        self._needs = _needs(self.BINDS)
         dup = duplicates(self._needs)
         if dup:
             raise SystemExit('claimed by more than one need: '
@@ -599,17 +458,12 @@ class Elite(adapter.Planner):
     def catalogue(self):
         """Every function there is evidence the game accepts.
 
-        From `vouched()` rather than from `VOCAB`, for the reason its own
-        docstring gives: the thirty shipped presets are not the whole list.
-        `NightVisionToggle` is a real ship function that works in game,
-        appears in none of them, and this plan has bound it all along -- a
-        catalogue built from the presets alone would drop it off the screen.
+        A read, not a translation. The harvest writes the record, from
+        the bindings file the game keeps for itself -- which names every
+        function whether bound or not, so the screen no longer depends on
+        what this tool happened to have written down.
         """
-        axes = set(VOCAB.get('axis', ())) | AXES
-        return [cactions.Action(fn, harvest.readable(fn),
-                                kind='axis' if fn in axes else 'button',
-                                rank=(RANK.get(fn) or {}).get('votes', 0))
-                for fn in sorted(vouched() | axes)]
+        return list(CAT)
 
 
     @typing.override
@@ -661,11 +515,13 @@ class Elite(adapter.Planner):
                         out.append(f'      {part:9} Joy_{button + 1:<4} '
                                    f'{ctx:5} {harvest.readable(func)}')
             if why:
-                out.append(f'      {"":9} '
-                           f'[{corneeds.URGENCY_NAME[n.urgency]}]'
-                           f'  {n.rank}/13 factory presets'
-                           f'{" relaxed" if n.relaxed else ""}'
-                           f'{"  " + n.note if n.note else ""}')
+                # 13 is what Elite's count is a count OF: the HOTAS presets
+                # it ships. The number itself is `need.rank` like everyone
+                # else's.
+                out.append('      ' + ' · '.join(
+                    corneeds.why_bits(p_, out_of=13)))
+                if n.note:
+                    out.append(f'      {n.note}')
         out.append('')
         for func, ctx, role, a_, invert in axes:
             out.append(f'  {harvest.readable(func):34} {ctx:5} {role:9} '

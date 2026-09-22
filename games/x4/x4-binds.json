@@ -1,0 +1,520 @@
+{
+"needs": [
+{
+"what": "Fire primary",
+"shape": "trigger",
+"bindings": [
+[
+{
+"action": "INPUT_STATE_FIRE_PRIMARY_WEAPON"
+}
+]
+],
+"urgency": 0,
+"suits": "fire",
+"dev": "stick",
+"note": "already on the stick by hand; the trigger is what it is for"
+},
+{
+"what": "Fire secondary",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_STATE_FIRE_SECONDARY_WEAPON"
+}
+]
+],
+"urgency": 0,
+"suits": "fire",
+"dev": "stick"
+},
+{
+"what": "Boost",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_STATE_BOOST"
+},
+{
+"action": "INPUT_ACTION_FP_RUN"
+}
+]
+],
+"urgency": 0,
+"suits": "reflex",
+"dev": "throttle",
+"note": "held, not tapped, so it wants a button you can hold"
+},
+{
+"what": "Target next enemy",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_TARGET_NEXT_ENEMY"
+}
+]
+],
+"urgency": 0,
+"suits": "lock",
+"dev": "stick"
+},
+{
+"what": "Target under cursor",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_TARGET_NEXT_TARGET"
+},
+{
+"action": "INPUT_STATE_MAP_SELECT"
+}
+]
+],
+"urgency": 0,
+"suits": "lock",
+"dev": "stick"
+},
+{
+"what": "Countermeasure",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_DEPLOY_COUNTERMEASURE"
+}
+]
+],
+"urgency": 0,
+"dev": "stick"
+},
+{
+"what": "Strafe",
+"shape": "hat4",
+"bindings": [
+[
+{
+"action": "INPUT_STATE_STRAFE_UP"
+}
+],
+[
+{
+"action": "INPUT_STATE_STRAFE_RIGHT"
+}
+],
+[
+{
+"action": "INPUT_STATE_STRAFE_DOWN"
+}
+],
+[
+{
+"action": "INPUT_STATE_STRAFE_LEFT"
+}
+]
+],
+"urgency": 0,
+"dev": "stick",
+"note": "the axes get it too; the hat is for a precise nudge",
+"on": [
+"up",
+"right",
+"down",
+"left"
+]
+},
+{
+"what": "Weapon group",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_CYCLE_NEXT_PRIMARY_WEAPONGROUP"
+}
+],
+[
+{
+"action": "INPUT_ACTION_CYCLE_PREV_PRIMARY_WEAPONGROUP"
+}
+]
+],
+"urgency": 0,
+"dev": "stick",
+"on": [
+"forward",
+"back"
+]
+},
+{
+"what": "Missile group",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_CYCLE_NEXT_SECONDARY_WEAPONGROUP"
+}
+],
+[
+{
+"action": "INPUT_ACTION_CYCLE_PREV_SECONDARY_WEAPONGROUP"
+}
+]
+],
+"urgency": 0,
+"on": [
+"forward",
+"back"
+]
+},
+{
+"what": "Match speed",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_STATE_MATCH_SPEED"
+}
+]
+],
+"urgency": 0,
+"dev": "throttle",
+"note": "latches in the game (toggle=\"1\"), so a plain button is right"
+},
+{
+"what": "Travel mode",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_TOGGLE_TRAVEL_MODE"
+}
+]
+],
+"urgency": 1,
+"dev": "throttle"
+},
+{
+"what": "Flight assist",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_TOGGLE_FLIGHT_ASSIST"
+}
+]
+],
+"urgency": 1,
+"dev": "throttle"
+},
+{
+"what": "Dock / undock",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_DOCK_ACTION"
+}
+],
+[
+{
+"action": "INPUT_ACTION_UNDOCK"
+}
+]
+],
+"urgency": 1,
+"dev": "throttle",
+"on": [
+"forward",
+"back"
+]
+},
+{
+"what": "Autopilot",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_TOGGLE_AUTOPILOT"
+}
+]
+],
+"urgency": 1,
+"dev": "throttle"
+},
+{
+"what": "Target action",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_NEXT_TARGET_ACTION"
+}
+],
+[
+{
+"action": "INPUT_ACTION_PREV_TARGET_ACTION"
+}
+]
+],
+"urgency": 1,
+"dev": "stick",
+"on": [
+"forward",
+"back"
+]
+},
+{
+"what": "Subcomponent",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_NEXT_SUBCOMPONENT"
+}
+],
+[
+{
+"action": "INPUT_ACTION_PREV_SUBCOMPONENT"
+}
+]
+],
+"urgency": 1,
+"dev": "stick",
+"on": [
+"right",
+"left"
+]
+},
+{
+"what": "Deselect target",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_DESELECT_TARGET"
+},
+{
+"action": "INPUT_STATE_MAP_BACK"
+}
+]
+],
+"urgency": 1,
+"dev": "stick"
+},
+{
+"what": "Scan mode",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_TOGGLE_SCAN_MODE"
+}
+]
+],
+"dev": "throttle"
+},
+{
+"what": "Long-range scan",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_TOGGLE_LONGRANGE_SCAN_MODE"
+}
+]
+],
+"dev": "throttle"
+},
+{
+"what": "Scan action",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_SCAN_ACTION"
+}
+]
+]
+},
+{
+"what": "SETA",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_TOGGLE_SETA_MODE"
+}
+]
+],
+"dev": "throttle"
+},
+{
+"what": "Map",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_OPEN_MAP"
+}
+]
+],
+"note": "the one menu worth a hand"
+},
+{
+"what": "Comms",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_COMM_ACTION"
+}
+]
+]
+},
+{
+"what": "View",
+"shape": "hat4",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_COCKPIT_VIEW"
+},
+{
+"action": "INPUT_STATE_MAP_RESET_POSITION"
+}
+],
+[
+{
+"action": "INPUT_ACTION_TARGET_VIEW"
+}
+],
+[
+{
+"action": "INPUT_ACTION_EXTERNAL_VIEW"
+},
+{
+"action": "INPUT_STATE_MAP_RESET_ROTATION"
+}
+],
+[
+{
+"action": "INPUT_ACTION_CYCLE_VIEW"
+}
+]
+],
+"suits": "view"
+},
+{
+"what": "Zoom goggles",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_ZOOMGOGGLES"
+}
+]
+],
+"suits": "view"
+},
+{
+"what": "Map rotate",
+"shape": "hat4",
+"bindings": [
+[
+{
+"action": "INPUT_STATE_MAP_PAN_TO_ROTATE"
+}
+],
+[],
+[],
+[]
+],
+"note": "only answers in the map; harmless in flight"
+},
+{
+"what": "Cockpit menu",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_OPEN_COCKPIT_MENU"
+}
+]
+],
+"urgency": 3
+},
+{
+"what": "Player ship info",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_OPEN_PLAYERSHIP_INFO"
+}
+]
+],
+"urgency": 3
+},
+{
+"what": "Missions",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_OPEN_MISSIONS"
+}
+]
+],
+"urgency": 3
+},
+{
+"what": "Quicksave",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_QUICKSAVE"
+}
+]
+],
+"urgency": 3,
+"note": "deliberately far from the hand"
+},
+{
+"what": "Pause",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_PAUSE"
+}
+]
+],
+"urgency": 3
+},
+{
+"what": "Jump / crouch",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "INPUT_STATE_FP_JUMP"
+}
+],
+[
+{
+"action": "INPUT_STATE_FP_CROUCH"
+}
+]
+],
+"urgency": 3,
+"on": [
+"forward",
+"back"
+]
+}
+]
+}

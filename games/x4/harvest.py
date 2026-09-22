@@ -52,6 +52,7 @@ import typing
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 '..', '..'))
+from core import actions as cactions                        # noqa: E402
 from core import game                                       # noqa: E402
 from core import adapter                                    # noqa: E402
 from core import vocab                                      # noqa: E402
@@ -62,6 +63,21 @@ from core import vocab                                      # noqa: E402
 #: installed in, not always the first one.
 APPID = '392160'
 PROFILE_PARTS = ('users', 'steamuser', 'Documents', 'Egosoft', 'X4')
+
+#: The three kinds X4 names in the id itself, and the prefixes that say so.
+#: `readable()` strips exactly these, which is the same fact read the other
+#: way round -- so it is kept here, once, rather than beside each reader.
+#: `INPUT_SOURCE_` is deliberately not among them: that says where a binding
+#: comes FROM, not what is being bound.
+ACTION, STATE, RANGE = 'action', 'state', 'range'
+PREFIX = {ACTION: 'INPUT_ACTION_', STATE: 'INPUT_STATE_',
+          RANGE: 'INPUT_RANGE_'}
+
+#: An id anywhere in a block of bytes. X4 ships no list of what it accepts --
+#: its four `inputmap*.xml` are LAYOUTS, and three of the four are the
+#: player's own saved profiles, so reading them tells you what somebody once
+#: chose rather than what the game allows. The executable carries the names.
+ID_IN_BYTES = re.compile(rb'INPUT_(?:ACTION|STATE|RANGE)_[A-Z0-9_]+')
 
 #: Attributes are not always in the same order and not always just the three.
 #: `toggle="1"` sits BETWEEN source and code on a latching <state>, and `sgn`
@@ -195,18 +211,75 @@ def profiles(path=None):
     return out
 
 
-def vocabulary(profs=None):
-    """{kind: {id}} -- everything X4 will accept a binding for.
+def kind_of(ident):
+    """`action`, `state` or `range`, read off the id.
 
-    The default profile ships every action with its stock binding, so it is
-    the vocabulary as well as a layout; the named profiles can only add.
+    X4's ids carry it, so it never had to travel in a payload beside them.
+    It is a property of the action, not of binding it.
     """
-    profs = profs or profiles()
+    for kind, prefix in PREFIX.items():
+        if ident.startswith(prefix):
+            return kind
+    return ACTION
+
+
+def ids_in(blob):
+    """{id} -- every action id in a block of bytes."""
+    return {m.group(0).decode('ascii') for m in ID_IN_BYTES.finditer(blob)}
+
+
+def binary(path=None):
+    """The game executable, or None. It holds the names of the actions.
+
+    Not an error when it is absent: the profiles still give a vocabulary,
+    just a narrower one, and a harvest that refuses to run because a Steam
+    library moved is worse than one that says what it got.
+    """
+    if path:
+        return path if os.path.exists(path) else None
+    where = os.environ.get('X4_GAME_DIR') or game.install_dir('X4 Foundations')
+    if not where:
+        return None
+    exe = os.path.join(where, 'X4.exe')
+    return exe if os.path.exists(exe) else None
+
+
+def vocabulary(profs=None, extra=None):
+    """{kind: [id]} -- everything X4 will accept a binding for.
+
+    Two sources, unioned, because neither is the whole truth.
+
+    The profiles are layouts. The shipped default binds 337 ids and the
+    three saved ones 314-338, and three of those four are the player's own
+    -- so what they carry is a record of past choices. Nine ids they DO
+    carry are absent from the executable (the mouse, VR and cutscene ones,
+    which the UI assembles rather than names), so they cannot be dropped.
+
+    The executable names 447, of which 97 no profile binds at all --
+    `INPUT_ACTION_DEPLOY_SATELLITE`, `DEPLOY_MINE`, `DEPLOY_NAVBEACON` and
+    the rest. Those are real, bindable, and exactly the kind of thing a
+    HOTAS wants; they were invisible because nobody had bound them yet.
+
+    `extra` is that second source as a set of bare ids -- `kind_of` reads
+    their kind off the id, which is X4's own convention and not a guess.
+    Left out, the executable is read; an empty one means none, the same
+    distinction `profs` makes. A caller asking for nothing must not be
+    handed everything.
+    """
+    # `is None`, not falsy: an empty mapping means "no profiles", and
+    # going off to read the install instead would make a caller that asked
+    # for nothing get everything.
+    profs = profiles() if profs is None else profs
+    if extra is None:
+        exe = binary()
+        extra = ids_in(open(exe, 'rb').read()) if exe else ()
     vocab = collections.defaultdict(set)
     for p in profs.values():
         for kind, ident, _src, _code in p['rows']:
             vocab[kind].add(ident)
-    return {k: sorted(v) for k, v in vocab.items()}
+    for ident in extra:
+        vocab[kind_of(ident)].add(ident)
+    return {k: sorted(v) for k, v in sorted(vocab.items())}
 
 
 #: Words in an id that are names rather than prose.
@@ -231,6 +304,49 @@ def readable(ident):
     if out[0] not in ACRONYMS:
         out[0] = out[0].capitalize()
     return ' '.join(out)
+
+
+def context_of(ident):
+    """Which context an id answers in, read off the id itself.
+
+    X4 has no mode flag on a binding: `MAP_*` ids answer only in the map and
+    `FP_*` only on foot, which is what lets one control carry three
+    meanings. Kept beside `kind_of` and `readable` because all three are the
+    same fact -- X4 says what an action IS in its name.
+    """
+    if '_MAP_' in ident:
+        return 'Map'
+    if '_FP_' in ident:
+        return 'On foot'
+    return 'Ship'
+
+
+def catalogue(voc=None):
+    """[Action] -- the whole vocabulary in the shape every game shares.
+
+    Built here rather than in `plan.py` because everything it needs is
+    already known here: `readable`, `kind_of` and `context_of` all read
+    X4's own naming, and the alternative is translating on the way out of
+    the cache instead of on the way in.
+
+    `range` is X4's word for an axis; `action` and `state` are both buttons
+    to anything outside this file, and the three-way kind stays recoverable
+    from the id for the writer that needs it.
+
+    No `rank`: X4's four profiles each bind 314-338 of the 456, and three
+    of the four are the player's own saved layouts, so counting them
+    separates nothing. A derived stand-in would be read as a fact.
+    """
+    voc = vocabulary() if voc is None else voc
+    return [cactions.Action(i, readable(i),
+                            kind='axis' if k == RANGE else 'button',
+                            mode=context_of(i))
+            for k, ids in sorted(voc.items()) for i in ids]
+
+
+def action_rows(voc=None):
+    """The section the cache holds, for a planner rebuilding on the spot."""
+    return cactions.dump(catalogue(voc))
 
 
 AXIS_CODE = re.compile(r'INPUT_JOYAXIS_(\w+)$')
@@ -293,7 +409,7 @@ class X4Harvest(adapter.Harvest):
     """
 
     game = 'x4'
-    files = {'x4-actions.json': ('vocabulary', 'slots', 'profiles')}
+    files = {'x4-actions.json': ('actions', 'slots', 'profiles')}
 
     @typing.override
     def arguments(self, parser):
@@ -307,13 +423,14 @@ class X4Harvest(adapter.Harvest):
         self.args = args
         self.where = profile_dir()
         self.profs = profiles(self.where)
+        self.exe = binary()
         self.v = vocabulary(self.profs)
         # `slots()` ran twice for every profile: once for the display and
         # once for the cache. Once is enough, and the two can no longer
         # disagree.
         self.slots = {n: slots(pr) for n, pr in self.profs.items()}
         return {'x4-actions.json': {
-            'vocabulary': self.v,
+            'actions': action_rows(self.v),
             'slots': self.slots,
             'profiles': {n: pr['name'] for n, pr in self.profs.items()}}}
 
@@ -326,7 +443,11 @@ class X4Harvest(adapter.Harvest):
                        f'{len(p["rows"]):>4} bindings, {joy} on a joystick')
         out.append('')
         out.append('vocabulary  '
-                   + ', '.join(f'{len(ids)} {k}' for k, ids in self.v.items()))
+                   + ', '.join(f'{len(ids)} {k}'
+                               for k, ids in self.v.items())
+                   + ('' if self.exe else
+                      '  (no X4.exe found -- profiles only, which is what '
+                      'somebody already bound rather than what X4 accepts)'))
         for name, sl in self.slots.items():
             if not sl:
                 continue

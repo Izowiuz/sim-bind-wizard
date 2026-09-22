@@ -1,0 +1,670 @@
+{
+"needs": [
+{
+"what": "Trigger",
+"shape": "trigger",
+"bindings": [
+[
+{
+"action": "SimTriggerFirstDetent"
+}
+],
+[
+{
+"action": "SimTriggerSecondDetent"
+}
+]
+],
+"urgency": 0,
+"suits": "fire",
+"dev": "stick",
+"note": "cumulative: the light pull starts the gun camera and the AVTR, pulling through it fires. The third detent stays free"
+},
+{
+"what": "Weapon release (Pickle)",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "SimPickle"
+}
+]
+],
+"urgency": 0,
+"suits": "fire",
+"dev": "stick",
+"note": "everything you drop or shoot comes off here"
+},
+{
+"what": "TMS — target management",
+"shape": "hat4",
+"bindings": [
+[
+{
+"action": "SimTMSUp"
+}
+],
+[
+{
+"action": "SimTMSRight"
+}
+],
+[
+{
+"action": "SimTMSDown"
+}
+],
+[
+{
+"action": "SimTMSLeft"
+}
+]
+],
+"urgency": 0,
+"suits": "sensor",
+"dev": "stick",
+"note": "up locks what the cursor is over, down breaks the lock"
+},
+{
+"what": "DMS — display management",
+"shape": "hat4",
+"bindings": [
+[
+{
+"action": "SimDMSUp"
+}
+],
+[
+{
+"action": "SimDMSRight"
+}
+],
+[
+{
+"action": "SimDMSDown"
+}
+],
+[
+{
+"action": "SimDMSLeft"
+}
+]
+],
+"urgency": 0,
+"suits": "sensor",
+"dev": "stick",
+"note": "picks the SOI — which MFD or the HUD the cursor is driving"
+},
+{
+"what": "CMS — countermeasures",
+"shape": "hat4",
+"bindings": [
+[
+{
+"action": "SimCMSUp"
+}
+],
+[
+{
+"action": "SimCMSRight"
+}
+],
+[
+{
+"action": "SimCMSDown"
+}
+],
+[
+{
+"action": "SimCMSLeft"
+}
+]
+],
+"urgency": 0,
+"suits": "reflex",
+"dev": "stick",
+"note": "up runs the CMDS programme: this is chaff and flares"
+},
+{
+"what": "Paddle — AP / trim disconnect",
+"shape": "paddle",
+"bindings": [
+[
+{
+"action": "SimAPOverride"
+}
+]
+],
+"urgency": 0,
+"suits": "reflex",
+"dev": "stick",
+"note": "hold it to override the autopilot and the trim"
+},
+{
+"what": "NWS / AR DISC / MSL STEP",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "SimMissileStep"
+}
+]
+],
+"urgency": 0,
+"suits": "reflex",
+"dev": "stick",
+"note": "one button, three jobs depending on what the jet is doing: nosewheel steering on the ground, missile step in the air"
+},
+{
+"what": "Trim — pitch",
+"shape": "encoder",
+"bindings": [
+[
+{
+"action": "AFElevatorTrimDown"
+}
+],
+[
+{
+"action": "AFElevatorTrimUp"
+}
+]
+],
+"push": [
+{
+"action": "AFResetTrim"
+}
+],
+"urgency": 0,
+"suits": "trim",
+"dev": "stick",
+"note": "BMS names these after the trim wheel, not the nose: \"Trim Up\" is nose DOWN. Roll trim is not on the HOTAS — three hats on the grip, four on the jet"
+},
+{
+"what": "Master arm",
+"shape": "latch",
+"bindings": [
+[
+{
+"action": "SimSafeMasterArm"
+}
+],
+[
+{
+"action": "SimArmMasterArm"
+}
+]
+],
+"suits": "state",
+"dev": "stick",
+"note": "the lever over the trigger, so the guard position IS the switch position. CHECK THIS ON THE RAMP: which of the two contacts is the closed lever was never measured — if the jet arms with the lever down, swap the two names in NEEDS"
+},
+{
+"what": "Radar cursor (slew)",
+"shape": "ministick",
+"bindings": [],
+"push": [
+{
+"action": "SimCursorEnable"
+}
+],
+"urgency": 0,
+"suits": "view",
+"dev": "throttle",
+"note": "the axes drive the cursor, the press is Cursor Enable"
+},
+{
+"what": "COMMS switch",
+"shape": "hat4",
+"bindings": [
+[
+{
+"action": "SimTransmitCom1"
+}
+],
+[
+{
+"action": "SimCommsSwitchRight"
+}
+],
+[
+{
+"action": "SimTransmitCom2"
+}
+],
+[
+{
+"action": "SimCommsSwitchLeft"
+}
+]
+],
+"urgency": 0,
+"suits": "reflex",
+"dev": "throttle",
+"note": "up UHF, down VHF, left and right work the IFF"
+},
+{
+"what": "SPD BRAKE switch",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "AFBrakesIn"
+}
+],
+[
+{
+"action": "AFBrakesOut"
+}
+]
+],
+"urgency": 0,
+"suits": "reflex",
+"dev": "throttle",
+"note": "forward closes, back opens — the way the real switch moves",
+"on": [
+"forward",
+"back"
+]
+},
+{
+"what": "DOGFIGHT / MRM override",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "SimSelectMRMOverride"
+},
+{
+"action": "SimDeselectOverride",
+"edge": "release"
+}
+],
+[
+{
+"action": "SimSelectSRMOverride"
+},
+{
+"action": "SimDeselectOverride",
+"edge": "release"
+}
+]
+],
+"urgency": 0,
+"suits": "reflex",
+"dev": "throttle",
+"note": "spring-loaded in the real jet: hold it forward for MRM, back for dogfight, let go and it cancels. That last part is the release edge, which no other sim of the four can express",
+"on": [
+"forward",
+"back"
+]
+},
+{
+"what": "MAN RANGE knob — UNCAGE",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "SimToggleMissileCage"
+}
+]
+],
+"urgency": 0,
+"suits": "reflex",
+"dev": "throttle",
+"note": "uncages the seeker so a heater growls at what you point it at"
+},
+{
+"what": "Radar cursor zero",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "SimRadarCursorZero"
+}
+]
+],
+"urgency": 0,
+"dev": "throttle",
+"note": "puts the cursor back under the nose when you have lost it — which happens while slewing, so it has to be under the thumb"
+},
+{
+"what": "MAN RANGE knob",
+"shape": "encoder",
+"bindings": [
+[
+{
+"action": "SimRangeKnobDown"
+}
+],
+[
+{
+"action": "SimRangeKnobUp"
+}
+]
+],
+"suits": "trim",
+"dev": "throttle",
+"shift": true
+},
+{
+"what": "Radar gain",
+"shape": "encoder",
+"bindings": [
+[
+{
+"action": "SimRadarGainDown"
+}
+],
+[
+{
+"action": "SimRadarGainUp"
+}
+]
+],
+"suits": "trim",
+"dev": "throttle",
+"shift": true
+},
+{
+"what": "ICP — master mode",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "SimICPAA"
+}
+],
+[
+{
+"action": "SimICPAG"
+}
+]
+],
+"note": "air-to-air and air-to-ground; NAV is the way back out"
+},
+{
+"what": "ICP — NAV mode",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "SimICPNav"
+}
+]
+]
+},
+{
+"what": "IFF MASTER knob",
+"shape": "selector",
+"bindings": [
+[
+{
+"action": "SimIFFMasterOff"
+}
+],
+[
+{
+"action": "SimIFFMasterStby"
+}
+],
+[
+{
+"action": "SimIFFMasterLow"
+}
+],
+[
+{
+"action": "SimIFFMasterNorm"
+}
+],
+[
+{
+"action": "SimIFFMasterEmerg"
+}
+]
+],
+"suits": "state",
+"dev": "throttle",
+"note": "five positions in the jet and five on the selector, and the knob holds its state the same way — the one control here that matches its cockpit original exactly",
+"shift": true
+},
+{
+"what": "DX shift (pinky)",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "SimHotasPinkyShift"
+}
+]
+],
+"suits": "occasional",
+"dev": "stick",
+"prefer": "Grip pinky button",
+"note": "hold it to reach the second layer. Everything on that layer is something you do on the ground, so a button you have to regrip for is the right home"
+},
+{
+"what": "Recentre head tracking",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "RecenterTrackIR"
+}
+]
+]
+},
+{
+"what": "Look closer",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "FOVToggle"
+}
+]
+],
+"note": "a step zoom on top of the analogue one on the dial"
+},
+{
+"what": "Slap switch (ECM)",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "SimSlapSwitch"
+}
+]
+]
+},
+{
+"what": "Laser arm",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "SimLaserArmToggle"
+}
+]
+]
+},
+{
+"what": "Landing gear",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "AFGearUp"
+}
+],
+[
+{
+"action": "AFGearDown"
+}
+]
+],
+"urgency": 1,
+"suits": "stepped-pair",
+"on": [
+"up",
+"down"
+],
+"shift": true
+},
+{
+"what": "Parking brake",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "SimParkingBrakeUp"
+}
+],
+[
+{
+"action": "SimParkingBrakeDown"
+}
+]
+],
+"urgency": 1,
+"suits": "stepped-pair",
+"on": [
+"up",
+"down"
+],
+"shift": true
+},
+{
+"what": "Landing / taxi lights",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "SimLandingLightCycle"
+}
+]
+],
+"urgency": 1,
+"note": "LANDING / OFF / TAXI is three positions, and cycling costs one button where matching it costs a rocker the two-position switches want more"
+},
+{
+"what": "JFS — engine start",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "SimJfsStartUp"
+}
+],
+[
+{
+"action": "SimJfsStartDown"
+}
+]
+],
+"urgency": 3,
+"suits": "stepped-pair",
+"note": "START 1 is the one the cold start wants",
+"on": [
+"up",
+"down"
+]
+},
+{
+"what": "Throttle idle detent",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "SimThrottleIdleDetentForward"
+}
+],
+[
+{
+"action": "SimThrottleIdleDetentBack"
+}
+]
+],
+"urgency": 3,
+"suits": "stepped-pair",
+"note": "forward brings the throttle round the detent to IDLE for the start, back is cutoff. Nothing else in the jet does this",
+"on": [
+"up",
+"down"
+]
+},
+{
+"what": "Stores config (CAT I / III)",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "SimCATSwitch"
+}
+]
+],
+"urgency": 3
+},
+{
+"what": "Air refuelling door",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "SimFuelDoorToggle"
+}
+]
+],
+"urgency": 3
+},
+{
+"what": "Canopy",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "AFCanopyToggle"
+}
+]
+],
+"urgency": 3
+},
+{
+"what": "AVTR",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "SimAVTRToggle"
+}
+]
+],
+"urgency": 3
+},
+{
+"what": "Night vision",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ToggleNVGMode"
+}
+]
+],
+"urgency": 3
+},
+{
+"what": "Visor",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "SimVisorToggle"
+}
+]
+],
+"urgency": 3
+}
+]
+}

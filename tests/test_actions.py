@@ -16,7 +16,8 @@ if REPO not in sys.path:
     sys.path.insert(0, REPO)
 
 from core.actions import (Action, Bind, PRESS, RELEASE,        # noqa: E402
-                          by_id, grouped)
+                          by_id, dump, dump_binds, grouped, read,
+                          read_binds)
 
 
 class TheBind(unittest.TestCase):
@@ -105,6 +106,85 @@ class Grouping(unittest.TestCase):
 
     def test_by_id_keys_on_the_id(self):
         self.assertEqual({'A', 'B'}, set(by_id([Action('A'), Action('B')])))
+
+
+class BindsOnDisk(unittest.TestCase):
+    """A bind, written down and read back.
+
+    What a need binds has lived in a Python literal since the first commit,
+    so it has never had to survive a round trip. It does now: the judgements
+    leave the source, and a bind that comes back subtly different is a
+    binding the game will accept and nobody asked for.
+    """
+
+    def test_a_plain_press_writes_only_its_action(self):
+        self.assertEqual([{'action': 'ID_GEAR'}], dump_binds([Bind('ID_GEAR')]))
+
+    def test_the_other_half_of_a_binding_survives(self):
+        # Two of the family's 63 BMS bindings are a press and a release of
+        # one switch. A release that came back a press would fire on the
+        # way down and never let go.
+        (back,) = read_binds(dump_binds([Bind('SimDeselect', edge=RELEASE)]))
+        self.assertEqual(RELEASE, back.edge)
+
+    def test_the_file_a_binding_belongs_in_survives(self):
+        # MSFS alone cannot read this off the id: which of its two
+        # profiles a binding goes into was chosen by whoever wrote it.
+        (back,) = read_binds(dump_binds([Bind('KEY_X', mode='heli')]))
+        self.assertEqual('heli', back.mode)
+
+    def test_a_slot_keeps_its_order(self):
+        # A slot is a list and the order is which button it lands on.
+        ids = ['C', 'A', 'B']
+        got = read_binds(dump_binds([Bind(i) for i in ids]))
+        self.assertEqual(ids, [b.action for b in got])
+
+
+class OnDisk(unittest.TestCase):
+    """The shape a harvest writes and a planner reads.
+
+    The record already existed and already had six producers -- every
+    `catalogue()` builds one. What it had no file, so the translating
+    happened on the way OUT of the cache, once per game, in six places that
+    could drift. Writing the record itself moves that to the way IN, where
+    the game's own format is already being read anyway.
+
+    Nothing optional is written. Four of the six ship no categories and X4
+    counts nothing, so a file full of `"category": null` would be three
+    thousand lines saying the same nothing -- and a reader that has to cope
+    with a missing key anyway gains nothing from being told.
+    """
+
+    def test_a_bare_action_writes_only_what_it_has(self):
+        self.assertEqual([{'id': 'KEY_GEAR', 'kind': 'button'}],
+                         dump([Action('KEY_GEAR')]))
+
+    def test_a_name_the_same_as_the_id_is_not_written_twice(self):
+        # X4 and Elite compute the name from the id, so for them every
+        # single row would otherwise carry it twice.
+        self.assertNotIn('name', dump([Action('KEY_GEAR', 'KEY_GEAR')])[0])
+
+    def test_everything_a_game_does_know_survives_the_trip(self):
+        one = Action('SimGear', 'Landing gear', kind='button',
+                     category='2.01 GEAR', mode='cockpit', rank=17)
+        (back,) = read(dump([one]))
+        for field in ('id', 'name', 'kind', 'category', 'mode', 'rank'):
+            self.assertEqual(getattr(one, field), getattr(back, field))
+
+    def test_a_row_from_an_older_harvest_still_reads(self):
+        # The cache is regenerated, not migrated -- but a working copy that
+        # predates a field should give a usable record rather than a
+        # KeyError naming nothing.
+        (back,) = read([{'id': 'KEY_GEAR'}])
+        self.assertEqual('KEY_GEAR', back.id)
+        self.assertEqual('button', back.kind)
+        self.assertEqual(0, back.rank)
+
+    def test_the_order_written_is_the_order_read(self):
+        # A screen whose rows move between harvests is one you cannot learn.
+        ids = ['C', 'A', 'B']
+        self.assertEqual(ids, [a.id for a in read(dump(
+            [Action(i) for i in ids]))])
 
 
 if __name__ == '__main__':

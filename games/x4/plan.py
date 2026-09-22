@@ -73,8 +73,12 @@ AXIS_CODE = {'X': 'X', 'Y': 'Y', 'Z': 'Z', 'Rx': 'RX', 'Ry': 'RY',
              'Rz': 'RZ', 'Slider': 'SLIDER1', 'Dial': 'SLIDER2'}
 
 #: X4's three binding elements. `action` fires once on press, `state` is true
-#: while held, `range` is an axis.
-ACTION, STATE, RANGE = 'action', 'state', 'range'
+#: while held, `range` is an axis. Taken from the harvest rather than spelled
+#: again: it is where `readable`, `kind_of` and `context_of` all live, and
+#: they are one fact -- X4 says what an action IS in its name.
+ACTION, STATE, RANGE = harvest.ACTION, harvest.STATE, harvest.RANGE
+kind_of = harvest.kind_of
+context_of = harvest.context_of
 
 
 def A(name):
@@ -85,48 +89,15 @@ def S(name):
     return 'INPUT_STATE_' + name
 
 
-def kind_of(ident):
-    """`action`, `state` or `range`, read off the id.
-
-    X4's ids carry it, so it never had to travel in the payload beside
-    them -- and once a payload is a list of Binds there is nowhere for it
-    to travel anyway. It is a property of the action, not of binding it.
-    """
-    for kind, prefix in ((ACTION, 'INPUT_ACTION_'), (STATE, 'INPUT_STATE_'),
-                         (RANGE, 'INPUT_RANGE_')):
-        if ident.startswith(prefix):
-            return kind
-    return ACTION
-
-
 class Need(corneeds.Need):
-    """A need whose payload is one (kind, id) pair per X4 context.
+    """A need whose slots carry X4 ids.
 
-    X4 scopes a binding by which id it is rather than by a mode flag: MAP_* ids
-    only answer in the map, FP_* only on foot, everything else in flight. So
-    one physical button carries up to three ids and they never collide.
+    X4 scopes a binding by which id it is rather than by a mode flag: MAP_*
+    ids only answer in the map, FP_* only on foot, everything else in
+    flight. So one physical button carries up to three ids and they never
+    collide, and `context_of` reads which is which off the name -- the
+    slot needs no room for it.
     """
-
-    def __init__(self, what, shape, ship=(), map_=(), foot=(), push=None,
-                 suits=None, urgency=IN_THE_AIR, device=None, prefer=None,
-                 on=None, note=''):
-        self.ship, self.map, self.foot = list(ship), list(map_), list(foot)
-        n = max(len(self.ship), len(self.map), len(self.foot))
-
-        def pad(xs):
-            return list(xs) + [None] * (n - len(xs))
-
-        # A slot is a list of Binds now. X4 scopes a binding by which id
-        # it is, and `context_of` reads that off the name, so the context
-        # stopped needing a position in the payload.
-        super().__init__(
-            what, shape,
-            bindings=[[cactions.Bind(i) for i in triple if i]
-                      for triple in zip(pad(self.ship), pad(self.map),
-                                        pad(self.foot))],
-            push=cactions.Bind(push) if push else None,
-            urgency=urgency, suits=suits, dev=device,
-            prefer=prefer, on=on, note=note)
 
     @property
     def device(self):
@@ -153,147 +124,45 @@ AXIS_NEEDS = [
     ('INPUT_RANGE_FP_STRAFE',          'stick',    ('kind', 'stick-x')),
 ]
 
-NEEDS = [
-    # --- with something shooting at you
-    Need('Fire primary', 'trigger', ship=[S('FIRE_PRIMARY_WEAPON')],
-         suits='fire', urgency=IN_A_TURN, device='stick',
-         note='already on the stick by hand; the trigger is what it is for'),
-
-    Need('Fire secondary', 'button', ship=[S('FIRE_SECONDARY_WEAPON')],
-         suits='fire', urgency=IN_A_TURN, device='stick'),
-
-    Need('Boost', 'button', ship=[S('BOOST')], foot=[A('FP_RUN')],
-         suits='reflex', urgency=IN_A_TURN, device='throttle',
-         note='held, not tapped, so it wants a button you can hold'),
-
-    Need('Target next enemy', 'button', ship=[A('TARGET_NEXT_ENEMY')],
-         suits='lock', urgency=IN_A_TURN, device='stick'),
-
-    Need('Target under cursor', 'button', ship=[A('TARGET_NEXT_TARGET')],
-         map_=[S('MAP_SELECT')], suits='lock', urgency=IN_A_TURN,
-         device='stick'),
-
-    Need('Countermeasure', 'button', ship=[A('DEPLOY_COUNTERMEASURE')],
-         urgency=IN_A_TURN, device='stick'),
-
-    Need('Strafe', 'hat4',
-         ship=[S('STRAFE_UP'), S('STRAFE_RIGHT'),
-               S('STRAFE_DOWN'), S('STRAFE_LEFT')],
-         on=('up', 'right', 'down', 'left'),
-         urgency=IN_A_TURN, device='stick',
-         note='the axes get it too; the hat is for a precise nudge'),
-
-    Need('Weapon group', 'hat2',
-         ship=[A('CYCLE_NEXT_PRIMARY_WEAPONGROUP'),
-               A('CYCLE_PREV_PRIMARY_WEAPONGROUP')],
-         on=('forward', 'back'), urgency=IN_A_TURN, device='stick'),
-
-    Need('Missile group', 'hat2',
-         ship=[A('CYCLE_NEXT_SECONDARY_WEAPONGROUP'),
-               A('CYCLE_PREV_SECONDARY_WEAPONGROUP')],
-         on=('forward', 'back'), urgency=IN_A_TURN),
-
-    Need('Match speed', 'button', ship=[S('MATCH_SPEED')],
-         urgency=IN_A_TURN, device='throttle',
-         note='latches in the game (toggle="1"), so a plain button is right'),
-
-    # --- hands busy, but there is time
-    Need('Travel mode', 'button', ship=[A('TOGGLE_TRAVEL_MODE')],
-         urgency=ON_APPROACH, device='throttle'),
-
-    Need('Flight assist', 'button', ship=[A('TOGGLE_FLIGHT_ASSIST')],
-         urgency=ON_APPROACH, device='throttle'),
-
-    Need('Dock / undock', 'hat2',
-         ship=[A('DOCK_ACTION'), A('UNDOCK')],
-         on=('forward', 'back'), urgency=ON_APPROACH, device='throttle'),
-
-    Need('Autopilot', 'button', ship=[A('TOGGLE_AUTOPILOT')],
-         urgency=ON_APPROACH, device='throttle'),
-
-    Need('Target action', 'hat2',
-         ship=[A('NEXT_TARGET_ACTION'), A('PREV_TARGET_ACTION')],
-         on=('forward', 'back'), urgency=ON_APPROACH, device='stick'),
-
-    Need('Subcomponent', 'hat2',
-         ship=[A('NEXT_SUBCOMPONENT'), A('PREV_SUBCOMPONENT')],
-         on=('right', 'left'), urgency=ON_APPROACH, device='stick'),
-
-    Need('Deselect target', 'button', ship=[A('DESELECT_TARGET')],
-         map_=[S('MAP_BACK')], urgency=ON_APPROACH, device='stick'),
-
-    # --- somewhere in the cruise
-    Need('Scan mode', 'button', ship=[A('TOGGLE_SCAN_MODE')],
-         urgency=IN_THE_AIR, device='throttle'),
-
-    Need('Long-range scan', 'button', ship=[A('TOGGLE_LONGRANGE_SCAN_MODE')],
-         urgency=IN_THE_AIR, device='throttle'),
-
-    Need('Scan action', 'button', ship=[A('SCAN_ACTION')],
-         urgency=IN_THE_AIR),
-
-    Need('SETA', 'button', ship=[A('TOGGLE_SETA_MODE')],
-         urgency=IN_THE_AIR, device='throttle'),
-
-    Need('Map', 'button', ship=[A('OPEN_MAP')],
-         urgency=IN_THE_AIR, note='the one menu worth a hand'),
-
-    Need('Comms', 'button', ship=[A('COMM_ACTION')], urgency=IN_THE_AIR),
-
-    Need('View', 'hat4',
-         ship=[A('COCKPIT_VIEW'), A('TARGET_VIEW'),
-               A('EXTERNAL_VIEW'), A('CYCLE_VIEW')],
-         map_=[S('MAP_RESET_POSITION'), None, S('MAP_RESET_ROTATION'), None],
-         push=None, suits='view', urgency=IN_THE_AIR),
-
-    Need('Zoom goggles', 'button', ship=[A('ZOOMGOGGLES')],
-         suits='view', urgency=IN_THE_AIR),
-
-    Need('Map rotate', 'hat4',
-         map_=[S('MAP_PAN_TO_ROTATE'), None, None, None],
-         urgency=IN_THE_AIR,
-         note='only answers in the map; harmless in flight'),
-
-    # --- canopy open, engine off
-    Need('Cockpit menu', 'button', ship=[A('OPEN_COCKPIT_MENU')],
-         urgency=ON_THE_RAMP),
-
-    Need('Player ship info', 'button', ship=[A('OPEN_PLAYERSHIP_INFO')],
-         urgency=ON_THE_RAMP),
-
-    Need('Missions', 'button', ship=[A('OPEN_MISSIONS')],
-         urgency=ON_THE_RAMP),
-
-    Need('Quicksave', 'button', ship=[A('QUICKSAVE')], urgency=ON_THE_RAMP,
-         note='deliberately far from the hand'),
-
-    Need('Pause', 'button', ship=[A('PAUSE')], urgency=ON_THE_RAMP),
-
-    Need('Jump / crouch', 'hat2',
-         foot=[S('FP_JUMP'), S('FP_CROUCH')],
-         on=('forward', 'back'), urgency=ON_THE_RAMP),
-]
+#: Where the judgements live. Which band a thing is in, what shape it wants,
+#: which device it belongs on, what somebody wrote about it -- 373 of them
+#: across the family, and nothing derives any of them.
+#:
+#: Source, not cache. They were a Python literal until now, which meant
+#: changing one meant editing code; they are still the same 32 decisions,
+#: kept in the repo, and now readable by something other than an editor.
+#: Deliberately not in `CACHE`: that names what the harvest wrote, and a
+#: harvest cannot write a judgement.
 
 
-def unknown(vocabulary):
+def needs(filename):
+    """[Need] -- the hand-written list, read rather than executed."""
+    return corneeds.read_needs(vocab.load(HERE, filename, key='needs'),
+                               make=Need)
+
+
+
+def unknown(needs, catalogue):
     """Ids in NEEDS or AXIS_NEEDS that the game will not accept a binding for.
 
-    The vocabulary is read from the game's own files, so a typo or an id
+    The catalogue is read from the game's own files, so a typo or an id
     dropped by a patch shows up here rather than as a binding that silently
     does nothing.
     """
+    known = cactions.by_id(catalogue)
     bad = []
-    for n in NEEDS:
+    for n in needs:
         for slot in n.bindings:
             for ident in (b.action for b in slot):
-                if ident not in vocabulary.get(kind_of(ident), ()):
+                if ident not in known:
                     bad.append((n.what, kind_of(ident), ident))
         if n.push is not None:
             ident = n.push.action
-            if ident not in vocabulary.get(kind_of(ident), ()):
+            if ident not in known:
                 bad.append((n.what, kind_of(ident), ident))
     for ident, _role, _how in AXIS_NEEDS:
-        if ident not in vocabulary.get(RANGE, ()):
+        a = known.get(ident)
+        if a is None or a.kind != 'axis':
             bad.append(('axis', RANGE, ident))
     return bad
 
@@ -475,19 +344,6 @@ def contents(devs, placed, axes, profile):
 CTX = ('Ship', 'Map', 'On foot')
 
 
-def context_of(ident):
-    """Which of CTX an id answers in, read off the id itself.
-
-    X4 has no mode flag on a binding: MAP_* ids answer only in the map and
-    FP_* only on foot, which is what lets one control carry three meanings.
-    """
-    if '_MAP_' in ident:
-        return 'Map'
-    if '_FP_' in ident:
-        return 'On foot'
-    return 'Ship' 
-
-
 def _sheet(layout, profile):
     devs, placed, unmet, free, axes = layout
     slot = slots(devs, profile)
@@ -562,7 +418,8 @@ class X4(adapter.Planner):
 
     game = 'x4'
     title = 'X4 Foundations'
-    CACHE = {'x4-actions.json': 'vocabulary'}
+    BINDS = 'x4-binds.json'
+    CACHE = {'x4-actions.json': 'actions'}
 
 
     @property
@@ -575,7 +432,7 @@ class X4(adapter.Planner):
         second as an override of an abstract property, and because two of the
         six derive their needs and could never be a constant anyway.
         """
-        return NEEDS
+        return self._needs
 
     def __init__(self, profile=None, slots=None, backup_dir=None):
         self.profile = profile or os.environ.get('X4_PROFILE',
@@ -588,7 +445,9 @@ class X4(adapter.Planner):
         # for. It is read here rather than at import, so that importing this
         # module defines classes and reads nothing: the contract test then
         # tells a clone with no cache from an adapter that is broken.
-        self.vocab = self.cache('x4-actions.json', build=harvest.vocabulary)
+        self.rows = self.cache('x4-actions.json',
+                               build=harvest.action_rows)
+        self._needs = needs(self.BINDS)
 
     @typing.override
     def build(self):
@@ -598,19 +457,14 @@ class X4(adapter.Planner):
 
     @typing.override
     def unknown(self):
-        return unknown(self.vocab)
+        return unknown(self.NEEDS, self.catalogue())
 
     @typing.override
     def catalogue(self):
-        # `range` is X4's word for an axis; `action` and `state` are both
-        # buttons to anything outside this file. The mode comes free --
-        # X4 scopes a binding by which id it is, and `context_of` already
-        # reads that off the name for the kneeboard.
-        return [cactions.Action(ident, harvest.readable(ident),
-                                kind='axis' if kind == 'range' else 'button',
-                                mode=context_of(ident))
-                for kind, ids in sorted(self.vocab.items())
-                for ident in ids]
+        # A read, not a translation. The harvest writes the record; what
+        # `range` means and which context an id answers in are facts about
+        # X4's naming, and they are settled where that naming is parsed.
+        return cactions.read(self.rows)
 
 
     @typing.override
@@ -665,10 +519,9 @@ class X4(adapter.Planner):
                                f'{context_of(ident):8} '
                                f'{harvest.readable(ident)}')
             if why:
-                out.append(f'      {"":9} '
-                           f'[{corneeds.URGENCY_NAME[n.urgency]}]'
-                           f'{" relaxed" if n.relaxed else ""}'
-                           f'{"  " + n.note if n.note else ""}')
+                out.append('      ' + ' · '.join(corneeds.why_bits(p_)))
+                if n.note:
+                    out.append(f'      {n.note}')
         out.append('')
         for ident, role, a in axes:
             out.append(f'  {harvest.readable(ident):28} {role:9} '

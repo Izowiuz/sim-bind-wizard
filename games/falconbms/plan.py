@@ -57,7 +57,9 @@ import harvest                                              # noqa: E402
 #: cache is told apart from an adapter that is broken. `Need.votes` is a
 #: property and `dx_offsets()` a function, so both read these only after an
 #: adapter exists to fill them.
-ACTIONS, DEVICES, VOTES = {}, [], {}
+#: The catalogue as the harvest wrote it, keyed by callback. Filled when
+#: an adapter is constructed, never at import.
+CAT, ACTIONS, DEVICES, VOTES = [], {}, [], {}
 
 DX_PER_DEVICE = 32
 #: g_nHotasPinkyShiftMagnitude. We do not use the shifted layer -- see README --
@@ -98,9 +100,11 @@ class Need(corneeds.Need):
     this way, so it stays here rather than in the core.
     """
 
-    def __init__(self, what, shape, calls=(), shift=False, **kw):
-        super().__init__(what, shape, bindings=_binds(calls), **kw)
-        self.shift = shift
+    #: BMS alone puts some bindings on a shifted layer -- held pinky plus
+    #: the button -- which is a second ledger over the same controls. It
+    #: travels beside the judgements because no rule over a callback name
+    #: finds it.
+    shift = False
 
     @property
     def calls(self):
@@ -109,7 +113,7 @@ class Need(corneeds.Need):
     def callbacks(self):
         out = [b.action for slot in self.bindings for b in slot]
         if self.push:
-            out.append(self.push)
+            out.extend(b.action for b in self.push)
         return out
 
     @property
@@ -122,180 +126,20 @@ class Need(corneeds.Need):
 # The jet's own controls, most-urgent first. Urgency is the DCS wizard's scale:
 # 0 you touch with a MiG on your tail, 1 on approach, 2 somewhere in the air,
 # 3 on the ramp with the canopy open.
-NEEDS = [
-    # ------------------------------------------------------------- the grip
-    Need('Trigger', 'trigger',
-         ['SimTriggerFirstDetent', 'SimTriggerSecondDetent'],
-         dev='stick', urgency=0, suits='fire',
-         note='cumulative: the light pull starts the gun camera and the AVTR, '
-              'pulling through it fires. The third detent stays free'),
+#: Where the judgements live. Which band a thing is in, what shape it wants,
+#: which device it belongs on, what somebody wrote about it -- and nothing
+#: derives any of it.
+#:
+#: Source, not cache. They were a Python literal until now, so changing one
+#: meant editing code. Deliberately not in `CACHE`: that names what the
+#: harvest wrote, and a harvest cannot write a judgement.
 
-    Need('Weapon release (Pickle)', 'button', ['SimPickle'],
-         dev='stick', urgency=0, suits='fire',
-         note='everything you drop or shoot comes off here'),
 
-    Need('TMS — target management', 'hat4',
-         ['SimTMSUp', 'SimTMSRight', 'SimTMSDown', 'SimTMSLeft'],
-         dev='stick', urgency=0, suits='sensor',
-         note='up locks what the cursor is over, down breaks the lock'),
+def needs(filename):
+    """[Need] -- the hand-written list, read rather than executed."""
+    return corneeds.read_needs(vocab.load(HERE, filename, key='needs'),
+                               also=('shift',), make=Need)
 
-    Need('DMS — display management', 'hat4',
-         ['SimDMSUp', 'SimDMSRight', 'SimDMSDown', 'SimDMSLeft'],
-         dev='stick', urgency=0, suits='sensor',
-         note='picks the SOI — which MFD or the HUD the cursor is driving'),
-
-    Need('CMS — countermeasures', 'hat4',
-         ['SimCMSUp', 'SimCMSRight', 'SimCMSDown', 'SimCMSLeft'],
-         dev='stick', urgency=0, suits='reflex',
-         note='up runs the CMDS programme: this is chaff and flares'),
-
-    Need('Paddle — AP / trim disconnect', 'paddle', ['SimAPOverride'],
-         dev='stick', urgency=0, suits='reflex',
-         note='hold it to override the autopilot and the trim'),
-
-    Need('NWS / AR DISC / MSL STEP', 'button', ['SimMissileStep'],
-         dev='stick', urgency=0, suits='reflex',
-         note='one button, three jobs depending on what the jet is doing: '
-              'nosewheel steering on the ground, missile step in the air'),
-
-    # The F-16 grip has FOUR hats -- TMS, DMS, CMS and trim -- and the WarBRD
-    # has three. Target, display and countermeasure management all outrank
-    # trim in a fight, so trim takes the encoder: pitch, which is the one you
-    # actually use (tanking, and hands-off level flight), plus reset on the
-    # click. Roll trim stays on the keyboard. This is the single place where
-    # the hardware is short of the jet, and it is a deliberate choice.
-    Need('Trim — pitch', 'encoder',
-         ['AFElevatorTrimDown', 'AFElevatorTrimUp'], push='AFResetTrim',
-         dev='stick', urgency=0, suits='trim',
-         note='BMS names these after the trim wheel, not the nose: '
-              '"Trim Up" is nose DOWN. Roll trim is not on the HOTAS — '
-              'three hats on the grip, four on the jet'),
-
-    Need('Master arm', 'latch', ['SimSafeMasterArm', 'SimArmMasterArm'],
-         dev='stick', urgency=2, suits='state',
-         note='the lever over the trigger, so the guard position IS the switch '
-              'position. CHECK THIS ON THE RAMP: which of the two contacts is '
-              'the closed lever was never measured — if the jet arms with the '
-              'lever down, swap the two names in NEEDS'),
-
-    # ----------------------------------------------------------- the throttle
-    Need('Radar cursor (slew)', 'ministick', [], push='SimCursorEnable',
-         dev='throttle', urgency=0, suits='view',
-         note='the axes drive the cursor, the press is Cursor Enable'),
-
-    Need('COMMS switch', 'hat4',
-         ['SimTransmitCom1', 'SimCommsSwitchRight',
-          'SimTransmitCom2', 'SimCommsSwitchLeft'],
-         dev='throttle', urgency=0, suits='reflex',
-         note='up UHF, down VHF, left and right work the IFF'),
-
-    Need('SPD BRAKE switch', 'hat2', ['AFBrakesIn', 'AFBrakesOut'],
-         on=('forward', 'back'), dev='throttle', urgency=0, suits='reflex',
-         note='forward closes, back opens — the way the real switch moves'),
-
-    Need('DOGFIGHT / MRM override', 'hat2',
-         [('SimSelectMRMOverride', 'SimDeselectOverride'),
-          ('SimSelectSRMOverride', 'SimDeselectOverride')],
-         on=('forward', 'back'), dev='throttle', urgency=0, suits='reflex',
-         note='spring-loaded in the real jet: hold it forward for MRM, back '
-              'for dogfight, let go and it cancels. That last part is the '
-              'release edge, which no other sim of the four can express'),
-
-    Need('MAN RANGE knob — UNCAGE', 'button', ['SimToggleMissileCage'],
-         dev='throttle', urgency=0, suits='reflex',
-         note='uncages the seeker so a heater growls at what you point it at'),
-
-    Need('Radar cursor zero', 'button', ['SimRadarCursorZero'],
-         dev='throttle', urgency=0,
-         note='puts the cursor back under the nose when you have lost it — '
-              'which happens while slewing, so it has to be under the thumb'),
-
-    # ------------------------------------------------------------ in the air
-    Need('MAN RANGE knob', 'encoder', ['SimRangeKnobDown', 'SimRangeKnobUp'],
-         dev='throttle', urgency=2, suits='trim', shift=True),
-
-    Need('Radar gain', 'encoder', ['SimRadarGainDown', 'SimRadarGainUp'],
-         dev='throttle', urgency=2, suits='trim', shift=True),
-
-    Need('ICP — master mode', 'hat2', ['SimICPAA', 'SimICPAG'], urgency=2,
-         note='air-to-air and air-to-ground; NAV is the way back out'),
-
-    Need('ICP — NAV mode', 'button', ['SimICPNav'], urgency=2),
-
-    Need('IFF MASTER knob', 'selector',
-         ['SimIFFMasterOff', 'SimIFFMasterStby', 'SimIFFMasterLow',
-          'SimIFFMasterNorm', 'SimIFFMasterEmerg'],
-         dev='throttle', urgency=2, suits='state', shift=True,
-         note='five positions in the jet and five on the selector, and the '
-              'knob holds its state the same way — the one control here that '
-              'matches its cockpit original exactly'),
-
-    # BMS gives every device 32 DX numbers and no more, so the 83 buttons on
-    # this pair are only 64 BMS can see. The shifted layer is the only way to
-    # fit the rest -- which is what 22 of 22 vendor profiles were saying by
-    # binding this callback first. A short press still works as an ordinary
-    # pinky press; held past 200 ms it shifts every device at once.
-    Need('DX shift (pinky)', 'button', ['SimHotasPinkyShift'],
-         dev='stick', urgency=2, suits='occasional',
-         # Pinned by hand. Scoring rates this and a throttle keyboard button as
-         # equivalent -- both need letting go of the grip -- but this is a
-         # button you HOLD while pressing another, and if that other one is on
-         # the throttle too you run out of hand.
-         prefer='Grip pinky button',
-         note='hold it to reach the second layer. Everything on that layer is '
-              'something you do on the ground, so a button you have to regrip '
-              'for is the right home'),
-
-    Need('Recentre head tracking', 'button', ['RecenterTrackIR'], urgency=2),
-
-    Need('Look closer', 'button', ['FOVToggle'], urgency=2,
-         note='a step zoom on top of the analogue one on the dial'),
-
-    Need('Slap switch (ECM)', 'button', ['SimSlapSwitch'], urgency=2),
-
-    Need('Laser arm', 'button', ['SimLaserArmToggle'], urgency=2),
-
-    # ------------------------------------------------------------ on approach
-    # The vendors mostly bind AFGearToggle and SimCATSwitch, because a Warthog
-    # has no spare two-position switches. We have five rockers, so the switch
-    # position and the aircraft agree even after an alt-tab or a reload -- a
-    # toggle only ever knows what it did last.
-    Need('Landing gear', 'hat2', ['AFGearUp', 'AFGearDown'],
-         on=('up', 'down'), urgency=1, suits='stepped-pair', shift=True),
-
-    Need('Parking brake', 'hat2',
-         ['SimParkingBrakeUp', 'SimParkingBrakeDown'],
-         on=('up', 'down'), urgency=1, suits='stepped-pair', shift=True),
-
-    Need('Landing / taxi lights', 'button', ['SimLandingLightCycle'],
-         urgency=1,
-         note='LANDING / OFF / TAXI is three positions, and cycling costs one '
-              'button where matching it costs a rocker the two-position '
-              'switches want more'),
-
-    # ------------------------------------------------------------- on the ramp
-    Need('JFS — engine start', 'hat2', ['SimJfsStartUp', 'SimJfsStartDown'],
-         on=('up', 'down'), urgency=3, suits='stepped-pair',
-         note='START 1 is the one the cold start wants'),
-
-    Need('Throttle idle detent', 'hat2',
-         ['SimThrottleIdleDetentForward', 'SimThrottleIdleDetentBack'],
-         on=('up', 'down'), urgency=3, suits='stepped-pair',
-         note='forward brings the throttle round the detent to IDLE for the '
-              'start, back is cutoff. Nothing else in the jet does this'),
-
-    Need('Stores config (CAT I / III)', 'button', ['SimCATSwitch'], urgency=3),
-    Need('Air refuelling door', 'button', ['SimFuelDoorToggle'], urgency=3),
-    Need('Canopy', 'button', ['AFCanopyToggle'], urgency=3),
-    Need('AVTR', 'button', ['SimAVTRToggle'], urgency=3),
-    Need('Night vision', 'button', ['ToggleNVGMode'], urgency=3),
-    Need('Visor', 'button', ['SimVisorToggle'], urgency=3),
-
-    # SimEject is not here on purpose. Twenty of the twenty-two vendor profiles
-    # put it on the SHIFTED layer, which is how you make a control hard to hit
-    # by accident. We do not use the shifted layer, and there is no button on
-    # either device awkward enough to be safe, so eject stays on the keyboard.
-]
 
 
 #: in-game axis, which device, and how to find it in the map
@@ -349,7 +193,7 @@ def usable(role, ctrl):
     return addressable(ctrl)
 
 
-def assign():
+def assign(needs):
     """(devices, placements, unplaced, free) using the shared allocator.
 
     Two calls rather than one, because the shifted layer runs over the SAME
@@ -359,8 +203,8 @@ def assign():
     cannot also mean pressing it -- is excluded through the veto hook.
     """
     devs = devices()
-    plain = [n for n in NEEDS if not n.shift]
-    shifted = [n for n in NEEDS if n.shift]
+    plain = [n for n in needs if not n.shift]
+    shifted = [n for n in needs if n.shift]
 
     placed, unmet, free = corneeds.allocate(plain, devs, usable=usable)
 
@@ -370,11 +214,17 @@ def assign():
         if holder is None:
             sys.exit('needs want the shifted layer but nothing carries '
                      'SimHotasPinkyShift -- add it to NEEDS')
-        more, unmet2, free = corneeds.allocate(
+        more, unmet2, spare = corneeds.allocate(
             shifted, devs,
             usable=lambda r, c: usable(r, c) and c is not holder)
         placed += more
         unmet += unmet2
+        # Intersected, not replaced. Each `allocate` reports what ITS OWN
+        # pass left over, so the shifted one calls the whole plain layer
+        # free -- and taking its answer offered 24 occupied controls,
+        # the main trigger among them, to anything looking for a home.
+        still = {(r, id(c)) for r, c in spare}
+        free = [(r, c) for r, c in free if (r, id(c)) in still]
     return devs, placed, unmet, free
 
 
@@ -463,13 +313,10 @@ def dx_binds(placed):
             if not payload:
                 continue
             dx = off[p.role] + local + (SHIFT if p.need.shift else 0)
-            if isinstance(payload, str):        # the push, a bare callback
-                press, release = payload, None
-            else:
-                press = next((b.action for b in payload
-                              if b.edge == cactions.PRESS), None)
-                release = next((b.action for b in payload
-                                if b.edge == cactions.RELEASE), None)
+            press = next((b.action for b in payload
+                          if b.edge == cactions.PRESS), None)
+            release = next((b.action for b in payload
+                            if b.edge == cactions.RELEASE), None)
             where = f'{p.ctrl.label} — {p.ctrl.direction(local) or "press"}'
             if dx in seen:
                 print(f'!! DX {dx} wanted by {seen[dx]} and {p.need.what}',
@@ -711,8 +558,11 @@ def show(layout, why=False, free_only=False):
         for b in binds:
             by_need.setdefault(id(b['need']), []).append(b)
         out.append('BUTTONS')
-        for need, role, ctrl, s in ((p.need, p.role, p.ctrl, p.points)
-                                    for p in placed):
+        # The placement itself, not just four fields off it: the account
+        # of WHY it is here is a property of the placement, and unpacking
+        # it away left `show` reassembling one from the pieces.
+        for p_ in placed:
+            need, role, ctrl = p_.need, p_.role, p_.ctrl
             mine = by_need.get(id(need), [])
             if not mine:
                 out.append(f'  {need.what}')
@@ -726,14 +576,14 @@ def show(layout, why=False, free_only=False):
                 extra = f'   / release: {b["release"]}' if b['release'] else ''
                 out.append(f'      DX{b["dx"]:<4} {d:<8} {b["press"]}{extra}')
             if why:
-                out.append(f'      why    {need.votes}/22 vendor profiles bind this; '
-                      f'wants a {need.shape}, score {s}')
+                out.append('      why    '
+                           + '; '.join(corneeds.why_bits(p_, out_of=22)))
                 if need.dev and need.dev != role:
-                    out.append(f'             COMPROMISE: belongs on the {need.dev}, '
-                          f'nothing of that shape was left there')
-                if need.relaxed:
-                    out.append('             took a control better than its urgency '
-                          'earns, because nothing plainer was left')
+                    # BMS's own: the only game that calls a wrong device a
+                    # compromise rather than a minus fifty.
+                    out.append(f'             COMPROMISE: belongs on the '
+                               f'{need.dev}, nothing of that shape was '
+                               f'left there')
                 if need.note:
                     out.append(f'{"":<13}{wrap(need.note, 60, " " * 13)}')
             out.append("")
@@ -778,8 +628,9 @@ def audit(layout):
     for cb, n in missed:
         if cb in mfd:
             continue
-        a = ACTIONS.get(cb, {})
-        out.append(f'  {n:>3}  {cb:<28} {a.get("desc", "(gone from the key file)")[:52]}')
+        a = ACTIONS.get(cb)
+        desc = a.name if a is not None else '(gone from the key file)'
+        out.append(f'  {n:>3}  {cb:<28} {desc[:52]}')
     return out
 
 
@@ -874,6 +725,8 @@ class FalconBms(adapter.Planner):
 
     game = 'falconbms'
     title = 'Falcon BMS'
+    BINDS = 'falconbms-binds.json'
+    EXTRA = ('shift',)
     CACHE = {'bms-actions.json': ('actions', 'devices'),
              'bms-rank.json': 'votes'}
     #: BMS's own word for the install predates the family's. Both spellings
@@ -892,7 +745,7 @@ class FalconBms(adapter.Planner):
         second as an override of an abstract property, and because two of the
         six derive their needs and could never be a constant anyway.
         """
-        return NEEDS
+        return self._needs
 
     def __init__(self, game_dir=None, backup_dir=None):
         if game_dir:
@@ -900,26 +753,25 @@ class FalconBms(adapter.Planner):
         self.bms = harvest.bms_dir()
         self.backup_dir = backup_dir
         self.subtitle = f'VIRPIL · {KEYFILE_OUT}'
-        ACTIONS.update(self.cache('bms-actions.json', key='actions'))
+        CAT[:] = cactions.read(self.cache('bms-actions.json',
+                                          key='actions'))
+        ACTIONS.update(cactions.by_id(CAT))
         DEVICES[:] = self.cache('bms-actions.json', key='devices')
         VOTES.update(self.cache('bms-rank.json'))
+        self._needs = needs(self.BINDS)
 
     @typing.override
     def build(self):
-        devs, placed, unmet, free = assign()
+        devs, placed, unmet, free = assign(self.NEEDS)
         return corneeds.Layout(devs, placed, unmet, free,
                                axes=axis_plan(devs))
 
     @typing.override
     def catalogue(self):
-        # The one harvest that already keeps a full record per action, so
-        # this is a rename and nothing else. `subsection` is the finer of
-        # the two panels BMS names and the one worth grouping by.
-        return [cactions.Action(call, rec.get('desc') or call, kind='button',
-                                category=(rec.get('subsection')
-                                          or rec.get('section')),
-                                rank=rec.get('votes') or 0)
-                for call, rec in sorted(ACTIONS.items())]
+        # A read, not a translation: which of BMS's two panel names is
+        # the category, and what a callback is called, are settled in the
+        # run that parses the key file.
+        return list(CAT)
 
 
     @typing.override

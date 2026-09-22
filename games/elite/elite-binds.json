@@ -1,0 +1,550 @@
+{
+"needs": [
+{
+"what": "Primary fire",
+"shape": "trigger",
+"bindings": [
+[
+{
+"action": "PrimaryFire"
+},
+{
+"action": "BuggyPrimaryFireButton"
+}
+]
+],
+"urgency": 0,
+"suits": "fire",
+"dev": "stick",
+"note": "13/13 factory presets, all of them on the stick",
+"rank": 13
+},
+{
+"what": "Secondary fire",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "SecondaryFire"
+},
+{
+"action": "BuggySecondaryFireButton"
+}
+]
+],
+"urgency": 0,
+"suits": "fire",
+"dev": "stick",
+"rank": 13
+},
+{
+"what": "Boost",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "UseBoostJuice"
+}
+]
+],
+"urgency": 0,
+"dev": "throttle",
+"note": "13/13, and every split preset puts it on the throttle",
+"rank": 13
+},
+{
+"what": "Select target",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "SelectTarget"
+},
+{
+"action": "SelectTarget_Buggy"
+}
+]
+],
+"urgency": 0,
+"suits": "lock",
+"dev": "stick",
+"rank": 13
+},
+{
+"what": "Next hostile",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "CycleNextHostileTarget"
+}
+]
+],
+"urgency": 0,
+"suits": "lock",
+"dev": "stick",
+"rank": 9
+},
+{
+"what": "Highest threat",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "SelectHighestThreat"
+}
+]
+],
+"urgency": 0,
+"suits": "lock",
+"dev": "stick",
+"rank": 5
+},
+{
+"what": "Power distribution",
+"shape": "hat4",
+"bindings": [
+[
+{
+"action": "IncreaseSystemsPower"
+},
+{
+"action": "IncreaseSystemsPower_Buggy"
+}
+],
+[
+{
+"action": "IncreaseWeaponsPower"
+},
+{
+"action": "IncreaseWeaponsPower_Buggy"
+}
+],
+[
+{
+"action": "ResetPowerDistribution"
+},
+{
+"action": "ResetPowerDistribution_Buggy"
+}
+],
+[
+{
+"action": "IncreaseEnginesPower"
+},
+{
+"action": "IncreaseEnginesPower_Buggy"
+}
+]
+],
+"urgency": 0,
+"dev": "stick",
+"note": "four functions at 13/13; pips are the whole of ED combat",
+"on": [
+"up",
+"right",
+"down",
+"left"
+],
+"rank": 13
+},
+{
+"what": "Fire group",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "CycleFireGroupNext"
+}
+],
+[
+{
+"action": "CycleFireGroupPrevious"
+}
+]
+],
+"urgency": 0,
+"dev": "stick",
+"on": [
+"forward",
+"back"
+],
+"rank": 12
+},
+{
+"what": "Hardpoints",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "DeployHardpointToggle"
+}
+]
+],
+"urgency": 0,
+"dev": "stick",
+"rank": 12
+},
+{
+"what": "Chaff",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "FireChaffLauncher"
+}
+]
+],
+"urgency": 0,
+"dev": "throttle",
+"rank": 3
+},
+{
+"what": "Heat sink",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "DeployHeatSink"
+}
+]
+],
+"urgency": 0,
+"dev": "throttle",
+"rank": 6
+},
+{
+"what": "Shield cell",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "UseShieldCell"
+}
+]
+],
+"urgency": 0,
+"dev": "throttle",
+"rank": 3
+},
+{
+"what": "Landing gear",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "LandingGearToggle"
+}
+]
+],
+"urgency": 1,
+"suits": "toggle",
+"dev": "throttle",
+"note": "a toggle, so one button: ED has no separate up and down. 9/13, four of five split presets on the throttle",
+"rank": 9
+},
+{
+"what": "Cargo scoop",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ToggleCargoScoop"
+},
+{
+"action": "ToggleCargoScoop_Buggy"
+}
+]
+],
+"urgency": 1,
+"dev": "throttle",
+"rank": 9
+},
+{
+"what": "Flight assist",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ToggleFlightAssist"
+},
+{
+"action": "ToggleDriveAssist"
+}
+]
+],
+"urgency": 1,
+"dev": "throttle",
+"rank": 12
+},
+{
+"what": "Speed zero",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "SetSpeedZero"
+}
+]
+],
+"urgency": 1,
+"dev": "throttle"
+},
+{
+"what": "Reverse throttle",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ToggleReverseThrottleInput"
+},
+{
+"action": "BuggyToggleReverseThrottleInput"
+}
+]
+],
+"urgency": 1,
+"dev": "throttle",
+"rank": 8
+},
+{
+"what": "Frame shift",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "HyperSuperCombination"
+}
+]
+],
+"urgency": 1,
+"dev": "throttle",
+"note": "supercruise and hyperspace on one button, as the game intends",
+"rank": 4
+},
+{
+"what": "Subsystem",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "CycleNextSubsystem"
+}
+],
+[
+{
+"action": "CyclePreviousSubsystem"
+}
+]
+],
+"suits": "sensor",
+"dev": "stick",
+"on": [
+"forward",
+"back"
+],
+"rank": 6
+},
+{
+"what": "Target",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "CycleNextTarget"
+}
+],
+[
+{
+"action": "CyclePreviousTarget"
+}
+]
+],
+"suits": "lock",
+"dev": "stick",
+"on": [
+"right",
+"left"
+],
+"rank": 9
+},
+{
+"what": "Radar range",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "RadarIncreaseRange"
+}
+],
+[
+{
+"action": "RadarDecreaseRange"
+}
+]
+],
+"suits": "sensor",
+"dev": "throttle",
+"on": [
+"forward",
+"back"
+],
+"rank": 4
+},
+{
+"what": "Head look",
+"shape": "ministick",
+"bindings": [],
+"suits": "view",
+"dev": "throttle",
+"note": "binds nothing: it reserves the mini-stick, which the axes below take, so no button need can claim it"
+},
+{
+"what": "Head look reset",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "HeadLookReset"
+}
+]
+],
+"suits": "view",
+"dev": "throttle"
+},
+{
+"what": "Discovery scan",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ExplorationFSSDiscoveryScan"
+}
+]
+],
+"dev": "throttle",
+"note": "13/13",
+"rank": 13
+},
+{
+"what": "Night vision",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "NightVisionToggle"
+}
+]
+]
+},
+{
+"what": "Spotlight",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ShipSpotLightToggle"
+},
+{
+"action": "HeadlightsBuggyButton"
+}
+]
+],
+"rank": 7
+},
+{
+"what": "Panel",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "CycleNextPanel"
+}
+],
+[
+{
+"action": "CyclePreviousPanel"
+}
+]
+],
+"dev": "throttle",
+"note": "13/13, every split preset on the throttle",
+"on": [
+"forward",
+"back"
+],
+"rank": 13
+},
+{
+"what": "Panel page",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "CycleNextPage"
+}
+],
+[
+{
+"action": "CyclePreviousPage"
+}
+]
+],
+"dev": "throttle",
+"on": [
+"right",
+"left"
+],
+"rank": 12
+},
+{
+"what": "Galaxy map",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "GalaxyMapOpen"
+},
+{
+"action": "GalaxyMapOpen_Buggy"
+}
+]
+],
+"urgency": 3,
+"rank": 4
+},
+{
+"what": "System map",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "SystemMapOpen"
+},
+{
+"action": "SystemMapOpen_Buggy"
+}
+]
+],
+"urgency": 3,
+"rank": 4
+},
+{
+"what": "Eject cargo",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "EjectAllCargo"
+},
+{
+"action": "EjectAllCargo_Buggy"
+}
+]
+],
+"urgency": 3,
+"prefer": "Big red button",
+"note": "pinned away from the hand: it throws the cargo out"
+}
+]
+}

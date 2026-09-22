@@ -56,6 +56,7 @@ if not os.path.isdir(CORE):
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import actions as cactions                        # noqa: E402
 from core import backup                                     # noqa: E402
 
 HOME = os.path.expanduser('~')
@@ -261,7 +262,18 @@ def compose(layout, targets, say=print):
     BUTTONS[:] = plan.button_table(layout.placed)
 
     lang = json.load(open(ACTIONS_JSON, encoding='utf-8'))
-    known_actions, known_axes = lang['actions'], lang['controls']
+    # The `actions` section is the shared record now, so membership has to
+    # be asked of the ids rather than of the section: a list of records
+    # answers `in` about its rows, not about what they are called, and the
+    # whole plan looked unknown.
+    cat = cactions.read(lang['actions'])
+    known_actions = {a.id for a in cat}
+    known_axes = lang['controls']
+    # `[en, pl]` per id, which is what this function has always handed back
+    # and what `--dry-run` prints. The English half comes from the shared
+    # record, the Polish from the section War Thunder keeps for it.
+    local = lang.get('local', {})
+    labels = {a.id: [a.name, local.get(a.id, '')] for a in cat}
 
     text, _eol = read_blk(targets[0])
     start, end, controls = extract_controls(text)
@@ -293,19 +305,13 @@ def compose(layout, targets, say=print):
 
     # ---- conflicts: one physical button, two actions in one context ------
     def contexts(action):
-        # Most helicopter actions suffix _HELICOPTER, a few prefix it -- and
-        # the twin has to be looked for in BOTH forms. Looking only for the
-        # suffix made `ID_TRIM` ("Trim aircraft") look like a shared action,
-        # when its twin is `ID_HELICOPTER_TRIM` ("Trim helicopter"), and this
-        # checker then reported a clash that does not exist. Same prefix /
-        # suffix inconsistency as in plan.is_heli(), one layer further down.
-        if action.endswith(HELI_SUFFIX) or action.startswith('ID_HELICOPTER'):
-            return ['heli']
-        twins = (action + HELI_SUFFIX,
-                 action.replace('ID_', 'ID_HELICOPTER_', 1))
-        if any(t in known_actions for t in twins):
-            return ['air']          # the game has a separate heli twin
-        return ['air', 'heli']      # no twin: the action applies to both
+        # The third copy of this rule, and the one its own comment already
+        # admitted to: "same prefix / suffix inconsistency as in
+        # plan.is_heli(), one layer further down". It is one fact about War
+        # Thunder's naming and it is settled in the harvest, where the whole
+        # vocabulary is parsed -- a twin is only ABSENT relative to the whole
+        # of it, which is what a local copy cannot know.
+        return list(plan.harvest.contexts(action, known_actions))
 
     seen = {}
     for role, idx, action, _ in BUTTONS:
@@ -463,7 +469,7 @@ def compose(layout, targets, say=print):
     n_btn = len({(r, i) for r, i, _, _ in BUTTONS})
     say(f'\nplan: {len(planned)} actions across {n_btn} physical buttons, '
         f'{len(AXES)} axis assignments')
-    return block, dev, known_actions
+    return block, dev, labels
 
 
 def main(argv=None, layout=None):

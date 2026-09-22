@@ -56,7 +56,7 @@ class Bind:
     rides here instead.
     """
 
-    __slots__ = ('action', 'edge', 'mode')
+    __slots__ = ('action', 'edge', 'mode', 'role', 'button', 'reason')
 
     def __init__(self, action, edge=PRESS, mode=None):
         if edge not in EDGES:
@@ -76,6 +76,19 @@ class Bind:
         #: is which FILE a binding is written into, chosen by whoever
         #: wrote it, and no rule over the name will find it.
         self.mode = mode
+        #: Where a run put it, and its account of why. Empty until one
+        #: does -- like `Need.relaxed`, these are what a run WORKED OUT
+        #: rather than what somebody decided, so `dump_binds` leaves them
+        #: out and the next run starts from the judgements, not from the
+        #: last answer.
+        self.role = None
+        self.button = None
+        self.reason = None
+
+    def placed_on(self, role, button, reason=None):
+        """Say where this bind ended up. Returns it, for building in place."""
+        self.role, self.button, self.reason = role, button, reason
+        return self
 
     def named(self, catalogue):
         """What to call this on a screen. `catalogue` is `by_id`'s dict.
@@ -122,6 +135,77 @@ class Action:
 
     def __hash__(self):
         return hash(self.id)
+
+
+def dump_binds(binds):
+    """[Bind] -> [dict]. A press with nothing else to say is one key.
+
+    `edge` and `mode` are left out at their defaults. Five of the six games
+    never set either, and a slot written as `{"action": "ID_GEAR"}` is a
+    slot somebody can read.
+    """
+    out = []
+    for b in binds:
+        row = {'action': b.action}
+        if b.edge != PRESS:
+            row['edge'] = b.edge
+        if b.mode is not None:
+            row['mode'] = b.mode
+        out.append(row)
+    return out
+
+
+def read_binds(rows):
+    """[dict] -> [Bind], in the order written -- which is which button."""
+    return [Bind(r['action'], r.get('edge', PRESS), r.get('mode'))
+            for r in rows]
+
+
+def dump(actions):
+    """[Action] -> [dict], the rows a harvest writes down.
+
+    The record has had six producers from the start -- every `catalogue()`
+    builds one -- and no file, so the translating happened on the way OUT
+    of the cache, six times, in six places free to drift. Writing the
+    record itself moves it to the way IN, where the game's own format is
+    being read anyway.
+
+    Only what the game actually said. A field left at its default is left
+    out: MSFS ships 3111 actions and four of the six games have no
+    categories, so writing them would be thousands of lines carrying the
+    word `null`, and a reader has to cope with an absent key regardless.
+
+    `kind` is the exception and is always written. `button` and `axis` are
+    a real fork -- they decide which half of a game's config a binding goes
+    into -- and that is the last thing a reader should be left to assume.
+    """
+    out = []
+    for a in actions:
+        row = {'id': a.id, 'kind': a.kind}
+        if a.name != a.id:
+            row['name'] = a.name
+        if a.category is not None:
+            row['category'] = a.category
+        if a.mode is not None:
+            row['mode'] = a.mode
+        if a.rank:
+            row['rank'] = a.rank
+        out.append(row)
+    return out
+
+
+def read(rows):
+    """[dict] -> [Action], in the order they were written.
+
+    Every field but the id has a default, so a working copy whose cache
+    predates one gives a usable record rather than a `KeyError` naming
+    nothing. The cache is regenerated rather than migrated -- it is derived
+    from the installed game -- but the run that discovers it is stale
+    should still be able to say so.
+    """
+    return [Action(r['id'], r.get('name'), r.get('kind', 'button'),
+                   r.get('category'), r.get('mode'), r.get('rank', 0))
+            for r in rows]
 
 
 def grouped(actions):

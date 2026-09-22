@@ -12,6 +12,14 @@ __pycache__/
 games/*/*-actions.json
 games/*/*-rank.json
 
+# NOT ignored, and the distinction matters: games/*/<game>-binds.json holds
+# the judgements -- which band a thing is in, what shape it wants, which
+# device it belongs on, what somebody wrote about it. 382 of them. They were
+# a Python literal until they moved here, they are nobody's copyright, and
+# nothing derives them: delete one and it is gone. A blanket rule over
+# games/*/*.json would take them with the caches.
+!games/*/*-binds.json
+
 # Rendered for review by a writer's --render, never the real thing.
 games/warthunder/machine.blk*
 

@@ -508,7 +508,8 @@ def place(module, cmds, guide, chosen):
                 n.borrowed = b
                 claims.append(corneeds.Placement(
                     n, role, ctrl,
-                    [(b, [cactions.Bind(n.members[0])])], 200))
+                    [(b, [cactions.Bind(n.members[0])])], 200,
+                    corneeds.Reason('claimed', points=200)))
                 needs.remove(n)
 
     # Axes never go through the allocator, in any game in the family.
@@ -540,11 +541,18 @@ def rows(layout):
 
     The order is the one `place()` appended in before it returned a Layout,
     and the one the listing has always printed: the trigger claims, then the
-    axes, then whatever the allocator placed. `points == 200` is the claim
-    marker `place()` sets, and it was the same magic number before.
+    axes, then whatever the allocator placed.
+
+    A claim used to be recognised by scoring exactly 200 -- a number chosen
+    to carry a meaning, which is a number nobody can change and one the
+    allocator could hit honestly. It now says what it is: `place()` writes
+    `Reason('claimed')` at the moment it claims.
     """
-    claims = [p for p in layout.placed if p.points == 200]
-    rest = [p for p in layout.placed if p.points != 200]
+    def claimed(p):
+        return p.why is not None and p.why.how == 'claimed'
+
+    claims = [p for p in layout.placed if claimed(p)]
+    rest = [p for p in layout.placed if not claimed(p)]
     return ([(p.need, (p.role, p.ctrl), p.points) for p in claims]
             + [(n, spot, None) for n, spot in layout.axes]
             + [(p.need, (p.role, p.ctrl), p.points) for p in rest])
@@ -561,15 +569,23 @@ def propose(module, key, game_dir=None):
     return cmds, guide, layout
 
 
-def seed(module, cmds, guide, chosen=None):
+def seed(module, cmds, guide, chosen=None, layout=None):
     """{command hash: the same record the capture screen writes}.
 
     Marked `proposed` so the screen can show what you have not confirmed yet;
     capturing over one drops the mark.
+
+    `layout` is the plan to write down. Give it whenever there IS one --
+    the review screen hands back its own, narrowed to what was accepted --
+    because working one out again here ignores every decision that screen
+    made. Left out, one is worked out, which is what the capture wizard and
+    `reseed()` want: neither has a reviewer to ask.
     """
-    if chosen is None:
-        chosen = candidates(module, cmds, guide)
-    out = rows(place(module, cmds, guide, chosen))
+    if layout is None:
+        if chosen is None:
+            chosen = candidates(module, cmds, guide)
+        layout = place(module, cmds, guide, chosen)
+    out = rows(layout)
     recs = {}
     for need, pair, _s in out:
         if not pair:
@@ -864,6 +880,8 @@ class Wizard(typing.Protocol):
     def harvest_commands(self, cfg: dict, aircraft_key: str,
                          factory_dir: str) -> dict: ...
 
+    def catalogue(self, cmds: dict) -> list[cactions.Action]: ...
+
     def build_guide(self, commands: dict) -> dict: ...
 
     def render_all(self, results: dict, cfg: dict,
@@ -932,16 +950,13 @@ class Dcs(adapter.Proposer):
 
     @typing.override
     def catalogue(self):
-        # Keyed by the wizard's command hash, because that is what every
-        # DCS record uses and what its results file is written against.
-        # The richest of the six: name, kind, category and votes are all
-        # in the cache already.
-        return [cactions.Action(h, c.get('name') or h,
-                                kind=('axis' if c.get('kind') == 'axis'
-                                      else 'button'),
-                                category=c.get('category'),
-                                rank=c.get('votes') or 0)
-                for h, c in sorted(self.cmds.items())]
+        # Settled beside `harvest_commands`, which builds these records:
+        # what a field is called is a fact about the format. DCS is the one
+        # game whose record is richer than the shared one -- `ways`, `dir`
+        # and `family` have no room in it and seven places here read them
+        # -- so the cache keeps one record rather than two spellings of
+        # the same four fields across 2500 of them.
+        return self.module.catalogue(self.cmds)
 
 
     @typing.override
@@ -954,8 +969,12 @@ class Dcs(adapter.Proposer):
     def seed(self, layout):
         path = results_path()
         data = json.load(open(path))
+        # The layout, not a fresh one. Five games hand `write_layout`
+        # whatever the reviewer accepted and `Layout.but()` exists to make
+        # it; this used to take the same argument and throw it away, so
+        # anything cleared on the screen came straight back.
         data.setdefault('aircraft', {})[self.aircraft] = seed(
-            self.module, self.cmds, self.guide)
+            self.module, self.cmds, self.guide, layout=layout)
         return {path: json.dumps(data, indent=2)}
 
     @typing.override
@@ -1069,6 +1088,9 @@ class Dcs(adapter.Proposer):
         placed = [(n, p, s) for n, p, s in out if p]
         lines = [f'{self.aircraft}: {len(placed)} controls proposed, '
                  f'{len(unplaced)} unplaced', '']
+        # `rows()` hands back the need and where it went, not the
+        # placement, and the account of WHY is on the placement.
+        held = {id(p.need): p for p in layout.placed}
         for need, pair, s in out:
             if need.shape == 'axis':
                 role, axs = pair if pair else (None, [])
@@ -1099,12 +1121,12 @@ class Dcs(adapter.Proposer):
                 lines.append(f'      {self.cmds[h]["name"][:46]:48s} '
                              f'-> {str(b):>3s} {w}')
             if why:
+                p_ = held.get(id(need))
+                bits = (corneeds.why_bits(p_) if p_ is not None
+                        else [corneeds.URGENCY_NAME[need.urgency]])
                 lines.append(f'      wants {need.shape}'
                              + (f', {need.dev}' if need.dev else '')
-                             + f", {['in a turn', 'on approach',
-                                     'in the air',
-                                     'on the ramp'][need.urgency]}"
-                             + f'   {need.rank} factory profiles   score {s}')
+                             + '   ' + '   '.join(bits))
                 lines.append(f'      '
                              f'{self.guide[need.members[0]]["place"][:74]}')
                 if need.shape == 'latch':

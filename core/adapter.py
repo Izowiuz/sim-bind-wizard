@@ -43,6 +43,7 @@ import importlib.machinery
 import importlib.util
 import inspect
 import os
+import subprocess
 import sys
 import time
 import typing
@@ -305,6 +306,20 @@ class Adapter(abc.ABC):
     #: `cache()` is told which.
     CACHE: dict = {}
 
+    #: Where this game's judgements live, relative to its own directory --
+    #: which band a thing is in, what shape it wants, what you filed it
+    #: under. Empty for a game that derives its needs instead: DCS reads
+    #: them off the aircraft, so there is nothing to keep.
+    #:
+    #: Deliberately not in `CACHE`. That names what the harvest wrote, and
+    #: a harvest cannot write a judgement.
+    BINDS: str = ''
+
+    #: Fields this game keeps of its own that travel with them. BMS marks
+    #: a need as living on the shifted layer and nobody else has the idea;
+    #: a generic bag would be the opaque payload this contract replaced.
+    EXTRA: tuple = ()
+
     #: constructor parameter -> extra flag spellings, for a game whose own
     #: word for something predates the common one.
     ALIASES: dict = {}
@@ -398,6 +413,64 @@ class Adapter(abc.ABC):
                 'find its own directory -- register it under spec.name '
                 'before exec_module, the way core.adapter.load does')
         return os.path.dirname(os.path.abspath(path))
+
+    @typing.final
+    def reharvest(self) -> list[str]:
+        """Read the game again, as `bind` would: a subprocess.
+
+        The same script `./bind <game> harvest` runs, for the same reason
+        `bind` shells out rather than importing -- a harvest reads a game
+        directory, unpacks archives and writes files, and none of that
+        wants to happen inside a curses loop with a half-drawn screen.
+
+        What comes back is what it printed. The catalogue on screen is
+        still the one loaded at start: picking the new one up means
+        starting again, and saying so beats pretending otherwise.
+        """
+        where = os.path.join(self.here, 'harvest.py')
+        if not os.path.exists(where):
+            return [f'{self.game} has no harvest.py -- it reads the game '
+                    'from inside its capture wizard']
+        done = subprocess.run([sys.executable, where, '--json'],
+                              cwd=self.here, capture_output=True, text=True)
+        out = [line for line in (done.stdout + done.stderr).splitlines()
+               if line.strip()]
+        return out + ([] if done.returncode == 0 else
+                      [f'!! harvest exited {done.returncode}'])
+
+    @typing.final
+    def drop_cache(self) -> list[str]:
+        """Remove what the harvest wrote, and only that.
+
+        `CACHE` names what the harvest wrote; `BINDS` is deliberately not
+        in it. So this walk cannot reach the judgements however it is
+        written -- which matters, because a harvest is one command away
+        from coming back and a judgement is not.
+        """
+        out = []
+        for name in sorted(self.CACHE):
+            path = os.path.join(self.here, name)
+            if not os.path.exists(path):
+                out.append(f'{name} was not there')
+                continue
+            os.remove(path)
+            out.append(f'removed {name}')
+        return out or ['nothing to remove']
+
+    @typing.final
+    def save_needs(self, needs) -> str:
+        """Write the judgements down, or say why there is nowhere to.
+
+        A judgement is derived from nothing: delete it and it is gone. So
+        a screen that lets somebody make one has to be able to keep it,
+        and until this existed, promoting an action lasted until `q`.
+        """
+        if not self.BINDS:
+            raise RuntimeError(
+                f'{self.game} derives its needs rather than keeping them, '
+                'so there is no list to write')
+        corneeds.save_needs(self.here, self.BINDS, needs, self.EXTRA)
+        return f'wrote {len(needs)} to {self.BINDS}'
 
     @typing.final
     def cache(self, filename, key=None, build=None):
@@ -648,7 +721,9 @@ class Planner(Adapter):
         """
         creview.run(self.build(), self.title, self.subtitle,
                     describe=self.describe, write=self.write_all,
-                    paths=self.paths(args))
+                    paths=self.paths(args), catalogue=self.catalogue(),
+                    save=self.save_needs, harvest=self.reharvest,
+                    drop=self.drop_cache)
 
 
 class Proposer(Adapter):

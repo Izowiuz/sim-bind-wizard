@@ -16,6 +16,7 @@ import re
 import unittest
 
 import fake
+from core.actions import Action, Bind
 from core import needs as corneeds
 from core import review
 from core import tui as ctui
@@ -34,14 +35,26 @@ DEVS = lambda: stick(                                        # noqa: E731
     fake.hat2('Panel rocker', 7, reach=fake.PANEL),
 )
 
-PLAN = [Need('Trim', 'hat4', ['U', 'R', 'D', 'L'], urgency=IN_A_TURN),
-        Need('Gear', 'button', ['GEAR']),
-        Need('Canopy', 'button', ['CANOPY'], urgency=ON_THE_RAMP)]
+def plan():
+    """Fresh needs every time, which is not fussiness.
+
+    `allocate` writes `relaxed` onto a need and a reviewer writes
+    `category`, so a module-level list is one set of objects shared by
+    every test in the file -- and one test filing something under
+    "Combat" put it there for all the others. It cost two failures in
+    tests that were right.
+    """
+    return [Need('Trim', 'hat4',
+                 [[Bind('U')], [Bind('R')], [Bind('D')], [Bind('L')]],
+                 urgency=IN_A_TURN),
+            Need('Gear', 'button', [[Bind('GEAR')]]),
+            Need('Canopy', 'button', [[Bind('CANOPY')]],
+                 urgency=ON_THE_RAMP)]
 
 
 def made(needs=None, devs=None, **kw):
     devs = devs or DEVS()
-    lay = Layout(devs, *allocate(list(needs or PLAN), devs),
+    lay = Layout(devs, *allocate(list(needs or plan()), devs),
                  axes=[('pitch', 'stick')])
     return review.Review(lay, 'Test', 'fake hardware', **kw)
 
@@ -104,13 +117,13 @@ class Starting(unittest.TestCase):
         self.assertEqual((0, 3, 0), rv.counts())
 
     def test_a_need_it_could_not_place_starts_unset(self):
-        rv = made([Need('Trim', 'hat8', ['A'] * 8)])
+        rv = made([Need('Trim', 'hat8', [[Bind('A')]] * 8)])
         self.assertEqual(UNSET, rv.mark[by(rv, 'Trim')])
         self.assertEqual('(unset)', rv.where(by(rv, 'Trim')))
         self.assertEqual((0, 0, 1), rv.counts())
 
     def test_every_need_is_a_row_whether_it_has_a_control_or_not(self):
-        rv = made(PLAN + [Need('Trim8', 'hat8', ['A'] * 8)])
+        rv = made(plan() + [Need('Trim8', 'hat8', [[Bind('A')]] * 8)])
         self.assertEqual(4, len([r for r in rv.rows() if r.kind == 'need']))
 
 
@@ -127,12 +140,12 @@ class Confirming(unittest.TestCase):
         self.assertIn('already yours', rv.confirm(by(rv, 'Gear')))
 
     def test_there_is_nothing_to_confirm_on_an_empty_row(self):
-        rv = made([Need('Trim', 'hat8', ['A'] * 8)])
+        rv = made([Need('Trim', 'hat8', [[Bind('A')]] * 8)])
         self.assertIn('nothing to confirm', rv.confirm(by(rv, 'Trim')))
         self.assertEqual(UNSET, rv.mark[by(rv, 'Trim')])
 
     def test_confirm_all_takes_the_proposals_and_leaves_the_gaps(self):
-        rv = made(PLAN + [Need('Trim8', 'hat8', ['A'] * 8)])
+        rv = made(plan() + [Need('Trim8', 'hat8', [[Bind('A')]] * 8)])
         rv.confirm_all()
         self.assertEqual((3, 0, 1), rv.counts())
 
@@ -214,7 +227,7 @@ class Proposing(unittest.TestCase):
         self.assertEqual(ctrl.label, at(rv, gear).ctrl.label)
 
     def test_it_says_so_when_the_planner_had_nothing(self):
-        rv = made([Need('Trim', 'hat8', ['A'] * 8)])
+        rv = made([Need('Trim', 'hat8', [[Bind('A')]] * 8)])
         self.assertIn('nowhere to put it', rv.propose(by(rv, 'Trim')))
 
     def test_it_refuses_a_control_someone_else_took_meanwhile(self):
@@ -260,7 +273,7 @@ class ByHand(unittest.TestCase):
         # The allocator refuses an `in a turn` need a control you must let go
         # of the grip to reach. Someone choosing by hand has decided otherwise.
         devs = stick(fake.button('Panel button', 0, reach=fake.PANEL))
-        rv = made([Need('Radar', 'button', ['ACM'], urgency=IN_A_TURN)],
+        rv = made([Need('Radar', 'button', [[Bind('ACM')]], urgency=IN_A_TURN)],
                   devs=devs)
         radar = by(rv, 'Radar')
         self.assertEqual(UNSET, rv.mark[radar], 'the ceiling refused it')
@@ -276,7 +289,7 @@ class ByHand(unittest.TestCase):
     def test_a_control_with_too_few_buttons_is_never_offered(self):
         devs = stick(fake.selector('Three-way', 0, positions=3,
                                    reach=fake.PANEL))
-        rv = made([Need('Trim', 'hat4', ['U', 'R', 'D', 'L'])], devs=devs)
+        rv = made([Need('Trim', 'hat4', [[Bind('U')], [Bind('R')], [Bind('D')], [Bind('L')]])], devs=devs)
         self.assertEqual([], rv.fits(by(rv, 'Trim')))
 
 
@@ -312,7 +325,7 @@ class ByPress(unittest.TestCase):
     def test_a_control_that_carries_nothing_is_refused(self):
         devs = stick(fake.control('unwired', 'Phantom', [0]),
                      fake.button('Panel button', 1, reach=fake.PANEL))
-        rv = made([Need('Gear', 'button', ['GEAR'])], devs=devs)
+        rv = made([Need('Gear', 'button', [[Bind('GEAR')]])], devs=devs)
         phantom = next(c for c in rv.layout.devices['stick']._groups
                        if c.label == 'Phantom')
         self.assertIn('carries no binding',
@@ -327,7 +340,7 @@ class ByPress(unittest.TestCase):
     def test_too_few_buttons_is_refused_with_the_count(self):
         devs = stick(fake.selector('Three-way', 0, positions=3,
                                    reach=fake.PANEL))
-        rv = made([Need('Trim', 'hat4', ['U', 'R', 'D', 'L'])], devs=devs)
+        rv = made([Need('Trim', 'hat4', [[Bind('U')], [Bind('R')], [Bind('D')], [Bind('L')]])], devs=devs)
         three = rv.layout.devices['stick'].groups(bindable=True)[0]
         why = refused(rv, by(rv, 'Trim'), 'stick', three)
         self.assertIn('3', why)
@@ -386,7 +399,7 @@ class Took(unittest.TestCase):
         self.assertEqual(ctrl.label, at(rv, gear).ctrl.label)
 
     def test_pressing_any_button_of_a_control_takes_the_whole_control(self):
-        rv = made([Need('Trim', 'hat4', ['U', 'R', 'D', 'L'])])
+        rv = made([Need('Trim', 'hat4', [[Bind('U')], [Bind('R')], [Bind('D')], [Bind('L')]])])
         trim = by(rv, 'Trim')
         rv.clear(trim)
         rv.took(trim, 'stick', 2)                   # the third of four
@@ -428,7 +441,7 @@ class WhereThePressLands(unittest.TestCase):
         devs = stick(fake.trigger('Main trigger', 0,
                                   stages=('first', 'second', 'third'),
                                   reach=fake.INDEX))
-        return made([Need('Fire', 'trigger', ['FIRE'])], devs=devs)
+        return made([Need('Fire', 'trigger', [[Bind('FIRE')]])], devs=devs)
 
     def test_a_lone_binding_lands_on_the_stage_you_pressed(self):
         # It used to land on the first stage whichever you pressed, because
@@ -450,7 +463,7 @@ class WhereThePressLands(unittest.TestCase):
     def test_a_need_wanting_the_whole_control_still_gets_its_own_order(self):
         # Four directions are the control's business, not the corner you
         # happened to touch.
-        rv = made([Need('Trim', 'hat4', ['U', 'R', 'D', 'L'])])
+        rv = made([Need('Trim', 'hat4', [[Bind('U')], [Bind('R')], [Bind('D')], [Bind('L')]])])
         trim = by(rv, 'Trim')
         rv.clear(trim)
         rv.took(trim, 'stick', 2)
@@ -459,7 +472,7 @@ class WhereThePressLands(unittest.TestCase):
     def test_an_on_claim_beats_the_press(self):
         # `on` says a speedbrake is fore/aft whatever hat it lands on. Letting
         # a press overrule it is the lie `on` exists to stop.
-        rv = made([Need('Speedbrake', 'hat4', ['OUT'], on=('forward',))])
+        rv = made([Need('Speedbrake', 'hat4', [[Bind('OUT')]], on=('forward',))])
         sb = by(rv, 'Speedbrake')
         rv.clear(sb)
         rv.took(sb, 'stick', 3)                     # 'left'
@@ -473,7 +486,7 @@ class WhereThePressLands(unittest.TestCase):
         # so rather than binding there.
         devs = stick(fake.control('hat2', 'Rocker', [0, 1], rest_contact=2,
                                   reach=fake.THUMB))
-        rv = made([Need('Flaps', 'hat2', ['UP'])], devs=devs)
+        rv = made([Need('Flaps', 'hat2', [[Bind('UP')]])], devs=devs)
         flaps = by(rv, 'Flaps')
         rv.clear(flaps)
         said = rv.took(flaps, 'stick', 2)
@@ -485,9 +498,9 @@ class WhereThePressLands(unittest.TestCase):
         fire = by(rv, 'Fire')
         ctrl = at(rv, fire).ctrl
         self.assertTrue(rv.honours_press(fire, ctrl, 1))
-        many = Need('Trim', 'trigger', ['A', 'B'])
+        many = Need('Trim', 'trigger', [[Bind('A')], [Bind('B')]])
         self.assertFalse(rv.honours_press(many, ctrl, 1), 'wants the control')
-        aimed = Need('Brake', 'trigger', ['A'], on=('first',))
+        aimed = Need('Brake', 'trigger', [[Bind('A')]], on=('first',))
         self.assertFalse(rv.honours_press(aimed, ctrl, 1), 'on wins')
 
 
@@ -500,7 +513,7 @@ class Writing(unittest.TestCase):
         self.assertEqual(3, len(rv.result().placed))
 
     def test_only_needs_with_a_control_are_written(self):
-        rv = made(PLAN + [Need('Trim8', 'hat8', ['A'] * 8)])
+        rv = made(plan() + [Need('Trim8', 'hat8', [[Bind('A')]] * 8)])
         self.assertEqual(3, len(rv.result().placed))
 
     def test_the_result_is_the_same_plan_narrowed(self):
@@ -513,7 +526,7 @@ class Writing(unittest.TestCase):
 
     def test_a_hand_placed_need_reaches_the_writer(self):
         devs = stick(fake.button('Panel button', 0, reach=fake.PANEL))
-        rv = made([Need('Radar', 'button', ['ACM'], urgency=IN_A_TURN)],
+        rv = made([Need('Radar', 'button', [[Bind('ACM')]], urgency=IN_A_TURN)],
                   devs=devs)
         radar = by(rv, 'Radar')
         rv.assign(radar, *rv.fits(radar)[0])
@@ -603,6 +616,356 @@ class BindsUnderTheAction(unittest.TestCase):
                    if r.kind == 'need' and r.need is gear)
         self.assertTrue(any('free control' in ln
                             for ln in review._detail(rv, row)))
+
+
+class TheDetailPanel(unittest.TestCase):
+    """What the right-hand panel says about the row you are on.
+
+    It answers three questions and they are not the same question: what is
+    this sitting on, what does it fire, and WHY is it there. The third had
+    no answer at all -- the panel listed the control and its reach and
+    stopped, so the one thing a reader actually argues with, the planner's
+    choice, was the one thing it would not account for.
+
+    `Reason` is that account, recorded where the decision was made. The
+    panel is its first human reader.
+    """
+
+    def rv(self, **kw):
+        return made(**kw)
+
+    def side(self, rv, what, width=26):
+        row = next(r for r in rv.rows()
+                   if r.kind == 'need' and r.need.what == what)
+        return review._side(rv, row, width)
+
+    def text(self, rv, what, width=26):
+        return '\n'.join(t for _tone, t in self.side(rv, what, width))
+
+    def tone_of(self, rv, what, word, width=26):
+        return next(tone for tone, t in self.side(rv, what, width)
+                    if word in t)
+
+    # ---- the why segment ----
+
+    def test_it_says_which_band_the_need_is_in(self):
+        self.assertIn('in a turn', self.text(self.rv(), 'Trim'))
+
+    def test_it_gives_the_terms_the_score_was_made_of(self):
+        # Not the number: 137 says nothing to a reader. The terms say what
+        # the control was picked FOR, and they are already recorded.
+        got = self.text(self.rv(), 'Trim')
+        self.assertIn('fits', got)
+
+    def test_it_names_the_shape_the_control_matched(self):
+        self.assertIn('hat4', self.text(self.rv(), 'Trim'))
+
+    def test_a_placement_that_reached_past_the_floor_says_so(self):
+        rv = made([Need('Airbrake', 'hat2', [[Bind('OUT')], [Bind('IN')]],
+                        urgency=IN_A_TURN)],
+                  devs=stick(fake.hat2('Panel rocker', 0,
+                                       reach=fake.PANEL)))
+        self.assertIn('floor', self.text(rv, 'Airbrake').lower())
+
+    # ---- the override mention ----
+
+    def test_the_planners_own_choice_is_marked_as_the_planners(self):
+        self.assertIn('planner', self.text(self.rv(), 'Trim').lower())
+
+    def test_moving_it_by_hand_is_said_out_loud(self):
+        rv = self.rv()
+        gear = by(rv, 'Gear')
+        ctrl = next(c for c in rv.layout.devices['stick'].groups(bindable=True)
+                    if c.label == 'Panel button')
+        rv.assign(gear, 'stick', ctrl)
+        self.assertIn('you', self.text(rv, 'Gear').lower())
+
+    def test_it_says_where_the_planner_had_wanted_it(self):
+        rv = self.rv()
+        gear = by(rv, 'Gear')
+        was = at(rv, gear).ctrl.label
+        ctrl = next(c for c in rv.layout.devices['stick'].groups(bindable=True)
+                    if c.label == 'Panel button')
+        rv.assign(gear, 'stick', ctrl)
+        self.assertIn(was, self.text(rv, 'Gear'))
+
+    def test_a_hand_that_agrees_with_the_planner_claims_no_move(self):
+        # Putting it back where it already was is not an override, and
+        # "moved from Thumb hat" about a binding on the thumb hat would be
+        # the screen arguing with the person reading it.
+        rv = self.rv()
+        gear = by(rv, 'Gear')
+        rv.assign(gear, 'stick', at(rv, gear).ctrl)
+        self.assertNotIn('moved', self.text(rv, 'Gear').lower())
+
+    # ---- which button of the control ----
+
+    def test_a_control_with_several_binds_says_which_is_which(self):
+        # Four binds on a hat share the control, so they share every word
+        # of the account except this one. Without it the panel repeats one
+        # sentence four times, which looks like an answer.
+        got = self.text(self.rv(), 'Trim')
+        self.assertIn('press order', got)
+
+    def test_a_single_bind_is_not_told_which_of_one_button(self):
+        # There is nothing to tell apart, and a heading over one obvious
+        # line is a line you learn to skip.
+        rv = self.rv()
+        gear = by(rv, 'Gear')
+        self.assertEqual(1, len(at(rv, gear).slots))
+        self.assertNotIn('WHICH BUTTON', self.text(rv, 'Gear'))
+
+    def test_a_hand_placed_bind_is_told_too(self):
+        rv = self.rv()
+        trim = by(rv, 'Trim')
+        ctrl = at(rv, trim).ctrl
+        rv.assign(trim, 'stick', ctrl)
+        spots = [b.reason.spot for _n, slot in at(rv, trim).slots
+                 for b in slot if b.reason]
+        self.assertTrue(all(spots), spots)
+
+    # ---- the colours ----
+
+    def test_the_override_line_wears_the_same_tone_as_the_row(self):
+        # `MINE` is a tone name as well as a state, deliberately, so the
+        # table and the panel cannot disagree about what green means.
+        rv = self.rv()
+        gear = by(rv, 'Gear')
+        ctrl = next(c for c in rv.layout.devices['stick'].groups(bindable=True)
+                    if c.label == 'Panel button')
+        rv.assign(gear, 'stick', ctrl)
+        self.assertEqual(MINE, self.tone_of(rv, 'Gear', 'you'))
+
+    def test_the_sections_are_headings_not_plain_text(self):
+        tones = {tone for tone, t in self.side(self.rv(), 'Trim')
+                 if t.isupper() and t.strip()}
+        self.assertEqual({'head'}, tones)
+
+    # ---- the width ----
+
+    def test_nothing_comes_back_wider_than_the_panel(self):
+        # `_draw` wraps too, but without a hanging indent -- so a ledger
+        # line it has to break lands flush left and stops reading as a
+        # ledger. The panel wraps its own.
+        for w in (18, 22, 26, 40):
+            for _tone, t in self.side(self.rv(), 'Trim', w):
+                self.assertLessEqual(len(t), w, repr(t))
+
+
+class Categories(unittest.TestCase):
+    """What the list groups by.
+
+    It grouped by urgency band, which is the allocator's scale and not
+    yours: four buckets, named for when you touch a thing, fixed in the
+    source. A category is yours -- you name it, you put things in it, you
+    move them between.
+
+    They are two fields on purpose. "Combat" can hold something you reach
+    for in a turn and something you set on the ramp, and the allocator
+    still has to know which is which.
+    """
+
+    def groups(self, rv):
+        return [r.text for r in rv.rows() if r.kind == 'head']
+
+    def under(self, rv, group):
+        out, seen = [], False
+        for r in rv.rows():
+            if r.kind == 'head':
+                seen = r.text == group
+            elif r.kind == 'need' and seen:
+                out.append(r.text)
+        return out
+
+    def test_a_need_with_no_category_keeps_its_band(self):
+        # Nothing has a category on the day this lands, so grouping by it
+        # alone would empty every screen in the family.
+        rv = made()
+        self.assertIn('IN A TURN', self.groups(rv))
+        self.assertIn('Trim', self.under(rv, 'IN A TURN'))
+
+    def test_a_need_with_a_category_sits_under_it(self):
+        rv = made()
+        trim = by(rv, 'Trim')
+        trim.category = 'Combat'
+        self.assertIn('COMBAT', self.groups(rv))
+        self.assertIn('Trim', self.under(rv, 'COMBAT'))
+        self.assertNotIn('Trim', self.under(rv, 'IN A TURN'))
+
+    def test_a_group_sorts_by_the_most_urgent_thing_in_it(self):
+        # A category holding something you reach for in a turn belongs
+        # above one whose most urgent member waits for the ramp -- the
+        # same order the bands had, derived rather than declared.
+        rv = made()
+        by(rv, 'Canopy').category = 'Housekeeping'
+        by(rv, 'Trim').category = 'Combat'
+        got = self.groups(rv)
+        self.assertLess(got.index('COMBAT'), got.index('HOUSEKEEPING'))
+
+    def test_an_empty_category_is_not_a_heading(self):
+        # `f` already skips a band it filtered empty; a category nobody
+        # is in is a line you scroll past to reach the rows you asked for.
+        rv = made()
+        by(rv, 'Trim').category = 'Combat'
+        rv.filter = 'gear'
+        self.assertNotIn('COMBAT', self.groups(rv))
+
+
+class Promoting(unittest.TestCase):
+    """Taking something out of the vocabulary and putting it on the list.
+
+    The screen showed 147 rows across five games while the games between
+    them accept 5856 actions. The other 5709 were not hidden -- nothing
+    ever knew about them, because the list was a hand-written literal and
+    the vocabulary was only ever consulted to check spelling.
+    """
+
+    CAT = [Action('ID_GEAR', 'Landing gear'),
+           Action('ID_FLARE', 'Countermeasures'),
+           Action('ID_PITCH', 'Pitch', kind='axis')]
+
+    def rv(self):
+        return made(catalogue=self.CAT)
+
+    def test_an_action_nobody_asked_for_is_not_on_the_list(self):
+        rv = self.rv()
+        self.assertNotIn('Landing gear', [n.what for n in rv.needs])
+
+    def test_promoting_puts_it_under_the_category_you_named(self):
+        rv = self.rv()
+        rv.promote(self.CAT[0], 'Combat')
+        need = next(n for n in rv.needs if n.what == 'Landing gear')
+        self.assertEqual('Combat', need.category)
+        self.assertIn('COMBAT', [r.text for r in rv.rows()
+                                 if r.kind == 'head'])
+
+    def test_what_it_binds_is_the_action_you_promoted(self):
+        rv = self.rv()
+        rv.promote(self.CAT[0], 'Combat')
+        need = next(n for n in rv.needs if n.what == 'Landing gear')
+        self.assertEqual([['ID_GEAR']],
+                         [[b.action for b in slot] for slot in need.bindings])
+
+    def test_it_arrives_carrying_nothing(self):
+        # Promoting says "this matters", not "put it here". Where is the
+        # next question and the screen already answers it.
+        rv = self.rv()
+        rv.promote(self.CAT[0], 'Combat')
+        need = next(n for n in rv.needs if n.what == 'Landing gear')
+        self.assertIsNone(rv.at[need])
+        self.assertEqual(UNSET, rv.mark[need])
+
+    def test_promoting_the_same_action_twice_is_once(self):
+        rv = self.rv()
+        rv.promote(self.CAT[0], 'Combat')
+        rv.promote(self.CAT[0], 'Nav')
+        self.assertEqual(1, sum(1 for n in rv.needs
+                                if n.what == 'Landing gear'))
+
+    def test_an_axis_says_it_cannot_go_that_way_yet(self):
+        # Axes never went through the allocator in any game in the family,
+        # so there is nothing for a promoted one to be placed on.
+        rv = self.rv()
+        said = rv.promote(self.CAT[2], 'Combat')
+        self.assertIn('axis', said.lower())
+        self.assertNotIn('Pitch', [n.what for n in rv.needs])
+
+    def test_promoting_writes_it_down(self):
+        # A judgement is derived from nothing. One that lasts until `q` is
+        # a judgement you have to make again.
+        kept = []
+        rv = made(catalogue=self.CAT,
+                  save=lambda needs: kept.append(list(needs)) or 'saved')
+        rv.promote(self.CAT[0], 'Combat')
+        self.assertTrue(kept, 'nothing was written')
+        self.assertIn('Landing gear', [n.what for n in kept[-1]])
+
+    def test_a_screen_with_nowhere_to_write_still_works(self):
+        # DCS derives its needs, so there is no list to keep -- and a
+        # screen that raised rather than said so would take the whole
+        # review down over a thing it cannot help.
+        rv = made(catalogue=self.CAT)
+        said = rv.promote(self.CAT[0], 'Combat')
+        self.assertIn('Landing gear', [n.what for n in rv.needs])
+        self.assertTrue(said)
+
+    def test_the_categories_in_use_can_be_offered(self):
+        # So a menu can show what exists before asking for a new name.
+        rv = self.rv()
+        rv.promote(self.CAT[0], 'Combat')
+        self.assertIn('Combat', rv.categories())
+        self.assertIn('in a turn', rv.categories())
+
+
+class Refiling(unittest.TestCase):
+    """Moving something from one group to another.
+
+    Promoting puts a thing on the list; this changes your mind about
+    where it belongs. They are separate because the first reaches into
+    the vocabulary and the second never leaves the list.
+    """
+
+    def test_it_moves_the_row(self):
+        rv = made()
+        trim = by(rv, 'Trim')
+        rv.refile(trim, 'Combat')
+        heads = [r.text for r in rv.rows() if r.kind == 'head']
+        self.assertIn('COMBAT', heads)
+        self.assertNotIn('IN A TURN', heads)
+
+    def test_it_is_written_down(self):
+        kept = []
+        rv = made(save=lambda needs: kept.append(list(needs)) or 'ok')
+        rv.refile(by(rv, 'Trim'), 'Combat')
+        self.assertEqual(['Combat'], [n.category for n in kept[-1]
+                                      if n.what == 'Trim'])
+
+    def test_putting_it_back_in_its_band_forgets_the_category(self):
+        # The band is the fallback, not a category -- filing something
+        # under `in a turn` and having that written down as a name would
+        # make the fallback a place you cannot leave.
+        rv = made()
+        trim = by(rv, 'Trim')
+        rv.refile(trim, 'Combat')
+        rv.refile(trim, 'in a turn')
+        self.assertIsNone(trim.category)
+
+    def test_it_does_not_touch_the_urgency(self):
+        # Two fields on purpose: where you filed it and when you reach
+        # for it are different questions, and the allocator reads one.
+        rv = made()
+        trim = by(rv, 'Trim')
+        was = trim.urgency
+        rv.refile(trim, 'Housekeeping')
+        self.assertEqual(was, trim.urgency)
+
+
+class Renaming(unittest.TestCase):
+    """Changing what a group is called, without emptying it first."""
+
+    def test_everything_in_it_moves(self):
+        rv = made()
+        rv.refile(by(rv, 'Trim'), 'Combat')
+        rv.refile(by(rv, 'Gear'), 'Combat')
+        rv.rename('Combat', 'Fighting')
+        self.assertEqual(['Fighting', 'Fighting'],
+                         [n.category for n in rv.needs
+                          if n.what in ('Trim', 'Gear')])
+
+    def test_nothing_else_moves(self):
+        rv = made()
+        rv.refile(by(rv, 'Trim'), 'Combat')
+        rv.rename('Combat', 'Fighting')
+        self.assertIsNone(by(rv, 'Canopy').category)
+
+    def test_renaming_a_band_is_refused(self):
+        # A band is not a category, it is what a need falls back to. There
+        # are four of them, they are the allocator's scale, and renaming
+        # one here would say otherwise.
+        rv = made()
+        said = rv.rename('in a turn', 'Fighting')
+        self.assertIn('band', said.lower())
+        self.assertIsNone(by(rv, 'Trim').category)
 
 
 class FilteringAndFolding(unittest.TestCase):
@@ -735,7 +1098,7 @@ class WhatItFound(unittest.TestCase):
                 'throttle': fake.device('throttle', [
                     fake.button('Pinky', 0, reach=fake.PANEL)],
                     product='L-VPC VMAX Prime Throttle')}
-        lay = Layout(devs, *allocate([Need('Fire', 'button', ['F'])], devs))
+        lay = Layout(devs, *allocate([Need('Fire', 'button', [[Bind('F')]])], devs))
         return review.Review(lay, 'Test', paths=[('game', '/games/thing')])
 
     def test_the_header_names_the_device_behind_each_role(self):
@@ -765,7 +1128,7 @@ class WhatItFound(unittest.TestCase):
     def test_it_marks_a_control_that_can_carry_nothing(self):
         devs = stick(fake.control('unwired', 'Phantom', [0]),
                      fake.button('Real', 1, reach=fake.PANEL))
-        rv = made([Need('Gear', 'button', ['GEAR'])], devs=devs)
+        rv = made([Need('Gear', 'button', [[Bind('GEAR')]])], devs=devs)
         phantom = map_text(rv).splitlines()
         phantom = [ln for ln in phantom if 'Phantom' in ln][0]
         self.assertIn('carries nothing', phantom)
@@ -775,7 +1138,7 @@ class WhatItFound(unittest.TestCase):
     def test_it_shows_the_axes_of_a_control_that_has_no_buttons(self):
         devs = stick(fake.ministick('Mini-stick', 3, push=0,
                                     reach=fake.THUMB))
-        rv = made([Need('Gear', 'button', ['GEAR'])], devs=devs)
+        rv = made([Need('Gear', 'button', [[Bind('GEAR')]])], devs=devs)
         line = [ln for ln in map_text(rv).splitlines()
                 if 'Mini-stick' in ln][0]
         self.assertIn('ax3,4', line)
@@ -827,10 +1190,12 @@ class WhatItFound(unittest.TestCase):
         # A legend drawn in the colours it explains: one line per tone,
         # because a line carries one.
         rv = made()
+        # Against the constant, not against its wording: this test is
+        # about one line per tone, and pinning the prose made it break
+        # when the words changed and the rule did not.
         legend = {tone: text for tone, text in rv.map_lines()
-                  if text.strip() in ('+ yours', "? the planner's,"
-                                      ' not yet checked', 'free',
-                                      'carries no binding at all')}
+                  if text.strip() in ('+ yours', f'? {review.PROPOSED_SAID}',
+                                      'free', 'carries no binding at all')}
         self.assertEqual({'mine', 'proposed', 'plain', 'meta'},
                          set(legend), 'each of the four, in its own tone')
 

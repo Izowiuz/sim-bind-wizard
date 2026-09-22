@@ -47,6 +47,7 @@ CORE = os.environ.get('SIM_BIND_WIZARD') or os.path.normpath(
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import actions as cactions
 from core import adapter                                    # noqa: E402
 
 CANDIDATES = [
@@ -144,6 +145,33 @@ def harvest(game_dir):
     return actions, rank, seen_profiles
 
 
+def catalogue(actions=None, rank=None):
+    """[Action] -- the whole vocabulary in the shape every game shares.
+
+    MSFS marks an axis by prefixing the name with `AXIS:`, so the kind and
+    the readable name come out of the same string. The ranking is per
+    aircraft category and an action can sit under several, so the highest
+    count wins: bound by 54 aeroplane profiles and no helicopter one is
+    still worth 54.
+    """
+    actions = actions or {}
+    votes = {}
+    for _cat, pairs in (rank or {}).items():
+        for name, n in pairs:
+            votes[name] = max(votes.get(name, 0), n)
+    return [cactions.Action(name, name.removeprefix('AXIS:'),
+                            kind='axis' if name.startswith('AXIS:')
+                            else 'button',
+                            mode=', '.join(sorted(ctxs)) or None,
+                            rank=votes.get(name, 0))
+            for name, ctxs in sorted(actions.items())]
+
+
+def action_rows(actions=None, rank=None):
+    """The section the cache holds."""
+    return cactions.dump(catalogue(actions, rank))
+
+
 @typing.final
 class MsfsHarvest(adapter.Harvest):
     """MSFS's action vocabulary and its per-category ranking.
@@ -170,15 +198,17 @@ class MsfsHarvest(adapter.Harvest):
         self.where = find_game(args.game_dir)
         actions, rank, counts = harvest(self.where)
         self.counts, self.rank = counts, rank
+        ranked = {c: sorted(k.items(), key=lambda kv: (-kv[1], kv[0]))
+                  for c, k in rank.items()}
         return {
             'msfs-actions.json': {
-                'actions': {k: sorted(v['contexts'])
-                            for k, v in sorted(actions.items())}},
+                'actions': action_rows(
+                    {k: sorted(v['contexts'])
+                     for k, v in sorted(actions.items())}, ranked)},
             'msfs-rank.json': {
                 'profiles': dict(counts),
                 # Ties by name, so two harvests of one install agree.
-                'rank': {c: sorted(k.items(), key=lambda kv: (-kv[1], kv[0]))
-                         for c, k in rank.items()}},
+                'rank': ranked},
         }
 
     @typing.override

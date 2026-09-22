@@ -14,8 +14,10 @@ author's own stick plugged in is not a test.
 import unittest
 
 import fake
-from core.needs import (Layout, Need, allocate, reach_tier,
-                        IN_A_TURN, ON_APPROACH, IN_THE_AIR, ON_THE_RAMP)
+from core.actions import Bind
+from core.needs import (Layout, Need, allocate, dump_needs, read_needs,
+                        reach_tier, IN_A_TURN, ON_APPROACH, IN_THE_AIR,
+                        ON_THE_RAMP)
 
 
 def one(placed, what):
@@ -188,6 +190,83 @@ class Slots(unittest.TestCase):
             [Need('Flaps', 'hat2', ['UP', 'DOWN'], push='FLAPS_RESET')], devs)
         self.assertEqual([(0, 'UP'), (1, 'DOWN'), (2, 'FLAPS_RESET')],
                          placed[0].slots)
+
+
+class NeedsOnDisk(unittest.TestCase):
+    """The hand-written list, written down instead.
+
+    147 needs across five games carry 373 judgements nothing derives --
+    which band a thing is in, what shape it wants, which device it belongs
+    on, what a human wrote about it. They have lived in a Python literal
+    since the first commit, so nothing could change one without editing
+    code, and nothing has ever had to survive a round trip.
+
+    What is NOT here is the per-context split every game's constructor
+    takes -- `air`/`heli`, `plane`/`glob`, `ship`/`map`/`foot`. Those zip
+    into the slots and read back off the binds, so writing them too would
+    be the same fact twice.
+    """
+
+    def back(self, need, also=()):
+        (got,) = read_needs(dump_needs([need], also), also)
+        return got
+
+    def test_every_judgement_survives(self):
+        one = Need('Airbrake', 'hat2', [[Bind('OUT')], [Bind('IN')]],
+                   urgency=IN_A_TURN, suits='reflex', dev='throttle',
+                   prefer='T1 rocker', on=('forward', 'back'), rank=17,
+                   note='held, not tapped')
+        got = self.back(one)
+        for f in ('what', 'shape', 'urgency', 'suits', 'dev', 'prefer',
+                  'on', 'rank', 'note'):
+            self.assertEqual(getattr(one, f), getattr(got, f), f)
+
+    def test_the_slots_come_back_in_the_order_they_went(self):
+        # A slot's position is which button it lands on. Reordered, a trim
+        # hat's directions land on different buttons and nothing raises.
+        one = Need('Trim', 'hat4', [[Bind('U')], [Bind('R')],
+                                    [Bind('D')], [Bind('L')]])
+        self.assertEqual(
+            [['U'], ['R'], ['D'], ['L']],
+            [[b.action for b in slot] for slot in self.back(one).bindings])
+
+    def test_a_slot_left_alone_stays_left_alone(self):
+        # An empty slot means "this direction is not bound", which is not
+        # the same as the slot not being there.
+        one = Need('Half', 'hat2', [[Bind('UP')], []])
+        self.assertEqual([1, 0], [len(s) for s in self.back(one).bindings])
+
+    def test_a_click_survives(self):
+        one = Need('Hat', 'hat4', [[Bind('U')]], push=[Bind('CLICK')])
+        got = self.back(one)
+        self.assertIsNotNone(got.push)
+
+    def test_a_shape_written_as_a_choice_stays_a_choice(self):
+        # `('button', 'hat2')` means "a button, or a rocker will do", and
+        # JSON gives a list back -- `first_shape` must still be 'button'.
+        one = Need('Gear', ('button', 'hat2'), [[Bind('G')]])
+        got = self.back(one)
+        self.assertEqual('button', got.first_shape)
+
+    def test_a_field_only_one_game_has_is_named_not_bagged(self):
+        # BMS alone marks a need as living on the shifted layer. A generic
+        # `extra` bag would be the opaque payload this project spent its
+        # time removing, so the game says which field it wants carried.
+        class Shifted(Need):
+            """What BMS's own subclass is, minus everything else."""
+            shift = False
+
+        one = Shifted('Pinky shift', 'button', [[Bind('SHIFT')]])
+        one.shift = True
+        back = read_needs(dump_needs([one], ('shift',)), ('shift',), Shifted)
+        self.assertIs(True, back[0].shift)
+
+    def test_a_need_the_allocator_has_touched_comes_back_untouched(self):
+        # `relaxed` is set BY a run; it is not a judgement and writing it
+        # down would make the next run start from the last one's outcome.
+        one = Need('Gear', 'button', [[Bind('G')]])
+        one.relaxed = True
+        self.assertFalse(self.back(one).relaxed)
 
 
 class Borrowing(unittest.TestCase):

@@ -34,7 +34,6 @@ OPTIONS
 # function belongs on as well as how much it matters.
 
 import argparse
-import collections
 import os
 import re
 import sys
@@ -47,6 +46,7 @@ CORE = os.environ.get('SIM_BIND_WIZARD') or os.path.normpath(
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import actions as cactions                        # noqa: E402
 from core import game                                       # noqa: E402
 from core import adapter                                    # noqa: E402
 from core import vocab                                      # noqa: E402
@@ -54,6 +54,19 @@ from core import vocab                                      # noqa: E402
 APPID = '359320'
 INSTALL = 'Elite Dangerous'
 SCHEMES = ('Products', 'elite-dangerous-odyssey-64', 'ControlSchemes')
+
+#: Where the game writes its OWN bindings, inside the Proton prefix. The
+#: shipped presets are thirty layouts; this is the file Elite maintains, and
+#: it lists every function it knows with the binding left empty where there
+#: is none. Finding the prefix is `core/game.py`'s job.
+BINDINGS_PARTS = ('users', 'steamuser', 'AppData', 'Local',
+                  'Frontier Developments', 'Elite Dangerous', 'Options',
+                  'Bindings')
+
+#: Only the file the GAME keeps, never every `.binds` in that folder: this
+#: wizard writes its own preset in there too, and reading that back would
+#: let a typo of ours enter the vocabulary and then validate itself.
+WRITTEN = re.compile(r'Custom(\.[\d.]+)?\.binds$')
 
 #: the preset that carries every function whether bound or not
 BASE = 'KeyboardMouseOnly.binds'
@@ -99,35 +112,78 @@ def presets(path=None):
     return out
 
 
-def vocabulary(path=None):
+def functions_in(root):
+    """{'button': {name}, 'axis': {name}} for one parsed .binds tree.
+
+    A function with no children is a setting rather than a binding and is
+    left out: `MouseSensitivity` and `YawToRollMode` are numbers in the same
+    file, and the file the game writes holds 92 of them.
+    """
+    out = {'button': set(), 'axis': set()}
+    for fn in root:
+        tags = {c.tag for c in fn}
+        if 'Binding' in tags:
+            out['axis'].add(fn.tag)
+        elif 'Primary' in tags:
+            out['button'].add(fn.tag)
+    return out
+
+
+def merge(seen):
+    """{kind: [name]} from several `functions_in` answers."""
+    button, axis = set(), set()
+    for one in seen:
+        button |= one['button']
+        axis |= one['axis']
+    # a function seen as both is an axis: the axis form is the richer one
+    return {'axis': sorted(axis), 'button': sorted(button - axis)}
+
+
+def written(path=None):
+    """[Root] for the bindings file the GAME keeps, if there is one.
+
+    Absent is not an error: on a machine where Elite has never been run
+    there is nothing to read, and the presets still give a vocabulary --
+    a narrower one, but a harvest that refuses because of it is worse than
+    one that says what it got.
+    """
+    where = path or game.in_prefix(APPID, *BINDINGS_PARTS)
+    if not where or not os.path.isdir(where):
+        return []
+    out = []
+    for name in sorted(os.listdir(where)):
+        if not WRITTEN.match(name):
+            continue
+        try:
+            out.append(ET.parse(os.path.join(where, name)).getroot())
+        except ET.ParseError:
+            continue
+    return out
+
+
+def vocabulary(path=None, also=None):
     """{kind: [function names]} -- kind is 'button' or 'axis'.
 
-    The union across every shipped preset, not just the base one. The base
-    carries the most (369 bindable), but the others name 24 it does not:
-    `Humanoid*` on-foot functions, the FSS camera buttons, the store camera's
-    stepped forms. Missing one makes a planner unable to name it.
+    Two sources, because neither is the whole truth.
 
-    A function with no children is a setting rather than a binding and is left
-    out: `MouseSensitivity` and `YawToRollMode` are numbers in the same file.
+    The shipped presets are thirty LAYOUTS. Their union names 393 functions
+    -- the base carries the most, and the others add 24 it does not:
+    `Humanoid*` on-foot functions, the FSS camera buttons, the store
+    camera's stepped forms.
 
-    Even the union is not the whole truth. `NightVisionToggle` is a real ship
-    function, accepted in a written preset and working in game, and it appears
-    in none of the thirty. A planner should treat a function bound and
-    verified by hand as vouched for too.
+    It is still not everything. `NightVisionToggle` is a real ship function,
+    accepted in a written preset and working in game, and it appears in none
+    of the thirty. The file Elite writes for itself carries it, along with
+    46 others the presets never mention -- the Galnet audio controls, the
+    humanoid emote slots, the placement-camera axes. That is the same trick
+    MSFS already uses for the same reason: read the source that ENUMERATES,
+    not the one that merely binds.
     """
-    out = collections.defaultdict(set)
-    for root in presets(path).values():
-        for fn in root:
-            tags = {c.tag for c in fn}
-            if 'Binding' in tags:
-                out['axis'].add(fn.tag)
-            elif 'Primary' in tags:
-                out['button'].add(fn.tag)
-    if not out:
+    seen = [functions_in(r) for r in presets(path).values()]
+    if not seen:
         sys.exit('no presets found -- the vocabulary comes from them')
-    # a function seen as both is an axis: the axis form is the richer one
-    out['button'] -= out['axis']
-    return {k: sorted(v) for k, v in out.items()}
+    seen += [functions_in(r) for r in (written() if also is None else also)]
+    return merge(seen)
 
 
 def role_of(device):
@@ -204,12 +260,34 @@ def readable(name):
     return ' '.join(out)
 
 
+def catalogue(voc=None, rank=None):
+    """[Action] -- the whole vocabulary in the shape every game shares.
+
+    Built here because everything it needs is read here anyway: the kinds
+    come from the same parse, `readable` turns Elite's CamelCase into
+    words, and the ranking is counted in the same run rather than joined
+    back on by whoever loads the cache.
+    """
+    voc = vocabulary() if voc is None else voc
+    rank = ranking() if rank is None else rank
+    axes = set(voc.get('axis', ()))
+    return [cactions.Action(fn, readable(fn),
+                            kind='axis' if fn in axes else 'button',
+                            rank=(rank.get(fn) or {}).get('votes', 0))
+            for fn in sorted(axes | set(voc.get('button', ())))]
+
+
+def action_rows(voc=None, rank=None):
+    """The section the cache holds."""
+    return cactions.dump(catalogue(voc, rank))
+
+
 @typing.final
 class EliteHarvest(adapter.Harvest):
     """Elite's function vocabulary and its factory ranking."""
 
     game = 'elite'
-    files = {'ed-actions.json': ('vocabulary',),
+    files = {'ed-actions.json': ('actions',),
              'ed-rank.json': ('ranking', 'profiles')}
 
     @typing.override
@@ -229,7 +307,8 @@ class EliteHarvest(adapter.Harvest):
         self.v = vocabulary(path)
         self.rank = ranking(path)
         self.profiles = hotas(path)
-        return {'ed-actions.json': {'vocabulary': self.v},
+        return {'ed-actions.json': {
+                    'actions': action_rows(self.v, self.rank)},
                 'ed-rank.json': {'ranking': self.rank,
                                  'profiles': sorted(self.profiles)}}
 

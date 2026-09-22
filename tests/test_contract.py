@@ -42,6 +42,7 @@ REPO = os.environ.get('SIM_BIND_WIZARD') or os.path.dirname(
 if REPO not in sys.path:
     sys.path.insert(0, REPO)
 
+from core import actions as cactions                        # noqa: E402
 from core import adapter                                    # noqa: E402
 from core import needs as corneeds                          # noqa: E402
 from core import sheet as csheet                            # noqa: E402
@@ -383,6 +384,118 @@ class TheFrontDoorTellsTheTruth(unittest.TestCase):
             with self.subTest(game=game, verb=verb):
                 self.assertNotIn(verb, self.bind.GAMES[game],
                                  f'GAPS says "{why}" but the table offers it')
+
+
+class TheJudgementsHaveAHome(unittest.TestCase):
+    """Where a game keeps what somebody decided, and how it gets back.
+
+    A judgement is not derived from anything: delete it and it is gone.
+    So a screen that lets you make one has to be able to write it down,
+    and until it could, promoting an action lasted until you pressed `q`.
+    """
+
+    def planners(self):
+        return [(g, live(g)) for g in adapter.games()]
+
+    def test_a_game_with_a_hand_written_list_says_where_it_lives(self):
+        for game, cls in self.planners():
+            with self.subTest(game=game):
+                if not cls.BINDS:
+                    # DCS derives its needs from the aircraft, so there is
+                    # no list of judgements to keep. `bind`'s own GAPS
+                    # says the same about its review screen.
+                    continue
+                where = os.path.join(REPO, 'games', game, cls.BINDS)
+                self.assertTrue(os.path.exists(where),
+                                f'{game} names {cls.BINDS} and it is not there')
+
+    def test_a_field_a_game_keeps_of_its_own_is_named(self):
+        # BMS marks a need as living on the shifted layer and nobody else
+        # has the idea. A generic bag would be the opaque payload this
+        # contract replaced, so the game says which field travels.
+        for game, cls in self.planners():
+            with self.subTest(game=game):
+                self.assertIsInstance(cls.EXTRA, tuple)
+
+
+class DroppingTheCache(unittest.TestCase):
+    """The one destructive thing the screen can do, held to its blast
+    radius.
+
+    A harvest is re-runnable: delete what it wrote and one command brings
+    it back. A judgement is not -- delete it and it is gone. They sit in
+    the same directory, named alike, and the button that removes the first
+    must not be able to reach the second.
+
+    It is not a matter of being careful. `CACHE` names what the harvest
+    wrote and `BINDS` is deliberately not in it, so the list this walks
+    cannot contain the judgements however the walk is written.
+    """
+
+    def test_it_never_names_the_judgements(self):
+        for game in adapter.games():
+            with self.subTest(game=game):
+                cls = live(game)
+                if not cls.BINDS:
+                    continue
+                self.assertNotIn(cls.BINDS, cls.CACHE,
+                                 f'{game} would delete its own judgements')
+
+    def test_what_it_would_remove_is_what_a_harvest_writes(self):
+        for game in adapter.games():
+            with self.subTest(game=game):
+                cls = live(game)
+                where = os.path.join(REPO, 'games', game, 'harvest.py')
+                if not os.path.exists(where):
+                    continue
+                harvests = [v for v in vars(adapter.load(game, 'harvest.py')
+                                            ).values()
+                            if inspect.isclass(v)
+                            and issubclass(v, adapter.Harvest)
+                            and not inspect.isabstract(v)]
+                if not harvests:
+                    continue
+                for name in cls.CACHE:
+                    self.assertIn(name, harvests[0].files,
+                                  f'{game} would delete {name}, which its '
+                                  'harvest does not write back')
+
+
+class EveryPayloadIsASlot(unittest.TestCase):
+    """A control's click is a button like the others, and carries a slot
+    like the others.
+
+    `Need.push` never agreed with itself: War Thunder put a list of Binds
+    there, MSFS a bare Bind, BMS a bare callback string. Every writer that
+    walks `p.slots` then had to ask what it was holding -- five
+    `isinstance` branches across two games, one of them commented "the
+    push, a bare callback".
+
+    Nothing was wrong with any of them on their own. They could not be
+    written down together, which is what a contract is for.
+    """
+
+    def needs(self, game):
+        return built(live(game)).NEEDS
+
+    def test_a_slot_is_a_list_of_binds(self):
+        for game in adapter.games():
+            with self.subTest(game=game):
+                for n in self.needs(game):
+                    for slot in n.bindings:
+                        self.assertIsInstance(slot, list, n.what)
+                        for b in slot:
+                            self.assertIsInstance(b, cactions.Bind, n.what)
+
+    def test_a_click_is_a_slot_too(self):
+        for game in adapter.games():
+            with self.subTest(game=game):
+                for n in self.needs(game):
+                    if n.push is None:
+                        continue
+                    self.assertIsInstance(n.push, list, f'{game} {n.what}')
+                    for b in n.push:
+                        self.assertIsInstance(b, cactions.Bind, n.what)
 
 
 class EveryGameHasACatalogue(unittest.TestCase):

@@ -1,0 +1,418 @@
+{
+"needs": [
+{
+"what": "Flight axes",
+"shape": "axis",
+"bindings": [
+[
+{
+"action": "KEY_AXIS_AILERONS_SET",
+"mode": "plane"
+},
+{
+"action": "KEY_AXIS_CYCLIC_LATERAL_SET",
+"mode": "heli"
+}
+],
+[
+{
+"action": "KEY_AXIS_ELEVATOR_SET",
+"mode": "plane"
+},
+{
+"action": "KEY_AXIS_CYCLIC_LONGITUDINAL_SET",
+"mode": "heli"
+}
+],
+[
+{
+"action": "KEY_AXIS_RUDDER_SET",
+"mode": "plane"
+},
+{
+"action": "KEY_AXIS_TAIL_ROTOR_SET",
+"mode": "heli"
+}
+]
+],
+"urgency": 0
+},
+{
+"what": "Power axis",
+"shape": "axis",
+"bindings": [
+[
+{
+"action": "KEY_THROTTLE_AXIS_SET_EX1",
+"mode": "plane"
+},
+{
+"action": "KEY_AXIS_COLLECTIVE_SET",
+"mode": "heli"
+}
+]
+],
+"urgency": 0
+},
+{
+"what": "Brakes",
+"shape": "axis",
+"bindings": [
+[
+{
+"action": "KEY_BRAKES",
+"mode": "plane"
+},
+{
+"action": "KEY_BRAKES",
+"mode": "heli"
+}
+]
+],
+"urgency": 1
+},
+{
+"what": "Trim",
+"shape": "hat4",
+"bindings": [
+[
+{
+"action": "KEY_ELEV_TRIM_UP",
+"mode": "plane"
+},
+{
+"action": "KEY_ROTOR_LONGITUDINAL_TRIM_INC",
+"mode": "heli"
+}
+],
+[
+{
+"action": "KEY_AILERON_TRIM_RIGHT",
+"mode": "plane"
+},
+{
+"action": "KEY_ROTOR_LATERAL_TRIM_INC",
+"mode": "heli"
+}
+],
+[
+{
+"action": "KEY_ELEV_TRIM_DN",
+"mode": "plane"
+},
+{
+"action": "KEY_ROTOR_LONGITUDINAL_TRIM_DEC",
+"mode": "heli"
+}
+],
+[
+{
+"action": "KEY_AILERON_TRIM_LEFT",
+"mode": "plane"
+},
+{
+"action": "KEY_ROTOR_LATERAL_TRIM_DEC",
+"mode": "heli"
+}
+]
+],
+"urgency": 0,
+"suits": "trim",
+"dev": "stick",
+"note": "the single most-bound thing after the flight axes"
+},
+{
+"what": "Views",
+"shape": "hat4",
+"bindings": [
+[
+{
+"action": "KEY_COCKPIT_QUICKVIEW3",
+"mode": "glob"
+}
+],
+[
+{
+"action": "KEY_CHASE_QUICKVIEW2",
+"mode": "glob"
+}
+],
+[
+{
+"action": "KEY_COCKPIT_QUICKVIEW4",
+"mode": "glob"
+}
+],
+[
+{
+"action": "KEY_CHASE_QUICKVIEW4",
+"mode": "glob"
+}
+]
+],
+"push": [
+{
+"action": "KEY_VIEW_MODE",
+"mode": "glob"
+}
+],
+"urgency": 0,
+"suits": "view",
+"dev": "stick"
+},
+{
+"what": "Look around",
+"shape": "ministick",
+"bindings": [],
+"urgency": 0,
+"suits": "view",
+"dev": "throttle",
+"note": "head movement wants the axes, not a hat. It carries no button payload at all -- it exists to RESERVE the mini-stick so a button need cannot take it, and it says throttle because the left hand is the one that is free while you are flying. The old scorer put it there by accident; now it is asked for"
+},
+{
+"what": "Flaps",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "KEY_FLAPS_DECR",
+"mode": "plane"
+}
+],
+[
+{
+"action": "KEY_FLAPS_INCR",
+"mode": "plane"
+}
+]
+],
+"urgency": 1,
+"suits": "stepped-pair"
+},
+{
+"what": "Gear",
+"shape": [
+"hat2",
+"switch2"
+],
+"bindings": [
+[
+{
+"action": "KEY_GEAR_TOGGLE",
+"mode": "plane"
+},
+{
+"action": "KEY_GEAR_TOGGLE",
+"mode": "heli"
+}
+],
+[
+{
+"action": "KEY_GEAR_TOGGLE",
+"mode": "plane"
+},
+{
+"action": "KEY_GEAR_TOGGLE",
+"mode": "heli"
+}
+]
+],
+"urgency": 1,
+"suits": "toggle"
+},
+{
+"what": "Spoilers",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "KEY_SPOILERS_DEC",
+"mode": "plane"
+}
+],
+[
+{
+"action": "KEY_SPOILERS_INC",
+"mode": "plane"
+}
+]
+],
+"urgency": 1,
+"suits": "stepped-pair"
+},
+{
+"what": "Parking brake",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "KEY_PARKING_BRAKES",
+"mode": "plane"
+},
+{
+"action": "KEY_PARKING_BRAKES",
+"mode": "heli"
+}
+]
+],
+"urgency": 3,
+"suits": "toggle"
+},
+{
+"what": "Radio reply",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "KEY_SR_COM_QUICK_REPLY",
+"mode": "glob"
+}
+]
+],
+"urgency": 0,
+"suits": "occasional",
+"note": "the most-bound global action in the factory profiles"
+},
+{
+"what": "Radio panel",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "KEY_MENU_SR_COM_PANEL_OPEN",
+"mode": "glob"
+}
+]
+],
+"urgency": 1,
+"suits": "occasional"
+},
+{
+"what": "Cockpit cycle",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "KEY_COCKPIT_BACKCYCLE",
+"mode": "glob"
+}
+],
+[
+{
+"action": "KEY_COCKPIT_CYCLE",
+"mode": "glob"
+}
+]
+],
+"urgency": 1,
+"suits": "view"
+},
+{
+"what": "Pilot view",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "KEY_CYCLE_PILOTVIEW_BACK",
+"mode": "glob"
+}
+],
+[
+{
+"action": "KEY_CYCLE_PILOTVIEW_NEXT",
+"mode": "glob"
+}
+]
+],
+"urgency": 1,
+"suits": "view"
+},
+{
+"what": "Smart camera",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "KEY_TOGGLE_SMART_CAMERA",
+"mode": "glob"
+}
+]
+],
+"urgency": 1,
+"suits": "view"
+},
+{
+"what": "Rotor trim reset",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "KEY_ROTOR_TRIM_RESET",
+"mode": "heli"
+}
+]
+],
+"urgency": 0,
+"suits": "trim"
+},
+{
+"what": "Rotor brake",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "KEY_ROTOR_BRAKE_TOGGLE",
+"mode": "heli"
+}
+]
+],
+"urgency": 3,
+"suits": "toggle"
+},
+{
+"what": "Engine start",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "KEY_ENGINE_AUTO_START",
+"mode": "plane"
+},
+{
+"action": "KEY_ENGINE_AUTO_START",
+"mode": "heli"
+}
+]
+],
+"urgency": 3,
+"suits": "occasional"
+},
+{
+"what": "Prop pitch",
+"shape": "axis",
+"bindings": [
+[
+{
+"action": "KEY_PROP_PITCH_AXIS_SET_EX1",
+"mode": "plane"
+}
+]
+],
+"urgency": 3
+},
+{
+"what": "Vertical speed",
+"shape": "axis",
+"bindings": [
+[
+{
+"action": "KEY_AXIS_VERTICAL_SPEED_SET",
+"mode": "plane"
+}
+]
+],
+"urgency": 3,
+"note": "a dial that rests centred is a SELECTOR, not a lever: it suits dialling a value in -- VS, heading bug -- where a slider resting at zero suits an axis where zero means off"
+}
+]
+}

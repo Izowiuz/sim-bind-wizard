@@ -50,6 +50,7 @@ CORE = os.environ.get('SIM_BIND_WIZARD') or str(HERE.parent.parent)
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import actions as cactions
 from core import adapter                                    # noqa: E402
 
 # A full key line: callback, sound, <unused>, key, mod, combo key, combo mod, flag, "description"
@@ -187,6 +188,32 @@ def harvest_devices(path):
     return out
 
 
+def catalogue(actions=None):
+    """[Action] -- the whole vocabulary in the shape every game shares.
+
+    The one harvest that already kept a full record per callback, so most
+    of this is a rename. `subsection` is the finer of the two panels BMS
+    names and the one worth grouping by; it is also the only `category`
+    any game in the family ships besides DCS's module.
+
+    What is left behind -- the stock keyboard key, its modifier, the sound
+    id, the line number -- nothing reads. The cache is derived from the
+    install, so a later use adds a section then rather than carrying six
+    unread fields across 1195 rows until it does.
+    """
+    actions = actions or {}
+    return [cactions.Action(call, rec.get('desc') or call, kind='button',
+                            category=(rec.get('subsection')
+                                      or rec.get('section')),
+                            rank=rec.get('votes') or 0)
+            for call, rec in sorted(actions.items())]
+
+
+def action_rows(actions=None):
+    """The section the cache holds."""
+    return cactions.dump(catalogue(actions))
+
+
 @typing.final
 class FalconBmsHarvest(adapter.Harvest):
     """BMS's callback vocabulary and the twenty-two vendor profiles."""
@@ -216,12 +243,16 @@ class FalconBmsHarvest(adapter.Harvest):
             a["placement"] = dict(placement.get(cb, {}))
 
         self.votes, self.placement = votes, placement
+        # Kept for `summary()`, which wants the full record the key file
+        # gave; what reaches the cache is the shared one.
+        self.actions = actions
         # Most-voted first, ties by name: `Counter.most_common()` leaves ties
         # in insertion order, which is whatever order the profiles happened
         # to be read in.
         order = sorted(votes.items(), key=lambda kv: (-kv[1], kv[0]))
         return {
-            "bms-actions.json": {"devices": devices, "actions": actions},
+            "bms-actions.json": {"devices": devices,
+                                 "actions": action_rows(actions)},
             "bms-rank.json": {
                 "profiles": profiles,
                 "votes": order,
@@ -232,7 +263,7 @@ class FalconBmsHarvest(adapter.Harvest):
 
     @typing.override
     def summary(self, data):
-        actions = data["bms-actions.json"]["actions"]
+        actions = self.actions
         devices = data["bms-actions.json"]["devices"]
         rank = data["bms-rank.json"]
         unknown = rank["not_in_keyfile"]

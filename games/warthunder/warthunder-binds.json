@@ -1,0 +1,560 @@
+{
+"needs": [
+{
+"what": "Guns",
+"shape": "trigger",
+"bindings": [
+[
+{
+"action": "ID_FIRE_MGUNS"
+},
+{
+"action": "ID_FIRE_MGUNS_HELICOPTER"
+}
+],
+[
+{
+"action": "ID_FIRE_CANNONS"
+},
+{
+"action": "ID_FIRE_CANNONS_HELICOPTER"
+}
+],
+[
+{
+"action": "ID_FIRE_ADDITIONAL_GUNS"
+},
+{
+"action": "ID_FIRE_ADDITIONAL_GUNS_HELICOPTER"
+}
+]
+],
+"urgency": 0,
+"note": "cumulative stages: pulling through fires everything up to it"
+},
+{
+"what": "Countermeasures",
+"shape": [
+"paddle",
+"button"
+],
+"bindings": [
+[
+{
+"action": "ID_FLARES"
+},
+{
+"action": "ID_FLARES_HELICOPTER"
+}
+]
+],
+"urgency": 0,
+"suits": "reflex",
+"note": "has to be reachable mid-manoeuvre without regripping"
+},
+{
+"what": "Fire missile",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ID_AAM"
+},
+{
+"action": "ID_ATGM_HELICOPTER"
+}
+]
+],
+"urgency": 0,
+"suits": "fire",
+"dev": "stick"
+},
+{
+"what": "Fire rockets",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ID_ROCKETS"
+},
+{
+"action": "ID_ROCKETS_HELICOPTER"
+}
+]
+],
+"urgency": 0,
+"suits": "fire",
+"dev": "stick"
+},
+{
+"what": "Views",
+"shape": "hat4",
+"bindings": [
+[
+{
+"action": "ID_CAMERA_DEFAULT"
+},
+{
+"action": "ID_CAMERA_DEFAULT"
+}
+],
+[
+{
+"action": "ID_CAMERA_GUNNER_HELICOPTER"
+}
+],
+[
+{
+"action": "ID_CAMERA_VIEW_DOWN"
+},
+{
+"action": "ID_CAMERA_VIEW_DOWN"
+}
+],
+[
+{
+"action": "ID_CAMERA_VIEW_BACK"
+},
+{
+"action": "ID_CAMERA_VIEW_BACK"
+}
+]
+],
+"push": [
+{
+"action": "ID_CAMERA_NEUTRAL"
+},
+{
+"action": "ID_CAMERA_NEUTRAL"
+}
+],
+"urgency": 0,
+"suits": "view",
+"dev": "stick",
+"note": "look back matters more in a dogfight than anything else here"
+},
+{
+"what": "Radar / IRST",
+"shape": "hat4",
+"bindings": [
+[
+{
+"action": "ID_SENSOR_SWITCH"
+},
+{
+"action": "ID_SENSOR_SWITCH_HELICOPTER"
+}
+],
+[
+{
+"action": "ID_SENSOR_RANGE_SWITCH"
+},
+{
+"action": "ID_SENSOR_RANGE_SWITCH_HELICOPTER"
+}
+],
+[
+{
+"action": "ID_SENSOR_MODE_SWITCH"
+},
+{
+"action": "ID_SENSOR_MODE_SWITCH_HELICOPTER"
+}
+],
+[
+{
+"action": "ID_SENSOR_TARGET_SWITCH"
+},
+{
+"action": "ID_SENSOR_TARGET_SWITCH_HELICOPTER"
+}
+]
+],
+"push": [
+{
+"action": "ID_SENSOR_TARGET_LOCK"
+},
+{
+"action": "ID_SENSOR_TARGET_LOCK_HELICOPTER"
+}
+],
+"urgency": 0,
+"suits": "sensor",
+"dev": "stick"
+},
+{
+"what": "Weapon lock",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ID_WEAPON_LOCK"
+},
+{
+"action": "ID_WEAPON_LOCK_HELICOPTER"
+}
+]
+],
+"urgency": 0,
+"suits": "lock",
+"dev": "stick",
+"note": "the seeker lock you hold while a heater growls"
+},
+{
+"what": "Cockpit sight on/off",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ID_TOGGLE_COLLIMATOR"
+},
+{
+"action": "ID_TOGGLE_COLLIMATOR_HELICOPTER"
+}
+]
+],
+"urgency": 0,
+"suits": "view"
+},
+{
+"what": "Target lock",
+"shape": "hat4",
+"bindings": [
+[
+{
+"action": "ID_LOCK_TARGET"
+}
+],
+[
+{
+"action": "ID_NEXT_TARGET"
+}
+],
+[
+{
+"action": "ID_RESET_TARGET"
+}
+],
+[
+{
+"action": "ID_PREV_TARGET"
+}
+]
+],
+"urgency": 0,
+"suits": "lock",
+"dev": "throttle",
+"prefer": "Thumb hat",
+"note": "up locks what you are pointing at, left and right step through the others, back drops it"
+},
+{
+"what": "Trim",
+"shape": "hat4",
+"bindings": [
+[
+{
+"action": "ID_TRIM_ELEVATOR_PLUS"
+}
+],
+[
+{
+"action": "ID_TRIM_AILERONS_PLUS"
+}
+],
+[
+{
+"action": "ID_TRIM_RESET"
+},
+{
+"action": "ID_HELICOPTER_TRIM_RESET"
+}
+],
+[
+{
+"action": "ID_TRIM_AILERONS_MINUS"
+}
+]
+],
+"push": [
+{
+"action": "ID_TRIM"
+},
+{
+"action": "ID_HELICOPTER_TRIM"
+}
+],
+"suits": "trim",
+"dev": "stick",
+"note": "hat trim is the DCS habit; ID_TRIM on the push is the WT idiom"
+},
+{
+"what": "WEP / afterburner",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ID_IGNITE_BOOSTERS"
+}
+]
+],
+"urgency": 0,
+"suits": "reflex",
+"dev": "throttle"
+},
+{
+"what": "Radar ACM",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ID_SENSOR_ACM_SWITCH"
+}
+]
+],
+"urgency": 0,
+"suits": "sensor",
+"note": "short-range auto-acquire; matters from the 1970s on"
+},
+{
+"what": "Sight stabilization",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ID_LOCK_TARGETING_AT_POINT_HELICOPTER"
+}
+]
+],
+"urgency": 0,
+"suits": "lock",
+"note": "the core of the ATGM workflow"
+},
+{
+"what": "Bombs",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ID_BOMBS"
+},
+{
+"action": "ID_BOMBS_HELICOPTER"
+}
+]
+],
+"urgency": 0,
+"suits": "release"
+},
+{
+"what": "Air-to-ground lock",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ID_AGM_LOCK"
+},
+{
+"action": "ID_AGM_LOCK_HELICOPTER"
+}
+]
+],
+"urgency": 0,
+"suits": "lock"
+},
+{
+"what": "Gear",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ID_GEAR"
+},
+{
+"action": "ID_GEAR_HELICOPTER"
+}
+]
+],
+"urgency": 1,
+"suits": "toggle",
+"dev": "throttle",
+"prefer": "Keyboard B1 button",
+"note": "pinned by hand: War Thunder only has a toggle, so the two ends of a rocker both did the same thing anyway -- a labelled button you can find by feel is worth more"
+},
+{
+"what": "Flaps",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "ID_FLAPS_UP"
+}
+],
+[
+{
+"action": "ID_FLAPS_DOWN"
+}
+]
+],
+"urgency": 1,
+"suits": "stepped-pair",
+"note": "WT steps through combat, takeoff and landing settings"
+},
+{
+"what": "Airbrake",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ID_AIR_BRAKE"
+}
+]
+],
+"urgency": 0,
+"suits": "toggle"
+},
+{
+"what": "Hover mode",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ID_CONTROL_MODE_HELICOPTER"
+}
+]
+],
+"suits": "toggle"
+},
+{
+"what": "SAS",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ID_FBW_MODE_HELICOPTER"
+}
+]
+],
+"suits": "toggle"
+},
+{
+"what": "Cockpit / external view",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "ID_CAMERA_FPS"
+},
+{
+"action": "ID_CAMERA_FPS_HELICOPTER"
+}
+],
+[
+{
+"action": "ID_CAMERA_TPS"
+},
+{
+"action": "ID_CAMERA_TPS_HELICOPTER"
+}
+]
+],
+"suits": "view"
+},
+{
+"what": "Radar / IRST swap",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ID_SENSOR_TYPE_SWITCH"
+}
+]
+],
+"suits": "sensor"
+},
+{
+"what": "Engine",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ID_TOGGLE_ENGINE"
+},
+{
+"action": "ID_TOGGLE_ENGINE_HELICOPTER"
+}
+]
+],
+"urgency": 3,
+"suits": "occasional"
+},
+{
+"what": "Tactical map",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ID_TACTICAL_MAP"
+}
+]
+],
+"urgency": 3,
+"suits": "occasional",
+"note": "the only navigation there is in simulator battles"
+},
+{
+"what": "Bomb bay",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ID_BAY_DOOR"
+}
+]
+],
+"urgency": 3,
+"suits": "occasional"
+},
+{
+"what": "Drag chute",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ID_CHUTE"
+}
+]
+],
+"urgency": 3,
+"suits": "occasional"
+},
+{
+"what": "Laser designator",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "ID_TOGGLE_LASER_DESIGNATOR_HELICOPTER"
+}
+]
+],
+"suits": "occasional"
+},
+{
+"what": "Weapon select",
+"shape": "hat2",
+"bindings": [
+[
+{
+"action": "ID_SWITCH_SHOOTING_CYCLE_PRIMARY_HELICOPTER"
+}
+],
+[
+{
+"action": "ID_SWITCH_SHOOTING_CYCLE_SECONDARY_HELICOPTER"
+}
+]
+],
+"suits": "stepped-pair"
+}
+]
+}

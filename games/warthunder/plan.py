@@ -49,36 +49,25 @@ from core import sheet as csheet                          # noqa: E402
 from core.needs import (IN_A_TURN, ON_APPROACH, IN_THE_AIR,  # noqa: E402,F401
                         ON_THE_RAMP)
 
+#: The harvest is imported for the naming rules it owns, the way x4's
+#: planner does. Importing it defines functions and reads nothing.
+harvest = adapter.from_file('wtharvest', os.path.join(HERE, 'harvest.py'))
 
-#: Filled by `WarThunder.__init__`, never at import -- see the note in
+
+#: The catalogue as the harvest wrote it, and the view of it this file asks
+#: for. Filled by `WarThunder.__init__`, never at import -- see the note in
 #: games/falconbms/plan.py. The rank file may be absent: it only annotates
 #: `--why`, so `__init__` shrugs where the actions file is fatal.
-ACTIONS, FACTORY = {}, {}
+CAT, BY_ID, FACTORY = [], {}, {}
 
-def is_heli(action):
-    """War Thunder is not consistent: most helicopter actions carry
-    `_HELICOPTER` as a suffix, but a handful wear it as a prefix
-    (`ID_HELICOPTER_TRIM`). Getting this wrong puts two actions on one button
-    in the same context and the game drops one of them."""
-    return action.endswith('_HELICOPTER') or action.startswith('ID_HELICOPTER')
+#: War Thunder's naming convention, kept in the harvest where the whole
+#: vocabulary is parsed: a twin is only ABSENT relative to the whole of it.
+is_heli = harvest.is_heli
 
 
 def contexts(action):
-    """Which vehicle contexts an action actually applies to.
-
-    The trap: War Thunder names most helicopter actions with an `_HELICOPTER`
-    suffix and a few with an `ID_HELICOPTER_` prefix, so a twin has to be
-    looked for in BOTH forms. And an action with no twin in either form is
-    SHARED -- it applies to helicopters as well as aircraft, whatever we meant
-    by putting it there. `ID_TRIM_ELEVATOR_MINUS` has no helicopter twin, so it
-    is live in a helicopter too.
-    """
-    if is_heli(action):
-        return ('heli',)
-    twins = (action + '_HELICOPTER', action.replace('ID_', 'ID_HELICOPTER_', 1))
-    if any(t in ACTIONS for t in twins):
-        return ('air',)
-    return ('air', 'heli')
+    """Which vehicle contexts an action actually applies to."""
+    return harvest.contexts(action, BY_ID)
 
 
 class Need(corneeds.Need):
@@ -96,29 +85,6 @@ class Need(corneeds.Need):
     a thumb button and the list had to be hand-sorted around it.
     """
 
-    def __init__(self, what, shape, air=(), heli=(), push=None, heli_push=None,
-                 urgency=IN_THE_AIR, suits=None, device=None, prefer=None,
-                 on=None, note=''):
-        self.air, self.heli = list(air), list(heli)
-        self.heli_push = heli_push
-        n = max(len(self.air), len(self.heli))
-
-        def pad(xs):
-            return list(xs) + [None] * (n - len(xs))
-
-        # A slot is a list of Binds now, not an (air, heli) pair. The
-        # context stopped riding in the payload because it belongs to the
-        # action -- `Action.mode` carries it, and `contexts()` still works
-        # it out from the name for everything that asks.
-        clicks = [x for x in (push, heli_push or push) if x]
-        super().__init__(
-            what, shape,
-            bindings=[[cactions.Bind(a) for a in pair if a]
-                      for pair in zip(pad(self.air), pad(self.heli))],
-            push=[cactions.Bind(x) for x in clicks] if clicks else None,
-            urgency=urgency, suits=suits, dev=device,
-            prefer=prefer, on=on, note=note)
-
     @property
     def device(self):
         return self.dev
@@ -126,137 +92,20 @@ class Need(corneeds.Need):
 
 # Ordered by what you lose first if it is missing. The matcher works down the
 # list, so the earliest needs get the best control that fits them.
-NEEDS = [
-    Need('Guns', 'trigger',
-         air=['ID_FIRE_MGUNS', 'ID_FIRE_CANNONS', 'ID_FIRE_ADDITIONAL_GUNS'],
-         heli=['ID_FIRE_MGUNS_HELICOPTER', 'ID_FIRE_CANNONS_HELICOPTER',
-               'ID_FIRE_ADDITIONAL_GUNS_HELICOPTER'],
-         note='cumulative stages: pulling through fires everything up to it', urgency=IN_A_TURN),
-
-    Need('Countermeasures', ('paddle', 'button'), air=['ID_FLARES'],
-         heli=['ID_FLARES_HELICOPTER'], suits='reflex',
-         note='has to be reachable mid-manoeuvre without regripping', urgency=IN_A_TURN),
-
-    Need('Fire missile', 'button', air=['ID_AAM'], heli=['ID_ATGM_HELICOPTER'],
-         suits='fire', device='stick', urgency=IN_A_TURN),
-
-    Need('Fire rockets', 'button', air=['ID_ROCKETS'],
-         heli=['ID_ROCKETS_HELICOPTER'], suits='fire',
-         device='stick', urgency=IN_A_TURN),
-
-    Need('Views', 'hat4',
-         air=['ID_CAMERA_DEFAULT', '', 'ID_CAMERA_VIEW_DOWN',
-              'ID_CAMERA_VIEW_BACK'],
-         heli=['ID_CAMERA_DEFAULT', 'ID_CAMERA_GUNNER_HELICOPTER',
-               'ID_CAMERA_VIEW_DOWN', 'ID_CAMERA_VIEW_BACK'],
-         push='ID_CAMERA_NEUTRAL', suits='view', device='stick',
-         note='look back matters more in a dogfight than anything else here', urgency=IN_A_TURN),
-
-    Need('Radar / IRST', 'hat4',
-         air=['ID_SENSOR_SWITCH', 'ID_SENSOR_RANGE_SWITCH',
-              'ID_SENSOR_MODE_SWITCH', 'ID_SENSOR_TARGET_SWITCH'],
-         heli=['ID_SENSOR_SWITCH_HELICOPTER', 'ID_SENSOR_RANGE_SWITCH_HELICOPTER',
-               'ID_SENSOR_MODE_SWITCH_HELICOPTER',
-               'ID_SENSOR_TARGET_SWITCH_HELICOPTER'],
-         push='ID_SENSOR_TARGET_LOCK', heli_push='ID_SENSOR_TARGET_LOCK_HELICOPTER',
-         suits='sensor', device='stick', urgency=IN_A_TURN),
-
-    Need('Weapon lock', 'button', air=['ID_WEAPON_LOCK'],
-         heli=['ID_WEAPON_LOCK_HELICOPTER'], suits='lock',
-         device='stick', note='the seeker lock you hold while a heater growls', urgency=IN_A_TURN),
-
-    # Back is the reset, by hand. It costs the down-step of elevator trim, so
-    # pitch only steps one way from here -- which is a fair trade when stepped
-    # trim does nothing at all in half the aircraft and the press next to it
-    # ("Trim aircraft") does the whole job in one go.
-    # In arcade the leading marker -- the thing you actually aim with -- only
-    # appears once a target is LOCKED. The game says so itself:
-    # "Lock on the enemy plane to see a leading marker for enemy aircraft".
-    # None of these four had a binding of any kind, joystick or keyboard, which
-    # is why there was nothing to aim at.
-    # The cockpit gunsight renders as a scope with the 2D HUD suppressed inside
-    # it -- no enemy nameplates, no markers, no lead circle. That is deliberate
-    # in War Thunder and there is no option to change it; the only lever the
-    # game offers is switching the sight off, which drops you back to the plain
-    # HUD crosshair while staying in the cockpit. Worth a button you can hit
-    # mid-fight, because which one you want changes with the situation.
-    Need('Cockpit sight on/off', 'button', air=['ID_TOGGLE_COLLIMATOR'],
-         heli=['ID_TOGGLE_COLLIMATOR_HELICOPTER'], suits='view', urgency=IN_A_TURN),
-
-    Need('Target lock', 'hat4',
-         air=['ID_LOCK_TARGET', 'ID_NEXT_TARGET',
-              'ID_RESET_TARGET', 'ID_PREV_TARGET'],
-         suits='lock', device='throttle', prefer='Thumb hat',
-         note='up locks what you are pointing at, left and right step through '
-              'the others, back drops it', urgency=IN_A_TURN),
-
-    Need('Trim', 'hat4',
-         air=['ID_TRIM_ELEVATOR_PLUS', 'ID_TRIM_AILERONS_PLUS',
-              'ID_TRIM_RESET', 'ID_TRIM_AILERONS_MINUS'],
-         heli=['', '', 'ID_HELICOPTER_TRIM_RESET', ''],
-         push='ID_TRIM', heli_push='ID_HELICOPTER_TRIM', suits='trim', device='stick',
-         note='hat trim is the DCS habit; ID_TRIM on the push is the WT idiom', urgency=IN_THE_AIR),
-
-    Need('WEP / afterburner', 'button', air=['ID_IGNITE_BOOSTERS'],
-         suits='reflex', device='throttle', urgency=IN_A_TURN),
+#: Where the judgements live. Which band a thing is in, what shape it wants,
+#: which device it belongs on, what somebody wrote about it -- and nothing
+#: derives any of it.
+#:
+#: Source, not cache. They were a Python literal until now, so changing one
+#: meant editing code. Deliberately not in `CACHE`: that names what the
+#: harvest wrote, and a harvest cannot write a judgement.
 
 
-    Need('Radar ACM', 'button', air=['ID_SENSOR_ACM_SWITCH'], suits='sensor', note='short-range auto-acquire; matters from the 1970s on', urgency=IN_A_TURN),
+def needs(filename):
+    """[Need] -- the hand-written list, read rather than executed."""
+    return corneeds.read_needs(vocab.load(HERE, filename, key='needs'),
+                               make=Need)
 
-
-    Need('Sight stabilization', 'button',
-         heli=['ID_LOCK_TARGETING_AT_POINT_HELICOPTER'], suits='lock', note='the core of the ATGM workflow', urgency=IN_A_TURN),
-
-
-    Need('Bombs', 'button', air=['ID_BOMBS'], heli=['ID_BOMBS_HELICOPTER'],
-         suits='release', urgency=IN_A_TURN),
-
-    Need('Air-to-ground lock', 'button', air=['ID_AGM_LOCK'],
-         heli=['ID_AGM_LOCK_HELICOPTER'], suits='lock', urgency=IN_A_TURN),
-
-    Need('Gear', 'button', air=['ID_GEAR'], heli=['ID_GEAR_HELICOPTER'],
-         suits='toggle', device='throttle', prefer='Keyboard B1 button',
-         note='pinned by hand: War Thunder only has a toggle, so the two ends '
-              'of a rocker both did the same thing anyway -- a labelled button '
-              'you can find by feel is worth more', urgency=ON_APPROACH),
-
-    Need('Flaps', 'hat2', air=['ID_FLAPS_UP', 'ID_FLAPS_DOWN'],
-         suits='stepped-pair',
-         note='WT steps through combat, takeoff and landing settings', urgency=ON_APPROACH),
-
-    Need('Airbrake', 'button', air=['ID_AIR_BRAKE'], suits='toggle', urgency=IN_A_TURN),
-
-        Need('Hover mode', 'button', heli=['ID_CONTROL_MODE_HELICOPTER'],
-         suits='toggle', urgency=IN_THE_AIR),
-
-    Need('SAS', 'button', heli=['ID_FBW_MODE_HELICOPTER'], suits='toggle', urgency=IN_THE_AIR),
-
-        Need('Cockpit / external view', 'hat2',
-         air=['ID_CAMERA_FPS', 'ID_CAMERA_TPS'],
-         heli=['ID_CAMERA_FPS_HELICOPTER', 'ID_CAMERA_TPS_HELICOPTER'],
-         suits='view', urgency=IN_THE_AIR),
-
-        Need('Radar / IRST swap', 'button', air=['ID_SENSOR_TYPE_SWITCH'],
-         suits='sensor', urgency=IN_THE_AIR),
-
-    Need('Engine', 'button', air=['ID_TOGGLE_ENGINE'],
-         heli=['ID_TOGGLE_ENGINE_HELICOPTER'], suits='occasional', urgency=ON_THE_RAMP),
-
-    Need('Tactical map', 'button', air=['ID_TACTICAL_MAP'], suits='occasional',
-         note='the only navigation there is in simulator battles', urgency=ON_THE_RAMP),
-
-    Need('Bomb bay', 'button', air=['ID_BAY_DOOR'], suits='occasional', urgency=ON_THE_RAMP),
-
-    Need('Drag chute', 'button', air=['ID_CHUTE'], suits='occasional', urgency=ON_THE_RAMP),
-
-    Need('Laser designator', 'button',
-         heli=['ID_TOGGLE_LASER_DESIGNATOR_HELICOPTER'], suits='occasional', urgency=IN_THE_AIR),
-
-    Need('Weapon select', 'hat2',
-         heli=['ID_SWITCH_SHOOTING_CYCLE_PRIMARY_HELICOPTER',
-               'ID_SWITCH_SHOOTING_CYCLE_SECONDARY_HELICOPTER'],
-         suits='stepped-pair', urgency=IN_THE_AIR),
-]
 
 # name in WT, the control kind it belongs on, and which of its axes
 AXIS_NEEDS = [
@@ -438,7 +287,8 @@ def wt_offsets():
 
 
 def en(action):
-    return ACTIONS.get(action, (action, ''))[0]
+    a = BY_ID.get(action)
+    return a.name if a is not None else action
 
 
 def _describe(p):
@@ -556,6 +406,7 @@ class WarThunder(adapter.Planner):
     game = 'warthunder'
     title = 'War Thunder'
     subtitle = 'air simulator + helicopters · VIRPIL'
+    BINDS = 'warthunder-binds.json'
     CACHE = {'wt-actions.json': 'actions',
              'wt-factory-rank.json': 'actions'}
 
@@ -570,15 +421,17 @@ class WarThunder(adapter.Planner):
         second as an override of an abstract property, and because two of the
         six derive their needs and could never be a constant anyway.
         """
-        return NEEDS
+        return self._needs
 
     def __init__(self, game_dir=None, saves=None, backup_dir=None):
         self.backup_dir = backup_dir
-        ACTIONS.update(self.cache('wt-actions.json'))
+        CAT[:] = cactions.read(self.cache('wt-actions.json'))
+        BY_ID.update(cactions.by_id(CAT))
         try:
             FACTORY.update(self.cache('wt-factory-rank.json'))
         except vocab.Missing:
             pass          # only annotates --why, so it may be absent
+        self._needs = needs(self.BINDS)
         # The writer owns machine.blk and where the install is; these were
         # module constants in it with no override at all.
         self.writer = typing.cast(Preset,
@@ -597,14 +450,9 @@ class WarThunder(adapter.Planner):
 
     @typing.override
     def catalogue(self):
-        # `contexts()` already answers air/heli/both off the name, and the
-        # English half of the localised pair is the name. A cache with no
-        # ranking section leaves FACTORY empty, which is a 0 and not a gap.
-        return [cactions.Action(ident, (names[0] if names else ident),
-                                kind='button',
-                                mode='/'.join(contexts(ident)),
-                                rank=FACTORY.get(ident, 0))
-                for ident, names in sorted(ACTIONS.items())]
+        # A read, not a translation: the harvest settles the name, the
+        # context and the ranking in the run that parses the archives.
+        return list(CAT)
 
 
     @typing.override
@@ -653,26 +501,15 @@ class WarThunder(adapter.Planner):
                        f'{str(used):18s} {c.label}'
                        + (f' — {where}' if where else ''))
             if why:
-                shape = (need.shape if isinstance(need.shape, str)
-                         else '/'.join(need.shape))
-                bits = [f'wants {shape}',
-                        corneeds.URGENCY_NAME[need.urgency]]
-                if need.suits:
-                    bits.append(f'suits {need.suits}'
-                                + (' ✓' if need.suits in c.suits else ' ✗'))
-                # reach used to be printed only for the reflex ones; it is
-                # worth seeing every time, because it is what the floor
-                # acts on
-                bits.append(f'reach: {c.reach}')
-                if need.prefer:
-                    bits.append(f'pinned to {need.prefer!r}')
-                if need.relaxed:
-                    bits.append('took a better control than its urgency '
-                                'earns')
-                out.append(f'      {", ".join(bits)}')
+                out.append('      ' + ', '.join(corneeds.why_bits(p_)))
                 if need.note:
                     out.append(f'      {need.note}')
-                f = max((FACTORY.get(a, 0) for a in need.air), default=0)
+                # War Thunder's own: the count is keyed by the ACTION ids
+                # this need carries, not by `need.rank`, because one need
+                # binds several and the busiest of them is the answer.
+                air = [b.action for slot in need.bindings for b in slot
+                       if not harvest.is_heli(b.action)]
+                f = max((FACTORY.get(a, 0) for a in air), default=0)
                 if f:
                     out.append('      factory HOTAS profiles binding this: '
                                f'{f}/29')
@@ -682,10 +519,17 @@ class WarThunder(adapter.Planner):
             out.append('')
             out.append(f'{len(unmet)} needs found no control:')
             for n in unmet:
-                out.append(f'  {n.what:24s} wanted {"/".join(n.shape)}'
-                           + (f', {n.suits}' if n.suits else '')
-                           + (', reachable without regripping'
-                              if n.reflex else ''))
+                # Guarded, like the placed branch above and like every
+                # other listing in the family: 27 of the 28 needs carry a
+                # string, and `'/'.join('button')` is `b/u/t/t/o/n`.
+                #
+                # The `reflex` clause that used to follow read a field that
+                # was taken off `Need` -- "reflex is gone" -- and had sat
+                # here unrun because nothing ever goes unplaced.
+                shape = (n.shape if isinstance(n.shape, str)
+                         else '/'.join(n.shape))
+                out.append(f'  {n.what:24s} wanted {shape}'
+                           + (f', {n.suits}' if n.suits else ''))
         if free:
             out += [''] + self.free(layout)
         return out

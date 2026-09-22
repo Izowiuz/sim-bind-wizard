@@ -119,6 +119,7 @@ if not os.path.isdir(CORE):
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import actions as cactions                        # noqa: E402
 from core import adapter                                    # noqa: E402
 from core import backup                                     # noqa: E402
 from core import capture                                    # noqa: E402
@@ -547,6 +548,33 @@ def switch_family(name, symbol_head):
     base = name.split(" - ")[0] if " - " in name else name
     return _norm(re.sub(r"\b(%s)\b" % "|".join(DIRECTION_WORDS), "", base,
                         flags=re.I))
+
+
+def catalogue(cmds):
+    """[Action] -- one module's commands in the shape every game shares.
+
+    Beside `harvest_commands`, which builds the records this reads, for the
+    same reason the other five build theirs in their harvests: what a field
+    is called is a fact about the format, and it is settled where the
+    format is parsed.
+
+    Unlike the other five, nothing of this is written to the cache. A DCS
+    command record already carries `ways`, `dir` and `family` -- how a
+    switch moves, which way, and what it groups with -- which the shared
+    record has no room for and seven places in `propose.py` read. Writing
+    the shared spelling beside it would put name, kind, category and the
+    vote count twice in every one of ~2500 records, for no reader. The
+    record stays one record; only the reading of it is settled here.
+
+    Keyed by the wizard's command hash, because that is what every DCS
+    record uses and what the results file is written against.
+    """
+    return [cactions.Action(h, c.get('name') or h,
+                            kind=('axis' if c.get('kind') == 'axis'
+                                  else 'button'),
+                            category=c.get('category'),
+                            rank=c.get('votes') or 0)
+            for h, c in sorted(cmds.items())]
 
 
 def harvest_commands(cfg, aircraft_key, factory_dir):

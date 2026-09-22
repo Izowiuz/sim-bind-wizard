@@ -87,102 +87,25 @@ class Need(corneeds.Need):
     match the core's 0, 1 and 3 exactly, so the only change is the name.
     """
 
-    def __init__(self, what, shape, plane=(), heli=(), glob_=(), push=None,
-                 suits=None, urgency=ON_APPROACH, device=None, note=''):
-        self.plane, self.heli, self.glob = list(plane), list(heli), list(glob_)
-        n = max(len(self.plane), len(self.heli), len(self.glob))
-
-        def pad(xs):
-            return list(xs) + [None] * (n - len(xs))
-
-        # A slot is a list of Binds, each carrying which file it goes
-        # into. MSFS's split is not a property of the action -- the same
-        # id can be an aeroplane binding in one profile and a global one
-        # in another -- so it rides on the Bind.
-        super().__init__(
-            what, shape,
-            bindings=[[cactions.Bind(a, mode=m)
-                       for a, m in zip(triple, ('plane', 'heli', 'glob'))
-                       if a]
-                      for triple in zip(pad(self.plane), pad(self.heli),
-                                        pad(self.glob))],
-            push=(cactions.Bind(push, mode='glob') if push else None),
-            urgency=urgency, suits=suits, dev=device,
-                         note=note)
-
     @property
     def device(self):
         return self.dev
 
 
-NEEDS = [
-    Need('Flight axes', 'axis',
-         plane=['KEY_AXIS_AILERONS_SET', 'KEY_AXIS_ELEVATOR_SET',
-                'KEY_AXIS_RUDDER_SET'],
-         heli=['KEY_AXIS_CYCLIC_LATERAL_SET',
-               'KEY_AXIS_CYCLIC_LONGITUDINAL_SET', 'KEY_AXIS_TAIL_ROTOR_SET'],
-         urgency=IN_A_TURN),
-    Need('Power axis', 'axis', plane=['KEY_THROTTLE_AXIS_SET_EX1'],
-         heli=['KEY_AXIS_COLLECTIVE_SET'], urgency=IN_A_TURN),
-    Need('Brakes', 'axis', plane=['KEY_BRAKES'], heli=['KEY_BRAKES'],
-         urgency=ON_APPROACH),
+#: Where the judgements live. Which band a thing is in, what shape it wants,
+#: which device it belongs on, what somebody wrote about it -- and nothing
+#: derives any of it.
+#:
+#: Source, not cache. They were a Python literal until now, so changing one
+#: meant editing code. Deliberately not in `CACHE`: that names what the
+#: harvest wrote, and a harvest cannot write a judgement.
 
-    Need('Trim', 'hat4',
-         plane=['KEY_ELEV_TRIM_UP', 'KEY_AILERON_TRIM_RIGHT',
-                'KEY_ELEV_TRIM_DN', 'KEY_AILERON_TRIM_LEFT'],
-         heli=['KEY_ROTOR_LONGITUDINAL_TRIM_INC', 'KEY_ROTOR_LATERAL_TRIM_INC',
-               'KEY_ROTOR_LONGITUDINAL_TRIM_DEC', 'KEY_ROTOR_LATERAL_TRIM_DEC'],
-         push=None, suits='trim', urgency=IN_A_TURN, device='stick',
-         note='the single most-bound thing after the flight axes'),
-    Need('Views', 'hat4',
-         glob_=['KEY_COCKPIT_QUICKVIEW3', 'KEY_CHASE_QUICKVIEW2',
-                'KEY_COCKPIT_QUICKVIEW4', 'KEY_CHASE_QUICKVIEW4'],
-         push='KEY_VIEW_MODE', suits='view', urgency=IN_A_TURN, device='stick'),
-    Need('Look around', 'ministick', glob_=[], suits='view', urgency=IN_A_TURN,
-         device='throttle',
-         note='head movement wants the axes, not a hat. It carries no button '
-              'payload at all -- it exists to RESERVE the mini-stick so a '
-              'button need cannot take it, and it says throttle because the '
-              'left hand is the one that is free while you are flying. The '
-              'old scorer put it there by accident; now it is asked for'),
 
-    Need('Flaps', 'hat2', plane=['KEY_FLAPS_DECR', 'KEY_FLAPS_INCR'],
-         suits='stepped-pair', urgency=ON_APPROACH),
-    Need('Gear', ('hat2', 'switch2'), plane=['KEY_GEAR_TOGGLE', 'KEY_GEAR_TOGGLE'],
-         heli=['KEY_GEAR_TOGGLE', 'KEY_GEAR_TOGGLE'], suits='toggle', urgency=ON_APPROACH),
-    Need('Spoilers', 'hat2', plane=['KEY_SPOILERS_DEC', 'KEY_SPOILERS_INC'],
-         suits='stepped-pair', urgency=ON_APPROACH),
-    Need('Parking brake', 'button', plane=['KEY_PARKING_BRAKES'],
-         heli=['KEY_PARKING_BRAKES'], suits='toggle', urgency=ON_THE_RAMP),
+def needs(filename):
+    """[Need] -- the hand-written list, read rather than executed."""
+    return corneeds.read_needs(vocab.load(HERE, filename, key='needs'),
+                               make=Need)
 
-    Need('Radio reply', 'button', glob_=['KEY_SR_COM_QUICK_REPLY'],
-         suits='occasional', urgency=IN_A_TURN,
-         note='the most-bound global action in the factory profiles'),
-    Need('Radio panel', 'button', glob_=['KEY_MENU_SR_COM_PANEL_OPEN'],
-         suits='occasional', urgency=ON_APPROACH),
-    Need('Cockpit cycle', 'hat2',
-         glob_=['KEY_COCKPIT_BACKCYCLE', 'KEY_COCKPIT_CYCLE'],
-         suits='view', urgency=ON_APPROACH),
-    Need('Pilot view', 'hat2',
-         glob_=['KEY_CYCLE_PILOTVIEW_BACK', 'KEY_CYCLE_PILOTVIEW_NEXT'],
-         suits='view', urgency=ON_APPROACH),
-    Need('Smart camera', 'button', glob_=['KEY_TOGGLE_SMART_CAMERA'],
-         suits='view', urgency=ON_APPROACH),
-
-    Need('Rotor trim reset', 'button', heli=['KEY_ROTOR_TRIM_RESET'],
-         suits='trim', urgency=IN_A_TURN),
-    Need('Rotor brake', 'button', heli=['KEY_ROTOR_BRAKE_TOGGLE'],
-         suits='toggle', urgency=ON_THE_RAMP),
-    Need('Engine start', 'button', plane=['KEY_ENGINE_AUTO_START'],
-         heli=['KEY_ENGINE_AUTO_START'], suits='occasional', urgency=ON_THE_RAMP),
-    Need('Prop pitch', 'axis', plane=['KEY_PROP_PITCH_AXIS_SET_EX1'],
-         urgency=ON_THE_RAMP),
-    Need('Vertical speed', 'axis', plane=['KEY_AXIS_VERTICAL_SPEED_SET'],
-         urgency=ON_THE_RAMP,
-         note='a dial that rests centred is a SELECTOR, not a lever: it suits '
-              'dialling a value in -- VS, heading bug -- where a slider resting '
-              'at zero suits an axis where zero means off'),
-]
 
 def rank_of(rank, action):
     for cat in ('Airplane', 'Helicopter', 'Transversal'):
@@ -192,8 +115,12 @@ def rank_of(rank, action):
     return '', 0
 
 
-def axis_plan(devs, actions):
-    """[(context, action, role, axis)] for the axis-shaped needs."""
+def axis_plan(devs, known):
+    """[(context, action, role, axis)] for the axis-shaped needs.
+
+    `known` is every action id there is -- membership is all this asks of
+    it, so a set or the catalogue's `by_id` both do.
+    """
     stick, thr = devs['stick'], devs['throttle']
     out = []
 
@@ -235,7 +162,7 @@ def axis_plan(devs, actions):
     ms = next(iter(thr.groups('ministick')), None)
     if ms and len(ms.axes) == 2:
         for action, i in (('KEY_AXIS_PAN_HEADING', 0), ('KEY_AXIS_PAN_PITCH', 1)):
-            if action in actions:
+            if action in known:
                 out.append(('glob', action, 'throttle', thr.axis(ms.axes[i])))
     return out
 
@@ -346,7 +273,7 @@ def bindings_for(devs, placed, axes):
     for p in placed:
         for button, payload in p.slots:
             info, code = button_code(button)
-            for b in (payload if isinstance(payload, list) else [payload]):
+            for b in payload:
                 add(p.role, 'global' if b.mode == 'glob' else 'flight',
                     b.action, info, code)
 
@@ -407,7 +334,7 @@ def _describe(p):
     and the same button often carries a different action in each."""
     out = []
     for button, payload in p.slots:
-        for b in (payload if isinstance(payload, list) else [payload]):
+        for b in payload:
             out.append((f'{b.mode} {button_code(button)[0]}', b.action))
     return out
 
@@ -437,7 +364,7 @@ def _sheet(layout):
         role, c = p.role, p.ctrl
         cells = {}
         for button, payload in p.slots:
-            for b in (payload if isinstance(payload, list) else [payload]):
+            for b in payload:
                 (cells.setdefault(button, {})
                       .setdefault(CTX[b.mode], []).append(b.action))
         # The push is in `slots` already -- the allocator appends it --
@@ -480,6 +407,7 @@ class Msfs(adapter.Planner):
     #: moved to core.vocab.save. A working copy harvested before that has a
     #: cache with no envelope, and core.vocab raises Stale for it rather
     #: than KeyError: run ./bind msfs harvest.
+    BINDS = 'msfs-binds.json'
     CACHE = {'msfs-actions.json': 'actions', 'msfs-rank.json': None}
 
 
@@ -493,37 +421,30 @@ class Msfs(adapter.Planner):
         second as an override of an abstract property, and because two of the
         six derive their needs and could never be a constant anyway.
         """
-        return NEEDS
+        return self._needs
 
     def __init__(self, backup_dir=None):
         self.backup_dir = backup_dir
         # Read here rather than at import, so that importing this module
         # defines classes and reads nothing.
-        self.actions = self.cache('msfs-actions.json')
+        self.cat = cactions.read(self.cache('msfs-actions.json'))
+        self.by_id = cactions.by_id(self.cat)
         self.rank = self.cache('msfs-rank.json')
+        self._needs = needs(self.BINDS)
 
     @typing.override
     def build(self):
         devs = devmap.by_role('stick', 'throttle')
         flat = [n for n in self.NEEDS if n.first_shape != 'axis']
         return corneeds.Layout(devs, *corneeds.allocate(flat, devs),
-                               axes=axis_plan(devs, self.actions))
+                               axes=axis_plan(devs, self.by_id))
 
     @typing.override
     def catalogue(self):
-        # `rank` is per category and an action can sit under several, so
-        # the highest count wins: bound by 54 aeroplane profiles and no
-        # helicopter one is still worth 54.
-        votes = {}
-        for _cat, pairs in (self.rank.get('rank') or {}).items():
-            for name, n in pairs:
-                votes[name] = max(votes.get(name, 0), n)
-        return [cactions.Action(
-                    name, name.removeprefix('AXIS:'),
-                    kind='axis' if name.startswith('AXIS:') else 'button',
-                    mode=', '.join(sorted(ctxs)) or None,
-                    rank=votes.get(name, 0))
-                for name, ctxs in sorted(self.actions.items())]
+        # A read, not a translation: the `AXIS:` prefix and the
+        # per-category vote count are both settled in the run that parses
+        # the profiles.
+        return list(self.cat)
 
 
     @typing.override
@@ -559,14 +480,18 @@ class Msfs(adapter.Planner):
             out.append(f'  {need.what:20s} {role:8s} {c.kind:9s} {c.label}')
             for button, payload in p.slots:
                 d = c.direction(button) or ''
-                for b in (payload if isinstance(payload, list)
-                          else [payload]):
+                for b in payload:
                     out.append(f'      {b.mode:5s} {b.action:44s} -> '
                                f'{button_code(button)[0]}'
                                f'{"  " + d if d else ""}')
             if why:
-                cat, n = rank_of(self.rank, (need.plane or need.heli
-                                             or need.glob or [''])[0])
+                out.append('      ' + ' · '.join(corneeds.why_bits(p)))
+                # MSFS ranks per aircraft category, so its denominator is
+                # a name rather than a number.
+                first = next((b.action for m in ('plane', 'heli', 'glob')
+                              for slot in need.bindings for b in slot
+                              if b.mode == m), '')
+                cat, n = rank_of(self.rank, first)
                 if n:
                     out.append(f'      {n} of the factory {cat} profiles '
                                'bind this')

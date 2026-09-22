@@ -60,6 +60,7 @@ CORE = os.environ.get('SIM_BIND_WIZARD') or os.path.normpath(
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
+from core import actions as cactions
 from core import adapter                                    # noqa: E402
 
 CANDIDATES = [
@@ -273,12 +274,63 @@ def harvest(game_dir):
     return actions, controls, rank, n_profiles
 
 
+def is_heli(action):
+    """War Thunder is not consistent: most helicopter actions carry
+    `_HELICOPTER` as a suffix, but a handful wear it as a prefix
+    (`ID_HELICOPTER_TRIM`). Getting this wrong puts two actions on one
+    button in the same context and the game drops one of them."""
+    return (action.endswith('_HELICOPTER')
+            or action.startswith('ID_HELICOPTER'))
+
+
+def contexts(action, known):
+    """Which vehicle contexts an action actually applies to.
+
+    The trap: a twin has to be looked for in BOTH forms. And an action with
+    no twin in either form is SHARED -- it applies to helicopters as well
+    as aircraft, whatever we meant by putting it there.
+    `ID_TRIM_ELEVATOR_MINUS` has no helicopter twin, so it is live in a
+    helicopter too.
+
+    `known` is every id there is, because a twin is only absent relative to
+    the whole vocabulary -- which is why this lives here, where the whole
+    vocabulary is being read anyway.
+    """
+    if is_heli(action):
+        return ('heli',)
+    twins = (action + '_HELICOPTER',
+             action.replace('ID_', 'ID_HELICOPTER_', 1))
+    if any(t in known for t in twins):
+        return ('air',)
+    return ('air', 'heli')
+
+
+def catalogue(actions=None, rank=None):
+    """[Action] -- the whole vocabulary in the shape every game shares.
+
+    The English half of the localised pair is the name; a cache with no
+    ranking section leaves the count at 0, which is a zero and not a gap.
+    """
+    actions = actions or {}
+    rank = rank or {}
+    known = set(actions)
+    return [cactions.Action(i, (names[0] if names else i), kind='button',
+                            mode='/'.join(contexts(i, known)),
+                            rank=rank.get(i, 0))
+            for i, names in sorted(actions.items())]
+
+
+def action_rows(actions=None, rank=None):
+    """The section the cache holds."""
+    return cactions.dump(catalogue(actions, rank))
+
+
 @typing.final
 class WarThunderHarvest(adapter.Harvest):
     """War Thunder's vocabulary and factory ranking."""
 
     game = 'warthunder'
-    files = {'wt-actions.json': ('actions', 'controls'),
+    files = {'wt-actions.json': ('actions', 'local', 'controls'),
              'wt-factory-rank.json': ('n', 'actions', 'axes')}
 
     @typing.override
@@ -290,8 +342,21 @@ class WarThunderHarvest(adapter.Harvest):
     def read(self, args):
         self.where = find_game(args.game_dir)
         actions, controls, rank, self.n = harvest(self.where)
+        # The record, not the raw localised pairs: the English half is the
+        # name, and which contexts an action answers in is a fact about
+        # War Thunder's naming that is settled here, where the whole
+        # vocabulary is in hand to look for a twin in.
+        # The Polish half stays in a section of War Thunder's own: the
+        # shared record carries one name, and translating it is a fact
+        # about this game's language files, not about actions. Only the
+        # half that does not fit -- the English one is already in the
+        # record and is not written twice.
+        local = {i: names[1] for i, names in actions.items()
+                 if len(names) > 1 and names[1]}
         out: dict[str, dict] = {
-            'wt-actions.json': {'actions': actions, 'controls': controls}}
+            'wt-actions.json': {'actions': action_rows(actions, rank),
+                                'local': local,
+                                'controls': controls}}
         if self.n:
             # Most-voted first, and ties by name. `Counter.most_common()`
             # leaves ties in insertion order, and the votes are counted out
