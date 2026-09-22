@@ -408,6 +408,7 @@ class Elite(adapter.Planner):
     game = 'elite'
     title = 'Elite Dangerous'
     BINDS = 'elite-binds.json'
+    CATALOGUE = 'ed-actions.json'
     CACHE = {'ed-actions.json': 'actions', 'ed-rank.json': 'ranking'}
 
 

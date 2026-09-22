@@ -12,6 +12,7 @@ yourself rather than a filter.
 """
 
 import curses
+import os
 import re
 import unittest
 
@@ -1241,7 +1242,9 @@ class WhatItFound(unittest.TestCase):
 
     def test_a_section_heading_on_the_map_is_a_heading(self):
         rv = made()
-        self.assertEqual('head', map_tone(rv, 'DEVICE MAP'))
+        # The box's own title says "device map" now, so the first
+        # heading inside it names what follows rather than repeating it.
+        self.assertEqual('head', map_tone(rv, 'MARKS'))
         self.assertEqual('meta', map_tone(rv, 'buttons,'),
                          'ids and counts are true but never the answer')
 
@@ -1255,6 +1258,30 @@ class WhatItFound(unittest.TestCase):
         self.assertEqual('meta', map_tone(rv, '/games/thing'))
         self.assertEqual('subhead', map_tone(rv, 'WarBRD'),
                          'a device is named under DEVICE MAP, not beside it')
+
+    def test_the_columns_are_named(self):
+        # Five columns and nothing saying what they were: `2,3,4` in the
+        # third one is a button list, and there was no way to know that
+        # but to work it out from the numbers.
+        head = [ln for ln in map_text(made()).splitlines()
+                if 'KIND' in ln]
+        self.assertTrue(head, 'no column header')
+        for word in ('CONTROL', 'BUTTONS', 'REACH'):
+            self.assertIn(word, head[0])
+
+    def test_a_home_path_is_written_short(self):
+        # A Proton prefix is 120 characters before it says anything, and
+        # fourteen of them are this machine's home directory.
+        rv = made(paths=[('game', os.path.expanduser('~/games/thing'))])
+        self.assertIn('~/games/thing', map_text(rv))
+        self.assertNotIn(os.path.expanduser('~/games'), map_text(rv))
+
+    def test_the_map_comes_before_the_paths(self):
+        # It is what the screen is for. The paths are reference, and nine
+        # lines of them ahead of the thing you opened it to see is why it
+        # read like a newspaper.
+        lines = map_text(self.two_sticks())
+        self.assertLess(lines.index('WarBRD'), lines.index('WHERE'))
 
     def test_every_control_carries_the_table_s_own_mark(self):
         # The colours went in before anything said what they meant, which

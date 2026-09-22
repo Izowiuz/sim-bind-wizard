@@ -727,6 +727,7 @@ class FalconBms(adapter.Planner):
     title = 'Falcon BMS'
     BINDS = 'falconbms-binds.json'
     EXTRA = ('shift',)
+    CATALOGUE = 'bms-actions.json'
     CACHE = {'bms-actions.json': ('actions', 'devices'),
              'bms-rank.json': 'votes'}
     #: BMS's own word for the install predates the family's. Both spellings

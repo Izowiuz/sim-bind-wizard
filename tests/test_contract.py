@@ -418,6 +418,29 @@ class TheJudgementsHaveAHome(unittest.TestCase):
                 self.assertIsInstance(cls.EXTRA, tuple)
 
 
+class TheCatalogueSaysWhereItCameFrom(unittest.TestCase):
+    """The vocabulary screen names the file it is reading.
+
+    It showed a count and nothing else, so the one question a stale
+    screen raises -- which file is this, and is it the one I just
+    re-harvested -- had no answer on it.
+    """
+
+    def test_every_game_names_it(self):
+        for game in adapter.games():
+            with self.subTest(game=game):
+                self.assertTrue(live(game).CATALOGUE,
+                                f'{game} builds a catalogue from nowhere')
+
+    def test_it_is_a_file_the_planner_actually_reads(self):
+        # Against CACHE, not against the directory: a name that is not
+        # loaded would put a plausible, wrong file on the screen.
+        for game in adapter.games():
+            with self.subTest(game=game):
+                cls = live(game)
+                self.assertIn(cls.CATALOGUE, cls.CACHE)
+
+
 class DroppingTheCache(unittest.TestCase):
     """The one destructive thing the screen can do, held to its blast
     radius.

@@ -111,6 +111,13 @@ class HowBigAPopup(unittest.TestCase):
         _y, _x, _bh, bw = box_for(['x' * 200], 24, 80, 'keys')
         self.assertLessEqual(bw, 80)
 
+    def test_a_full_box_is_the_whole_screen(self):
+        # The vocabulary screen and the device map are lists you work in,
+        # not notices you read: centred and sized to content they sit in
+        # a hole, and every row they could have shown is one they did not.
+        self.assertEqual((0, 0, 24, 80),
+                         box_for(['one'], 24, 80, 'map', full=True))
+
     def test_it_says_when_more_is_coming_than_fits(self):
         self.assertTrue(overflows([f'line {i}' for i in range(90)], 24, 80,
                                   'keys'))

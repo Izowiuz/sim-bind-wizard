@@ -110,8 +110,8 @@ class Review:
     """
 
     def __init__(self, layout, title, subtitle='', describe=None,
-                 paths=(), catalogue=(), save=None, harvest=None,
-                 drop=None):
+                 paths=(), catalogue=(), source='', save=None,
+                 harvest=None, drop=None):
         self.layout = layout
         self.title = title
         self.subtitle = subtitle
@@ -126,6 +126,10 @@ class Review:
         #: against 5856 actions -- and until this was passed in, nothing
         #: on this screen knew the rest existed.
         self.catalogue = list(catalogue)
+        #: Which file it was read out of. The vocabulary screen puts it on
+        #: its top bar: after `h` re-reads the game or `D` forgets it, the
+        #: question that screen raises is which file is in front of you.
+        self.source = source
         #: How the judgements get written down. A game that derives its
         #: needs has none, and the screen has to cope rather than raise:
         #: it cannot help, and taking the review down over it would be
@@ -297,45 +301,42 @@ class Review:
         """The device map as the review sees it, with what sits on each
         control -- the answer to "is that really a hat, and what is on it".
 
-        `[(tone, text)]` rather than bare lines. The pager cannot tell a
-        device heading from a control carrying something, and the tone is the
-        one thing only this method knows; naming it here is also what keeps
-        the two screens honest, because a control wears the state of the need
-        on it and that state is the same word the table draws its row with.
+        `[(tone, text)]` rather than bare lines. The tone is the one thing
+        only this method knows, and naming it here is what keeps the two
+        screens honest: a control wears the state of the need on it, and
+        that state is the same word the table draws its row with.
 
         Every control also carries the table's own `?`/`+` mark. Colour was
         the only thing saying which controls were spoken for, and a colour
         nobody has been taught is just some of the rows being a different
         colour -- so the mark says it in text, the legend says what the mark
-        means, and the colour is left to do what it is good at, which is
-        being seen without being read.
+        means, and the colour is left to do what it is good at.
+
+        The map comes first and the paths last. This is the screen you open
+        to find a spare control; nine lines of Proton prefix ahead of it is
+        what made it read like a newspaper.
         """
         out = []
-        if self.paths:
-            out.append(('head', 'WHERE'))
-            # Each path on its own line: a Proton prefix is 90 characters
-            # before it says anything, and a truncated path answers nothing.
-            for label, path in self.paths:
-                out.append(('subhead', f'  {label}'))
-                out.extend(('meta', f'    {ln}') for ln in _fold(str(path)))
-            out.append(('plain', ''))
-        out.append(('head', 'DEVICE MAP'))
-        # The legend is four lines because a line carries one tone, and a
-        # legend that is not drawn in the colours it explains explains
-        # nothing. This is the screen somebody opens to find a spare
-        # control, so what the colours mean is what they came for.
+        out.append(('head', 'MARKS'))
+        # The legend is three lines because a line carries one tone, and a
+        # legend not drawn in the colours it explains explains nothing.
         for state in (MINE, PROPOSED, UNSET):
             out.append((state, f'  {MARK[state]} {MARK_SAID[state]}'))
         for role, dev in self.devices():
-            ids = f'    {dev.slug} · usb {dev.usb or "?"}'
+            ids = f'{dev.slug} · usb {dev.usb or "?"}'
             if dev.serial:
                 ids += f' · serial {dev.serial}'
             out.append(('plain', ''))
             out.append(('subhead', f'  {role}  {dev.product}'))
-            out.append(('meta', ids))
-            out.append(('meta', f'    {dev.n_buttons} buttons,'
-                                f' {dev.n_axes} axes · {dev.path}'))
+            out.append(('meta', f'    {dev.n_buttons} buttons, '
+                                f'{dev.n_axes} axes · {ids}'))
+            out.append(('meta', f'    {_tilde(str(dev.path))}'))
             out.append(('plain', ''))
+            # Named columns. There were five of them and nothing saying
+            # which was which: `2,3,4` is a button list, and the only way
+            # to learn that was to work it out from the numbers.
+            out.append(('meta', f'    {"KIND":10} {"CONTROL":24} '
+                                f'{"BUTTONS":16} {"REACH":20} ON IT'))
             for ctrl in dev.groups():
                 held = self.who_has(role, ctrl)
                 parts = [','.join(str(b) for b in ctrl.buttons)]
@@ -344,22 +345,32 @@ class Review:
                 if ctrl.axes:
                     parts.append('ax' + ','.join(str(a) for a in ctrl.axes))
                 btns = ' '.join(x for x in parts if x)
-                # Carrying something -> that need's state, mark and
-                # colour alike, which is exactly how the table draws it.
-                # Free and bindable -> plain, because a spare control is the
-                # normal case and colouring the normal case says nothing.
-                # Bindable by nothing -> as dim as the ids above it, which
-                # is what it is worth.
+                # Carrying something -> that need's state, mark and colour
+                # alike, which is exactly how the table draws it. Free and
+                # bindable -> plain, because a spare control is the normal
+                # case and colouring the normal case says nothing. Bindable
+                # by nothing -> as dim as the ids above it.
                 state = self.mark[held] if held else None
                 tone = state or ('plain' if ctrl.bindable else 'meta')
                 out.append((tone,
                             f'  {MARK[state] if state else " "} '
-                            f'{ctrl.kind:10} {ctrl.label[:26]:26} '
+                            f'{ctrl.kind:10} {ctrl.label[:24]:24} '
                             f'{(btns or "-")[:16]:16} '
-                            f'{(ctrl.reach or ""):24.24} '
+                            f'{_hand(ctrl.reach):20.20} '
                             + (held.what if held else
                                ('' if ctrl.bindable
                                 else '(carries nothing)'))))
+        if self.paths:
+            out.append(('plain', ''))
+            out.append(('head', 'WHERE'))
+            # Each path on its own lines: a Proton prefix is 120 characters
+            # before it says anything, and a truncated path answers nothing.
+            # Shortened at the home directory, which is 14 of them and the
+            # one part a reader already knows.
+            for label, path in self.paths:
+                out.append(('subhead', f'  {label}'))
+                out.extend(('meta', f'    {ln}')
+                           for ln in _fold(_tilde(str(path))))
         return out
 
     # -------------------------------------------------------------- writing
@@ -654,8 +665,9 @@ KEYS = (
     ('plain', '  review — put a game\'s actions onto HOTAS controls'),
     ('plain', ''),
     ('head', 'DESCRIPTION'),
-    ('plain', '  One entry per thing to be able to do, and the control it'),
-    ('plain', '  got. Nothing reaches the game until w.'),
+    ('plain', "  A row is an entry: one or more of the game's actions,"),
+    ('plain', '  and the control they landed on. Entries are grouped by'),
+    ('plain', '  category, and nothing reaches the game until w.'),
     ('plain', ''),
     ('head', 'MARKS'),
     ('mine', f'  {MARK[MINE]}           {MARK_SAID[MINE]}'),
@@ -686,6 +698,22 @@ KEYS = (
     ('plain', '  w           write the plan to the game'),
     ('plain', '  q           quit'),
 )
+
+
+def _hand(reach):
+    """`thumb, without releasing grip` -> `thumb`, for a column.
+
+    The clause before the comma is the part that tells two reaches apart;
+    what follows it is the same phrase on most of them. At twenty columns
+    the full string was cut mid-word, which told nobody anything.
+    """
+    return (reach or '').split(',')[0]
+
+
+def _tilde(path):
+    """`/home/you/x` -> `~/x`. Fourteen characters a reader already knows."""
+    home = os.path.expanduser('~')
+    return '~' + path[len(home):] if path.startswith(home + os.sep) else path
 
 
 def _fold(path, width=74):
@@ -950,25 +978,33 @@ def _panel(scr, theme, rect, title, right='', keys=(), tail='', note=''):
     return y + 1, x + 2, h - 2, w - 4
 
 
-def box_for(body, h, w, title):
+def box_for(body, h, w, title, full=False):
     """(y, x, height, width) for a box holding `body` on an h x w screen.
 
     Sized to what it holds and no larger: a help box with three inches of
     blank border says the list is longer than it is. Capped at the screen,
     which is where `overflows` takes over.
+
+    `full` takes the whole terminal instead. A notice you read wants to be
+    the size of what it says; a list you WORK in -- the vocabulary, the
+    device map -- wants every row it can get, and centring it in a margin
+    costs two of them for nothing.
     """
+    if full:
+        return 0, 0, h, w
     inner = max((len(t) for t in body), default=0)
     bw = min(w - 2, max(len(title) + 6, inner + 4))
     bh = min(h - 2, len(body) + 2)
     return (h - bh) // 2, (w - bw) // 2, bh, bw
 
 
-def overflows(body, h, w, title):
+def overflows(body, h, w, title, full=False):
     """Is there more than the box can show at once?"""
-    return len(body) > box_for(body, h, w, title)[2] - 2
+    return len(body) > box_for(body, h, w, title, full)[2] - 2
 
 
-def _box(scr, theme, title, lines, keys=(), tail='', top=0, sel=None):
+def _box(scr, theme, title, lines, keys=(), tail='', top=0, sel=None,
+         full=False):
     """Draw a framed box over the middle of the screen. Returns its page.
 
     Framed by the same `lid`/`sill` the panels use, so every box on this
@@ -977,7 +1013,7 @@ def _box(scr, theme, title, lines, keys=(), tail='', top=0, sel=None):
     """
     body = [t for _tone, t in lines]
     h, w = scr.getmaxyx()
-    y, x, bh, bw = box_for(body, h, w, title)
+    y, x, bh, bw = box_for(body, h, w, title, full)
     page = bh - 2
     _put(scr, y, x, ctui.lid(bw, title), theme.head)
     for n in range(page):
@@ -990,7 +1026,7 @@ def _box(scr, theme, title, lines, keys=(), tail='', top=0, sel=None):
     return page
 
 
-def _popup(scr, tui, theme, title, lines):
+def _popup(scr, tui, theme, title, lines, full=False):
     """A box you read and dismiss.
 
     Scrolls rather than truncates. It used to draw `lines[:bh - 2]` and
@@ -1002,13 +1038,13 @@ def _popup(scr, tui, theme, title, lines):
     top = 0
     while True:
         h, w = scr.getmaxyx()
-        page = box_for(body, h, w, title)[2] - 2
-        more = overflows(body, h, w, title)
+        page = box_for(body, h, w, title, full)[2] - 2
+        more = overflows(body, h, w, title, full)
         top = max(0, min(top, len(body) - page)) if more else 0
         _box(scr, theme, title, lines,
              ('↑↓ more', 'any other key closes') if more else (),
              f'{top + page} of {len(body)}' if more else 'any key to close',
-             top)
+             top, full=full)
         k = tui.key(0.5)
         if k is None:
             continue
@@ -1218,43 +1254,6 @@ def _ask(scr, tui, prompt, start=''):
             text += k
 
 
-def _pager(scr, tui, title, lines):
-    """Show `(tone, text)` lines, scroll them, leave on ESC or q.
-
-    `core/tui.py` keeps a transcript and repaints its tail, which is right for
-    a capture prompt and wrong for a listing longer than the screen -- the
-    device map is thirty lines before it has said anything about the second
-    stick.
-    """
-    top = 0
-    while True:
-        h, w = scr.getmaxyx()
-        page = max(1, h - 3)
-        top = max(0, min(top, max(0, len(lines) - page)))
-        scr.erase()
-        _put(scr, 0, 0, title, tui.theme.title)
-        for i, (tone, text) in enumerate(lines[top:top + page]):
-            _put(scr, 1 + i, 0, text, tui.theme[tone])
-        more = f'{top + 1}-{min(len(lines), top + page)} of {len(lines)}'
-        _put(scr, h - 1, 0,
-             f'↑↓ jk scroll · SPACE page · g/G first/last · '
-             f'q back    {more}')
-        scr.refresh()
-        k = tui.key(0.5)
-        if k in ('esc', 'q', 'Q', 'enter'):
-            return
-        if k in ('up', 'k'):
-            top -= 1
-        elif k in ('down', 'j'):
-            top += 1
-        elif k == 'g':
-            top = 0
-        elif k == 'G':
-            top = len(lines)
-        elif k == ' ':
-            top += page
-
-
 def _head_of(rv, name, fallback):
     """Where this group's heading is now, after it was renamed."""
     for i, row in enumerate(rv.rows()):
@@ -1337,9 +1336,9 @@ def _browse(scr, tui, rv):
     this holds what the game accepts. 147 rows against 5856 across the
     family, and until now nothing here knew the rest was there.
 
-    Windowed like `_pager` and not sized to content like `_popup`: MSFS
-    ships 3111 actions and a box that quietly drops what does not fit
-    would be worse than no box.
+    Windowed rather than sized to content: MSFS ships 3111 actions
+    and a box that quietly drops what does not fit would be worse
+    than no box.
     """
     order = [a for _cat, group in cactions.grouped(rv.catalogue)
              for a in group]
@@ -1359,7 +1358,13 @@ def _browse(scr, tui, rv):
         scr.erase()
         right = (f'filter {find!r} · {len(shown)} of {len(order)}'
                  if find else f'{len(order)} the game accepts')
-        _put(scr, 0, 0, ctui.lid(w, 'vocabulary', right), tui.theme.head)
+        _put(scr, 0, 0, ctui.lid(w, rv.source or 'vocabulary', right),
+             tui.theme.head)
+        # The sides the corners promise. `lid` and `sill` end in `╭╮╰╯`,
+        # so a box drawn without them reads as an unfinished one.
+        for row in range(1, h - 1):
+            _put(scr, row, 0, ctui.V, tui.theme.head)
+            _put(scr, row, w - 1, ctui.V, tui.theme.head)
         for i, a in enumerate(shown[top:top + page - 1]):
             y = 1 + i
             mark = '+' if a.id in bound else ' '
@@ -1419,12 +1424,12 @@ def _browse(scr, tui, rv):
 # ------------------------------------------------------------------ the loop
 
 def run(layout, title, subtitle='', describe=None, write=None, paths=(),
-        catalogue=(), save=None, harvest=None, drop=None):
+        catalogue=(), source='', save=None, harvest=None, drop=None):
     """Show the need list, let it be filled, write what has a control.
     Returns the `Layout` that was written, or None if nothing was."""
     sticks = Sticks(layout)
     rv = Review(layout, title, subtitle, describe, paths, catalogue,
-                save, harvest, drop)
+                source, save, harvest, drop)
     try:
         return curses.wrapper(_loop, rv, write, sticks)
     finally:
@@ -1530,7 +1535,8 @@ def _loop(scr, rv, write, sticks):
                 # resets to the top; that would lose what you were doing.
                 sel = _row_of(rv, need, sel)
         elif k in ('m', 'M'):
-            _pager(scr, tui, f'{rv.title} — device map', rv.map_lines())
+            _popup(scr, tui, tui.theme, 'device map', rv.map_lines(),
+                   full=True)
         elif k in ('w', 'W'):
             written = _write(tui, rv, write) or written
         elif k == ' ' and need is not None:

@@ -419,6 +419,7 @@ class X4(adapter.Planner):
     game = 'x4'
     title = 'X4 Foundations'
     BINDS = 'x4-binds.json'
+    CATALOGUE = 'x4-actions.json'
     CACHE = {'x4-actions.json': 'actions'}
 
 

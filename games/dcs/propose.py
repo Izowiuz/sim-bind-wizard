@@ -906,6 +906,7 @@ class Dcs(adapter.Proposer):
 
     game = 'dcs'
     title = 'DCS World'
+    CATALOGUE = 'dcs-actions.json'
     CACHE = {'dcs-actions.json': 'aircraft'}
     #: `-a` is what this has always been typed as, and `./bind dcs plan
     #: -a su-25T` is in the top-level README.

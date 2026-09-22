@@ -408,6 +408,7 @@ class Msfs(adapter.Planner):
     #: cache with no envelope, and core.vocab raises Stale for it rather
     #: than KeyError: run ./bind msfs harvest.
     BINDS = 'msfs-binds.json'
+    CATALOGUE = 'msfs-actions.json'
     CACHE = {'msfs-actions.json': 'actions', 'msfs-rank.json': None}
 
 

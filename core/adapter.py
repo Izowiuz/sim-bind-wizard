@@ -315,6 +315,12 @@ class Adapter(abc.ABC):
     #: a harvest cannot write a judgement.
     BINDS: str = ''
 
+    #: Which of `CACHE`'s files the catalogue is read out of. Named rather
+    #: than guessed from the others: the vocabulary screen puts it on its
+    #: top bar, and a plausible wrong filename there is worse than none --
+    #: the question it answers is "is this the file I just re-harvested".
+    CATALOGUE: str = ''
+
     #: Fields this game keeps of its own that travel with them. BMS marks
     #: a need as living on the shifted layer and nobody else has the idea;
     #: a generic bag would be the opaque payload this contract replaced.
@@ -722,6 +728,7 @@ class Planner(Adapter):
         creview.run(self.build(), self.title, self.subtitle,
                     describe=self.describe, write=self.write_all,
                     paths=self.paths(args), catalogue=self.catalogue(),
+                    source=os.path.join('games', self.game, self.CATALOGUE),
                     save=self.save_needs, harvest=self.reharvest,
                     drop=self.drop_cache)
 

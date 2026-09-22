@@ -407,6 +407,7 @@ class WarThunder(adapter.Planner):
     title = 'War Thunder'
     subtitle = 'air simulator + helicopters · VIRPIL'
     BINDS = 'warthunder-binds.json'
+    CATALOGUE = 'wt-actions.json'
     CACHE = {'wt-actions.json': 'actions',
              'wt-factory-rank.json': 'actions'}
 
