@@ -1023,6 +1023,42 @@ class ThePanelOnAHeading(unittest.TestCase):
         self.assertNotIn('band', self.text(rv, 'Combat').lower())
 
 
+class BeforeWriting(unittest.TestCase):
+    """What `w` says before it does it.
+
+    It did it first. The keystroke that overwrites a game's config was
+    one press with nothing between, and the warning that some bindings
+    were still `?` was printed AFTER the file had been written -- which
+    is a warning about a decision already made.
+    """
+
+    def rv(self, **kw):
+        return made(paths=[('writes', '/games/thing/inputmap_3.xml')], **kw)
+
+    def text(self, rv, width=60):
+        return '\n'.join(t for _tone, t in review._write_plan(rv, width))
+
+    def test_it_names_the_file_it_will_write(self):
+        self.assertIn('inputmap_3.xml', self.text(self.rv()))
+
+    def test_it_says_how_much(self):
+        rv = self.rv()
+        n = len(rv.result().placed)
+        self.assertIn(str(n), self.text(rv))
+
+    def test_it_warns_that_unaccepted_ones_go_too(self):
+        # Before, not after: `?` means you have not looked, and the file
+        # is written with them in it either way.
+        rv = self.rv()
+        said = self.text(rv)
+        self.assertIn(review.MARK_SAID[PROPOSED], said)
+
+    def test_a_plan_you_have_been_through_says_nothing_of_the_kind(self):
+        rv = self.rv()
+        rv.confirm_all()
+        self.assertNotIn(review.MARK_SAID[PROPOSED], self.text(rv))
+
+
 class Renaming(unittest.TestCase):
     """Changing what a group is called, without emptying it first."""
 

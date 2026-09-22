@@ -1058,6 +1058,29 @@ def _popup(scr, tui, theme, title, lines, full=False):
             return
 
 
+def _inner(scr):
+    """How wide a full-screen box's content may be."""
+    return max(20, scr.getmaxyx()[1] - 4)
+
+
+def _confirm(scr, tui, title, lines):
+    """Show what is about to happen and wait for a yes. True if given.
+
+    RETURN rather than a typed word: this is the thing the screen is for,
+    it is pressed often, and every writer in the family backs the file up
+    before it touches it. What was missing was not a gate -- it was seeing
+    what the keystroke would do while there was still time to say no.
+    """
+    while True:
+        _box(scr, tui.theme, title, lines,
+             ('↵ do it', 'ESC cancel'), tail='')
+        k = tui.key(0.5)
+        if k == 'enter':
+            return True
+        if k in ('esc', 'q', 'Q'):
+            return False
+
+
 def _choose(scr, tui, title, lines, tail=''):
     """A box you pick a line out of. Returns the index, or None on ESC."""
     sel = top = 0
@@ -1538,7 +1561,7 @@ def _loop(scr, rv, write, sticks):
             _popup(scr, tui, tui.theme, 'device map', rv.map_lines(),
                    full=True)
         elif k in ('w', 'W'):
-            written = _write(tui, rv, write) or written
+            written = _write(scr, tui, rv, write) or written
         elif k == ' ' and need is not None:
             # SPACE was keep/drop before the table grew a third state. It is
             # kept as confirm, because that is the one a walk through the list
@@ -1604,7 +1627,41 @@ def _by_hand(scr, tui, rv, need):
     return f'{need.what} -> {role}/{ctrl.label}  (yours)'
 
 
-def _write(tui, rv, write):
+def _write_plan(rv, width):
+    """What `w` is about to do, before it does it.
+
+    The keystroke overwrites a game's config and there was nothing between
+    the press and the file. What it writes and where is exactly the thing
+    a reader would want to check, and it was only ever printed afterwards.
+    """
+    out = []
+
+    def say(tone, text='', lead=''):
+        out.extend((tone, piece) for piece in _fit(width, text, lead))
+
+    kept = rv.result()
+    mine, prop, _unset = rv.counts()
+    if rv.paths:
+        say('head', 'FILES')
+        for label, path in rv.paths:
+            say('subhead', f'  {label}')
+            for line in _fold(_tilde(str(path)), max(20, width - 4)):
+                say('meta', f'    {line}')
+        say('plain')
+    say('head', 'PLAN')
+    say('plain', f'  {ctui.plural(len(kept.placed), "binding")}')
+    if mine:
+        say(MINE, f'  {MARK[MINE]}{mine} {MARK_SAID[MINE]}')
+    if prop:
+        # Before the keystroke, not after it. `?` means you have not been
+        # through them, and they go into the file either way -- which is
+        # a thing to learn while you can still say no.
+        say(PROPOSED, f'  {MARK[PROPOSED]}{prop} {MARK_SAID[PROPOSED]}'
+                      f' — written too')
+    return out
+
+
+def _write(scr, tui, rv, write):
     if write is None:
         rv.status = 'this game has no writer wired to the review yet'
         return None
@@ -1612,16 +1669,12 @@ def _write(tui, rv, write):
     if not kept.placed:
         rv.status = 'nothing has a control, so there is nothing to write'
         return None
-    _mine, prop, _unset = rv.counts()
-    tui.page(f'{rv.title} — writing '
-         f'{ctui.plural(len(kept.placed), "binding")}')
-    if prop:
-        tui.log(f'{prop} of them are still marked ? — proposed and not '
-                'looked at. They are written too.')
-        tui.log('')
+    if not _confirm(scr, tui, 'write', _write_plan(rv, _inner(scr))):
+        rv.status = 'not written'
+        return None
     # Every writer in the family reports by printing, and some warn on stderr.
     # Under curses that lands on the screen being drawn, so it is caught here
-    # and replayed as log lines -- cheaper than teaching six writers to return
+    # and shown afterwards -- cheaper than teaching six writers to return
     # text they already print.
     out = io.StringIO()
     written = None
@@ -1633,10 +1686,13 @@ def _write(tui, rv, write):
         extra = [f'refused: {e}']
     except (RuntimeError, OSError, ValueError) as e:
         extra = [f'ERROR: {e}']
-    for line in out.getvalue().splitlines():
-        tui.log(line)
-    for line in (extra or []):
-        tui.log(str(line))
-    tui.wait_any_key()
+    said = [('meta', ln) for ln in out.getvalue().splitlines()]
+    # The two that matter, in the tone that says so: a refusal or an error
+    # is one line in whatever a writer printed, and finding it was the
+    # reader's problem.
+    said += [('unset' if str(ln).startswith(('refused:', 'ERROR:'))
+              else 'plain', str(ln)) for ln in (extra or [])]
+    _popup(scr, tui, tui.theme, 'written' if written else 'not written',
+           said or [('meta', 'the writer said nothing')])
     rv.status = 'written' if written else 'not written'
     return written
