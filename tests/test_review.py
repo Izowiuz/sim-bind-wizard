@@ -545,10 +545,12 @@ class Rows(unittest.TestCase):
         heads = [r.text for r in made().rows() if r.kind == 'head']
         self.assertEqual(['IN A TURN', 'IN THE AIR', 'ON THE RAMP'], heads)
 
-    def test_only_needs_can_be_selected(self):
+    def test_a_gap_cannot_be_selected(self):
+        # A heading is a thing you act on -- `R` renames it -- so what is
+        # left unselectable is what answers nothing.
         rows = made().rows()
-        self.assertTrue(all(r.kind == 'need' for r in rows if r.selectable))
-        self.assertTrue(any(r.kind == 'head' for r in rows))
+        self.assertTrue(all(r.kind != 'gap' for r in rows if r.selectable))
+        self.assertTrue(any(r.kind == 'gap' for r in rows))
 
 
 class BindsUnderTheAction(unittest.TestCase):
@@ -588,7 +590,7 @@ class BindsUnderTheAction(unittest.TestCase):
     def test_a_bind_row_cannot_be_selected(self):
         # It is the answer to the row above, not a thing you put anywhere.
         rows = self.rv().rows()
-        self.assertTrue(all(r.kind == 'need'
+        self.assertTrue(all(r.kind != 'bind'
                             for r in rows if r.selectable))
         self.assertTrue(any(r.kind == 'bind' for r in rows))
 
@@ -937,6 +939,87 @@ class Refiling(unittest.TestCase):
         was = trim.urgency
         rv.refile(trim, 'Housekeeping')
         self.assertEqual(was, trim.urgency)
+
+
+class SelectableHeadings(unittest.TestCase):
+    """A category heading is a thing you can stand on.
+
+    `R` renamed the group the cursor's row was IN, which meant renaming a
+    category by standing on one of its members -- so the heading was the
+    one thing on the screen you could read and not touch.
+
+    Everything else stays guarded by `row.kind`. The handlers that need a
+    `Need` keep asking for one and get None on a heading, which is the
+    graceful half; the ones that act on a group have to branch on the kind
+    themselves rather than lean on `need is not None`.
+    """
+
+    def rows(self, rv):
+        return rv.rows()
+
+    def test_a_heading_can_be_landed_on(self):
+        rv = made()
+        heads = [r for r in self.rows(rv) if r.kind == 'head']
+        self.assertTrue(heads)
+        self.assertTrue(all(r.selectable for r in heads))
+
+    def test_a_gap_still_cannot(self):
+        # It answers nothing and stopping on it is a keystroke for nothing.
+        rv = made()
+        gaps = [r for r in self.rows(rv) if r.kind == 'gap']
+        self.assertTrue(gaps)
+        self.assertFalse(any(r.selectable for r in gaps))
+
+    def test_a_heading_carries_the_name_rename_needs(self):
+        # `text` is upper-cased for the screen; `rename` needs what the
+        # need actually holds, and 'IN A TURN' is not it.
+        rv = made()
+        head = next(r for r in self.rows(rv) if r.kind == 'head')
+        self.assertEqual(head.text, head.group.upper())
+        self.assertIn(head.group, rv.categories())
+
+    def test_a_heading_has_no_need(self):
+        # So every handler that wants one gets None and does nothing,
+        # which is what keeps the rest of the loop untouched.
+        rv = made()
+        head = next(r for r in self.rows(rv) if r.kind == 'head')
+        self.assertIsNone(head.need)
+
+
+class ThePanelOnAHeading(unittest.TestCase):
+    """Standing on a heading should say something.
+
+    It said nothing: `_side` answered `[]` for anything that was not a
+    need, so landing on a heading left an empty box beside it -- which
+    reads as a hole rather than as a thing you are on.
+    """
+
+    def side(self, rv, name, width=28):
+        row = next(r for r in rv.rows()
+                   if r.kind == 'head' and r.group == name)
+        return review._side(rv, row, width)
+
+    def text(self, rv, name, width=28):
+        return '\n'.join(t for _tone, t in self.side(rv, name, width))
+
+    def test_it_names_the_group(self):
+        self.assertIn('in a turn', self.text(made(), 'in a turn'))
+
+    def test_it_counts_what_is_in_it(self):
+        rv = made()
+        rv.refile(by(rv, 'Gear'), 'Combat')
+        rv.refile(by(rv, 'Canopy'), 'Combat')
+        self.assertIn('2', self.text(rv, 'Combat'))
+
+    def test_it_says_a_band_is_not_yours_to_rename(self):
+        # Standing on one and pressing R is refused, and the panel should
+        # say so before the keystroke rather than after it.
+        self.assertIn('band', self.text(made(), 'in a turn').lower())
+
+    def test_a_category_of_yours_says_nothing_of_the_kind(self):
+        rv = made()
+        rv.refile(by(rv, 'Gear'), 'Combat')
+        self.assertNotIn('band', self.text(rv, 'Combat').lower())
 
 
 class Renaming(unittest.TestCase):

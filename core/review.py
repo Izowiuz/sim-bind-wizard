@@ -40,6 +40,7 @@ control, which is why `Layout.but()` exists and why the two adapters that
 derived their writer's tables inside `build()` had to stop.
 """
 
+import collections
 import contextlib
 import curses
 import io
@@ -81,16 +82,24 @@ MARK_SAID = {
 class Row:
     """One line of the table. `kind` decides what it answers to."""
 
-    def __init__(self, kind, text, need=None):
+    def __init__(self, kind, text, need=None, group=None):
         self.kind = kind                # 'head' | 'need' | 'bind' | 'gap'
         self.text = text
         self.need = need
+        #: on a heading, the group's real name. `text` is upper-cased for
+        #: the screen and `rename` needs what the needs actually hold --
+        #: 'IN A TURN' is not it.
+        self.group = group
 
     @property
     def selectable(self):
+        # A heading is a thing you act on: `R` renames it. It used to be
+        # the one thing on the screen you could read and not touch, so a
+        # category was renamed by standing on one of its members.
+        #
         # A `bind` is the answer to the row above it, not a thing you put
-        # anywhere, so moving skips it.
-        return self.kind == 'need'
+        # anywhere, and a `gap` answers nothing -- moving skips both.
+        return self.kind in ('need', 'head')
 
 
 class Review:
@@ -608,7 +617,7 @@ class Review:
                 # filter took away -- an empty group is a line you scroll
                 # past to reach the rows you asked for.
                 continue
-            out.append(Row('head', name.upper()))
+            out.append(Row('head', name.upper(), group=name))
             for need in band:
                 out.append(Row('need', need.what, need=need))
                 # What it binds, under it. This was the footer's job, which
@@ -670,7 +679,7 @@ KEYS = (
     ('head', 'THE LIST'),
     ('plain', '  a           browse the game\'s vocabulary and add entries'),
     ('plain', '  r           move this entry to another category'),
-    ('plain', '  R           rename this entry\'s category'),
+    ('plain', '  R           rename the category it is in; all of it moves'),
     ('plain', ''),
     ('head', 'OTHER'),
     ('plain', '  m           device map and install paths'),
@@ -791,6 +800,8 @@ def _side(rv, row, width=DETAIL_MIN - 4):
     own. A row saying "stick" does not say WHICH stick, and this is the
     moment that question is being asked.
     """
+    if row is not None and row.kind == 'head':
+        return _group_side(rv, row.group, width)
     if row is None or row.kind != 'need':
         return []
     need, p = row.need, rv.at[row.need]
@@ -831,6 +842,35 @@ def _side(rv, row, width=DETAIL_MIN - 4):
     say('plain')
     say('head', 'WHY')
     _why(rv, need, p, say)
+    return out
+
+
+def _group_side(rv, name, width):
+    """What a heading is, when the cursor is on one.
+
+    It answered nothing before, so landing on a heading left an empty box
+    -- which reads as a hole rather than as a thing you are standing on.
+    """
+    out = []
+
+    def say(tone, text='', lead=''):
+        out.extend((tone, piece) for piece in _fit(width, text, lead))
+
+    members = dict(rv.groups()).get(name, [])
+    say('head', 'CATEGORY')
+    say('subhead', name)
+    if name in corneeds.URGENCY_NAME:
+        # Before the keystroke rather than after it: `R` refuses a band,
+        # and finding that out by pressing it is finding it out late.
+        say('note', 'a band, not yours to rename')
+        say('meta', 'r files things out of it')
+    say('plain')
+    say('head', 'HOLDS')
+    say('plain', ctui.plural(len(members), 'entry', 'entries'))
+    tally = collections.Counter(rv.mark[n] for n in members)
+    for state in (MINE, PROPOSED, UNSET):
+        if tally[state]:
+            say(state, f'{tally[state]} {MARK_SAID[state]}')
     return out
 
 
@@ -1038,19 +1078,22 @@ def _draw(scr, rv, sel, state, theme):
               f'{MARK[PROPOSED]}{prop}' if prop else '',
               f'{unset} {MARK_SAID[UNSET]}' if unset else '']
     right = rv.narrowed() or ctui.SEP.join(c for c in counts if c)
-    pick = [i for i, r in enumerate(rows) if r.selectable]
+    # Needs, not every selectable row: this says which of the things you
+    # are placing you are on, and a heading is not one of them.
+    pick = [i for i, r in enumerate(rows) if r.kind == 'need']
     at = sum(1 for i in pick if i <= sel)
     iy, ix, ih, iw = _panel(
         scr, theme, (ly, lx, lh, lw),
         rv.title + (f' · {rv.subtitle}' if rv.subtitle else ''),
-        right, HINTS, f'{at}/{len(pick)}' if pick else 'none',
-        note=rv.status)
+        right, HINTS,
+        _where(rows, sel, at, pick), note=rv.status)
 
     for n, i in enumerate(range(top, min(len(rows), top + visible))):
         row = rows[i]
         y = iy + n
         if row.kind == 'head':
-            _put(scr, y, ix, row.text[:iw], theme.head)
+            _put(scr, y, ix, row.text[:iw],
+                 theme.sel if i == sel else theme.head)
         elif row.kind == 'bind':
             _put(scr, y, ix + 4, row.text[:iw - 4], theme.meta)
         elif row.kind == 'need':
@@ -1068,7 +1111,10 @@ def _draw(scr, rv, sel, state, theme):
                      rv.where(row.need)[:iw - NAME_W - 2], attr)
 
     row = rows[sel] if 0 <= sel < len(rows) else None
-    name = row.need.what if row and row.kind == 'need' else ''
+    # The group on a heading, the need on a row: the panel is about
+    # whatever the cursor is on, and its title should say which.
+    name = (row.need.what if row and row.kind == 'need'
+            else row.group if row and row.kind == 'head' else '')
     dy, dx, dh, dw = _panel(scr, theme, side, name[:side[3] - 6],
                             tail='? help')
     # One wrapper, not two. `_side` fits its own lines to `dw` because it
@@ -1207,6 +1253,34 @@ def _pager(scr, tui, title, lines):
             top = len(lines)
         elif k == ' ':
             top += page
+
+
+def _head_of(rv, name, fallback):
+    """Where this group's heading is now, after it was renamed."""
+    for i, row in enumerate(rv.rows()):
+        if row.kind == 'head' and row.group == name:
+            return i
+    return fallback
+
+
+def _where(rows, sel, at, pick):
+    """The sill's tail: which of the things you are placing you are on.
+
+    On a heading there is no such thing -- `0/32` read like a fault -- so
+    it says what the heading holds. Counted from the rows on screen, not
+    from the group: with a filter up, what it holds and what you can see
+    are different numbers, and the one to report is the one in front of
+    you.
+    """
+    here = rows[sel] if 0 <= sel < len(rows) else None
+    if here is None or here.kind != 'head':
+        return f'{at}/{len(pick)}' if pick else 'none'
+    n = 0
+    for r in rows[sel + 1:]:
+        if r.kind == 'head':
+            break
+        n += r.kind == 'need'
+    return ctui.plural(n, 'entry', 'entries') + ' here'
 
 
 def _row_of(rv, need, fallback):
@@ -1380,7 +1454,13 @@ def _loop(scr, rv, write, sticks):
         k = tui.key(0.5)
         if k is None:
             continue
-        need = rows[sel].need if rows[sel].selectable else None
+        # By kind, not by `selectable`: a heading is selectable now and
+        # carries no need, so every handler that wants one still gets
+        # None and does nothing. The ones that act on a GROUP ask for the
+        # kind themselves.
+        here = rows[sel] if 0 <= sel < len(rows) else Row('gap', '')
+        need = here.need if here.kind == 'need' else None
+        group = here.group if here.kind == 'head' else None
 
         if k in ('q', 'Q', 'esc'):
             return written
@@ -1434,12 +1514,13 @@ def _loop(scr, rv, write, sticks):
             rv.status = _browse(scr, tui, rv)
             state['top'] = 0
             move(-len(rv.rows()))
-        elif k == 'R' and need is not None:
-            was = rv.group_of(need)
+        elif k == 'R' and (group or need is not None):
+            was = group or rv.group_of(need)
             got = _ask(scr, tui, f'rename {was!r} to: ', was)
             if got and got.strip() and got.strip() != was:
                 rv.status = rv.rename(was, got.strip())
-                sel = _row_of(rv, need, sel)
+                sel = (_head_of(rv, got.strip(), sel) if group
+                       else _row_of(rv, need, sel))
         elif k == 'r' and need is not None:
             where = _pick_category(scr, tui, rv)
             if where:
