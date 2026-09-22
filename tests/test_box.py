@@ -21,6 +21,7 @@ REPO = os.path.dirname(HERE)
 if REPO not in sys.path:
     sys.path.insert(0, REPO)
 
+from core.review import box_for, overflows                    # noqa: E402
 from core.tui import lid, sill                                 # noqa: E402
 
 
@@ -85,6 +86,35 @@ class TheSill(unittest.TestCase):
         got = sill(26, ('↑↓ move', '↵ press'), '12/32')
         self.assertIn('12/32', got)
         self.assertEqual(26, len(got))
+
+
+class HowBigAPopup(unittest.TestCase):
+    """A box sized to what it holds, and honest when it cannot hold it.
+
+    `_popup` rendered `lines[:bh - 2]` and stopped. On a 24-row terminal
+    the help list simply ended, with nothing to say it had -- and the
+    keys that fell off were the ones furthest down, which is where the
+    less-used ones live and therefore where somebody looking for help is
+    most likely to be looking.
+    """
+
+    def test_a_short_list_gets_a_box_its_own_size(self):
+        _y, _x, bh, _bw = box_for(['one', 'two'], 24, 80, 'keys')
+        self.assertEqual(4, bh)          # two lines plus lid and sill
+
+    def test_a_long_list_stops_at_the_screen(self):
+        _y, _x, bh, _bw = box_for([f'line {i}' for i in range(90)],
+                                  24, 80, 'keys')
+        self.assertLessEqual(bh, 24)
+
+    def test_the_box_is_never_wider_than_the_screen(self):
+        _y, _x, _bh, bw = box_for(['x' * 200], 24, 80, 'keys')
+        self.assertLessEqual(bw, 80)
+
+    def test_it_says_when_more_is_coming_than_fits(self):
+        self.assertTrue(overflows([f'line {i}' for i in range(90)], 24, 80,
+                                  'keys'))
+        self.assertFalse(overflows(['one', 'two'], 24, 80, 'keys'))
 
 
 if __name__ == '__main__':

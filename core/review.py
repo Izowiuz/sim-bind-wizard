@@ -624,23 +624,53 @@ class Review:
 #: The whole list, shown by `?`. The border carries the handful you reach
 #: for constantly; this carries everything, including the capital forms --
 #: which is most of what somebody presses `?` to find out.
-KEYS = ('  ↑↓  j/k     move                g/G   first / last',
-        '  ↵  RETURN    press a control     l     choose from a list',
-        '',
-        '  c/C  SPACE   confirm this one / every proposal',
-        "  p/P          the planner's choice here / into every gap",
-        '  x/X          clear this one / every proposal',
-        '',
-        '  a            everything the game accepts, to add from',
-        '               h there reads the game again, D forgets what it read',
-        '  r/R          file this one elsewhere / rename its category',
-        '',
-        '  f            find: narrows the list, RETURN on empty clears it',
-        '  h            show or hide what each one binds',
-        '  m            the device map, and where the game was found',
-        '  w            write everything that has a control',
-        '  ?            this',
-        '  q            quit')
+#: What `?` shows. Two things it did not before.
+#:
+#: It says what the screen IS. A list of key names answers "which key"
+#: and never "what am I doing here", and the second is why somebody
+#: reaches for help in the first place.
+#:
+#: And one entry per line. It used to put two on the first two rows and
+#: one on every other, and hang a keyless continuation under `a` for the
+#: browse screen's own keys -- which belong to that screen, and are in
+#: its own footer.
+KEYS = (
+    ('head', 'NAME'),
+    ('plain', '  review — put a game\'s actions onto HOTAS controls'),
+    ('plain', ''),
+    ('head', 'DESCRIPTION'),
+    ('plain', '  One entry per thing to be able to do, and the control it'),
+    ('plain', '  got. Nothing reaches the game until w.'),
+    ('plain', ''),
+    ('head', 'MARKS'),
+    ('mine', '  +           assigned by you'),
+    ('proposed', '  ?           proposed, not accepted'),
+    ('meta', '  (none)      unassigned'),
+    ('plain', ''),
+    ('head', 'MOVING'),
+    ('plain', '  ↑↓  j k     previous / next entry'),
+    ('plain', '  g  G        first / last entry'),
+    ('plain', '  f           filter by text; empty clears'),
+    ('plain', '  h           toggle the bindings under each entry'),
+    ('plain', ''),
+    ('head', 'ASSIGNING'),
+    ('plain', '  ↵           assign by pressing a control'),
+    ('plain', '  l           assign from a list of controls that fit'),
+    ('plain', '  c  C        accept this proposal / every proposal'),
+    ('plain', '  SPACE       accept, then move down'),
+    ('plain', '  p  P        restore the proposal here / in every gap'),
+    ('plain', '  x  X        unassign this / every proposal'),
+    ('plain', ''),
+    ('head', 'THE LIST'),
+    ('plain', '  a           browse the game\'s vocabulary and add entries'),
+    ('plain', '  r           move this entry to another category'),
+    ('plain', '  R           rename this entry\'s category'),
+    ('plain', ''),
+    ('head', 'OTHER'),
+    ('plain', '  m           device map and install paths'),
+    ('plain', '  w           write the plan to the game'),
+    ('plain', '  q           quit'),
+)
 
 
 def _fold(path, width=74):
@@ -908,30 +938,67 @@ def _panel(scr, theme, rect, title, right='', keys=(), tail='', note=''):
     return y + 1, x + 2, h - 2, w - 4
 
 
+def box_for(body, h, w, title):
+    """(y, x, height, width) for a box holding `body` on an h x w screen.
+
+    Sized to what it holds and no larger: a help box with three inches of
+    blank border says the list is longer than it is. Capped at the screen,
+    which is where `overflows` takes over.
+    """
+    inner = max((len(t) for t in body), default=0)
+    bw = min(w - 2, max(len(title) + 6, inner + 4))
+    bh = min(h - 2, len(body) + 2)
+    return (h - bh) // 2, (w - bw) // 2, bh, bw
+
+
+def overflows(body, h, w, title):
+    """Is there more than the box can show at once?"""
+    return len(body) > box_for(body, h, w, title)[2] - 2
+
+
 def _popup(scr, tui, theme, title, lines):
     """A framed box over the middle of the screen. Leaves on any key.
 
     Framed by the same `lid`/`sill` the panels use, so it reads as one of
     them rather than as a different kind of thing that happens to be on
-    top. Sized to what it holds and no larger: a help box with three
-    inches of blank border says the list is longer than it is.
+    top.
+
+    Scrolls rather than truncates. It used to draw `lines[:bh - 2]` and
+    stop, so on a short terminal the help simply ended -- and what fell
+    off the bottom was the least-used half, which is the half somebody
+    opening the help is most likely to be after.
     """
-    h, w = scr.getmaxyx()
     body = [t for _tone, t in lines]
-    inner = max((len(t) for t in body), default=0)
-    bw = min(w - 2, max(len(title) + 6, inner + 4))
-    bh = min(h - 2, len(body) + 2)
-    y, x = (h - bh) // 2, (w - bw) // 2
+    top = 0
     while True:
+        h, w = scr.getmaxyx()
+        y, x, bh, bw = box_for(body, h, w, title)
+        page = bh - 2
+        more = overflows(body, h, w, title)
+        top = max(0, min(top, len(body) - page)) if more else 0
         _put(scr, y, x, ctui.lid(bw, title), theme.head)
-        for n in range(bh - 2):
+        for n in range(page):
             _put(scr, y + 1 + n, x, ctui.V + ' ' * (bw - 2) + ctui.V,
                  theme.head)
-        _put(scr, y + bh - 1, x, ctui.sill(bw, (), 'any key'), theme.head)
-        for n, (tone, text) in enumerate(lines[:bh - 2]):
+        _put(scr, y + bh - 1, x,
+             ctui.sill(bw,
+                       ('↑↓ more', 'any other key closes') if more else (),
+                       f'{top + page} of {len(body)}' if more
+                       else 'any key to close'),
+             theme.head)
+        for n, (tone, text) in enumerate(lines[top:top + page]):
             _put(scr, y + 1 + n, x + 2, text[:bw - 4], theme[tone])
         scr.refresh()
-        if tui.key(0.5) is not None:
+        k = tui.key(0.5)
+        if k is None:
+            continue
+        if more and k in ('up', 'k'):
+            top -= 1
+        elif more and k in ('down', 'j'):
+            top += 1
+        elif more and k == ' ':
+            top += page
+        else:
             return
 
 
@@ -1346,8 +1413,7 @@ def _loop(scr, rv, write, sticks):
             rv.status = ('showing what each one binds'
                          if rv.show_binds else 'binds hidden')
         elif k == '?':
-            _popup(scr, tui, tui.theme, 'keys',
-                   [('plain', line) for line in KEYS])
+            _popup(scr, tui, tui.theme, 'help', KEYS)
         elif k in ('a', 'A') and rv.catalogue:
             rv.status = _browse(scr, tui, rv)
             state['top'] = 0

@@ -1255,21 +1255,29 @@ class Footer(unittest.TestCase):
 
     WIDTH = 80
 
+    #: `?` carries its own tones now, so these read the text half. The
+    #: rules are about what the help SAYS, not how it is coloured.
+    def said(self):
+        return ' '.join(t for _tone, t in review.KEYS)
+
     def test_every_help_line_fits_a_standard_terminal(self):
-        for line in review.KEYS:
+        for _tone, line in review.KEYS:
             self.assertLessEqual(len(line), self.WIDTH - 1, line)
 
     def test_every_hint_in_the_border_is_also_in_the_help(self):
         # Otherwise the two drift and the short list becomes the only place
         # some key is named -- which is how `w write` went missing before.
-        listed = ' '.join(review.KEYS)
+        listed = self.said()
         for hint in review.HINTS:
             key = hint.split()[0]
             self.assertIn(key, listed, f'{hint!r} is nowhere in `?`')
 
     def test_moving_is_documented_at_all(self):
-        keys = ' '.join(review.KEYS)
-        for what in ('j/k', 'g/G'):
+        # What it does, not how it is spelled: the last version of this
+        # pinned 'g / G' and broke when the help went man-terse, which
+        # told nobody anything about whether moving was documented.
+        keys = self.said()
+        for what in ('previous', 'next', 'first', 'last'):
             self.assertIn(what, keys)
 
     def test_every_branch_of_the_loop_is_reachable_from_the_footer(self):
@@ -1278,9 +1286,9 @@ class Footer(unittest.TestCase):
         # the action -- so each branch needs one of its keys spelled out.
         import inspect
         src = inspect.getsource(review._loop)
-        listed = ' '.join(review.KEYS)
-        spelled = {'up': '↑', 'down': '↓', 'enter': 'RETURN', 'esc': 'q',
-                   ' ': 'c/C'}
+        listed = self.said()
+        spelled = {'up': '↑', 'down': '↓', 'enter': '↵', 'esc': 'q',
+                   ' ': 'SPACE'}
         branches = [frozenset(re.findall(r"'([^']+)'", m.group(1)))
                     for m in re.finditer(r"k (?:==|in) \(?([^:)]+)\)?:", src)]
         self.assertGreater(len(branches), 6, 'the parse found nothing')
