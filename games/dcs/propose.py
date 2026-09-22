@@ -26,6 +26,7 @@ import argparse
 import collections
 import datetime
 import json
+import tomllib
 import os
 import re
 import sys
@@ -377,14 +378,6 @@ def resolve_axis(devs, need, cmds):
 #: out. The first version read the word "finger" out of a sentence describing
 #: where a switch sits on the real jet, which is a different question, and
 #: every fix to it moved the symptom somewhere else.
-#: A tighter ceiling than the core's default for `in the air`. DCS derives its
-#: needs from a module's own vocabulary and cuts the list at a vote threshold,
-#: so there is room to spare on the good controls -- and with the ceiling at 1
-#: a sensor or radio switch reaches the borrow pass and gets a finger position
-#: instead of taking a whole keyboard button. The games that write their needs
-#: out by hand saturate those controls and must not do this: War Thunder lost
-#: its airbrake off the thumb when the core tried it globally.
-REACH = {0: 1, 1: 3, 2: 1, 3: 3}
 
 #: This module's six themes onto the core's four urgencies. The scale is the
 #: core's; only the mapping is DCS's.
@@ -457,7 +450,24 @@ def candidates(module, cmds, guide):
     return chosen
 
 
-def place(module, cmds, guide, chosen):
+_RULES = None
+
+
+def _rules():
+    """DCS's scoring: the core's, with `scoring.toml` beside this over it.
+
+    Module level because two of `place`'s three callers have no adapter to
+    ask -- `reseed` and `seed` -- and all three have to score the same way
+    or the screen and the file disagree about the same aircraft.
+    """
+    global _RULES
+    if _RULES is None:
+        with open(os.path.join(HERE, 'scoring.toml'), 'rb') as f:
+            _RULES = corneeds.merge_rules(corneeds.RULES, tomllib.load(f))
+    return _RULES
+
+
+def place(module, cmds, guide, chosen, rules=None):
     """-> core.needs.Layout.
 
     The matching is `core.needs.allocate`. What stays here is what the core
@@ -521,7 +531,7 @@ def place(module, cmds, guide, chosen):
             buttons.append(need)
 
     placed, still, free = corneeds.allocate(
-        buttons, devs, reach=REACH,
+        buttons, devs, rules=rules or _rules(),
         usable=(lambda r, c: c is not claimed) if claimed else None)
 
     for pl in placed:

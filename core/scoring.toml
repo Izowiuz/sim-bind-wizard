@@ -1,0 +1,217 @@
+# How a control is chosen. The numbers the allocator works from, in one
+# place, with what each of them is FOR beside it.
+#
+# They are judgements. "+25 because it suits the job" against "+20 because
+# it is exactly the shape asked for" is somebody's opinion about which
+# matters more, and this project moves judgements out of source -- the 382
+# in games/*/‑binds.json went first, and these are the same kind.
+#
+# A game may override any table here with a scoring.toml of its own, merged
+# key by key. Two already need to: DCS replaces the band limits, because its
+# needs come from a vocabulary cut at a vote threshold rather than from a
+# hand-written list, and has room to spare.
+#
+# What a game may NOT define is what a condition MEANS. `device_matches` is
+# a predicate over a control and a need, named here and written in
+# core/needs.py. A file that could define conditions would need an
+# expression language, and that is a worse thing to own than this file.
+
+[reach]
+# Matched as substrings of the device map's own prose. Order matters: the
+# first hit wins, which is why 'thumb' and 'index finger' both read 0.
+words = [["thumb", 0], ["index finger", 0],
+         ["without releasing", 1], ["needs letting go", 3]]
+unmeasured = 2
+means = [
+  [0, "under the thumb, or the index finger on the grip"],
+  [1, "another finger, without letting go of the grip"],
+  [2, "nobody wrote its reach down, so it is assumed middling"],
+  [3, "you let go of the grip to reach it"],
+]
+
+# When you reach for a thing, and what that lets it take. `takes` is
+# [closest allowed, furthest allowed] in the tiers above.
+[[band]]
+name  = "in a turn"
+takes = [0, 1]
+note  = """Tier 2 was tried here and measured worse: War Thunder's airbrake, \
+bombs, radar ACM, sight stabilisation and air-to-ground lock were being \
+served by the borrow pass, which runs last, so tightening this let 'in the \
+air' take the whole controls whose presses they were borrowing. Five combat \
+functions moved to the keyboard panel and five cruise functions took their \
+place. The fault is the pass order, not the ceiling."""
+
+[[band]]
+name  = "on approach"
+takes = [0, 3]
+
+[[band]]
+name  = "in the air"
+takes = [0, 3]
+
+[[band]]
+name  = "on the ramp"
+takes = [2, 3]
+note  = """Starts at 2 on purpose. Without it, something you do once with \
+the canopy open grabs a thumb position the moment one is free, and the only \
+defence left is hand-sorting the need list -- which is what War Thunder was \
+reduced to."""
+
+# The passes, in the order they run.
+[[pass]]
+name = "pinned"
+does = "a control you named, before anything else is placed"
+
+[[pass]]
+name = "floored"
+does = "the ordinary one; the limits above both hold"
+
+[[pass]]
+name = "relaxed"
+does = "nothing was left inside them, so the far end opens up"
+
+[[pass]]
+name = "borrowed"
+does = "a spare button on a control something else owns"
+
+# What makes one control beat another. `when` names a predicate defined in
+# core/needs.py; `per` names a count to multiply the weight by.
+[[term]]
+name   = "pinned"
+weight = 1000
+when   = "pinned"
+says   = "pinned to {label}"
+general = "pinned to a control you named"
+stops  = true
+note   = """A pin outranks the reach tables, not just the ranking. It was a \
++500 bonus applied AFTER the ceiling, so a pinned control the ceiling \
+excluded scored nothing and the bonus never ran: BMS's pinky shift scored \
+721 with a loose ceiling and nothing with a tight one, and moved silently to \
+the thumb mini-stick -- a control you cannot hold as a modifier while working \
+the thumb hats the shifted layer sits on."""
+
+[[term]]
+name   = "fits"
+weight = 100
+when   = "always"
+says   = "shape and count fit"
+
+[[term]]
+name   = "reach"
+weight = 12
+when   = "always"
+per    = "tier"
+says   = "leaves closer controls free"
+general = "for each tier further from your hand"
+note   = """Rewards the LEAST precious control that still does the job. Needs \
+are placed most-urgent-first, so the thumb positions are already spoken for \
+by the time anything from the ramp gets a look."""
+
+[[term]]
+name   = "device_right"
+weight = 40
+when   = "device_matches"
+says   = "on the {role}, as asked"
+general = "on the device it asked for"
+
+[[term]]
+name   = "device_wrong"
+weight = -50
+when   = "device_differs"
+says   = "wrong device; wanted the {dev}"
+general = "on a different device"
+
+[[term]]
+name   = "exact_shape"
+weight = 20
+when   = "exact_shape"
+says   = "exact shape ({kind})"
+general = "exactly the shape it asked for"
+
+[[term]]
+name   = "suits"
+weight = 25
+when   = "suits"
+says   = "suits {suits}"
+general = "suits the job it is for"
+
+[[term]]
+name   = "click"
+weight = 15
+when   = "has_click"
+says   = "has a click"
+
+[[term]]
+name   = "directions_differ"
+weight = -8
+when   = "directions_differ"
+says   = "directions differ"
+note   = """A control whose directions merely differ is still a home -- a \
+rocker is up/down and a need asking for left/right is happy enough on it."""
+
+[[term]]
+name   = "no_directions"
+weight = -60
+when   = "no_directions"
+says   = "no directions"
+note   = """A different matter, and the test has to be against the direction \
+vocabulary rather than "has any label": a selector answers '1'..'5' and an \
+encoder 'ccw'/'cw', which are positions. Reading those as directions let \
+Elite's four panel-focus actions onto a five-position switch that HOLDS \
+whichever position it is in."""
+
+[[term]]
+name   = "spare"
+weight = -4
+when   = "always"
+per    = "spare"
+says   = "{n} spare button"
+general = "for each spare button it does not need"
+plural = "{n} spare buttons"
+
+# Why a control is refused outright, before any of the above runs.
+[[gate]]
+when = "unusable"
+says = "the game cannot address it"
+
+[[gate]]
+when = "wrong_shape"
+says = "it is the wrong shape"
+
+[[gate]]
+when = "too_few"
+says = "it has too few bindable buttons"
+
+[[gate]]
+when = "out_of_reach"
+says = "its reach is outside the limits above"
+
+[shapes]
+# What may stand in for what. The first entry is the shape actually asked
+# for and scores the `exact_shape` bonus; the rest are substitutes.
+hat2      = ["hat2", "switch2", "switch3", "hat4", "selector"]
+hat4      = ["hat4", "hat8", "selector"]
+button    = ["button", "paddle", "dial"]
+paddle    = ["paddle", "button"]
+trigger   = ["trigger"]
+ministick = ["ministick"]
+encoder   = ["encoder", "dial"]
+dial      = ["dial", "encoder"]
+latch     = ["latch"]
+selector  = ["selector"]
+
+[mechanisms]
+# Controls whose buttons are one physical mechanism rather than independent
+# positions. They lend their click and nothing else.
+one = ["latch", "trigger", "selector", "encoder"]
+
+[directions]
+# Hats are captured with whichever words fitted the control at the time, so
+# a need asking for "forward" has to accept "up" from a hat that calls it so.
+forward = ["forward", "up", "fwd"]
+up      = ["up", "forward", "fwd"]
+back    = ["back", "down", "aft"]
+down    = ["down", "back", "aft"]
+left    = ["left"]
+right   = ["right"]
+push    = ["push"]

@@ -700,6 +700,40 @@ class TheDetailPanel(unittest.TestCase):
         rv.assign(gear, 'stick', at(rv, gear).ctrl)
         self.assertNotIn('moved', self.text(rv, 'Gear').lower())
 
+    # ---- the decision, drawn ----
+
+    def test_it_shows_the_reach_it_took_and_the_one_allowed(self):
+        # `Reason` has recorded both since it existed and nothing ever
+        # drew them, so the constraint the whole scoring turns on was the
+        # one thing the panel would not say.
+        got = self.text(self.rv(), 'Trim')
+        self.assertRegex(got, r'reach \d+, allowed \d+')
+
+    def test_the_terms_hang_off_the_score(self):
+        # A flat list of numbers beside a total is two facts; a tree says
+        # the second is made of the first.
+        got = self.text(self.rv(), 'Trim')
+        self.assertIn('points', got)
+        self.assertTrue(any(ln.strip().startswith(('├', '└'))
+                            for ln in got.splitlines()), got)
+
+    def test_a_lifted_ceiling_is_a_branch_of_its_own(self):
+        rv = made([Need('Airbrake', 'hat2', [[Bind('OUT')], [Bind('IN')]],
+                        urgency=IN_A_TURN)],
+                  devs=stick(fake.hat2('Panel rocker', 0,
+                                       reach=fake.PANEL)))
+        self.assertIn('floor', self.text(rv, 'Airbrake').lower())
+
+    def test_a_hand_placed_one_has_no_score_to_draw(self):
+        # You did not score it, you chose it. A tree of terms under
+        # "assigned by you" would be the screen inventing an argument.
+        rv = self.rv()
+        gear = by(rv, 'Gear')
+        ctrl = next(c for c in rv.layout.devices['stick'].groups(bindable=True)
+                    if c.label == 'Panel button')
+        rv.assign(gear, 'stick', ctrl)
+        self.assertNotIn('points', self.text(rv, 'Gear'))
+
     # ---- which button of the control ----
 
     def test_a_control_with_several_binds_says_which_is_which(self):
@@ -1057,6 +1091,91 @@ class BeforeWriting(unittest.TestCase):
         rv = self.rv()
         rv.confirm_all()
         self.assertNotIn(review.MARK_SAID[PROPOSED], self.text(rv))
+
+
+class TheRulesScreen(unittest.TestCase):
+    """How a control is chosen, drawn from the tables that choose it.
+
+    The point is not that it explains the allocator -- a hand-written
+    paragraph would too, until somebody changed a number. The point is
+    that it cannot go stale: every line it draws is read out of the table
+    the allocator itself reads, so tuning a weight rewrites the screen.
+
+    What is NOT here is the pass order, which is control flow and would
+    need a parser to derive. It is one sentence and it is written out.
+    """
+
+    def said(self, rv=None):
+        return '\n'.join(t for _tone, t in (rv or made()).rules_lines(60))
+
+    def test_it_names_every_band(self):
+        for band in corneeds.URGENCY_NAME:
+            self.assertIn(band, self.said())
+
+    def test_a_band_shows_the_reach_it_may_take(self):
+        # The number, not a word for it: `in a turn` may reach to 1 and
+        # everything else to 3, and that is the whole floor-and-ceiling
+        # rule in one row.
+        said = self.said()
+        for band, limit in zip(corneeds.URGENCY_NAME,
+                               corneeds.MAX_REACH.values()):
+            row = [ln for ln in said.splitlines() if band in ln]
+            self.assertTrue(row, band)
+            self.assertIn(str(limit), row[0])
+
+    def test_it_shows_what_each_thing_is_worth(self):
+        # The weights were the one part of the scoring the screen could
+        # not show, because they were literals inside `score()`.
+        said = self.said()
+        for term in corneeds.TERMS:
+            self.assertIn(str(term['weight']), said, term['name'])
+
+    def test_it_tells_the_story_behind_a_number(self):
+        # The reason a limit is what it is was a comment only a reader of
+        # the code ever saw. It is the most valuable text in the repo and
+        # it belongs on the screen that explains the limit.
+        noted = [x for x in list(corneeds.RULES['band'])
+                 + list(corneeds.TERMS) if 'note' in x]
+        self.assertTrue(noted, 'nothing carries a note')
+        for one in noted:
+            self.assertIn(one['note'].split('.')[0][:40], self.said())
+
+    def test_it_is_derived_and_not_transcribed(self):
+        # The test that earns the screen. Move a limit and it has to move
+        # with it; a hand-written one would not. It is also the thing DCS
+        # needs, since it tightens a band -- a screen showing the core's
+        # numbers there would be explaining somebody else's allocator.
+        mine = corneeds.merge_rules(
+            corneeds.RULES, {'band': [{'name': 'in the air',
+                                       'takes': [0, 1]}]})
+        rv = made(rules=mine)
+        row = [ln for ln in self.said(rv).splitlines()
+               if 'in the air' in ln][0]
+        self.assertIn('0 to 1', row)
+
+    def test_it_lists_every_pass(self):
+        # Derived from CAME_BY it showed three of four: that table holds
+        # what is worth SAYING about a placement, so it leaves out the
+        # ordinary pass and takes in two things that are not passes.
+        said = self.said()
+        for how, _what in corneeds.PASSES:
+            self.assertIn(how, said)
+
+    def test_it_lists_what_stands_in_for_what(self):
+        for shape, subs in corneeds.FITS.items():
+            row = [ln for ln in self.said().splitlines()
+                   if ln.strip().startswith(shape + ' ')]
+            self.assertTrue(row, shape)
+            for sub in subs[1:]:
+                self.assertIn(sub, row[0])
+
+    def test_it_names_the_reach_words_the_map_uses(self):
+        # `thumb`, `index finger` and the rest are matched as substrings
+        # of the map's own prose, so a screen that spelled them its own
+        # way would send somebody looking for words nothing contains.
+        said = self.said()
+        for word, _tier in corneeds.REACH_TIER:
+            self.assertIn(word, said)
 
 
 class Renaming(unittest.TestCase):

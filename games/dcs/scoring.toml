@@ -1,0 +1,12 @@
+# DCS's own, merged over core/scoring.toml. Only what differs.
+
+[[band]]
+name  = "in the air"
+takes = [0, 1]
+note  = """A tighter ceiling than the core's. DCS derives its needs from a \
+module's own vocabulary and cuts the list at a vote threshold, so there is \
+room to spare on the good controls -- and with the ceiling at 1 a sensor or \
+radio switch reaches the borrow pass and gets a finger position instead of \
+taking a whole keyboard button. The games that write their needs out by hand \
+saturate those controls and must not do this: War Thunder lost its airbrake \
+off the thumb when the core tried it globally."""

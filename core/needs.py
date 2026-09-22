@@ -13,79 +13,125 @@ a War Thunder action id, a BMS callback, or a pair of X4 source/code strings
 without the allocator knowing the difference.
 """
 
+import os
 import sys
+import tomllib
 import typing
+
+
+def _read_rules(path):
+    """The scoring rules, as written down."""
+    with open(path, 'rb') as f:
+        return tomllib.load(f)
+
+
+#: Which key identifies an entry in each list of the file. Merging by
+#: POSITION would mean inserting a band in the core file silently
+#: repointed every override in the family at the wrong one.
+#: `term` is keyed by a name of its own and not by `when`: three of them
+#: are conditioned on `always`, so the condition does not tell them apart
+#: and an override would have hit whichever came last.
+KEYED_BY = {'band': 'name', 'pass': 'name', 'term': 'name', 'gate': 'when'}
+
+
+def merge_rules(base, extra):
+    """`base` with `extra` laid over it. Neither is changed.
+
+    A game says only what it differs on. Two already need to: DCS replaces
+    a band's limits, because its needs come from a vocabulary cut at a
+    vote threshold rather than written out by hand, so it has room to
+    spare where the others saturate.
+
+    An entry naming something the base does not have is refused rather
+    than added. A typo would otherwise be a fifth band nothing places
+    into, or a weight applied to a condition nobody wrote.
+    """
+    #  because the file's sections are two shapes -- a list of
+    # entries keyed by name, or a plain table -- and a checker asked to
+    # join them objects at whichever branch is using one as itself.
+    out: dict[str, typing.Any] = {
+        k: (list(v) if isinstance(v, list) else dict(v))
+        for k, v in base.items()}
+    for section, given in (extra or {}).items():
+        if section not in out:
+            raise ValueError(f'{section!r} is not a section of the rules')
+        if section not in KEYED_BY:
+            out[section] = {**out[section], **given}
+            continue
+        key = KEYED_BY[section]
+        at = {row[key]: n for n, row in enumerate(out[section])}
+        for row in given:
+            if row[key] not in at:
+                raise ValueError(
+                    f'{section} {row[key]!r} is not one the rules define')
+            out[section][at[row[key]]] = {**out[section][at[row[key]]], **row}
+    return out
+
 
 from core import actions as cactions
 
 
 # ---------------------------------------------------------------- vocabulary
 
-#: What may stand in for what when the exact shape is not on the hardware.
-#: Order matters: the first entry is the shape actually asked for and scores a
-#: bonus, the rest are substitutes.
-FITS = {
-    'hat2': ('hat2', 'switch2', 'switch3', 'hat4', 'selector'),
-    'hat4': ('hat4', 'hat8', 'selector'),
-    'button': ('button', 'paddle', 'dial'),
-    'paddle': ('paddle', 'button'),
-    'trigger': ('trigger',),
-    'ministick': ('ministick',),
-    'encoder': ('encoder', 'dial'),
-    'dial': ('dial', 'encoder'),
-    'latch': ('latch',),
-    'selector': ('selector',),
-}
-
-#: WHEN you touch a thing, which is what decides how good a home it deserves.
-#: 0 you reach for with something on your tail, 3 on the ramp with the canopy
-#: open.
-IN_A_TURN, ON_APPROACH, IN_THE_AIR, ON_THE_RAMP = 0, 1, 2, 3
-URGENCY_NAME = ('in a turn', 'on approach', 'in the air', 'on the ramp')
+#: The rules, read once from the file beside this one. Everything below is
+#: a view of it: the tables the allocator works from have one definition,
+#: and it is the one the screen that explains them also reads.
+#:
+#: Read at import because it ships with the code -- it is source, not a
+#: cache and not a judgement about a game, so there is nothing here that a
+#: clone with nothing installed could be missing.
+RULES = _read_rules(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 'scoring.toml'))
 
 #: How precious a control is, read from the map's own words about reach.
-REACH_TIER = [('thumb', 0), ('index finger', 0),
-              ('without releasing', 1),
-              ('needs letting go', 3)]
+REACH_TIER = [(word, tier) for word, tier in RULES['reach']['words']]
 
-#: The worst reach an urgency can live with in the floored pass. Only a
-#: preference: the relaxed pass lifts it.
-#:
-#: Tier 2 was tried at 1, to keep `in the air` off controls you must let go of
-#: the grip for. Measured on this hardware it did the opposite of its
-#: intention: War Thunder's airbrake, bombs, radar ACM, sight stabilisation
-#: and air-to-ground lock -- all `in a turn` -- were being served by the
-#: BORROW pass, which runs last, so tightening the ceiling let `in the air`
-#: needs take the whole controls whose presses they were borrowing. Five
-#: combat functions moved from the thumb to the keyboard panel and five cruise
-#: functions took their place. The fault is the pass order, not the ceiling:
-#: borrowing happens after every main pass, so a need that can only borrow
-#: loses to anything that can claim a control outright, however less urgent.
-MAX_REACH = {0: 1, 1: 3, 2: 3, 3: 3}
-#: ...and the best it may take. Without a floor, something you do once on the
-#: ramp grabs a thumb position the moment one is free, and the only defence is
-#: hand-sorting the need list -- which is what War Thunder was reduced to.
-MIN_REACH = {0: 0, 1: 0, 2: 0, 3: 2}
+#: What a control whose reach nobody wrote down is worth.
+UNMEASURED = RULES['reach']['unmeasured']
 
-#: Controls whose buttons are one physical mechanism rather than independent
-#: positions. They may lend their click and nothing else.
-ONE_MECHANISM = ('latch', 'trigger', 'selector', 'encoder')
+#: What each tier means, in the words a reader has.
+REACH_MEANS = {tier: says for tier, says in RULES['reach']['means']}
 
-#: Hats are captured with whichever words fitted the control at the time, so a
-#: need asking for "forward" has to accept "up" from a hat that calls it that.
-SAME_WAY = {'forward': ('forward', 'up', 'fwd'),
-            'up': ('up', 'forward', 'fwd'),
-            'back': ('back', 'down', 'aft'),
-            'down': ('down', 'back', 'aft'),
-            'left': ('left',), 'right': ('right',),
-            'push': ('push',)}
+#: WHEN you touch a thing, which is what decides how good a home it
+#: deserves. 0 you reach for with something on your tail, 3 on the ramp
+#: with the canopy open.
+IN_A_TURN, ON_APPROACH, IN_THE_AIR, ON_THE_RAMP = 0, 1, 2, 3
+URGENCY_NAME = tuple(b['name'] for b in RULES['band'])
+
+#: The best reach a band may take, and the worst it may live with. Without
+#: the floor, something you do once on the ramp grabs a thumb position the
+#: moment one is free; without the ceiling, nothing is kept close.
+MIN_REACH = {n: b['takes'][0] for n, b in enumerate(RULES['band'])}
+MAX_REACH = {n: b['takes'][1] for n, b in enumerate(RULES['band'])}
+
+#: The passes, in the order `allocate` runs them.
+PASSES = tuple((p['name'], p['does']) for p in RULES['pass'])
+
+#: What makes one control beat another, and why one is refused outright.
+TERMS = RULES['term']
+GATES = RULES['gate']
+
+#: What may stand in for what when the exact shape is not on the hardware.
+#: Order matters: the first entry is the shape actually asked for and
+#: scores a bonus, the rest are substitutes.
+FITS = {shape: tuple(subs) for shape, subs in RULES['shapes'].items()}
+
+#: Controls whose buttons are one physical mechanism rather than
+#: independent positions. They may lend their click and nothing else.
+ONE_MECHANISM = tuple(RULES['mechanisms']['one'])
+
+#: Hats are captured with whichever words fitted the control at the time,
+#: so a need asking for "forward" has to accept "up" from a hat that calls
+#: it that.
+SAME_WAY = {want: tuple(names)
+            for want, names in RULES['directions'].items()}
 
 
 def reach_tier(ctrl):
     for word, tier in REACH_TIER:
         if word in (ctrl.reach or ''):
             return tier
-    return 2                            # unknown: somewhere in between
+    return UNMEASURED
 
 
 # --------------------------------------------------------------------- needs
@@ -341,104 +387,137 @@ def slots_for(need, ctrl, why=None):
 
 # ----------------------------------------------------------------- the match
 
-def score(ctrl, need, role, floor=True, usable=None, reach=None,
-          parts=None):
+#: What each condition in `scoring.toml` MEANS. The file names them and
+#: this writes them, because a condition is a predicate over a control and
+#: a need -- a file that could define one would need an expression
+#: language, and that is a worse thing to own than the file.
+#:
+#: Every one is held to the file by `tests/test_scoring.py`, both ways: a
+#: name with no predicate is a weight nobody applies, and a predicate no
+#: name reaches is a rule left behind in the code.
+WHEN = {
+    'always': lambda c, n, r, t: True,
+    'pinned': lambda c, n, r, t: bool(n.prefer) and n.prefer == c.label,
+    'device_matches': lambda c, n, r, t: n.dev == r,
+    'device_differs': lambda c, n, r, t: bool(n.dev) and n.dev != r,
+    'exact_shape': lambda c, n, r, t: c.kind == n.first_shape,
+    'suits': lambda c, n, r, t: bool(n.suits) and n.suits in c.suits,
+    'has_click': lambda c, n, r, t: n.push is not None and c.push is not None,
+    'directions_differ': lambda c, n, r, t: (not satisfies_on(n, c)
+                                             and directional(c)),
+    'no_directions': lambda c, n, r, t: (not satisfies_on(n, c)
+                                         and not directional(c)),
+}
+
+#: What a weight is multiplied by, where it is multiplied by anything.
+PER = {
+    'tier': lambda c, n, r, t: t,
+    'spare': lambda c, n, r, t: len(c.bindable_buttons) - n.wanted,
+}
+
+#: Why a control is refused outright. `x` is the run's own state, which is
+#: what tells these from `WHEN`: a gate reads the pass it is in.
+REFUSE = {
+    'unusable': lambda x: x.usable is not None and not x.usable(x.role,
+                                                                x.ctrl),
+    'wrong_shape': lambda x: x.ctrl.kind not in x.need.shapes,
+    'too_few': lambda x: len(x.ctrl.bindable_buttons) < x.need.wanted,
+    'out_of_reach': lambda x: (x.tier > x.ceiling
+                               or (x.floor and x.tier < x.lowest)),
+}
+
+
+class _Run:
+    """What a gate reads besides the control and the need."""
+
+    __slots__ = ('ctrl', 'need', 'role', 'tier', 'floor', 'ceiling', 'lowest',
+                 'usable')
+
+    def __init__(self, ctrl, need, role, tier, floor, ceiling, lowest,
+                 usable):
+        self.ctrl, self.need, self.role = ctrl, need, role
+        self.tier, self.floor = tier, floor
+        self.ceiling, self.lowest, self.usable = ceiling, lowest, usable
+
+
+def score(ctrl, need, role, floor=True, usable=None, parts=None,
+          rules=None):
     """How well a control plays this part. None means it cannot.
 
-    `reach` overrides MAX_REACH for a game whose need list is ranked and
-    truncated rather than written out by hand -- see allocate().
+    The weights and their words come from `scoring.toml`; what each
+    condition means comes from `WHEN` above. `rules` is a game's own set
+    merged over the core's -- DCS tightens one band, because its needs
+    come from a vocabulary cut at a vote threshold rather than written out
+    by hand, so it has room to spare where the others saturate.
 
     `parts` collects `(delta, what it was for)` for every term that fired,
     which is what a `Reason` carries. It is off by default because the
-    allocator scores every control against every need and wants a number to
-    compare; the winner is scored a second time, with the terms, once it has
-    won. That costs one extra call per placement and keeps the hot loop a
-    comparison. `score()` is pure, so the second call describes the first.
+    allocator scores every control against every need and wants a number
+    to compare; the winner is scored a second time, with the terms, once
+    it has won. `score()` is pure, so the second call describes the first.
 
     A term worth nothing is left out rather than listed as zero: a screen
     saying `0  suits gunnery` reads as a fact about the control, and it is
     the absence of one.
     """
+    rules = rules or RULES
     def part(delta, text):
         if parts is not None and delta:
             parts.append((delta, text))
         return delta
 
-    if usable is not None and not usable(role, ctrl):
-        return None
-    if ctrl.kind not in need.shapes:
-        return None
-    if len(ctrl.bindable_buttons) < need.wanted:
-        return None
-
-    # A pin outranks the reach tables, not just the ranking. `prefer` used to
-    # be a +500 bonus applied AFTER the ceiling, so a pinned control the
-    # ceiling excluded scored None and the bonus never ran: BMS's pinky shift,
-    # pinned to the grip pinky button, scored 721 with a loose ceiling and
-    # None with a tight one, and silently moved to the thumb mini-stick --
-    # a control you cannot hold as a modifier while working the thumb hats the
-    # shifted layer sits on. Shape and capacity still have to fit; a pin cannot
-    # put four directions on a single button.
-    if need.prefer and need.prefer == ctrl.label:
-        return part(1000, f'pinned to {ctrl.label}')
-
     tier = reach_tier(ctrl)
-    # The ceiling yields in the relaxed pass, but only for a need the borrow
-    # pass could never serve.
-    #
-    # Borrowing hands a need one spare button on a control somebody else took,
-    # so it only ever works for a need that wants ONE button -- and for those a
-    # borrowed thumb press beats a whole control you must let go of the grip to
-    # reach. Lifting the ceiling for them made it lose: War Thunder's radar ACM
-    # and sight stabilisation, both `in a turn`, left the thumb for the side
-    # dials because a whole dial became legal in the relaxed pass, which runs
-    # BEFORE borrowing.
-    #
-    # A need wanting several buttons has no such fallback. Every encoder and
-    # selector on this hardware needs letting go of the grip, so without the
-    # lift BMS's MAN RANGE knob, radar gain, ICP master mode and IFF MASTER had
-    # nowhere to go at all.
-    table = reach or MAX_REACH
+    table = {n: b['takes'][1] for n, b in enumerate(rules['band'])}
     ceiling = table[need.urgency]
+    # The ceiling yields in the relaxed pass, but only for a need the
+    # borrow pass could never serve. Borrowing hands a need one spare
+    # button on a control somebody else took, so it only works for a need
+    # wanting ONE button -- and for those a borrowed thumb press beats a
+    # whole control you must let go of the grip to reach. Lifting the
+    # ceiling for them made it lose: War Thunder's radar ACM and sight
+    # stabilisation, both `in a turn`, left the thumb for the side dials
+    # because a whole dial became legal in the relaxed pass, which runs
+    # BEFORE borrowing. A need wanting several buttons has no such
+    # fallback: every encoder and selector on this hardware needs letting
+    # go of the grip, so without the lift BMS's MAN RANGE knob, radar
+    # gain, ICP master mode and IFF MASTER had nowhere to go at all.
     if not floor and need.wanted > 1:
         ceiling = max(table.values())
-    if tier > ceiling:
-        return None
-    if floor and tier < MIN_REACH[need.urgency]:
+    run = _Run(ctrl, need, role, tier, floor, ceiling,
+               rules['band'][need.urgency]['takes'][0], usable)
+
+    # The order is here rather than in the file because it is load-bearing
+    # and has a story. A pin outranks the reach tables, not just the
+    # ranking, so it is taken BETWEEN the gates that are about the control
+    # and the one that is about the pass: `prefer` used to be a bonus
+    # applied after the ceiling, so a pinned control the ceiling excluded
+    # scored nothing and the bonus never ran -- BMS's pinky shift scored
+    # 721 with a loose ceiling and nothing with a tight one, and moved
+    # silently to a control you cannot hold as a modifier.
+    for name in ('unusable', 'wrong_shape', 'too_few'):
+        if REFUSE[name](run):
+            return None
+    for term in rules['term']:
+        if term.get('stops') and WHEN[term['when']](ctrl, need, role, tier):
+            return part(term['weight'], _says(term, ctrl, need, role, 1))
+    if REFUSE['out_of_reach'](run):
         return None
 
-    # Take the LEAST precious control that still does the job. Needs are placed
-    # most-urgent-first, so the thumb positions are already spoken for by the
-    # time anything from the ramp gets a look -- and it has no reason to want
-    # one anyway.
-    s = part(100, 'shape and count fit')
-    s += part(12 * tier, 'leaves closer controls free')
-    if need.dev == role:
-        s += part(40, f'on the {role}, as asked')
-    elif need.dev and need.dev != role:
-        s += part(-50, f'wrong device; wanted the {need.dev}')
-    if ctrl.kind == need.first_shape:
-        s += part(20, f'exact shape ({ctrl.kind})')
-    if need.suits and need.suits in ctrl.suits:
-        s += part(25, f'suits {need.suits}')
-    if need.push is not None and ctrl.push is not None:
-        s += part(15, 'has a click')
-    if not satisfies_on(need, ctrl):
-        # A control whose directions merely differ is still a home -- a rocker
-        # is up/down and a need asking for left/right is happy enough on it --
-        # so that is a nudge towards one that does match. A control with no
-        # DIRECTIONS at all is a different matter, and the test has to be
-        # against the direction vocabulary rather than "has any label": a
-        # selector answers '1'..'5' and an encoder 'ccw'/'cw', which are
-        # positions, not directions. Reading those as directions let Elite's
-        # four panel-focus actions onto a five-position switch that HOLDS
-        # whichever position it is in.
-        s += (part(-8, 'directions differ') if directional(ctrl)
-              else part(-60, 'no directions'))
-    spare = len(ctrl.bindable_buttons) - need.wanted
-    s += part(-4 * spare,
-              f'{spare} spare button' + ('' if spare == 1 else 's'))
+    s = 0
+    for term in rules['term']:
+        if term.get('stops') or not WHEN[term['when']](ctrl, need, role,
+                                                       tier):
+            continue
+        n = PER[term['per']](ctrl, need, role, tier) if 'per' in term else 1
+        s += part(term['weight'] * n, _says(term, ctrl, need, role, n))
     return s
+
+
+def _says(term, ctrl, need, role, n):
+    """A term's words, with the run's own values in them."""
+    form = term['plural'] if n != 1 and 'plural' in term else term['says']
+    return form.format(role=role, dev=need.dev, kind=ctrl.kind,
+                       suits=need.suits, label=ctrl.label, n=n)
 
 
 class Reason:
@@ -503,6 +582,18 @@ class Reason:
     def __repr__(self):
         return f'<Reason {self.how} {self.points}>'
 
+
+#: The passes, in the order `allocate` runs them. A table because the
+#: screen that explains the allocator has to read it from somewhere, and
+#: `CAME_BY` is not that somewhere: it holds what is worth SAYING about a
+#: placement, so it leaves out the ordinary pass and takes in two things
+#: that are not passes at all. Using it as the list showed three of four.
+PASSES = (
+    ('pinned', 'a control you named, before anything else is placed'),
+    ('floored', 'the ordinary one; the limits above both hold'),
+    ('relaxed', 'nothing was left inside them, so the far end opens up'),
+    ('borrowed', 'a spare button on a control something else owns'),
+)
 
 #: How a placement came about, as a reader wants it said. `floored` is
 #: absent on purpose: it is the ordinary case, and a line announcing that
@@ -674,7 +765,7 @@ class Layout:
         return sorted(out.items())
 
 
-def allocate(needs, devices, usable=None, reach=None):
+def allocate(needs, devices, usable=None, rules=None):
     """(placements, unplaced, free), most urgent first.
 
     Two passes. The first keeps the reach floor: something you do on the ramp
@@ -687,7 +778,8 @@ def allocate(needs, devices, usable=None, reach=None):
     game cannot address: BMS sees only a device's first 32 buttons, so the
     VMAX's last nineteen are real to your hand and invisible to the sim.
 
-    `reach` replaces MAX_REACH for this run, because the same ceiling means
+    `rules` is a game's own scoring merged over the core's, which is how
+    a band's limits get replaced for one game: the same ceiling means
     different things depending on where the needs came from. A hand-written
     list saturates the good controls, so a tight ceiling displaces something
     more urgent -- War Thunder lost its airbrake off the thumb that way. A list
@@ -696,6 +788,9 @@ def allocate(needs, devices, usable=None, reach=None):
     steers sensor and radio switches onto borrowed finger positions instead of
     whole keyboard buttons, which is what it was for.
     """
+    rules = rules or RULES
+    top = {n: b['takes'][1] for n, b in enumerate(rules['band'])}
+    low = {n: b['takes'][0] for n, b in enumerate(rules['band'])}
     pool = [(role, c) for role, d in sorted(devices.items())
             for c in d.groups(bindable=True)]
     taken, placed = set(), []
@@ -718,7 +813,7 @@ def allocate(needs, devices, usable=None, reach=None):
                 if j in taken:
                     continue
                 s = score(c, need, role, floor=floor,
-                          usable=usable, reach=reach)
+                          usable=usable, rules=rules)
                 if s is not None and (best_s is None or s > best_s):
                     best, best_s = j, s
             if best is not None and need.prefer and floor \
@@ -741,12 +836,14 @@ def allocate(needs, devices, usable=None, reach=None):
             # second opinion -- and the hot loop above stays a comparison
             # between numbers instead of building a record per candidate.
             terms = []
-            score(ctrl, need, role, floor=floor, usable=usable, reach=reach,
-                  parts=terms)
-            table = reach or MAX_REACH
+            score(ctrl, need, role, floor=floor, usable=usable,
+                  rules=rules, parts=terms)
+            # The BAND's ceiling, not the lifted one. The relaxed pass
+            # raises it, and recording the raised number made a placement
+            # that had reached past the floor read as one that had not --
+            # `how` is what says the floor came off.
+            table = top
             ceiling = table[need.urgency]
-            if not floor and need.wanted > 1:
-                ceiling = max(table.values())
             why = Reason(
                 'pinned' if need.prefer and need.prefer == ctrl.label
                 else ('floored' if floor else 'relaxed'),
@@ -783,7 +880,7 @@ def allocate(needs, devices, usable=None, reach=None):
         for j, (role, c) in enumerate(pool):
             if usable is not None and not usable(role, c):
                 continue
-            if reach_tier(c) > (reach or MAX_REACH)[need.urgency]:
+            if reach_tier(c) > top[need.urgency]:
                 continue
             spare = [b for b in c.bindable_buttons
                      if (role, b) not in occupied]
@@ -811,8 +908,7 @@ def allocate(needs, devices, usable=None, reach=None):
             # airbrake, bombs and sight stabilisation off the thumb onto the
             # middle-finger hat for no gain to anybody. (DCS's own borrow pass,
             # which this is lifted from, still has the old sign.)
-            s = 60 + 12 * ((reach or MAX_REACH)[ON_THE_RAMP]
-                           - reach_tier(c))
+            s = 60 + 12 * (top[ON_THE_RAMP] - reach_tier(c))
             s += 30 if need.dev == role else 0
             if j not in taken:
                 # Prefer borrowing a spare position over opening a control
@@ -832,7 +928,7 @@ def allocate(needs, devices, usable=None, reach=None):
         # there rather than in `score()`, so the terms are rebuilt here from
         # what decided them. They still have to add up to `_s`.
         terms = [(60, 'last pass; still free')]
-        lent = 12 * ((reach or MAX_REACH)[ON_THE_RAMP] - reach_tier(ctrl))
+        lent = 12 * (top[ON_THE_RAMP] - reach_tier(ctrl))
         if lent:
             terms.append((lent, 'best of what was left'))
         if need.dev == role:
@@ -841,7 +937,7 @@ def allocate(needs, devices, usable=None, reach=None):
             terms.append((-15, 'opens an untouched control'))
         why = Reason('borrowed', points=_s, parts=terms,
                      tier=reach_tier(ctrl),
-                     ceiling=(reach or MAX_REACH)[need.urgency])
+                     ceiling=top[need.urgency])
         slots = [(button, need.bindings[0])]
         hand_out(slots, role, why, [(button, 'the one spare button')])
         placed.append(Placement(need, role, ctrl, slots, _s, why))

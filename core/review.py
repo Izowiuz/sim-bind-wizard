@@ -111,7 +111,7 @@ class Review:
 
     def __init__(self, layout, title, subtitle='', describe=None,
                  paths=(), catalogue=(), source='', save=None,
-                 harvest=None, drop=None):
+                 harvest=None, drop=None, rules=None):
         self.layout = layout
         self.title = title
         self.subtitle = subtitle
@@ -141,6 +141,11 @@ class Review:
         #: deliberately not in it.
         self.harvest = harvest
         self.drop = drop
+        #: The scoring this game plays by: the core's, with the game's
+        #: over the top. The screen that explains the allocator has to
+        #: read the same set the allocator ran on, or it is explaining
+        #: somebody else's -- DCS tightens a band.
+        self.rules = rules or corneeds.RULES
         self.status = ''
         #: what `f` narrowed the action level to. Matched against the
         #: need's own name, not against what it binds: the question `f`
@@ -576,6 +581,105 @@ class Review:
         self.mark[need] = UNSET
         return f'{action.name} added to {category}{self._kept()}'
 
+    def rules_lines(self, width=60):
+        """How a control is chosen, read out of the tables that choose it.
+
+        In the order somebody asks, not the order the code runs. The first
+        version was seven tables with no thread: it never said what the
+        allocator was FOR, used `band`, `reach`, `floor` and `ceiling`
+        without defining any of them, and printed 0, 1 and 3 without
+        saying that lower means closer to your hand.
+
+        Every number is still read from the table the allocator itself
+        reads -- tune a limit and this rewrites itself -- but a number
+        with nothing around it explained nothing.
+        """
+        out = []
+
+        def say(tone, text='', lead=''):
+            out.extend((tone, piece) for piece in _fit(width, text, lead))
+
+        say('head', 'WHAT THIS DOES')
+        say('plain', 'There are more things you want bound than there '
+                     'are good buttons to put them on.', lead='  ')
+        say('plain')
+        say('plain', 'So every binding is marked with WHEN you reach for '
+                     'it — with someone on your tail, or parked with the '
+                     'canopy open. And every control is marked with what '
+                     'reaching for it costs: a thumb, or letting go of '
+                     'the grip.', lead='  ')
+        say('plain')
+        say('plain', 'Urgent bindings pick first. Cheap controls are held '
+                     'back from the unhurried ones until everything else '
+                     'has had a turn.', lead='  ')
+        say('plain')
+
+        say('head', 'HOW FAR A CONTROL IS')
+        for tier in sorted(corneeds.REACH_MEANS):
+            say('plain', corneeds.REACH_MEANS[tier], lead=f'  {tier}  ')
+        say('meta', 'Lower is closer. Read off the device map\'s own '
+                    'words: ' + ', '.join(w for w, _t in corneeds.REACH_TIER),
+            lead='  ')
+        say('plain')
+
+        say('head', 'WHEN YOU REACH FOR IT')
+        for band in self.rules['band']:
+            low, high = band['takes']
+            say('plain', f'may take {low} to {high}',
+                lead=f'  {band["name"]:16} ')
+            if band.get('note'):
+                say('note', band['note'], lead='     ')
+        say('plain')
+
+        say('head', 'WHICH BINDING GOES FIRST')
+        say('plain', 'Anything you pinned to a control by name. Then '
+                     'the rest, most urgent first. Two of equal urgency '
+                     'are split by how many of the game\'s own profiles '
+                     'bind each one.', lead='  ')
+        say('plain')
+
+        say('head', 'WHEN IT REFUSES A CONTROL')
+        for line in ('the game cannot address it',
+                     'it is the wrong shape',
+                     'it has too few bindable buttons',
+                     'its reach is outside the limits above'):
+            say('plain', line, lead='  · ')
+        say('plain')
+
+        say('head', 'HOW MANY TRIES IT GETS')
+        say('meta', f'{len(corneeds.PASSES)}, each giving up more than the '
+                    f'last:', lead='  ')
+        for n, (how, what) in enumerate(corneeds.PASSES, 1):
+            say('plain', what, lead=f'  {n}  {how:9} ')
+        say('plain')
+
+        say('head', 'WHAT MAKES ONE CONTROL BEAT ANOTHER')
+        for term in self.rules['term']:
+            # `says` carries the run's own values -- `{role}`, `{label}` --
+            # and there is no run here, so a term that needs them says the
+            # same rule with nothing in the holes.
+            say('plain', term.get('general', term['says']),
+                lead=f'  {term["weight"]:+5}  ')
+            if term.get('note'):
+                say('note', term['note'], lead='         ')
+        say('plain')
+
+        say('head', 'WHAT COUNTS AS THE RIGHT SHAPE')
+        say('meta', f'{"asked for":11} will also take', lead='  ')
+        for shape, subs in self.rules['shapes'].items():
+            say('plain', ', '.join(subs[1:]) or 'nothing else',
+                lead=f'  {shape:11} ')
+        say('plain')
+        say('meta', 'These lend their click and nothing else: '
+                    + ', '.join(corneeds.ONE_MECHANISM) + '.', lead='  ')
+        say('plain')
+        say('meta', 'A binding that names a direction accepts another '
+                    'word for it:', lead='  ')
+        for want, names in corneeds.SAME_WAY.items():
+            if len(names) > 1:
+                say('plain', ', '.join(names[1:]), lead=f'  {want:11} ')
+        return out
+
     # ----------------------------------------------------------------- rows
 
     def matches(self, need):
@@ -694,6 +798,7 @@ KEYS = (
     ('plain', '  R           rename the category it is in; all of it moves'),
     ('plain', ''),
     ('head', 'OTHER'),
+    ('plain', '  s           how a control is chosen'),
     ('plain', '  m           device map and install paths'),
     ('plain', '  w           write the plan to the game'),
     ('plain', '  q           quit'),
@@ -927,22 +1032,32 @@ def _why(rv, need, p, say):
         say('meta', 'proposal accepted')
 
     say('plain')
-    say('meta', corneeds.URGENCY_NAME[need.urgency])
-    if need.rank:
-        say('meta', f'{ctui.plural(need.rank, "factory profile")} bind it')
+
+    # Drawn as what it is: a band, the gates that band imposed, and a
+    # score made of named terms. It was a flat list of lines, so the one
+    # thing the whole scoring turns on -- how far the reach ceiling let it
+    # go -- was recorded in `Reason` and shown nowhere.
+    say('subhead', corneeds.URGENCY_NAME[need.urgency])
     if r is None:
         say('note', 'no account recorded')
         return
+    branch = []
+    if r.tier is not None and r.ceiling is not None:
+        branch.append(('meta', f'reach {r.tier}, allowed {r.ceiling}'))
     if r.how in corneeds.CAME_BY:
-        say('note', corneeds.CAME_BY[r.how])
-
-    # Biggest first: the term that decided it should be the one read first,
-    # and the order `score()` applies them in is an accident of how the
-    # rules are written down rather than of what mattered.
-    if r.parts:
-        say('plain')
-        for delta, what in sorted(r.parts, key=lambda q: -abs(q[0])):
-            say('meta', what, lead=f'{delta:+5} ')
+        branch.append(('note', corneeds.CAME_BY[r.how]))
+    if need.rank:
+        branch.append(('meta', ctui.plural(need.rank, 'factory profile')
+                       + ' bind it'))
+    terms = sorted(r.parts, key=lambda q: -abs(q[0]))
+    if terms:
+        branch.append(('plain', f'{r.points} points'))
+    for n, (tone, text) in enumerate(branch):
+        last = n == len(branch) - 1
+        say(tone, text, lead=f'  {"└" if last else "├"} ')
+    for n, (delta, what) in enumerate(terms):
+        last = n == len(terms) - 1
+        say('meta', what, lead=f'    {"└" if last else "├"} {delta:+5} ')
 
     if need.note:
         say('plain')
@@ -1447,12 +1562,13 @@ def _browse(scr, tui, rv):
 # ------------------------------------------------------------------ the loop
 
 def run(layout, title, subtitle='', describe=None, write=None, paths=(),
-        catalogue=(), source='', save=None, harvest=None, drop=None):
+        catalogue=(), source='', save=None, harvest=None, drop=None,
+        rules=None):
     """Show the need list, let it be filled, write what has a control.
     Returns the `Layout` that was written, or None if nothing was."""
     sticks = Sticks(layout)
     rv = Review(layout, title, subtitle, describe, paths, catalogue,
-                source, save, harvest, drop)
+                source, save, harvest, drop, rules)
     try:
         return curses.wrapper(_loop, rv, write, sticks)
     finally:
@@ -1557,6 +1673,9 @@ def _loop(scr, rv, write, sticks):
                 # at means nothing now. Every other shape change here
                 # resets to the top; that would lose what you were doing.
                 sel = _row_of(rv, need, sel)
+        elif k == 's':
+            _popup(scr, tui, tui.theme, 'how a control is chosen',
+                   rv.rules_lines(_inner(scr)), full=True)
         elif k in ('m', 'M'):
             _popup(scr, tui, tui.theme, 'device map', rv.map_lines(),
                    full=True)

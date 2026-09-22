@@ -46,6 +46,7 @@ import os
 import subprocess
 import sys
 import time
+import tomllib
 import typing
 
 from core import actions as cactions
@@ -464,6 +465,20 @@ class Adapter(abc.ABC):
         return out or ['nothing to remove']
 
     @typing.final
+    def rules(self) -> dict:
+        """The scoring rules: the core's, with this game's over the top.
+
+        A game that has nothing to say gets the core's unchanged, so
+        dropping a `scoring.toml` in beside a planner is all it takes --
+        no wiring, and nothing to remember to call.
+        """
+        mine = os.path.join(self.here, 'scoring.toml')
+        if not os.path.exists(mine):
+            return corneeds.RULES
+        with open(mine, 'rb') as f:
+            return corneeds.merge_rules(corneeds.RULES, tomllib.load(f))
+
+    @typing.final
     def save_needs(self, needs) -> str:
         """Write the judgements down, or say why there is nowhere to.
 
@@ -730,7 +745,7 @@ class Planner(Adapter):
                     paths=self.paths(args), catalogue=self.catalogue(),
                     source=os.path.join('games', self.game, self.CATALOGUE),
                     save=self.save_needs, harvest=self.reharvest,
-                    drop=self.drop_cache)
+                    drop=self.drop_cache, rules=self.rules())
 
 
 class Proposer(Adapter):
