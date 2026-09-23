@@ -570,7 +570,8 @@ def show(layout, why=False, free_only=False):
                       'a bug in slots_for')
                 continue
             out.append(f'  {need.what}')
-            out.append(f'{"":<4}{ctrl.label}  ({role}, {ctrl.reach})')
+            out.append(f'{"":<4}{ctrl.label}  ({role},'
+                       f' {corneeds.reach_said(ctrl)})')
             for b in sorted(mine, key=lambda b: b['dx']):
                 d = ctrl.direction(b['local']) or 'press'
                 extra = f'   / release: {b["release"]}' if b['release'] else ''
@@ -713,7 +714,7 @@ def _sheet(layout):
                     else '/'.join(n.shape)) for n in unmet]
     sh.free = [(role, c.label,
                 ', '.join(str(off[role] + x) for x in c.bindable_buttons),
-                c.reach) for role, c in free]
+                corneeds.reach_said(c)) for role, c in free]
     return sh
 
 

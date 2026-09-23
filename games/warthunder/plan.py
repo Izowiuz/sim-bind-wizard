@@ -368,7 +368,7 @@ def _sheet(layout):
                     else '/'.join(n.shape)) for n in unmet]
     sh.free = [(role, c.label,
                 ', '.join(str(off[role][1] + x) for x in c.bindable_buttons),
-                c.reach) for role, c in free]
+                corneeds.reach_said(c)) for role, c in free]
     return sh
 
 
@@ -540,7 +540,7 @@ class WarThunder(adapter.Planner):
         out = [f'{len(layout.free)} controls left free:']
         for role, c in layout.free:
             out.append(f'  {role:8s} {c.kind:9s} {str(c.buttons):18s} '
-                       f'{c.label}   [{c.reach}]')
+                       f'{c.label}   [{corneeds.reach_said(c)}]')
         return out
 
 

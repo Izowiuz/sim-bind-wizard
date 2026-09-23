@@ -376,7 +376,7 @@ def _sheet(layout, profile):
             ident=AXIS_CODE[a.hid],
             does=f'{context_of(ident)}: {harvest.readable(ident)}'))
 
-    sh.free = [(r, c.label, '', c.reach or '') for r, c in free]
+    sh.free = [(r, c.label, '', corneeds.reach_said(c)) for r, c in free]
     sh.unplaced = [(n.what, n.shape if isinstance(n.shape, str)
                     else '/'.join(n.shape)) for n in unmet]
     sh.note('Writing it', [

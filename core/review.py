@@ -361,7 +361,7 @@ class Review:
                             f'  {MARK[state] if state else " "} '
                             f'{ctrl.kind:10} {ctrl.label[:24]:24} '
                             f'{(btns or "-")[:16]:16} '
-                            f'{_hand(ctrl.reach):20.20} '
+                            f'{_hand(corneeds.reach_said(ctrl)):20.20} '
                             + (held.what if held else
                                ('' if ctrl.bindable
                                 else '(carries nothing)'))))
@@ -617,9 +617,10 @@ class Review:
         say('head', 'HOW FAR A CONTROL IS')
         for tier in sorted(corneeds.REACH_MEANS):
             say('plain', corneeds.REACH_MEANS[tier], lead=f'  {tier}  ')
-        say('meta', 'Lower is closer. Read off the device map\'s own '
-                    'words: ' + ', '.join(w for w, _t in corneeds.REACH_TIER),
-            lead='  ')
+        say('meta', 'Lower is closer. Measured on the device map, finger'
+                    ' by finger, for the desk this layout is for. A control'
+                    f' nobody has measured sorts at {corneeds.UNMEASURED},'
+                    ' below all of them.', lead='  ')
         say('plain')
 
         say('head', 'WHEN YOU REACH FOR IT')
@@ -962,8 +963,9 @@ def _side(rv, row, width=DETAIL_MIN - 4):
         say('meta', dev.product)
     say('plain', p.ctrl.label)
     say('meta', f'{p.ctrl.kind} · {ctui.plural(len(p.slots), "binding")}')
-    if p.ctrl.reach:
-        say('meta', p.ctrl.reach)
+    said = corneeds.reach_said(p.ctrl)
+    if said:
+        say('meta', said)
 
     binds = rv.binds(need)
     if binds:
@@ -1091,138 +1093,6 @@ def _panel(scr, theme, rect, title, right='', keys=(), tail='', note=''):
     _put(scr, y + h - 1, x, ctui.sill(w, keys, tail, note),
          theme.note if note else theme.head)
     return y + 1, x + 2, h - 2, w - 4
-
-
-def box_for(body, h, w, title, full=False):
-    """(y, x, height, width) for a box holding `body` on an h x w screen.
-
-    Sized to what it holds and no larger: a help box with three inches of
-    blank border says the list is longer than it is. Capped at the screen,
-    which is where `overflows` takes over.
-
-    `full` takes the whole terminal instead. A notice you read wants to be
-    the size of what it says; a list you WORK in -- the vocabulary, the
-    device map -- wants every row it can get, and centring it in a margin
-    costs two of them for nothing.
-    """
-    if full:
-        return 0, 0, h, w
-    inner = max((len(t) for t in body), default=0)
-    bw = min(w - 2, max(len(title) + 6, inner + 4))
-    bh = min(h - 2, len(body) + 2)
-    return (h - bh) // 2, (w - bw) // 2, bh, bw
-
-
-def overflows(body, h, w, title, full=False):
-    """Is there more than the box can show at once?"""
-    return len(body) > box_for(body, h, w, title, full)[2] - 2
-
-
-def _box(scr, theme, title, lines, keys=(), tail='', top=0, sel=None,
-         full=False):
-    """Draw a framed box over the middle of the screen. Returns its page.
-
-    Framed by the same `lid`/`sill` the panels use, so every box on this
-    screen -- the help, the control list, the prompt to press something --
-    reads as one kind of thing rather than three.
-    """
-    body = [t for _tone, t in lines]
-    h, w = scr.getmaxyx()
-    y, x, bh, bw = box_for(body, h, w, title, full)
-    page = bh - 2
-    _put(scr, y, x, ctui.lid(bw, title), theme.head)
-    for n in range(page):
-        _put(scr, y + 1 + n, x, ctui.V + ' ' * (bw - 2) + ctui.V, theme.head)
-    _put(scr, y + bh - 1, x, ctui.sill(bw, keys, tail), theme.head)
-    for n, (tone, text) in enumerate(lines[top:top + page]):
-        lit = theme.sel if sel is not None and top + n == sel else theme[tone]
-        _put(scr, y + 1 + n, x + 2, text[:bw - 4], lit)
-    scr.refresh()
-    return page
-
-
-def _popup(scr, tui, theme, title, lines, full=False):
-    """A box you read and dismiss.
-
-    Scrolls rather than truncates. It used to draw `lines[:bh - 2]` and
-    stop, so on a short terminal the help simply ended -- and what fell
-    off the bottom was the least-used half, which is the half somebody
-    opening the help is most likely to be after.
-    """
-    body = [t for _tone, t in lines]
-    top = 0
-    while True:
-        h, w = scr.getmaxyx()
-        page = box_for(body, h, w, title, full)[2] - 2
-        more = overflows(body, h, w, title, full)
-        top = max(0, min(top, len(body) - page)) if more else 0
-        _box(scr, theme, title, lines,
-             ('↑↓ more', 'any other key closes') if more else (),
-             f'{top + page} of {len(body)}' if more else 'any key to close',
-             top, full=full)
-        k = tui.key(0.5)
-        if k is None:
-            continue
-        if more and k in ('up', 'k'):
-            top -= 1
-        elif more and k in ('down', 'j'):
-            top += 1
-        elif more and k == ' ':
-            top += page
-        else:
-            return
-
-
-def _inner(scr):
-    """How wide a full-screen box's content may be."""
-    return max(20, scr.getmaxyx()[1] - 4)
-
-
-def _confirm(scr, tui, title, lines):
-    """Show what is about to happen and wait for a yes. True if given.
-
-    RETURN rather than a typed word: this is the thing the screen is for,
-    it is pressed often, and every writer in the family backs the file up
-    before it touches it. What was missing was not a gate -- it was seeing
-    what the keystroke would do while there was still time to say no.
-    """
-    while True:
-        _box(scr, tui.theme, title, lines,
-             ('↵ do it', 'ESC cancel'), tail='')
-        k = tui.key(0.5)
-        if k == 'enter':
-            return True
-        if k in ('esc', 'q', 'Q'):
-            return False
-
-
-def _choose(scr, tui, title, lines, tail=''):
-    """A box you pick a line out of. Returns the index, or None on ESC."""
-    sel = top = 0
-    while True:
-        h, w = scr.getmaxyx()
-        page = box_for([t for _tone, t in lines], h, w, title)[2] - 2
-        sel = max(0, min(sel, len(lines) - 1))
-        if sel < top:
-            top = sel
-        elif sel >= top + page:
-            top = sel - page + 1
-        _box(scr, tui.theme, title, lines,
-             ('↑↓ move', '↵ choose', 'ESC back'),
-             f'{sel + 1} of {len(lines)}', top, sel)
-        k = tui.key(0.5)
-        if k in ('up', 'k'):
-            sel -= 1
-        elif k in ('down', 'j'):
-            sel += 1
-        elif k == 'g':
-            sel = 0
-        elif k == 'G':
-            sel = len(lines)
-        elif k == 'enter':
-            return sel
-        elif k == 'esc':
-            return None
 
 
 def _draw(scr, rv, sel, state, theme):
@@ -1445,7 +1315,7 @@ def _pick_category(scr, tui, rv):
     have is how you end up with two.
     """
     known = rv.categories()
-    got = _choose(scr, tui, 'file it under',
+    got = tui.choose('file it under',
                   [('plain', k) for k in known] + [('meta', 'a new one...')])
     if got is None:
         return None
@@ -1653,7 +1523,7 @@ def _loop(scr, rv, write, sticks):
             rv.status = ('showing what each one binds'
                          if rv.show_binds else 'binds hidden')
         elif k == '?':
-            _popup(scr, tui, tui.theme, 'help', KEYS)
+            tui.popup('help', KEYS)
         elif k in ('a', 'A') and rv.catalogue:
             rv.status = _browse(scr, tui, rv)
             state['top'] = 0
@@ -1674,10 +1544,10 @@ def _loop(scr, rv, write, sticks):
                 # resets to the top; that would lose what you were doing.
                 sel = _row_of(rv, need, sel)
         elif k == 's':
-            _popup(scr, tui, tui.theme, 'how a control is chosen',
-                   rv.rules_lines(_inner(scr)), full=True)
+            tui.popup('how a control is chosen',
+                   rv.rules_lines(tui.inner()), full=True)
         elif k in ('m', 'M'):
-            _popup(scr, tui, tui.theme, 'device map', rv.map_lines(),
+            tui.popup('device map', rv.map_lines(),
                    full=True)
         elif k in ('w', 'W'):
             written = _write(scr, tui, rv, write) or written
@@ -1719,7 +1589,7 @@ def _by_press(scr, tui, rv, need, sticks):
     else:
         lines += [('plain', '  any position; the whole control is taken'),
                   ('plain', '  and the bindings go in its own order')]
-    _box(scr, tui.theme, need.what, lines, tail='ESC leaves it as it is')
+    tui.box(need.what, lines, tail='ESC leaves it as it is')
     ccapture.drain(devices, tui)
 
     got = ccapture.wait_input(devices, want_axis=False, tui=tui)
@@ -1736,9 +1606,10 @@ def _by_hand(scr, tui, rv, need):
     fits = rv.fits(need)
     if not fits:
         return f'{need.what}: nothing free has that shape'
-    labels = [('plain', f'{role:9} {c.label:30} {c.kind:9} {c.reach or ""}')
+    labels = [('plain', f'{role:9} {c.label:30} {c.kind:9} '
+                                f'{corneeds.reach_said(c)}')
               for role, c in fits]
-    idx = _choose(scr, tui, f'{need.what} — wants {need.first_shape}', labels)
+    idx = tui.choose(f'{need.what} — wants {need.first_shape}', labels)
     if idx is None:
         return f'{need.what}: left as it was'
     role, ctrl = fits[idx]
@@ -1788,7 +1659,7 @@ def _write(scr, tui, rv, write):
     if not kept.placed:
         rv.status = 'nothing has a control, so there is nothing to write'
         return None
-    if not _confirm(scr, tui, 'write', _write_plan(rv, _inner(scr))):
+    if not tui.confirm('write', _write_plan(rv, tui.inner())):
         rv.status = 'not written'
         return None
     # Every writer in the family reports by printing, and some warn on stderr.
@@ -1811,7 +1682,7 @@ def _write(scr, tui, rv, write):
     # reader's problem.
     said += [('unset' if str(ln).startswith(('refused:', 'ERROR:'))
               else 'plain', str(ln)) for ln in (extra or [])]
-    _popup(scr, tui, tui.theme, 'written' if written else 'not written',
+    tui.popup('written' if written else 'not written',
            said or [('meta', 'the writer said nothing')])
     rv.status = 'written' if written else 'not written'
     return written

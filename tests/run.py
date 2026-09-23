@@ -12,6 +12,11 @@ test suite that stops being run.
 `sim-device-map` has to be findable -- the fake hardware is built out of its
 classes on purpose (see fake.py) -- so a missing map is reported as the one
 thing wrong rather than as thirty broken imports.
+
+The tests that run a real planner need a desk named, because the map will
+not guess which one you are at and neither will this. Whichever is first on
+file is used, unless SIM_DEVICE_PROFILE already says otherwise: the tests
+are about a planner returning a layout, not about which desk it was for.
 """
 
 import os
@@ -31,10 +36,14 @@ def main():
 
     from core import devmap
     try:
-        devmap.load()
+        dm = devmap.load()
     except SystemExit as e:
         print(e, file=sys.stderr)
         return 2
+    if not os.environ.get('SIM_DEVICE_PROFILE'):
+        on_file = dm.load_profiles()
+        if on_file:
+            os.environ['SIM_DEVICE_PROFILE'] = on_file[0].name
 
     loader = unittest.TestLoader()
     if args:

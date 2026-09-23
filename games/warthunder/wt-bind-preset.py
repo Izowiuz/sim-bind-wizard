@@ -366,7 +366,7 @@ def compose(layout, targets, say=print):
     if dropped:
         say('  -- joystick bindings cleared (nothing in the plan wants them):')
         for a in sorted(dropped):
-            say(f'       {a}   {lang["actions"].get(a, [a])[0]}')
+            say(f'       {a}   {labels.get(a, [a])[0]}')
 
     for role, idx, action, _ in BUTTONS:
         wt = dev[role]['btn_off'] + idx

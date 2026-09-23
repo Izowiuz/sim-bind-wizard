@@ -36,25 +36,56 @@ from core import devmap                                      # noqa: E402
 devicemap = devmap.load()
 
 # ---------------------------------------------------------------- the reaches
+#
+# A reach is now a place a hand can be, not a sentence: `(level, finger)`,
+# which the map turns into a tier by how far the level is from flying.
+# The wording used to be matched on substrings, so a typo here quietly
+# tested a tier nobody shipped.
 
-#: tier 0 -- under the thumb, or the index finger on the grip
-THUMB = 'thumb, without releasing grip'
-INDEX = 'index finger, on the grip'
-#: tier 1 -- another finger, still holding on
-PINKY = 'pinky finger, without releasing grip'
-MIDDLE = 'middle/ring finger, without releasing grip'
-#: tier 3 -- let go of the grip to get there
-PANEL = 'needs letting go'
-#: tier 2 -- what an uncaptured control scores, by falling through the table
-UNSAID = ''
+#: tier 0 -- the hand where it lives, thumb or index finger
+THUMB = ('HOME', 'thumb')
+INDEX = ('HOME', 'index')
+#: tier 1 -- another finger stretching, the hand still on the grip
+PINKY = ('EXTENDED', 'pinky')
+MIDDLE = ('EXTENDED', 'middle')
+#: tier 3 -- let go of the device to get there
+PANEL = ('OFF', '')
+#: nobody has measured it. Not tier 2: there is no answer at all, and a
+#: number here would be one nothing could tell from a measured one.
+UNSAID = None
 
 
 # --------------------------------------------------------------- the controls
 
-def control(kind, label, buttons=(), **kw):
-    """One entry for a device's `[[group]]` table."""
-    g = {'kind': kind, 'label': label, 'buttons': list(buttons)}
+def control(kind, label, buttons=(), names=(), dirs=(), stages=(),
+            positions=(), push=None, rest_contact=None, travel_contact=None,
+            transient=(), reach=UNSAID, **kw):
+    """One entry for a device's `[[group]]` table.
+
+    `reach` is not a field on a control any more -- where a thing ended up
+    is a fact about the desk -- so it is carried here and `device` lays it
+    out as the desk's `access`.
+    """
+    said = list(names or dirs or stages or positions)
+    latching = kind in devicemap.LATCHING
+    states = []
+    for n, b in enumerate(buttons):
+        name = said[n] if n < len(said) else ''
+        states.append({'button': b}
+                      | ({'name': name, 'direction': name} if name and dirs
+                         else {'name': name} if name else {})
+                      | ({'latching': True} if latching else {}))
+    for role, b in (('push', push), ('rest', rest_contact),
+                    ('travel', travel_contact)):
+        if b is not None:
+            states.append({'name': role, 'button': b, 'role': role}
+                          | ({'latching': True} if role != 'push' else {}))
+    for b in transient:
+        states.append({'name': 'passing', 'button': b, 'role': 'transient'})
+    g = {'kind': kind, 'label': label, 'id': devicemap.slug(label),
+         'states': states}
     g.update(kw)
+    g['reach'] = reach                  # lifted out again by `device`
     return g
 
 
@@ -109,7 +140,7 @@ def axis(index, kind, label, hid='X', rest='centred', **kw):
 # ---------------------------------------------------------------- the devices
 
 def device(kind, controls=(), axes=(), slug=None, product=None, usb=None,
-           serial=None, evdev=None, games=None):
+           serial=None, evdev=None, games=None, hand=''):
     """A `devicemap.Device` that no one ever plugged in."""
     slug = slug or f'fake-{kind}'
     ident = {'usb': usb or '0000:0000', 'serial': serial or 'FAKE',
@@ -125,18 +156,37 @@ def device(kind, controls=(), axes=(), slug=None, product=None, usb=None,
         'identity': [ident],
         'fingerprint': {},
         'axis': list(axes),
-        'group': list(controls),
+        'group': [{k: v for k, v in c.items() if k != 'reach'}
+                  for c in controls],
     }
-    return devicemap.Device(data, f'<fake:{slug}>')
+    dev = devicemap.Device(data, f'<fake:{slug}>')
+    return dev.under(desk(hand, (slug, controls)))
+
+
+def desk(hand='', *devices):
+    """A `Profile` laying these controls out under one hand.
+
+    A reach is a fact about the desk, so it cannot be built into the
+    device: two devices in one test have to be under the same desk or
+    `compatible` has no pair of hands to compare.
+    """
+    said = []
+    for slug, controls in devices:
+        access = {}
+        for c in controls:
+            if c.get('reach') is None:
+                continue
+            level, finger = c['reach']
+            access[c['id']] = [{'part': 'panel' if level == 'OFF' else 'grip',
+                                'level': level, 'finger': finger}]
+        said.append({'slug': slug, 'hand': hand, 'access': access})
+    return devicemap.Profile({'name': 'a desk in a test', 'device': said},
+                             '<test-desk>')
 
 
 def _all(group):
-    out = list(group.get('buttons', []))
-    for key in ('push', 'rest_contact', 'travel_contact'):
-        if group.get(key) is not None:
-            out.append(group[key])
-    out.extend(group.get('transient', []))
-    return out
+    return [st['button'] for st in group.get('states') or []
+            if st.get('button') is not None]
 
 
 def hotas(stick_controls=(), throttle_controls=(),

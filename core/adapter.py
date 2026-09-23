@@ -384,7 +384,8 @@ class Adapter(abc.ABC):
         return []
 
     def free(self, layout) -> list[str]:
-        return [f'  {role:9} {c.label:34} {c.kind:10} {c.reach or ""}'
+        return [f'  {role:9} {c.label:34} {c.kind:10} '
+                f'{corneeds.reach_said(c)}'
                 for role, c in layout.free]
 
     def extra(self, args, layout) -> list[str] | None:
@@ -532,6 +533,8 @@ class Adapter(abc.ABC):
         p = argparse.ArgumentParser(
             description=sys.modules[type(self).__module__].__doc__,
             formatter_class=argparse.RawDescriptionHelpFormatter)
+        p.add_argument('--desk', metavar='NAME',
+                       help='which rig in the device map this is for')
         p.add_argument('--why', action='store_true',
                        help='print why each control was chosen')
         p.add_argument('--free', action='store_true',
@@ -561,6 +564,11 @@ class Adapter(abc.ABC):
         things gets two things here.
         """
         args = self.parser().parse_args(argv)
+        # Said before anything is read: which desk this is decides which
+        # device is the stick, which hand is on it, and how far every
+        # control is. The map will not guess, and neither will this.
+        if args.desk:
+            os.environ['SIM_DEVICE_PROFILE'] = args.desk
 
         bad = self.unknown()
         if bad:
@@ -598,6 +606,13 @@ class Adapter(abc.ABC):
             return 0
         for line in self.show(layout, why=args.why):
             print(line)
+        # Said once, here, rather than in six games' own headers: with
+        # nothing measured every control scores the same on reach, so the
+        # layout is real but not reach-aware, and nothing else on screen
+        # would say so.
+        note = layout.reach_note()
+        if note:
+            print(f'\n  {note}')
         return 0
 
     # ---- what the two kinds of adapter each answer differently ----------

@@ -27,67 +27,62 @@ def load():
     return devicemap
 
 
-def by_role(*required, pick=None):
-    """{'stick': Device, 'throttle': Device, ...} keyed by the map's own `kind`.
+def by_role(*required, desk=None):
+    """{'stick': Device, 'throttle': Device, ...} as the desk says it is.
 
-    Keying on kind is what lets hardware change without touching any game's
-    code: capture a new stick, it lands in the map as `kind = "stick"`, and
-    every planner picks it up. Matching inside the map is by USB id and
-    fingerprint, never by name, so a firmware update that renames the device
-    does not lose it.
+    Keying on the role is what lets hardware change without touching any
+    game's code: put a new stick on the desk and every planner picks it
+    up. Which device that is comes from the profile in the map, not from
+    what happens to be plugged in.
 
-    Two devices of the same kind used to mean the last one loaded silently won.
-    Now a CONNECTED device wins, and if that still does not decide it the
-    ambiguity is reported rather than guessed -- picking the wrong stick would
-    produce a layout that looks right and binds the wrong hardware.
+    This used to guess. It bucketed the captures by `kind`, preferred a
+    connected one, and where that still did not decide it fell through to
+    `(plugged or devs)[0]` -- the last one loaded silently won. Two
+    override channels existed to paper over it. A desk answers the
+    question outright, so all of that is gone and the only thing left to
+    say is which desk:
 
-    Override explicitly with `pick={'stick': 'slug'}` or the environment:
+        SIM_DEVICE_PROFILE=Biurko ./plan.py
 
-        SIM_DEVICE_ROLES="stick=vpc-stick-warbrd-d" ./plan.py
+    `desk` names it in code, for a test or a caller that already knows.
     """
     dm = load()
-    forced = dict(pick or {})
-    for part in filter(None, os.environ.get('SIM_DEVICE_ROLES', '').split(',')):
-        role, _, slug = part.partition('=')
-        forced.setdefault(role.strip(), slug.strip())
-
-    by_kind = {}
-    for d in dm.load_all():
-        by_kind.setdefault(d.kind, []).append(d)
-
-    live = set()
     try:
-        live = {m.device.slug for m in dm.find_connected() if m.device}
-    except OSError:
-        pass                            # no /dev/input access; fall back to files
-
+        rig = dm.profile(desk)
+    except SystemExit as e:
+        # The map's own message names the desks and the environment
+        # variable. This adds the flag, which is the spelling anybody
+        # running a planner has in front of them.
+        raise SystemExit(f'{e}\n  or: --desk <name>') from None
+    if rig is None:
+        sys.exit('no desk on file, so where your hardware sits is not'
+                 ' written down anywhere.\n  make one with'
+                 ' sim-device-map/capture.py')
     out = {}
-    for kind, devs in by_kind.items():
-        if kind in forced:
-            hit = next((d for d in devs if d.slug == forced[kind]), None)
-            if hit is None:
-                sys.exit(f'no {kind} called {forced[kind]!r} in the map; have '
-                         + ', '.join(d.slug for d in devs))
-            out[kind] = hit
-            continue
-        if len(devs) == 1:
-            out[kind] = devs[0]
-            continue
-        plugged = [d for d in devs if d.slug in live]
-        if len(plugged) == 1:
-            out[kind] = plugged[0]
-            continue
-        if kind in required:
-            sys.exit(
-                f'the map has {len(devs)} devices of kind {kind!r} and '
-                f'{len(plugged)} of them are plugged in, so which one this '
-                'layout is for cannot be decided here.\n  candidates: '
-                + ', '.join(d.slug for d in devs)
-                + f'\n  choose with SIM_DEVICE_ROLES="{kind}=<slug>"')
-        out[kind] = (plugged or devs)[0]
-
+    for dev in dm.load_all(rig=rig):
+        if rig.entry(dev.slug) is not None:
+            out[dev.role] = dev
     missing = set(required) - set(out)
     if missing:
-        sys.exit(f'device map has no {", ".join(sorted(missing))} — '
-                 'capture one with sim-device-map/capture.py')
+        sys.exit(_nothing_to_bind(rig, out, missing))
     return out
+
+
+def _nothing_to_bind(rig, have, missing):
+    """Why this desk cannot answer, said about the desk and nothing else.
+
+    Never about what you own. A desk with nothing on it is a desk nobody
+    has filled in -- the hardware may be plugged in right now -- and
+    `you have no stick` is a claim this has no way of making.
+    """
+    if not have:
+        return (f'{rig.name} has nothing on it, so nothing here knows what'
+                ' to bind.\n'
+                '  say what is on it:  sim-device-map/capture.py\n'
+                '  or work at another desk:  --desk <name>')
+    return (f'{rig.name} does not say which of its devices does the job of'
+            f' {", ".join(sorted(missing))}.\n'
+            f'  it names: {", ".join(sorted(have))}\n'
+            '  change what it says:  sim-device-map/capture.py\n'
+            '  or work at another desk:  --desk <name>')
+

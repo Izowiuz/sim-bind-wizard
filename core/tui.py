@@ -170,6 +170,60 @@ def sill(width, keys=(), tail='', note=''):
     return BL + out + H * max(0, room - len(out)) + end + BR
 
 
+def box_for(body, h, w, title, full=False, keys=(), tail=''):
+    """(y, x, height, width) for a box holding `body` on an h x w screen.
+
+    Sized to what it holds and no larger: a help box with three inches of
+    blank border says the list is longer than it is. Capped at the screen,
+    which is where `overflows` takes over.
+
+    `keys` and `tail` widen it too. `sill` drops the keys that will not
+    fit and keeps the tail before any of them, so a short list under a
+    short title made a box too narrow to say `↵ choose` -- and the way out
+    of it was the one thing it did not show.
+
+    `full` takes the whole terminal instead. A notice you read wants to be
+    the size of what it says; a list you WORK in -- the vocabulary, the
+    device map -- wants every row it can get, and centring it in a margin
+    costs two of them for nothing.
+    """
+    if full:
+        return 0, 0, h, w
+    inner = max((len(t) for t in body), default=0)
+    across = sum(len(k) for k in keys) + len(SEP) * max(0, len(keys) - 1)
+    across += len(tail) + 2 if tail else 0
+    bw = min(w - 2, max(len(title) + 8, inner + 2 * GAP + 2,
+                        across + 4 if keys else 0))
+    bh = min(h - 2, len(body) + 2 + PAD)
+    return (h - bh) // 2, (w - bw) // 2, bh, bw
+
+
+#: A blank row between the last line and the sill. Text that runs into the
+#: bottom edge reads as text that was cut off there.
+PAD = 1
+
+#: Blank columns between a box's border and what it says. Counted from
+#: the inside of the edge, which is where somebody reading it counts from.
+GAP = 2
+
+
+def rows_in(bh):
+    """How many lines of content a box of this height holds."""
+    return bh - 2 - PAD
+
+
+
+def overflows(body, h, w, title, full=False):
+    """Is there more than the box can show at once?"""
+    return len(body) > rows_in(box_for(body, h, w, title, full)[2])
+
+
+#: What a box you pick from says it answers to. Named because `box_for`
+#: has to know them to leave room for them, and a list that disagreed
+#: with the sill would size the box for keys it does not show.
+CHOOSE_KEYS = ('\u2191\u2193 move', '\u21b5 choose', 'ESC back')
+
+
 class Tui:
     def __init__(self, scr, theme=None):
         self.scr = scr
@@ -211,6 +265,152 @@ class Tui:
                 self.scr.addstr(y, x, text[:max(0, w - x - 1)], attr)
             except curses.error:
                 pass
+
+    def box(self, title, lines, keys=(), tail='', top=0, sel=None,
+            full=False):
+        """Draw a framed box over the middle of the screen. Returns its page.
+
+        Framed by the same `lid`/`sill` the panels use, so every box on this
+        screen -- the help, the control list, the prompt to press something --
+        reads as one kind of thing rather than three.
+        """
+        body = [t for _tone, t in lines]
+        h, w = self.scr.getmaxyx()
+        y, x, bh, bw = box_for(body, h, w, title, full, keys, tail)
+        page = rows_in(bh)
+        self._put(y, x, lid(bw, title), self.theme.head)
+        for n in range(bh - 2):
+            self._put(y + 1 + n, x, V + ' ' * (bw - 2) + V, self.theme.head)
+        self._put(y + bh - 1, x, sill(bw, keys, tail), self.theme.head)
+        for n, (tone, text) in enumerate(lines[top:top + page]):
+            lit = (self.theme.sel
+                   if sel is not None and top + n == sel
+                   else self.theme[tone])
+            self._put(y + 1 + n, x + 1 + GAP, text[:bw - 2 - 2 * GAP], lit)
+        self.scr.refresh()
+        return page
+
+    def popup(self, title, lines, full=False):
+        """A box you read and dismiss.
+
+        Scrolls rather than truncates. It used to draw `lines[:bh - 2]` and
+        stop, so on a short terminal the help simply ended -- and what fell
+        off the bottom was the least-used half, which is the half somebody
+        opening the help is most likely to be after.
+        """
+        body = [t for _tone, t in lines]
+        top = 0
+        while True:
+            h, w = self.scr.getmaxyx()
+            page = rows_in(box_for(body, h, w, title, full)[2])
+            more = overflows(body, h, w, title, full)
+            top = max(0, min(top, len(body) - page)) if more else 0
+            self.box(title, lines,
+                 ('↑↓ more', 'any other key closes') if more else (),
+                 f'{top + page} of {len(body)}' if more else 'any key to close',
+                 top, full=full)
+            k = self.key(0.5)
+            if k is None:
+                continue
+            if more and k in ('up', 'k'):
+                top -= 1
+            elif more and k in ('down', 'j'):
+                top += 1
+            elif more and k == ' ':
+                top += page
+            else:
+                return
+
+    def inner(self):
+        """How wide a full-screen box's content may be."""
+        return max(20, self.scr.getmaxyx()[1] - 4)
+
+    def confirm(self, title, lines):
+        """Show what is about to happen and wait for a yes. True if given.
+
+        RETURN rather than a typed word: this is the thing the screen is for,
+        it is pressed often, and every writer in the family backs the file up
+        before it touches it. What was missing was not a gate -- it was seeing
+        what the keystroke would do while there was still time to say no.
+        """
+        while True:
+            self.box(title, lines, ('↵ do it', 'ESC cancel'), tail='')
+            k = self.key(0.5)
+            if k == 'enter':
+                return True
+            if k in ('esc', 'q', 'Q'):
+                return False
+
+    def ask(self, title, lines=(), value='', keys=('↵ accept',
+                                                   'ESC back')):
+        """A line of text. Returns it, or None on ESC.
+
+        In the same frame as everything else, because a prompt drawn on a
+        bare screen is a second set of rules: this one is read with the
+        same eyes that just read a list.
+        """
+        while True:
+            self.box(title, [('plain', t) for t in lines]
+                     + ([('plain', '')] if lines else [])
+                     + [('sel', f'{value}_')], keys)
+            k = self.key(0.5)
+            if k == 'enter':
+                return value
+            if k == 'esc':
+                return None
+            if k == 'backspace':
+                value = value[:-1]
+            elif k and len(k) == 1 and k.isprintable():
+                value += k
+
+    def choose(self, title, lines, tail='', head=(), skip=()):
+        """A box you pick a line out of. Returns the index, or None on ESC.
+
+        `head` is rows above the list that are not part of it -- where a
+        list was read from, what it is counted out of. In the box rather
+        than in the sill, because the sill's note pushes the keys off and
+        the way out of a box is not the thing to trade away.
+
+        `skip` names rows inside the list the cursor passes over: a blank
+        one holding two kinds of thing apart. Landing on it would be
+        landing on nothing, and `↵ choose` over a blank row is a key that
+        does not mean anything.
+        """
+        head, skip = list(head), set(skip)
+        pick = [n for n in range(len(lines)) if n not in skip]
+        if not pick:
+            return None
+        at = top = 0
+        while True:
+            h, w = self.scr.getmaxyx()
+            rows = head + list(lines)
+            page = rows_in(box_for([t for _tone, t in rows], h, w, title,
+                                   keys=CHOOSE_KEYS,
+                                   tail=f'{len(pick)} of {len(pick)}')[2])
+            at = max(0, min(at, len(pick) - 1))
+            sel = pick[at]
+            if len(head) + sel < top:
+                top = len(head) + sel
+            elif len(head) + sel >= top + page:
+                top = len(head) + sel - page + 1
+            # The widest the tail ever gets, so the box does not change
+            # width as the cursor passes 9.
+            self.box(title, rows, CHOOSE_KEYS,
+                     f'{at + 1:>{len(str(len(pick)))}} of {len(pick)}',
+                     top, len(head) + sel)
+            k = self.key(0.5)
+            if k in ('up', 'k'):
+                at -= 1
+            elif k in ('down', 'j'):
+                at += 1
+            elif k == 'g':
+                at = 0
+            elif k == 'G':
+                at = len(pick) - 1
+            elif k == 'enter':
+                return sel
+            elif k == 'esc':
+                return None
 
     def menu(self, title, items, index=0, footer="arrows = move, "
              "RETURN = select, ESC = back"):

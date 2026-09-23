@@ -34,6 +34,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 #: Deliberately not `import fake`: that loads the device map at import, and
 #: the point of this file is that it says something on a clone which has none.
@@ -649,6 +650,14 @@ class RunDirectly(unittest.TestCase):
         # two own their format from inside a capture wizard.
         built(live('warthunder'))
         done = self.ran('warthunder', 'wt-bind-preset.py', '--dry-run')
+        said = done.stderr.strip() + done.stdout.strip()
+        if 'machine.blk' in said and 'no controls' in said:
+            # The same kind of skip as `live`: what the game wrote in its
+            # own config is a fact about this machine. The sidecar reads
+            # that file to know which joystick slot is which, so without
+            # it there is nothing for a dry run to be dry about.
+            raise unittest.SkipTest('the installed machine.blk has no '
+                                    'controls{} block')
         self.assertEqual(0, done.returncode, done.stderr.strip()[-500:])
 
     def test_a_capture_wizard_still_imports(self):
@@ -662,3 +671,298 @@ class RunDirectly(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class WhichDeskAPlannerIsFor(unittest.TestCase):
+    """Every planner takes it, because every planner needs it: which desk
+    decides which device is the stick and how far each control is."""
+
+    def test_every_planner_takes_the_flag(self):
+        for game in adapter.games():
+            with self.subTest(game=game):
+                obj = built(live(game))
+                flags = {s for a in obj.parser()._actions
+                         for s in a.option_strings}
+                self.assertIn('--desk', flags)
+
+    def test_it_says_the_same_thing_as_the_environment(self):
+        was = os.environ.get('SIM_DEVICE_PROFILE')
+        try:
+            os.environ.pop('SIM_DEVICE_PROFILE', None)
+            obj = built(live(adapter.games()[0]))
+            args = obj.parser().parse_args(['--desk', 'Somewhere'])
+            self.assertEqual('Somewhere', args.desk)
+        finally:
+            if was is not None:
+                os.environ['SIM_DEVICE_PROFILE'] = was
+
+    def test_saying_it_on_the_command_line_is_enough(self):
+        # With nothing in the environment and more than one desk on file,
+        # the flag is the only thing standing between a planner and the
+        # map's refusal to guess.
+        from core import devmap
+        rigs = devmap.load().load_profiles()
+        if len(rigs) < 2:
+            raise unittest.SkipTest('one desk on file, so nothing to pick')
+        game = adapter.games()[0]
+        built(live(game))
+        env = {k: v for k, v in os.environ.items()
+               if k != 'SIM_DEVICE_PROFILE'}
+        done = subprocess.run(
+            [sys.executable, adapter.planner(game), '--desk', rigs[0].name],
+            cwd=os.path.join(REPO, 'games', game), env=env,
+            capture_output=True, text=True, timeout=300)
+        self.assertEqual(0, done.returncode, done.stderr.strip()[-400:])
+
+    def test_the_message_names_both_ways_of_saying_it(self):
+        from core import devmap
+        dm = devmap.load()
+
+        def two(name=None):
+            raise SystemExit('more than one profile')
+
+        with mock.patch.object(dm, 'profile', two):
+            with self.assertRaises(SystemExit) as caught:
+                devmap.by_role()
+        self.assertIn('--desk', str(caught.exception))
+
+
+class TheLauncherAsking(unittest.TestCase):
+    """`./bind` asks which desk, but only where there is somebody to ask."""
+
+    def setUp(self):
+        self.bind = adapter.from_file('bind_under_test',
+                                      os.path.join(REPO, 'bind'),
+                                      argv=['bind'])
+
+    def rigs(self, *names):
+        dm = __import__('core.devmap', fromlist=['devmap']).load()
+        return [dm.Profile({'name': n, 'device': [
+            {'slug': 'a-stick', 'role': 'stick'}]}, f'<{n}>') for n in names]
+
+    def asked(self, rest=(), env=None, names=('Biurko', 'Fotel')):
+        """(did it put a menu up, what it answered).
+
+        With a terminal faked, because without one every one of these
+        returns None for the same reason and the test says nothing.
+        """
+        dm = __import__('core.devmap', fromlist=['devmap']).load()
+        put_up = []
+        with mock.patch.object(sys.stdin, 'isatty', lambda: True), \
+             mock.patch.object(sys.stderr, 'isatty', lambda: True), \
+             mock.patch.object(dm, 'load_profiles',
+                               lambda: self.rigs(*names)), \
+             mock.patch.object(self.bind, 'pick_desk',
+                               lambda rigs, where:
+                               put_up.append(rigs) or ('Picked', where)), \
+             mock.patch.dict(os.environ, env or {}, clear=True):
+            got, _where = self.bind.which_desk(list(rest))
+        return bool(put_up), got
+
+    def test_with_two_desks_and_nothing_said_it_asks(self):
+        self.assertEqual((True, 'Picked'), self.asked())
+
+    def test_a_desk_said_on_the_command_line_is_not_asked_about(self):
+        self.assertEqual((False, None), self.asked(['--desk', 'Biurko']))
+        self.assertEqual((False, None), self.asked(['--desk=Biurko']))
+
+    def test_nor_one_in_the_environment(self):
+        self.assertEqual((False, None),
+                         self.asked(env={'SIM_DEVICE_PROFILE': 'Biurko'}))
+
+    def test_one_desk_is_not_a_question(self):
+        self.assertEqual((False, None), self.asked(names=('Biurko',)))
+
+    def test_and_nothing_is_asked_with_nobody_there(self):
+        # A pipe, a script, CI. The planner's own message names the ways
+        # of saying it, and a prompt nobody can answer is a hang.
+        dm = __import__('core.devmap', fromlist=['devmap']).load()
+        put_up = []
+        with mock.patch.object(sys.stdin, 'isatty', lambda: False), \
+             mock.patch.object(dm, 'load_profiles',
+                               lambda: self.rigs('Biurko', 'Fotel')), \
+             mock.patch.object(self.bind, 'pick_desk',
+                               lambda rigs, where: put_up.append(rigs)), \
+             mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual((None, None), self.bind.which_desk([]))
+        self.assertEqual([], put_up)
+
+
+    def test_backing_out_picks_nothing(self):
+        # ESC on that menu means "I did not say", not "the first one".
+        # Picking for you is what the old by_role did, and it is how a
+        # layout came out for the wrong stick.
+        dm = __import__('core.devmap', fromlist=['devmap']).load()
+        with mock.patch.object(__import__('curses'), 'wrapper',
+                               lambda run: (None, None)):
+            self.assertEqual((None, None),
+                             self.bind.pick_desk(self.rigs('Biurko', 'Fotel'),
+                                                 '/somewhere'))
+
+    def test_a_line_says_the_desk_and_what_is_on_it(self):
+        one, two = self.rigs('Biurko', 'Fotel')
+        two.devices = []
+        said = self.bind.desk_items([one, two])
+        self.assertIn('Biurko', said[0])
+        self.assertIn('stick', said[0])
+        self.assertIn('nothing on it', said[1])
+
+    def test_the_names_line_up(self):
+        said = self.bind.desk_items(self.rigs('A', 'A much longer name'))
+        self.assertEqual(*[len(t) - len(t.lstrip()) for t in said])
+        self.assertEqual(*[t.index('stick') for t in said])
+
+
+class WhereTheDesksWereRead(unittest.TestCase):
+    """Shown, and changeable: a desk is a fact about a room, and somebody
+    with these files kept somewhere synced has to be able to say where."""
+
+    def setUp(self):
+        self.bind = adapter.from_file('bind_under_test2',
+                                      os.path.join(REPO, 'bind'),
+                                      argv=['bind'])
+
+    def test_a_path_under_home_is_said_the_way_you_would_say_it(self):
+        home = os.path.expanduser('~')
+        self.assertEqual('~/desks',
+                         self.bind.said_path(os.path.join(home, 'desks')))
+
+    def test_and_one_outside_it_is_left_alone(self):
+        self.assertEqual('/etc/desks', self.bind.said_path('/etc/desks'))
+
+    def test_a_home_shaped_prefix_is_not_a_home(self):
+        home = os.path.expanduser('~')
+        self.assertEqual(home + 'x', self.bind.said_path(home + 'x'))
+
+    def test_the_last_row_is_not_a_desk(self):
+        dm = __import__('core.devmap', fromlist=['devmap']).load()
+        rigs = [dm.Profile({'name': n, 'device': []}, f'<{n}>')
+                for n in ('A', 'B')]
+        self.assertEqual(2, len(self.bind.desk_items(rigs)))
+        self.assertNotIn(self.bind.ELSEWHERE, self.bind.desk_items(rigs))
+
+
+class PointingAtAnotherDirectory(unittest.TestCase):
+    """The whole picker loop, driven against a screen that is not one."""
+
+    def setUp(self):
+        self.bind = adapter.from_file('bind_under_test3',
+                                      os.path.join(REPO, 'bind'),
+                                      argv=['bind'])
+        self.dm = __import__('core.devmap', fromlist=['devmap']).load()
+
+    def rigs(self, *names):
+        return [self.dm.Profile({'name': n, 'device': []}, f'<{n}>')
+                for n in names]
+
+    def run_picker(self, keys, rigs, where='/somewhere'):
+        # `setup` too: it asks curses to hide the cursor and start
+        # colour, and there is no terminal here to ask.
+        import curses
+        from core import tui as ctui
+        from test_box import Keyed
+        scr = Keyed(keys)
+        with mock.patch.object(curses, 'wrapper', lambda run: run(scr)), \
+             mock.patch.object(ctui, 'setup',
+                               lambda s: ctui.Tui(s, ctui.Theme(False))):
+            return self.bind.pick_desk(rigs, where), scr
+
+    def test_the_blank_before_the_last_row_is_stepped_over(self):
+        # It is not a desk and not a place to read them from, so there
+        # is nothing for `↵ choose` to mean on it.
+        said = {}
+        from core import tui as ctui
+        import curses
+        from test_box import Keyed
+        with mock.patch.object(curses, 'wrapper', lambda run: run(Keyed([27]))), \
+             mock.patch.object(ctui, 'setup',
+                               lambda s: ctui.Tui(s, ctui.Theme(False))), \
+             mock.patch.object(ctui.Tui, 'choose',
+                               lambda self, title, lines, **kw:
+                               said.update(kw, rows=lines) or None):
+            self.bind.pick_desk(self.rigs('A', 'B'), '/somewhere')
+        blank, = [n for n, (_tone, t) in enumerate(said['rows']) if not t]
+        self.assertEqual([blank], list(said['skip']))
+        self.assertEqual(self.bind.ELSEWHERE, said['rows'][-1][1])
+
+    def test_picking_a_desk_hands_back_where_it_came_from(self):
+        got, _scr = self.run_picker([10], self.rigs('A', 'B'))
+        self.assertEqual(('A', '/somewhere'), got)
+
+    def test_the_last_row_asks_for_a_directory(self):
+        import curses
+        here = os.path.dirname(os.path.abspath(__file__))
+        typed = [curses.KEY_DOWN] * 2 + [10]        # down to `somewhere else`
+        typed += [8] * 40 + [ord(c) for c in here] + [10, 27]
+        got, _scr = self.run_picker(typed, self.rigs('A', 'B'))
+        self.assertEqual((None, here), got)
+
+    def test_return_on_the_path_you_came_in_with_changes_nothing(self):
+        # It reads as backing out of the question. Taken as an answer it
+        # dropped you into the planner with no desk chosen at all.
+        #
+        # Started from a directory that EXISTS on purpose: from one that
+        # does not, the `is it a directory` check catches it first and
+        # the test passes whatever this does.
+        import curses
+        here = os.path.dirname(os.path.abspath(__file__))
+        typed = [curses.KEY_DOWN] * 2 + [10]        # down to `somewhere else`
+        typed += [10]                                # RETURN, nothing typed
+        typed += [curses.KEY_UP] * 2 + [10]          # back up, pick the first
+        got, _scr = self.run_picker(typed, self.rigs('A', 'B'), where=here)
+        self.assertEqual(('A', here), got)
+
+    def test_a_directory_that_is_not_one_is_said_and_not_taken(self):
+        import curses
+        typed = [curses.KEY_DOWN] * 2 + [10]
+        typed += [8] * 40 + [ord(c) for c in '/no/such/place'] + [10]
+        typed += [27, 27]                    # dismiss the notice, then leave
+        got, scr = self.run_picker(typed, self.rigs('A', 'B'))
+        self.assertEqual((None, None), got)
+        self.assertIn('/no/such/place', '\n'.join(scr.frames))
+
+    def test_no_desks_at_all_is_a_question(self):
+        # One desk answers itself. None is not the same thing: the files
+        # may be somewhere this has not been told to look.
+        dm = self.dm
+        put_up = []
+        with mock.patch.object(sys.stdin, 'isatty', lambda: True), \
+             mock.patch.object(sys.stderr, 'isatty', lambda: True), \
+             mock.patch.object(dm, 'load_profiles', lambda: []), \
+             mock.patch.object(self.bind, 'pick_desk',
+                               lambda rigs, where:
+                               put_up.append(where) or (None, None)), \
+             mock.patch.dict(os.environ, {}, clear=True):
+            self.bind.which_desk([])
+        self.assertEqual([dm.PROFILES], put_up)
+
+    def test_and_one_desk_answers_itself(self):
+        dm = self.dm
+        put_up = []
+        with mock.patch.object(sys.stdin, 'isatty', lambda: True), \
+             mock.patch.object(sys.stderr, 'isatty', lambda: True), \
+             mock.patch.object(dm, 'load_profiles',
+                               lambda: self.rigs('Only one')), \
+             mock.patch.object(self.bind, 'pick_desk',
+                               lambda rigs, where: put_up.append(where)), \
+             mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual((None, None), self.bind.which_desk([]))
+        self.assertEqual([], put_up)
+
+    def test_a_directory_you_picked_reaches_the_planner(self):
+        # Through the environment, because the planner is another
+        # process and the map reads it there.
+        said = {}
+        with mock.patch.object(self.bind, 'which_desk',
+                               lambda rest: ('Biurko', '/elsewhere')), \
+             mock.patch.object(self.bind.subprocess, 'call',
+                               lambda cmd, cwd=None, env=None:
+                               said.update(env or {}) or 0), \
+             mock.patch.object(sys, 'argv', ['bind', 'x4', 'why']):
+            self.bind.main()
+        self.assertEqual('Biurko', said.get('SIM_DEVICE_PROFILE'))
+        self.assertEqual('/elsewhere', said.get('SIM_DEVICE_PROFILES'))
+
+    def test_with_no_desks_at_all_it_still_offers_to_look_elsewhere(self):
+        _got, scr = self.run_picker([27], [])
+        self.assertIn(self.bind.ELSEWHERE, '\n'.join(scr.frames))

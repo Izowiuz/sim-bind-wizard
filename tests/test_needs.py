@@ -12,8 +12,11 @@ author's own stick plugged in is not a test.
 """
 
 import unittest
+from unittest import mock
 
 import fake
+from core import devmap
+from core import needs as corneeds
 from core.actions import Bind
 from core.needs import (Layout, Need, allocate, dump_needs, read_needs,
                         reach_tier, IN_A_TURN, ON_APPROACH, IN_THE_AIR,
@@ -42,17 +45,15 @@ class Reach(unittest.TestCase):
         # with the canopy open takes a thumb position the moment one is free,
         # and the only defence left is hand-sorting the need list.
         #
-        # The thumb button here is deliberately the one SCORING would pick --
-        # exact shape (+20) and matching suits (+25) beat the panel dial's
-        # worse reach (+36) -- so the floor is the only thing standing between
-        # a ramp switch and the best position on the stick.
+        # The thumb button here is deliberately the one SCORING would pick
+        # -- exact shape beats the panel dial's worse reach -- so the floor
+        # is the only thing standing between a ramp switch and the best
+        # position on the stick.
         devs = {'stick': fake.device('stick', [
-            fake.button('Thumb button', 0, reach=fake.THUMB,
-                        suits=['occasional']),
+            fake.button('Thumb button', 0, reach=fake.THUMB),
             fake.control('dial', 'Panel dial', [1], reach=fake.PANEL),
         ])}
-        need = Need('Canopy', 'button', ['CANOPY'], urgency=ON_THE_RAMP,
-                    suits='occasional')
+        need = Need('Canopy', 'button', ['CANOPY'], urgency=ON_THE_RAMP)
         placed, unplaced, _free = allocate([need], devs)
         self.assertEqual([], unplaced)
         self.assertEqual('Panel dial', placed[0].ctrl.label)
@@ -94,10 +95,17 @@ class Reach(unittest.TestCase):
         self.assertEqual('Panel button', placed[0].ctrl.label)
         self.assertEqual(['Thumb button'], [c.label for _r, c in free])
 
-    def test_an_uncaptured_reach_sits_between_the_two(self):
-        self.assertEqual(2, reach_tier(
-            fake.device('stick', [fake.button('Nameless', 0)])
-            .groups(bindable=True)[0]))
+    def test_an_unmeasured_reach_sits_below_every_measured_one(self):
+        # Not middling: a control nobody has walked the fingers on is one
+        # nothing is known about, and a number in the middle would be one
+        # nothing could tell from a measurement.
+        nobody = fake.device('stick', [fake.button('Nameless', 0)])
+        self.assertIsNone(nobody.groups(bindable=True)[0].tier)
+        got = reach_tier(nobody.groups(bindable=True)[0])
+        furthest = reach_tier(fake.device('stick', [
+            fake.button('Panel', 0, reach=fake.PANEL)])
+            .groups(bindable=True)[0])
+        self.assertGreater(got, furthest)
 
 
 class Pins(unittest.TestCase):
@@ -453,15 +461,187 @@ class Devices(unittest.TestCase):
             [Need('Speedbrake', 'button', ['SB'], dev='throttle')], devs)
         self.assertEqual('throttle', placed[0].role)
 
-    def test_suits_tips_the_balance(self):
-        devs = {'stick': fake.device('stick', [
-            fake.button('Plain button', 0, reach=fake.PANEL),
-            fake.button('Fire button', 1, reach=fake.PANEL, suits=['fire']),
-        ])}
-        placed, _un, _free = allocate(
-            [Need('Gun', 'button', ['GUN'], suits='fire')], devs)
-        self.assertEqual('Fire button', placed[0].ctrl.label)
-
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class HowFarAControlIs(unittest.TestCase):
+    """Measured on the map now, finger by finger, not matched out of prose.
+
+    The old table read the map's own sentences for substrings -- 'thumb',
+    'without releasing' -- so the tier a control got depended on the
+    wording somebody typed while capturing it.
+    """
+
+    def ctrl(self, **kw):
+        return fake.device('stick', [fake.button('One', 0, **kw)]) \
+            .groups(bindable=True)[0]
+
+    def test_a_measured_reach_is_the_number_the_map_gives(self):
+        for reach, tier in ((fake.THUMB, 0), (fake.INDEX, 0),
+                            (fake.PINKY, 1), (fake.MIDDLE, 1),
+                            (fake.PANEL, 3)):
+            with self.subTest(reach=reach):
+                self.assertEqual(tier, reach_tier(self.ctrl(reach=reach)))
+
+    def test_an_unmeasured_one_sorts_below_all_of_them(self):
+        self.assertGreater(reach_tier(self.ctrl()),
+                           reach_tier(self.ctrl(reach=fake.PANEL)))
+
+    def test_it_says_how_it_is_reached_in_words(self):
+        said = corneeds.reach_said(self.ctrl(reach=fake.PINKY))
+        self.assertIn('pinky', said)
+        self.assertIn(corneeds.REACH_MEANS[1], said)
+
+    def test_and_says_nothing_when_nobody_measured(self):
+        self.assertEqual('', corneeds.reach_said(self.ctrl()))
+
+    def test_the_nearest_way_of_reaching_it_is_the_one_said(self):
+        dev = fake.device('stick', [fake.button('One', 0, reach=fake.PANEL)])
+        one = dev.groups(bindable=True)[0]
+        one.access = [devmap.load().Spot(part='grip', level='OFF'),
+                      devmap.load().Spot(part='grip', level='HOME',
+                                         finger='thumb')]
+        self.assertEqual(0, reach_tier(one))
+        self.assertIn('thumb', corneeds.reach_said(one))
+
+
+class WhatAnUnmeasuredControlIsAllowed(unittest.TestCase):
+    """Placed, but last. Refusing it outright places nothing at all on a
+    desk nobody has walked, which reads as a broken planner."""
+
+    def test_it_can_still_take_the_most_urgent_need(self):
+        devs = {'stick': fake.device('stick', [fake.button('One', 0)])}
+        placed, unplaced, _f = allocate(
+            [Need('Fire', 'button', ['F'], urgency=IN_A_TURN)], devs)
+        self.assertEqual([], unplaced)
+        self.assertEqual('One', placed[0].ctrl.label)
+
+    def test_but_a_measured_one_out_of_the_band_is_still_refused(self):
+        devs = {'stick': fake.device('stick', [
+            fake.button('Panel', 0, reach=fake.PANEL)])}
+        _p, unplaced, _f = allocate(
+            [Need('Fire', 'button', ['F'], urgency=IN_A_TURN)], devs)
+        self.assertEqual(1, len(unplaced))
+
+    def test_it_is_never_paid_for_being_far_away(self):
+        # The reach term rewards the furthest control that still does the
+        # job, because that leaves the near ones for something more
+        # urgent. An unmeasured one is not known to be far, and paying it
+        # anyway is how it beat a thumb button somebody had measured.
+        need = Need('Fire', 'button', ['F'], urgency=IN_A_TURN)
+        dev = fake.device('stick', [fake.button('Nobody', 0)])
+        parts = []
+        corneeds.score(dev.groups(bindable=True)[0], need, 'stick',
+                       parts=parts)
+        self.assertFalse([t for _d, t in parts if 'closer' in t], parts)
+
+    def test_so_a_control_measured_further_off_beats_it(self):
+        devs = {'stick': fake.device('stick', [
+            fake.button('Nobody measured this', 0),
+            fake.button('Stretch', 1, reach=fake.PINKY)])}
+        placed, _u, _f = allocate(
+            [Need('Gear', 'button', ['GEAR'], urgency=ON_APPROACH)], devs)
+        self.assertEqual('Stretch', placed[0].ctrl.label)
+
+
+class SayingWhatWasNotMeasured(unittest.TestCase):
+    """A layout on an unmeasured desk is real but not reach-aware."""
+
+    def layout(self, *controls):
+        devs = {'stick': fake.device('stick', list(controls))}
+        return corneeds.Layout(devs, *allocate([], devs))
+
+    def test_nothing_measured_says_so(self):
+        got = self.layout(fake.button('One', 0), fake.button('Two', 1))
+        self.assertEqual((2, 2), got.unmeasured())
+        self.assertIn('no control', got.reach_note())
+
+    def test_some_measured_counts_the_rest(self):
+        got = self.layout(fake.button('One', 0, reach=fake.THUMB),
+                          fake.button('Two', 1))
+        self.assertEqual((1, 2), got.unmeasured())
+        self.assertIn('1 of 2', got.reach_note())
+
+    def test_all_measured_says_nothing(self):
+        got = self.layout(fake.button('One', 0, reach=fake.THUMB))
+        self.assertEqual((0, 1), got.unmeasured())
+        self.assertEqual('', got.reach_note())
+
+
+class WhichDeviceIsWhich(unittest.TestCase):
+    """The desk says. It used to be guessed from what was plugged in."""
+
+    def desk(self, *devices, name='a desk in a test'):
+        dm = devmap.load()
+        said = [{'slug': d.slug, 'role': d.kind, 'hand': 'left'}
+                for d in devices]
+        return dm.Profile({'name': name, 'device': said}, '<test-desk>')
+
+    def test_it_keys_on_the_role_the_desk_gave_it(self):
+        dm = devmap.load()
+        have = dm.load_all(bare=True)
+        rig = dm.Profile({'name': 'x', 'device': [
+            {'slug': have[0].slug, 'role': 'collective'}]}, '<x>')
+        with mock.patch.object(dm, 'profile', lambda name=None: rig):
+            got = devmap.by_role('collective')
+        self.assertEqual(['collective'], list(got))
+        self.assertEqual(have[0].slug, got['collective'].slug)
+
+    def test_a_device_the_desk_does_not_name_is_not_on_it(self):
+        dm = devmap.load()
+        have = dm.load_all(bare=True)
+        self.assertGreater(len(have), 1, 'needs two captures to be a test')
+        rig = dm.Profile({'name': 'x', 'device': [
+            {'slug': have[0].slug, 'role': 'stick'}]}, '<x>')
+        with mock.patch.object(dm, 'profile', lambda name=None: rig):
+            got = devmap.by_role()
+        self.assertEqual([have[0].slug], [d.slug for d in got.values()])
+
+    def test_an_empty_desk_says_so_and_claims_nothing_else(self):
+        # Never `you have no stick`: the hardware may be plugged in right
+        # now, and this has no way of knowing. The desk is what is empty.
+        dm = devmap.load()
+        rig = dm.Profile({'name': 'Fotel', 'device': []}, '<x>')
+        with mock.patch.object(dm, 'profile', lambda name=None: rig):
+            with self.assertRaises(SystemExit) as caught:
+                devmap.by_role('stick', 'throttle')
+        said = str(caught.exception)
+        self.assertIn('Fotel', said)
+        self.assertIn('nothing on it', said)
+        for word in ('stick', 'throttle'):
+            with self.subTest(word=word):
+                self.assertNotIn(word, said)
+
+    def test_a_desk_that_names_devices_says_which_job_is_unfilled(self):
+        dm = devmap.load()
+        have = dm.load_all(bare=True)
+        rig = dm.Profile({'name': 'Fotel', 'device': [
+            {'slug': have[0].slug, 'role': 'collective'}]}, '<x>')
+        with mock.patch.object(dm, 'profile', lambda name=None: rig):
+            with self.assertRaises(SystemExit) as caught:
+                devmap.by_role('stick')
+        said = str(caught.exception)
+        self.assertIn('stick', said)
+        self.assertIn('collective', said)
+        self.assertNotIn('nothing on it', said)
+
+    def test_either_way_it_says_how_to_get_out_of_it(self):
+        dm = devmap.load()
+        for devices in ([], [{'slug': dm.load_all(bare=True)[0].slug,
+                              'role': 'collective'}]):
+            rig = dm.Profile({'name': 'Fotel', 'device': devices}, '<x>')
+            with mock.patch.object(dm, 'profile', lambda name=None: rig):
+                with self.assertRaises(SystemExit) as caught:
+                    devmap.by_role('stick')
+            with self.subTest(devices=len(devices)):
+                self.assertIn('capture.py', str(caught.exception))
+                self.assertIn('--desk', str(caught.exception))
+
+    def test_no_desk_at_all_says_to_make_one(self):
+        dm = devmap.load()
+        with mock.patch.object(dm, 'profile', lambda name=None: None):
+            with self.assertRaises(SystemExit) as caught:
+                devmap.by_role()
+        self.assertIn('capture.py', str(caught.exception))

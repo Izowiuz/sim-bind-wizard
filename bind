@@ -10,6 +10,10 @@ DESCRIPTION
     VERB defaults to `tui`, or `plan` where a game has no review
     screen. Anything after it is passed to the script.
 
+    With more than one desk in the device map and none named, this
+    asks which. Say it outright with `--desk NAME` or
+    SIM_DEVICE_PROFILE.
+
 VERBS
     harvest   read the game's files, write the vocabulary cache
     plan      what it would bind, and where
@@ -24,7 +28,7 @@ GAMES
     dcs  elite (ed)  falconbms (bms)  msfs  warthunder (wt)  x4
 
 EXAMPLES
-    ./bind wt why
+    ./bind wt why --desk IzoDesk
     ./bind x4 sheet
     ./bind bms plan --audit
 
@@ -207,6 +211,122 @@ def default_verb(game):
     return 'tui' if 'tui' in GAMES.get(game, {}) else 'plan'
 
 
+def which_desk(rest):
+    """(desk, where its file was read from), either of which may be None.
+
+    Only asked when there is something to ask: the map cannot settle it
+    by itself, nothing was said on the command line or in the
+    environment, and somebody is at a terminal to answer. Anywhere else
+    this keeps quiet and the planner's own message names the ways of
+    saying it.
+
+    One desk on file and there is no question -- but none at all is one:
+    the files may be somewhere this does not look yet.
+    """
+    if any(a == '--desk' or a.startswith('--desk=') for a in rest):
+        return None, None
+    if os.environ.get('SIM_DEVICE_PROFILE'):
+        return None, None
+    if not (sys.stdin.isatty() and sys.stderr.isatty()):
+        return None, None
+    if HERE not in sys.path:
+        sys.path.insert(0, HERE)
+    try:
+        dm = __import__('core.devmap', fromlist=['devmap']).load()
+    except SystemExit:
+        return None, None               # no map; the planner says so better
+    where = dm.PROFILES
+    while True:
+        rigs = [r for r in dm.load_profiles()]
+        if len(rigs) == 1 and where == dm.PROFILES:
+            return None, None
+        desk, said = pick_desk(rigs, where)
+        if desk is not None or said is None or said == where:
+            return desk, said
+        where = said
+        dm.PROFILES = said
+
+
+#: The last row of the desk list: not a desk, a place to look for them.
+ELSEWHERE = 'read desks from somewhere else…'
+
+
+def said_path(where):
+    """A directory as somebody would say it, not as the OS spells it."""
+    home = os.path.expanduser('~')
+    return ('~' + where[len(home):]) if where.startswith(home + os.sep) \
+        else where
+
+
+def desk_items(rigs):
+    """One line per desk: what it is called and what is on it.
+
+    What is on it, because the names are yours and a list of them says
+    nothing about which room you are in. `nothing on it` is a desk you
+    made and have not filled, which is worth seeing before you pick it.
+    """
+    wide = max((len(r.name) for r in rigs), default=0)
+    return [f'{r.name:<{wide}}   '
+            + (', '.join(d.get('role') or d['slug'] for d in r.devices)
+               or 'nothing on it')
+            for r in rigs]
+
+
+def pick_desk(rigs, where):
+    """Put the rigs on the screen the rest of this repo uses.
+
+    Returns `(name, directory)`: the desk to work at and where it was
+    read from, either of which may be None. The directory is shown and
+    changeable because a desk is a fact about a room -- somebody with two
+    rooms, or with these files kept somewhere synced, has to be able to
+    say where they are without editing this.
+    """
+    import curses
+    from core import tui as ctui
+
+    def run(scr):
+        tui = ctui.setup(scr)
+        while True:
+            rows = [('plain', t) for t in desk_items(rigs)]
+            # A blank between the desks and the row that is not one, and
+            # the cursor steps over it: `↵ choose` on a blank row would
+            # be a key that does not mean anything.
+            rows += [('plain', ''), ('meta', ELSEWHERE)]
+            got = tui.choose('Which desk is this for?', rows,
+                             head=[('meta', f'read from {said_path(where)}'),
+                                   ('plain', '')],
+                             skip=[len(rigs)])
+            if got is None:
+                return None, None
+            if got != len(rows) - 1:
+                # A desk. Not "anything that is not the last row": the
+                # blank between them is not a desk either, and reading
+                # it as one is only prevented by `skip` happening to be
+                # right.
+                return rigs[got].name, where
+            said = tui.ask('Read desks from',
+                           ['A directory of .toml desks.'], value=where)
+            # RETURN on the path you came in with is not a choice of
+            # anywhere: it is backing out of the question, and treating
+            # it as an answer dropped you into the planner with no desk.
+            if not said or said == where:
+                continue
+            if not os.path.isdir(said):
+                tui.popup('Nothing there',
+                          [('plain', f'{said} is not a directory.')])
+                continue
+            return None, said
+
+    try:
+        return curses.wrapper(run)
+    except curses.error:
+        # No terminal that can do this, which the planner's own message
+        # covers. Narrow on purpose: a blanket catch here swallowed a
+        # mistake inside `run` and reported it as "no terminal".
+        return None, None
+    return rigs[got].name if got is not None else None
+
+
 def main():
     args = sys.argv[1:]
     if not args or args[0] in ('-h', '--help'):
@@ -241,10 +361,19 @@ def main():
         print(f'{path} is missing', file=sys.stderr)
         return 2
 
+    desk, where = which_desk(rest)
+    env = dict(os.environ)
+    if desk:
+        env['SIM_DEVICE_PROFILE'] = desk
+    if where:
+        env['SIM_DEVICE_PROFILES'] = where
+    env = env if (desk or where) else None
+
     cmd = [sys.executable, path, *fixed, *rest]
     print(f'--> games/{game}/{script} '
           + ' '.join([*fixed, *rest]), file=sys.stderr)
-    return subprocess.call(cmd, cwd=os.path.join(HERE, 'games', game))
+    return subprocess.call(cmd, cwd=os.path.join(HERE, 'games', game),
+                           env=env)
 
 
 if __name__ == '__main__':

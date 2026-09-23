@@ -115,12 +115,13 @@ class AGameOverTheTop(unittest.TestCase):
             self.merged({'band': [{'name': 'mid-burn', 'takes': [0, 1]}]})
 
     def test_a_weight_can_be_retuned(self):
-        got = self.merged({'term': [{'name': 'suits', 'weight': 99}]})
+        got = self.merged({'term': [{'name': 'click', 'weight': 99}]})
         weights = {t['name']: t['weight'] for t in got['term']}
-        self.assertEqual(99, weights['suits'])
+        self.assertEqual(99, weights['click'])
         self.assertEqual(100, weights['fits'], 'the rest stand')
-        self.assertEqual('suits {suits}',
-                         {t['name']: t['says'] for t in got['term']}['suits'],
+        self.assertEqual({t['name']: t['says'] for t in
+                          corneeds.RULES['term']}['click'],
+                         {t['name']: t['says'] for t in got['term']}['click'],
                          'what it says is kept when only the weight moves')
 
     def test_a_condition_the_core_does_not_define_is_refused(self):

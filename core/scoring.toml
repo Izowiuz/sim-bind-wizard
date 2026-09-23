@@ -17,17 +17,22 @@
 # expression language, and that is a worse thing to own than this file.
 
 [reach]
-# Matched as substrings of the device map's own prose. Order matters: the
-# first hit wins, which is why 'thumb' and 'index finger' both read 0.
-words = [["thumb", 0], ["index finger", 0],
-         ["without releasing", 1], ["needs letting go", 3]]
-unmeasured = 2
+# The map measures this now, finger by finger, and hands over a number:
+# how far the nearest way of reaching a control is from flying. These are
+# the map's own levels, so there is nothing here to keep in step by hand.
 means = [
-  [0, "under the thumb, or the index finger on the grip"],
-  [1, "another finger, without letting go of the grip"],
-  [2, "nobody wrote its reach down, so it is assumed middling"],
-  [3, "you let go of the grip to reach it"],
+  [0, "your hand where it lives, nothing moved"],
+  [1, "one finger stretching, the hand still on the grip"],
+  [2, "the hand off the grip, still on the device"],
+  [3, "the hand off the device altogether"],
+  [4, "nobody has measured it, so it sorts below all of them"],
 ]
+# What a control nobody has measured counts as where a tier is needed at
+# all. The reach term does not fire for one -- rewarding it for distance
+# nobody measured is how an unmeasured button beat a measured thumb -- so
+# this is only what the gates read, and they let it through: how far it is
+# is the question, and there is no answer to refuse it with.
+unmeasured = 4
 
 # When you reach for a thing, and what that lets it take. `takes` is
 # [closest allowed, furthest allowed] in the tiers above.
@@ -99,7 +104,7 @@ says   = "shape and count fit"
 [[term]]
 name   = "reach"
 weight = 12
-when   = "always"
+when   = "measured"
 per    = "tier"
 says   = "leaves closer controls free"
 general = "for each tier further from your hand"
@@ -127,13 +132,6 @@ weight = 20
 when   = "exact_shape"
 says   = "exact shape ({kind})"
 general = "exactly the shape it asked for"
-
-[[term]]
-name   = "suits"
-weight = 25
-when   = "suits"
-says   = "suits {suits}"
-general = "suits the job it is for"
 
 [[term]]
 name   = "click"

@@ -1169,13 +1169,15 @@ class TheRulesScreen(unittest.TestCase):
             for sub in subs[1:]:
                 self.assertIn(sub, row[0])
 
-    def test_it_names_the_reach_words_the_map_uses(self):
-        # `thumb`, `index finger` and the rest are matched as substrings
-        # of the map's own prose, so a screen that spelled them its own
-        # way would send somebody looking for words nothing contains.
+    def test_it_says_what_every_tier_means(self):
+        # The number comes off the map, measured finger by finger. A
+        # screen that showed it bare would be showing an index into a
+        # table the reader has not got.
         said = self.said()
-        for word, _tier in corneeds.REACH_TIER:
-            self.assertIn(word, said)
+        for tier, means in corneeds.REACH_MEANS.items():
+            with self.subTest(tier=tier):
+                self.assertIn(means, said)
+                self.assertIn(str(tier), said)
 
 
 class Renaming(unittest.TestCase):

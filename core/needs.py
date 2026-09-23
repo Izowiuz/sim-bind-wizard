@@ -83,10 +83,9 @@ from core import actions as cactions
 RULES = _read_rules(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                  'scoring.toml'))
 
-#: How precious a control is, read from the map's own words about reach.
-REACH_TIER = [(word, tier) for word, tier in RULES['reach']['words']]
-
-#: What a control whose reach nobody wrote down is worth.
+#: What a control nobody has measured is worth: worse than anything that
+#: has been. The map hands over a tier or None, and None is not a middling
+#: control -- it is one nothing is known about.
 UNMEASURED = RULES['reach']['unmeasured']
 
 #: What each tier means, in the words a reader has.
@@ -128,10 +127,29 @@ SAME_WAY = {want: tuple(names)
 
 
 def reach_tier(ctrl):
-    for word, tier in REACH_TIER:
-        if word in (ctrl.reach or ''):
-            return tier
-    return UNMEASURED
+    """How far this control is from flying, measured by the map.
+
+    `None` there means nobody has walked the fingers on that desk, which
+    is why the wizard asks for a rig at all. It is not a tier: it sorts
+    below every measured one, so a control somebody checked wins over one
+    nobody has.
+    """
+    return UNMEASURED if ctrl.tier is None else ctrl.tier
+
+
+def reach_said(ctrl):
+    """How it is reached, in words, or '' when nobody has measured it.
+
+    Built from the nearest spot rather than read off the control: where a
+    thing ended up is a fact about the desk, and the same stick on a
+    chair rail is reached differently.
+    """
+    spots = [a for a in ctrl.access if a.tier == ctrl.tier]
+    if not spots:
+        return ''
+    spot = spots[0]
+    said = REACH_MEANS.get(spot.tier, '')
+    return f'{spot.finger}, {said}' if spot.finger else said
 
 
 # --------------------------------------------------------------------- needs
@@ -397,11 +415,16 @@ def slots_for(need, ctrl, why=None):
 #: name reaches is a rule left behind in the code.
 WHEN = {
     'always': lambda c, n, r, t: True,
+    # The reach term rewards the FURTHEST control that still does the job,
+    # because that leaves the near ones for something more urgent. An
+    # unmeasured control must not collect that: nobody knows it is far,
+    # and paying it for distance nobody measured is how it beat a thumb
+    # button somebody had measured.
+    'measured': lambda c, n, r, t: c.tier is not None,
     'pinned': lambda c, n, r, t: bool(n.prefer) and n.prefer == c.label,
     'device_matches': lambda c, n, r, t: n.dev == r,
     'device_differs': lambda c, n, r, t: bool(n.dev) and n.dev != r,
     'exact_shape': lambda c, n, r, t: c.kind == n.first_shape,
-    'suits': lambda c, n, r, t: bool(n.suits) and n.suits in c.suits,
     'has_click': lambda c, n, r, t: n.push is not None and c.push is not None,
     'directions_differ': lambda c, n, r, t: (not satisfies_on(n, c)
                                              and directional(c)),
@@ -422,21 +445,28 @@ REFUSE = {
                                                                 x.ctrl),
     'wrong_shape': lambda x: x.ctrl.kind not in x.need.shapes,
     'too_few': lambda x: len(x.ctrl.bindable_buttons) < x.need.wanted,
-    'out_of_reach': lambda x: (x.tier > x.ceiling
-                               or (x.floor and x.tier < x.lowest)),
+    # Only where somebody has measured. How far a control is is what this
+    # gate is about, and on a desk nobody has walked the fingers on there
+    # is no answer to refuse it with -- refusing anyway places nothing at
+    # all, which reads as a broken planner rather than as an unmeasured
+    # desk. It still scores last, so anything measured wins.
+    'out_of_reach': lambda x: x.measured and (x.tier > x.ceiling
+                                              or (x.floor
+                                                  and x.tier < x.lowest)),
 }
 
 
 class _Run:
     """What a gate reads besides the control and the need."""
 
-    __slots__ = ('ctrl', 'need', 'role', 'tier', 'floor', 'ceiling', 'lowest',
-                 'usable')
+    __slots__ = ('ctrl', 'need', 'role', 'tier', 'measured', 'floor',
+                 'ceiling', 'lowest', 'usable')
 
     def __init__(self, ctrl, need, role, tier, floor, ceiling, lowest,
                  usable):
         self.ctrl, self.need, self.role = ctrl, need, role
         self.tier, self.floor = tier, floor
+        self.measured = ctrl.tier is not None
         self.ceiling, self.lowest, self.usable = ceiling, lowest, usable
 
 
@@ -634,10 +664,10 @@ def why_bits(p, out_of=None):
         out.append(f'{n.rank}/{out_of} factory profiles bind it' if out_of
                    else f'{n.rank} factory profile'
                         + ('' if n.rank == 1 else 's') + ' bind it')
-    if p.ctrl.reach:
+    if reach_said(p.ctrl):
         # Printed every time, not only for the reflex ones: it is what the
         # floor acts on, so it is what a disputed placement turns on.
-        out.append(f'reach: {p.ctrl.reach}')
+        out.append(f'reach: {reach_said(p.ctrl)}')
     if r is None:
         return out
     if r.how == 'pinned' and n.prefer:
@@ -744,6 +774,30 @@ class Layout:
     def __repr__(self):
         return (f'<Layout {len(self.placed)} placed, {len(self.unplaced)} '
                 f'unplaced, {len(self.free)} free, {len(self.axes)} axes>')
+
+    def unmeasured(self):
+        """(controls with no measured reach, controls) on this desk.
+
+        Worth saying out loud wherever a layout is explained: with none of
+        them measured every control scores the same on reach, so the
+        layout is real but it is not reach-aware, and nothing else on
+        screen would tell you that.
+        """
+        every = [g for dev in self.devices.values()
+                 for g in dev.groups(bindable=True)]
+        return sum(1 for g in every if g.tier is None), len(every)
+
+    def reach_note(self):
+        """One line about what the map has not been told, or ''."""
+        left, every = self.unmeasured()
+        if not left or not every:
+            return ''
+        if left == every:
+            return ('no control on this desk has a measured reach, so'
+                    ' nothing here knows what is near your hand'
+                    ' — sim-device-map/capture.py, then `r`')
+        return (f'{left} of {every} controls have no measured reach, so'
+                ' they sort below every control that has')
 
     def but(self, placed):
         """The same layout with a different set of placements.

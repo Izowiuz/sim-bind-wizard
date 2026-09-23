@@ -102,7 +102,7 @@ class TheArithmetic(unittest.TestCase):
              fake.button('Pinky button', 5, reach=fake.PINKY)],
             [fake.button('Panel button', 0, reach=fake.PANEL)])
         need = Need('Trim', 'hat4', ['U', 'R', 'D', 'L'],
-                    urgency=IN_A_TURN, dev='stick', suits='trim')
+                    urgency=IN_A_TURN, dev='stick')
         ctrl = next(c for c in devs['stick'].groups(bindable=True)
                     if c.label == 'Thumb hat')
         quiet = corneeds.score(ctrl, need, 'stick')
@@ -284,15 +284,6 @@ class WhatItNames(unittest.TestCase):
                   dev='stick')], devs)
         self.assertIn('stick', said(why(placed, 'Fire')))
 
-    def test_it_names_the_suits_tag_that_matched(self):
-        devs = {'stick': fake.device('stick', [
-            fake.button('Thumb button', 0, reach=fake.THUMB,
-                        suits=['gunnery'])])}
-        placed, _u, _f = allocate(
-            [Need('Fire', 'button', ['FIRE'], urgency=IN_A_TURN,
-                  suits='gunnery')], devs)
-        self.assertIn('gunnery', said(why(placed, 'Fire')))
-
     def test_it_records_the_reach_it_took_and_the_one_allowed(self):
         # `in a turn` may reach to tier 1 with the floor on. Without both
         # numbers "reached past the floor" is a claim with nothing behind it.
@@ -366,8 +357,7 @@ class TheAccount(unittest.TestCase):
 
     def bits(self, need, devs=None):
         devs = devs or {'stick': fake.device('stick', [
-            fake.button('Thumb button', 0, reach=fake.THUMB,
-                        suits='gunnery'),
+            fake.button('Thumb button', 0, reach=fake.THUMB),
             fake.hat2('Panel rocker', 1, reach=fake.PANEL)])}
         placed, _u, _f = allocate([need], devs)
         return corneeds.why_bits(placed[0])
@@ -399,9 +389,8 @@ class TheAccount(unittest.TestCase):
         self.assertTrue(any('floor' in b for b in got), got)
 
     def test_it_carries_the_terms_the_score_was_made_of(self):
-        got = self.bits(Need('Fire', 'button', ['F'], urgency=IN_A_TURN,
-                             suits='gunnery'))
-        self.assertTrue(any('suits gunnery' in b for b in got), got)
+        got = self.bits(Need('Fire', 'button', ['F'], urgency=IN_A_TURN))
+        self.assertTrue(any('exact shape' in b for b in got), got)
 
     def test_it_says_when_a_hand_chose_it(self):
         devs = {'stick': fake.device('stick', [
