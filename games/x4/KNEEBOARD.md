@@ -6,9 +6,9 @@ X4 Foundations · VIRPIL. Generated — do not edit, regenerate.
 
 | Control | Code | Does |
 |---|---|---|
-| Main stick, left/right | `X` | Ship: Steering primary |
-| Main stick, fore/aft | `Y` | Ship: Steering pitch |
-| Stick twist | `Z` | Ship: Steering secondary |
+| Main stick | `X` | Ship: Steering primary |
+| Main stick | `Y` | Ship: Steering pitch |
+| Main stick | `Z` | Ship: Steering secondary |
 | Mini-stick | `RX` | Ship: Strafe left right |
 | Mini-stick | `RY` | Ship: Strafe up down |
 | Left throttle lever | `RX` | Ship: Throttle |
@@ -17,8 +17,8 @@ X4 Foundations · VIRPIL. Generated — do not edit, regenerate.
 | Thumb mini-stick | `Y` | Map: Map pan up down |
 | Mini-stick | `RX` | On foot: FP yaw |
 | Mini-stick | `RY` | On foot: FP pitch |
-| Main stick, fore/aft | `Y` | On foot: FP walk |
-| Main stick, left/right | `X` | On foot: FP strafe |
+| Main stick | `Y` | On foot: FP walk |
+| Main stick | `X` | On foot: FP strafe |
 
 ## Buttons
 
@@ -31,13 +31,13 @@ X4 Foundations · VIRPIL. Generated — do not edit, regenerate.
 | 14 | Bottom thumb hat — push | Open playership info | — | — |
 | 18 | Bottom thumb hat — right | Open missions | — | — |
 | 16 | Bottom thumb hat — left | Quicksave | — | — |
-| 31 | Grip pinky button — press | Deselect target | Map back | — |
+| 31 | Grip pinky button — press | Fire secondary weapon | — | — |
 | 24 | Grip thumb hat — up | Next target action | — | — |
 | 26 | Grip thumb hat — down | Prev target action | — | — |
 | 23 | Grip thumb hat — push | Pause | — | — |
 | X | Main trigger — first | Fire primary weapon | — | — |
-| 13 | Thumb bottom button — press | Target next enemy | — | — |
-| BACK | Thumb top button — press | Fire secondary weapon | — | — |
+| 13 | Thumb bottom button — press | Target next target | Map select | — |
+| BACK | Thumb top button — press | Target next enemy | — | — |
 | LEFT_THUMB | Top thumb hat — up | Strafe up | — | — |
 | RIGHT_THUMB | Top thumb hat — left | Strafe left | — | — |
 | BIGBUTTON | Top thumb hat — down | Strafe down | — | — |
@@ -48,33 +48,33 @@ X4 Foundations · VIRPIL. Generated — do not edit, regenerate.
 
 | Code | Control | Ship | Map | On foot |
 |---|---|---|---|---|
-| 40 | APU button — press | Open map | — | — |
-| 29 | Big red button — press | Toggle SETA mode | — | — |
-| 17 | Bottom thumb button — press | Match speed | — | — |
+| 40 | APU button — press | Scan action | — | — |
+| 29 | Big red button — press | Boost | — | FP run |
+| 17 | Bottom thumb button — press | Comm action | — | — |
 | 23 | Keyboard B1 button — press | Toggle travel mode | — | — |
 | 24 | Keyboard B2 button — press | Toggle flight assist | — | — |
 | 25 | Keyboard B3 button — press | Toggle autopilot | — | — |
-| 26 | Keyboard B4 button — press | Toggle scan mode | — | — |
-| 27 | Keyboard B5 button — press | Toggle longrange scan mode | — | — |
-| 28 | Keyboard B6 button — press | Scan action | — | — |
-| B | Left side dial — push | Comm action | — | — |
-| X | Middle finger button — press | Target next target | Map select | — |
-| LEFT_SHOULDER | Middle finger hat — up | Cockpit view | Map reset position | — |
-| RIGHT_SHOULDER | Middle finger hat — right | Target view | — | — |
-| BACK | Middle finger hat — down | External view | Map reset rotation | — |
-| START | Middle finger hat — left | Cycle view | — | — |
-| 51 | Mode selector — 1 | — | Map pan to rotate | — |
-| A | Pinky button — press | Boost | — | FP run |
+| 26 | Keyboard B4 button — press | Deselect target | Map back | — |
+| 27 | Keyboard B5 button — press | Toggle scan mode | — | — |
+| 28 | Keyboard B6 button — press | Toggle longrange scan mode | — | — |
+| B | Left side dial — push | Toggle SETA mode | — | — |
+| X | Middle finger button — press | Match speed | — | — |
+| LEFT_SHOULDER | Middle finger hat — up | — | Map pan to rotate | — |
+| 48 | Mode selector — 4 | Cycle view | — | — |
+| 49 | Mode selector — 3 | External view | Map reset rotation | — |
+| 50 | Mode selector — 2 | Target view | — | — |
+| 51 | Mode selector — 1 | Cockpit view | Map reset position | — |
+| A | Pinky button — press | Deploy countermeasure | — | — |
 | LEFT_THUMB | Right side dial — push | Zoomgoggles | — | — |
-| 30 | T1 rocker — up | Dock action | — | — |
-| 31 | T1 rocker — down | Undock | — | — |
-| 32 | T2 rocker — up | Next subcomponent | — | — |
-| 33 | T2 rocker — down | Prev subcomponent | — | — |
-| 34 | T3 rocker — up | — | — | FP jump |
-| 35 | T3 rocker — down | — | — | FP crouch |
-| 16 | Thumb button — press | Deploy countermeasure | — | — |
-| BIGBUTTON | Thumb two-way hat — forward | Cycle next secondary weapongroup | — | — |
-| 13 | Thumb two-way hat — back | Cycle prev secondary weapongroup | — | — |
+| 30 | T1 rocker — up | Cycle next secondary weapongroup | — | — |
+| 31 | T1 rocker — down | Cycle prev secondary weapongroup | — | — |
+| 34 | T3 rocker — up | Dock action | — | — |
+| 35 | T3 rocker — down | Undock | — | — |
+| 36 | T4 rocker — up | Next subcomponent | — | — |
+| 37 | T4 rocker — down | Prev subcomponent | — | — |
+| 38 | T5 rocker — up | — | — | FP jump |
+| 39 | T5 rocker — down | — | — | FP crouch |
+| 16 | Thumb button — press | Open map | — | — |
 
 ## Writing it
 
@@ -84,14 +84,18 @@ X4 Foundations · VIRPIL. Generated — do not edit, regenerate.
 
 ## Still free
 
-- Mini-stick (stick) — no buttons
 - Trigger initial lever (stick) — no buttons
+- Main stick (stick) — no buttons
+- Mini-stick (stick) — no buttons
 - Stick encoder and click (stick) — no buttons
 - Analogue brake lever on the grip (stick) — no buttons
+- Left throttle lever (throttle) — no buttons
+- Right throttle lever (throttle) — no buttons
+- Side lever (throttle) — no buttons
+- Thumb two-way hat (throttle) — no buttons
 - Thumb mini-stick (throttle) — no buttons
 - Thumb hat (throttle) — no buttons
-- T4 rocker (throttle) — no buttons
-- T5 rocker (throttle) — no buttons
+- T2 rocker (throttle) — no buttons
 - E1 encoder (throttle) — no buttons
 - E2 encoder (throttle) — no buttons
 

@@ -17,6 +17,7 @@ from unittest import mock
 import fake
 from core import devmap
 from core import needs as corneeds
+from core import solve as csolve
 from core.actions import Bind
 from core.needs import (Layout, Need, allocate, dump_needs, read_needs,
                         reach_tier, IN_A_TURN, ON_APPROACH, IN_THE_AIR,
@@ -879,3 +880,167 @@ class TheRulesNameOnlyWordsTheMapProduces(unittest.TestCase):
         # the map's: a game asks for `forward`, a hat reports `fwd`.
         self.assertIn('forward', corneeds.RULES['directions'])
         self.assertIn('back', corneeds.RULES['directions'])
+
+
+class TheSolverIsNeverWorseThanWalkingTheList(unittest.TestCase):
+    """Greedy takes the needs in urgency order and gives each the best
+    control still free. It cannot undo a choice, so an early urgent need
+    takes the one a later need needed more -- and the passes named
+    `relaxed` and `borrowed` are what it does instead of backtracking.
+
+    The model decides the whole assignment at once. The judgement is
+    unchanged: `score()` still says how well a control plays a part, and
+    its number is the objective. So a difference here is one greedy
+    could not reach, not a difference of opinion.
+    """
+
+    def both(self, needs, devs):
+        """(greedy, solver) -- (total points, placed, unplaced) for each."""
+        if not csolve.have_it():
+            self.skipTest('no ortools here; the solver half cannot run')
+        out = []
+        for on in (False, True):
+            with mock.patch.object(csolve, 'have_it', lambda: on):
+                placed, left, _free = allocate(needs, devs)
+            out.append((sum(p.points or 0 for p in placed), len(placed),
+                        len(left)))
+        return out
+
+    def tight(self):
+        """Two needs and two controls, where taking the best first loses.
+
+        The urgent need scores well on both; the other only on the one
+        the urgent one would take. Walking the list places one of two.
+        """
+        devs = {'stick': fake.device('stick', [
+            fake.button('Thumb', 0, reach=fake.THUMB),
+            fake.hat4('Hat', 1, reach=fake.THUMB)])}
+        return [Need('Urgent', ('button', 'hat4'), [[Bind('A')]],
+                     urgency=IN_A_TURN, dev='stick'),
+                Need('Other', 'button', [[Bind('B')]],
+                     urgency=ON_THE_RAMP, dev='stick')], devs
+
+    def test_it_places_at_least_as_many(self):
+        needs, devs = self.tight()
+        greedy, solver = self.both(needs, devs)
+        self.assertGreaterEqual(solver[1], greedy[1])
+
+    def test_and_scores_at_least_as_well(self):
+        needs, devs = self.tight()
+        greedy, solver = self.both(needs, devs)
+        self.assertGreaterEqual(solver[0], greedy[0])
+
+    def test_without_the_solver_it_still_answers(self):
+        # ortools is the one dependency outside the standard library in
+        # this family. A clone without it gets the greedy layout, which
+        # is worse than the best and much better than none.
+        needs, devs = self.tight()
+        with mock.patch.object(csolve, 'have_it', lambda: False):
+            placed, _left, _free = allocate(needs, devs)
+        self.assertTrue(placed)
+
+    def test_a_pinned_need_still_gets_its_pin(self):
+        # And the pin is the WORSE control, so the ranking would put it
+        # elsewhere: a pin that only tips the scales is no use once
+        # something outranks it. BMS's pinky shift lost the grip pinky
+        # button to the landing lights exactly that way.
+        if not csolve.have_it():
+            self.skipTest('no ortools here; the solver half cannot run')
+        devs = {'stick': fake.device('stick', [
+            fake.button('Thumb', 0, reach=fake.THUMB),
+            fake.button('Pinky', 1, reach=fake.PANEL)])}
+        needs = [Need('Pinned', 'button', [[Bind('A')]], dev='stick',
+                      prefer='Pinky', urgency=IN_A_TURN)]
+        loose = Need('Pinned', 'button', [[Bind('A')]], dev='stick',
+                     urgency=IN_A_TURN)
+        with mock.patch.object(csolve, 'have_it', lambda: True):
+            free, _l, _f = allocate([loose], devs)
+        self.assertEqual(['Thumb'], [p.ctrl.label for p in free])
+        for on in (False, True):
+            with mock.patch.object(csolve, 'have_it', lambda on=on: on):
+                placed, _left, _free = allocate(needs, devs)
+            with self.subTest(solver=on):
+                self.assertEqual(['Pinky'], [p.ctrl.label for p in placed])
+
+    def test_no_control_takes_two_needs(self):
+        if not csolve.have_it():
+            self.skipTest('no ortools here; the solver half cannot run')
+        needs, devs = self.tight()
+        with mock.patch.object(csolve, 'have_it', lambda: True):
+            placed, _left, _free = allocate(needs, devs)
+        seen = [(p.role, p.ctrl.id) for p in placed]
+        self.assertEqual(len(seen), len(set(seen)))
+
+
+class WhatTheModelIsNotAllowedToDo(unittest.TestCase):
+    """The constraints, each on its own. A dict of results hid two of
+    them: a want that came back twice replaced itself, and a room taken
+    twice looked like one placement."""
+
+    def setUp(self):
+        if not csolve.have_it():
+            self.skipTest('no ortools here')
+
+    def test_a_want_takes_one_room(self):
+        got = csolve.best([('a', {1: 100, 2: 100})], [1, 2])
+        self.assertEqual(1, len(got))
+
+    def test_a_room_takes_one_want(self):
+        got = csolve.best([('a', {1: 100}), ('b', {1: 100})], [1])
+        self.assertEqual(1, len(got))
+
+    def test_placing_beats_scoring(self):
+        # Scores go negative -- a control on the wrong device with no
+        # directions and buttons to spare -- and the only home for a
+        # need can be one of those. Left unplaced it is a thing you
+        # cannot do in the aircraft; placed badly it is a stretch.
+        got = csolve.best([('a', {1: -200})], [1])
+        self.assertEqual([('a', 1)], got)
+
+    def test_and_it_still_prefers_the_better_room(self):
+        got = csolve.best([('a', {1: 10, 2: 90})], [1, 2])
+        self.assertEqual([('a', 2)], got)
+
+    def test_it_gives_up_the_better_room_to_place_two(self):
+        # The whole reason for the model: walking the list gives `a` the
+        # 90 and leaves `b` nowhere.
+        got = dict(csolve.best([('a', {1: 10, 2: 90}), ('b', {2: 90})],
+                               [1, 2]))
+        self.assertEqual({'a': 1, 'b': 2}, got)
+
+
+class APinIsAConstraintAndNotABigNumber(unittest.TestCase):
+    """It is worth +1000 as well, which outranks anything -- until the
+    model can place one more need by moving it. Then a number loses and
+    a constraint does not, and an explicit choice that the solver may
+    trade away is not a choice."""
+
+    def setUp(self):
+        if not csolve.have_it():
+            self.skipTest('no ortools here')
+
+    def rig(self):
+        """Two buttons. The pinned need fits either; the other fits only
+        the pinned one, so placing both means breaking the pin."""
+        devs = {'stick': fake.device('stick', [
+            fake.button('Pin', 0, reach=fake.THUMB),
+            fake.button('Spare', 1, reach=fake.THUMB)])}
+        return [Need('Mine', 'button', [[Bind('A')]], dev='stick',
+                     prefer='Pin', urgency=IN_A_TURN),
+                Need('Other', 'button', [[Bind('B')]], dev='stick',
+                     prefer='Pin', urgency=ON_THE_RAMP)], devs
+
+    def test_the_pin_holds_even_where_breaking_it_places_more(self):
+        needs, devs = self.rig()
+        placed, left, _free = allocate(needs, devs)
+        mine = next(p for p in placed if p.need.what == 'Mine')
+        self.assertEqual('Pin', mine.ctrl.label)
+
+    def test_and_the_other_is_told_rather_than_moved_quietly(self):
+        needs, devs = self.rig()
+        placed, _left, _free = allocate(needs, devs)
+        other = next((p for p in placed if p.need.what == 'Other'), None)
+        # Either left for the relaxed pass or put somewhere else -- but
+        # never on the pin, which is somebody else's.
+        if other is not None:
+            self.assertNotEqual('Pin', other.ctrl.label)

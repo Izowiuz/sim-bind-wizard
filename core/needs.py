@@ -69,6 +69,7 @@ def merge_rules(base, extra):
 
 
 from core import actions as cactions
+from core import solve as csolve
 
 
 # ---------------------------------------------------------------- vocabulary
@@ -891,21 +892,58 @@ def allocate(needs, devices, usable=None, rules=None):
                    key=lambda i: (needs[i].prefer is None, needs[i].urgency,
                                   -needs[i].rank))
 
+    def offers(i, floor):
+        """{pool index: points} -- where this need may go, and what each
+        is worth. A pinned need is offered its pin and nothing else, so
+        the choice is a choice rather than a nudge the ranking can undo.
+        """
+        need = needs[i]
+        out = {}
+        for j, (role, c) in enumerate(pool):
+            if j in taken:
+                continue
+            if need.prefer and floor and c.label != need.prefer:
+                continue
+            s = score(c, need, role, floor=floor, usable=usable, rules=rules)
+            if s is not None:
+                out[j] = s
+        return out
+
+    def chosen(todo, floor):
+        """{need index: pool index} for as many as can be placed.
+
+        One model rather than one choice per need in turn. Greedy cannot
+        undo a choice, so an early urgent need takes the control a later
+        one needed more -- and there is no pass that gives it back.
+        """
+        wants = [(i, offers(i, floor)) for i in todo]
+        if csolve.have_it():
+            got = csolve.best(wants, range(len(pool)))
+            if got is not None:
+                return dict(got)
+        # No solver installed, or it gave up: the list in urgency order,
+        # each taking the best still free. Worse than the best answer and
+        # much better than none.
+        out, used = {}, set()
+        for i, may in wants:
+            free = {j: s for j, s in may.items() if j not in used}
+            if not free:
+                continue
+            j = max(free, key=lambda j: free[j])
+            out[i], _ = j, used.add(j)
+        return out
+
     def pass_over(todo, floor):
         left = []
+        picked = chosen(todo, floor)
         for i in todo:
             need = needs[i]
-            best, best_s = None, None
-            for j, (role, c) in enumerate(pool):
-                if j in taken:
-                    continue
-                s = score(c, need, role, floor=floor,
-                          usable=usable, rules=rules)
-                if s is not None and (best_s is None or s > best_s):
-                    best, best_s = j, s
-            if best is not None and need.prefer and floor \
-                    and pool[best][1].label != need.prefer:
-                # it is pinned and this is not the pin: say so rather than
+            best = picked.get(i)
+            best_s = None if best is None else score(
+                pool[best][1], need, pool[best][0], floor=floor,
+                usable=usable, rules=rules)
+            if best is None and need.prefer and floor:
+                # it is pinned and the pin is not free: say so rather than
                 # quietly put it somewhere else and look like it worked
                 print(f'!! {need.what!r} is pinned to {need.prefer!r}, which is '
                       f'not free; leaving it for the relaxed pass',
