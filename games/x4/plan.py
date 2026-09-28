@@ -109,19 +109,19 @@ class Need(corneeds.Need):
 #: Axes are resolved by what the device map says a control IS, never by index.
 #: (X4 id, role, how to find it)
 AXIS_NEEDS = [
-    ('INPUT_RANGE_STEERING_PRIMARY',   'stick',    ('kind', 'stick-x')),
-    ('INPUT_RANGE_STEERING_PITCH',     'stick',    ('kind', 'stick-y')),
-    ('INPUT_RANGE_STEERING_SECONDARY', 'stick',    ('kind', 'twist')),
-    ('INPUT_RANGE_STRAFE_LEFT_RIGHT',  'stick',    ('kind', 'mini-stick-x')),
-    ('INPUT_RANGE_STRAFE_UP_DOWN',     'stick',    ('kind', 'mini-stick-y')),
+    ('INPUT_RANGE_STEERING_PRIMARY',   'stick',    ('axis', 'stick', 'x')),
+    ('INPUT_RANGE_STEERING_PITCH',     'stick',    ('axis', 'stick', 'y')),
+    ('INPUT_RANGE_STEERING_SECONDARY', 'stick',    ('axis', 'stick', 'z')),
+    ('INPUT_RANGE_STRAFE_LEFT_RIGHT',  'stick',    ('axis', 'ministick', 'x')),
+    ('INPUT_RANGE_STRAFE_UP_DOWN',     'stick',    ('axis', 'ministick', 'y')),
     ('INPUT_RANGE_THROTTLE',           'throttle', ('label', 'Left throttle lever')),
     ('INPUT_RANGE_MAP_ZOOM_IN',        'throttle', ('label', 'Side lever')),
-    ('INPUT_RANGE_MAP_PAN_LEFT_RIGHT', 'throttle', ('kind', 'mini-stick-x')),
-    ('INPUT_RANGE_MAP_PAN_UP_DOWN',    'throttle', ('kind', 'mini-stick-y')),
-    ('INPUT_RANGE_FP_YAW',             'stick',    ('kind', 'mini-stick-x')),
-    ('INPUT_RANGE_FP_PITCH',           'stick',    ('kind', 'mini-stick-y')),
-    ('INPUT_RANGE_FP_WALK',            'stick',    ('kind', 'stick-y')),
-    ('INPUT_RANGE_FP_STRAFE',          'stick',    ('kind', 'stick-x')),
+    ('INPUT_RANGE_MAP_PAN_LEFT_RIGHT', 'throttle', ('axis', 'ministick', 'x')),
+    ('INPUT_RANGE_MAP_PAN_UP_DOWN',    'throttle', ('axis', 'ministick', 'y')),
+    ('INPUT_RANGE_FP_YAW',             'stick',    ('axis', 'ministick', 'x')),
+    ('INPUT_RANGE_FP_PITCH',           'stick',    ('axis', 'ministick', 'y')),
+    ('INPUT_RANGE_FP_WALK',            'stick',    ('axis', 'stick', 'y')),
+    ('INPUT_RANGE_FP_STRAFE',          'stick',    ('axis', 'stick', 'x')),
 ]
 
 #: Where the judgements live. Which band a thing is in, what shape it wants,
@@ -171,13 +171,14 @@ def unknown(needs, catalogue):
 
 def axis_of(devs, role, how):
     """The axis a need names, by what the map says it is."""
-    kind, value = how
-    for a in devs[role].axes():
-        if kind == 'kind' and a.kind == value:
-            return a
-        if kind == 'label' and a.label == value:
-            return a
-    return None
+    dev = devs[role]
+    if how[0] == 'axis':
+        # The control's kind and which axis of it, said separately. One
+        # word for both -- `mini-stick-x` -- said the kind twice, and a
+        # stick is one control with three axes, not three controls.
+        return dev.axis_of(how[1], how[2])
+    return next((a for a in dev.axes()
+                 if dev.axis_label(a.index) == how[1]), None)
 
 
 def axis_plan(devs):

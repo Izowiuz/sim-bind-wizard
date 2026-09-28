@@ -395,7 +395,7 @@ class Rejections(unittest.TestCase):
     def test_an_unwired_control_is_never_offered(self):
         # The firmware reports it; nothing is physically behind it.
         devs = {'stick': fake.device('stick', [
-            fake.control('unwired', 'Phantom', [0]),
+            fake.unwired('Phantom', [0]),
             fake.button('Real button', 1, reach=fake.PANEL),
         ])}
         placed, _un, _free = allocate(
@@ -500,8 +500,8 @@ class HowFarAControlIs(unittest.TestCase):
     def test_the_nearest_way_of_reaching_it_is_the_one_said(self):
         dev = fake.device('stick', [fake.button('One', 0, reach=fake.PANEL)])
         one = dev.groups(bindable=True)[0]
-        one.access = [devmap.load().Spot(part='grip', level='OFF'),
-                      devmap.load().Spot(part='grip', level='HOME',
+        one.access = [devmap.load().Spot(role='grip', level='OFF'),
+                      devmap.load().Spot(role='grip', level='HOME',
                                          finger='thumb')]
         self.assertEqual(0, reach_tier(one))
         self.assertIn('thumb', corneeds.reach_said(one))
@@ -645,3 +645,237 @@ class WhichDeviceIsWhich(unittest.TestCase):
             with self.assertRaises(SystemExit) as caught:
                 devmap.by_role()
         self.assertIn('capture.py', str(caught.exception))
+
+
+class EveryAxisAGamesNamesExists(unittest.TestCase):
+    """A game names an axis by the control it is part of and which axis of
+    it -- `('stick', 'x')`. It used to be one word, `stick-x`, which said
+    the control's kind and the axis's part in it at once; when the map
+    stopped spelling it that way the lookups silently found nothing, and
+    x4 and Elite quietly lost their flight axes."""
+
+    #: The tables, and where in a row the selector sits.
+    TABLES = (('x4', 'AXIS_NEEDS', 2), ('elite', 'AXIS_NEEDS', 3),
+              ('falconbms', 'AXIS_NEEDS', 2))
+
+    def rows(self, game, table):
+        mod = _plan_module(game)
+        if mod is None:
+            self.skipTest(f'{game} has no planner on this machine')
+        return getattr(mod, table, None), mod
+
+    def test_every_selector_names_a_kind_the_map_knows(self):
+        import devicemap
+        for game, table, at in self.TABLES:
+            rows, _mod = self.rows(game, table)
+            if rows is None:
+                continue
+            for row in rows:
+                how = row[at]
+                kind = (how[1] if how[0] == 'axis' else None) \
+                    if isinstance(how, tuple) else None
+                if kind is None and how == 'axis':
+                    kind = row[at + 1][0]
+                if kind is None:
+                    continue
+                with self.subTest(game=game, need=row[0]):
+                    self.assertIn(kind, devicemap.KINDS)
+
+    def test_no_selector_still_spells_it_as_one_word(self):
+        for game, table, at in self.TABLES:
+            rows, _mod = self.rows(game, table)
+            if rows is None:
+                continue
+            for row in rows:
+                said = repr(row)
+                with self.subTest(game=game, need=row[0]):
+                    for gone in ('stick-x', 'stick-y', 'mini-stick-x',
+                                 'mini-stick-y'):
+                        self.assertNotIn(gone, said)
+
+
+def _plan_module(game):
+    """A game's planner, imported the way `bind` imports it."""
+    import importlib.util
+    import os
+    import sys
+    path = os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), 'games', game, 'plan.py')
+    if not os.path.exists(path):
+        return None
+    here = os.path.dirname(path)
+    sys.path.insert(0, here)
+    try:
+        spec = importlib.util.spec_from_file_location(f'{game}_plan', path)
+        assert spec and spec.loader
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+    finally:
+        sys.path.remove(here)
+
+
+class TheAxisSelectorsPickTheRightAxis(unittest.TestCase):
+    """Naming the kind alone finds the control's FIRST axis, so roll,
+    pitch and yaw all landed on the same one. The role is what tells
+    them apart, and a lookup that drops it is a lookup that silently
+    binds three needs to one stick movement."""
+
+    def rig(self):
+        """A stick of three axes and a throttle of two, and nothing else."""
+        stick = fake.device('stick', axes=[
+            {'index': 0, 'role': 'x'}, {'index': 1, 'role': 'y'},
+            {'index': 2, 'role': 'z'}, {'index': 3}], controls=[
+            {'kind': 'stick', 'id': 'main', 'label': 'Main stick',
+             'axes': [0, 1, 2]},
+            {'kind': 'lever', 'id': 'brake', 'label': 'Brake', 'axes': [3]}])
+        thr = fake.device('throttle', axes=[
+            {'index': 0, 'role': 'x'}, {'index': 1, 'role': 'y'},
+            {'index': 2}], controls=[
+            {'kind': 'ministick', 'id': 'mini', 'label': 'Mini',
+             'axes': [0, 1]},
+            {'kind': 'dial', 'id': 'dial', 'label': 'Dial', 'axes': [2]}])
+        return {'stick': stick, 'throttle': thr}
+
+    def picked(self, mod, devs, role, row, at):
+        """What one selector resolves to, through the GAME's own lookup.
+
+        Not through `Device.axis_of`: the thing under test is the game
+        asking, and a test that asks the map directly passes whatever
+        the game does with the answer.
+        """
+        if hasattr(mod, 'axis_of'):
+            got = mod.axis_of(devs, role, row[at])
+        else:
+            got = mod.find_axis(devs[role], row[at], row[at + 1])
+        return None if got is None else got.index
+
+    def each_game(self):
+        for game, table, at in EveryAxisAGamesNamesExists.TABLES:
+            mod = _plan_module(game)
+            if mod is not None and hasattr(mod, table):
+                yield game, mod, getattr(mod, table), at
+
+    def test_each_axis_of_a_control_is_its_own(self):
+        for game, mod, _rows, at in self.each_game():
+            devs = self.rig()
+            row = ['x', 'stick'] + [None] * 4
+            seen = []
+            for r in ('x', 'y', 'z'):
+                row[at:at + 2] = (['axis', ('stick', r)] if at + 1 < len(row)
+                                  and not hasattr(mod, 'axis_of')
+                                  else [('axis', 'stick', r), None])
+                seen.append(self.picked(mod, devs, 'stick', row, at))
+            with self.subTest(game=game):
+                self.assertEqual([0, 1, 2], seen)
+
+    def test_a_control_with_one_axis_needs_no_role(self):
+        for game, mod, _rows, at in self.each_game():
+            devs = self.rig()
+            row = ['x', 'stick'] + [None] * 4
+            row[at:at + 2] = (['axis', ('lever', '')]
+                              if not hasattr(mod, 'axis_of')
+                              else [('axis', 'lever', ''), None])
+            with self.subTest(game=game):
+                self.assertEqual(3, self.picked(mod, devs, 'stick', row, at))
+
+    def test_two_roles_of_one_control_never_land_on_one_axis(self):
+        # The regression this guards: naming only the kind gave roll,
+        # pitch and yaw the same axis. Not that two needs never share one
+        # -- x4 binds the stick for flying and again for walking, which
+        # is two contexts and one piece of plastic.
+        for game, table, at in EveryAxisAGamesNamesExists.TABLES:
+            mod = _plan_module(game)
+            if mod is None or not hasattr(mod, table):
+                continue
+            devs, seen = self.rig(), {}
+            for row in getattr(mod, table):
+                how = row[at] if isinstance(row[at], tuple) else (
+                    (row[at], *row[at + 1]) if row[at] == 'axis' else None)
+                if how is None or how[0] != 'axis' or len(how) < 3:
+                    continue
+                if not how[2]:
+                    continue        # one axis, so no role to collide
+                if row[1] not in devs:
+                    continue
+                got = self.picked(mod, devs, row[1], row, at)
+                if got is None:
+                    continue
+                key = (row[1], how[1], got)
+                with self.subTest(game=game, need=row[0]):
+                    self.assertIn(seen.get(key, how[2]), (how[2],),
+                                  f'{how[1]} {seen.get(key)} and {how[2]}'
+                                  ' are the same axis')
+                seen[key] = how[2]
+
+
+class TheRulesNameOnlyWordsTheMapProduces(unittest.TestCase):
+    """Three tables in `scoring.toml` name shapes and directions, and
+    nothing checked them. A shape nobody has -- a typo, or a kind the map
+    has since renamed -- simply never matched, and the need asking for it
+    went unplaced with no word about why."""
+
+    def rules(self, **over):
+        import copy
+        got = copy.deepcopy(corneeds.RULES)
+        got.update(over)
+        return got
+
+    def map_of(self):
+        return devmap.load()
+
+    def test_the_rules_on_file_agree_with_the_map(self):
+        corneeds.check_rules(corneeds.RULES, self.map_of())
+
+    def test_a_shape_the_map_has_no_word_for(self):
+        with self.assertRaises(ValueError) as caught:
+            corneeds.check_rules(
+                self.rules(shapes={'hat4': ['hat4', 'wobbler']}),
+                self.map_of())
+        self.assertIn('wobbler', str(caught.exception))
+
+    def test_a_need_shape_nothing_can_be(self):
+        with self.assertRaises(ValueError):
+            corneeds.check_rules(self.rules(shapes={'wobbler': ['hat4']}),
+                                 self.map_of())
+
+    def test_a_mechanism_that_is_not_a_kind(self):
+        with self.assertRaises(ValueError):
+            corneeds.check_rules(
+                self.rules(mechanisms={'one': ['latch', 'wobbler']}),
+                self.map_of())
+
+    def test_a_direction_no_control_ever_says(self):
+        # This is what it caught on the real file: `forward` and `back`
+        # were listed as words a CONTROL might use, and the map has only
+        # `fwd` and `aft`. Those entries could never match.
+        with self.assertRaises(ValueError) as caught:
+            corneeds.check_rules(
+                self.rules(directions={'up': ['up', 'forward']}),
+                self.map_of())
+        self.assertIn('forward', str(caught.exception))
+
+    def test_and_the_real_table_says_only_control_words(self):
+        dm = self.map_of()
+        ways = set(dm.DIRECTIONS) | {'push'}
+        for want, names in corneeds.RULES['directions'].items():
+            for one in names:
+                with self.subTest(want=want, says=one):
+                    self.assertIn(one, ways)
+
+    def test_loading_the_map_is_what_runs_it(self):
+        # Checked where both exist, not by whoever remembers to ask: a
+        # shape the rules name and the map has never heard of matches
+        # nothing, and the only sign is a need at the bottom of the
+        # unplaced list.
+        with mock.patch.object(corneeds, 'RULES',
+                               self.rules(shapes={'wobbler': ['hat4']})):
+            with self.assertRaises(ValueError) as caught:
+                devmap.load()
+        self.assertIn('wobbler', str(caught.exception))
+
+    def test_the_need_side_still_says_what_a_person_would(self):
+        # The left side is the word a need uses and is deliberately not
+        # the map's: a game asks for `forward`, a hat reports `fwd`.
+        self.assertIn('forward', corneeds.RULES['directions'])
+        self.assertIn('back', corneeds.RULES['directions'])

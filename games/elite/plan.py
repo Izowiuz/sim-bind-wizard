@@ -148,20 +148,20 @@ def twinned(*ship):
 #: roll, throttle and flight assist on the same control -- which is exactly
 #: what sharing a control between contexts is FOR.
 AXIS_NEEDS = [
-    ('RollAxisRaw',       'Ship', 'stick',    ('kind', 'stick-x'),      False),
-    ('PitchAxisRaw',      'Ship', 'stick',    ('kind', 'stick-y'),      True),
-    ('YawAxisRaw',        'Ship', 'stick',    ('kind', 'twist'),        False),
+    ('RollAxisRaw',       'Ship', 'stick',    ('axis', 'stick', 'x'),      False),
+    ('PitchAxisRaw',      'Ship', 'stick',    ('axis', 'stick', 'y'),      True),
+    ('YawAxisRaw',        'Ship', 'stick',    ('axis', 'stick', 'z'),        False),
     ('ThrottleAxis',      'Ship', 'throttle',
      ('label', 'Left throttle lever'), False),
-    ('LateralThrustRaw',  'Ship', 'throttle', ('kind', 'mini-stick-x'), False),
-    ('VerticalThrustRaw', 'Ship', 'throttle', ('kind', 'mini-stick-y'), False),
-    ('BuggyRollAxisRaw',  'SRV',  'stick',    ('kind', 'stick-x'),      False),
-    ('BuggyPitchAxis',    'SRV',  'stick',    ('kind', 'stick-y'),      True),
-    ('SteeringAxis',      'SRV',  'stick',    ('kind', 'stick-x'),      False),
+    ('LateralThrustRaw',  'Ship', 'throttle', ('axis', 'ministick', 'x'), False),
+    ('VerticalThrustRaw', 'Ship', 'throttle', ('axis', 'ministick', 'y'), False),
+    ('BuggyRollAxisRaw',  'SRV',  'stick',    ('axis', 'stick', 'x'),      False),
+    ('BuggyPitchAxis',    'SRV',  'stick',    ('axis', 'stick', 'y'),      True),
+    ('SteeringAxis',      'SRV',  'stick',    ('axis', 'stick', 'x'),      False),
     ('DriveSpeedAxis',    'SRV',  'throttle',
      ('label', 'Left throttle lever'), False),
-    ('CamTranslateXAxis', 'Ship', 'stick',    ('kind', 'mini-stick-x'), False),
-    ('CamTranslateYAxis', 'Ship', 'stick',    ('kind', 'mini-stick-y'), False),
+    ('CamTranslateXAxis', 'Ship', 'stick',    ('axis', 'ministick', 'x'), False),
+    ('CamTranslateYAxis', 'Ship', 'stick',    ('axis', 'ministick', 'y'), False),
 ]
 
 def _needs(filename):
@@ -223,13 +223,14 @@ def duplicates(needs):
 # ------------------------------------------------------------ the hardware --
 
 def axis_of(devs, role, how):
-    kind, value = how
-    for a in devs[role].axes():
-        if kind == 'kind' and a.kind == value:
-            return a
-        if kind == 'label' and a.label == value:
-            return a
-    return None
+    dev = devs[role]
+    if how[0] == 'axis':
+        # The control's kind and which axis of it, said separately. One
+        # word for both -- `mini-stick-x` -- said the kind twice, and a
+        # stick is one control with three axes, not three controls.
+        return dev.axis_of(how[1], how[2])
+    return next((a for a in dev.axes()
+                 if dev.axis_label(a.index) == how[1]), None)
 
 
 def axis_plan(devs):

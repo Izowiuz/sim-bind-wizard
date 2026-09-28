@@ -126,6 +126,39 @@ SAME_WAY = {want: tuple(names)
             for want, names in RULES['directions'].items()}
 
 
+def check_rules(rules, devicemap):
+    """Every control word the rules use is one the map can produce.
+
+    Three tables here name shapes and directions, and nothing checked
+    them: a shape nobody has -- a typo, or a kind the map has since
+    renamed -- simply never matched, and a need asking for it went
+    unplaced with no word about why. `FITS` said `switch2` long after
+    the map spelled anything that way, and the only sign was a need
+    quietly at the bottom of the unplaced list.
+
+    Not at import: this module has to load on a clone with no map at
+    all. `devmap.load()` calls it, which is the first moment both exist.
+    """
+    bad = []
+    kinds = set(devicemap.KINDS)
+    for want, subs in rules['shapes'].items():
+        for one in [want] + list(subs):
+            if one not in kinds:
+                bad.append(f'shapes: {one!r} is not a kind')
+    for one in rules['mechanisms']['one']:
+        if one not in kinds:
+            bad.append(f'mechanisms: {one!r} is not a kind')
+    ways = set(devicemap.DIRECTIONS) | {'push'}
+    for want, names in rules['directions'].items():
+        for one in names:
+            if one not in ways:
+                bad.append(f'directions: {want} accepts {one!r},'
+                           ' which no control says')
+    if bad:
+        raise ValueError('scoring.toml:\n  ' + '\n  '.join(sorted(set(bad))))
+    return rules
+
+
 def reach_tier(ctrl):
     """How far this control is from flying, measured by the map.
 

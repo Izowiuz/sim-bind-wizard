@@ -57,6 +57,15 @@ UNSAID = None
 
 # --------------------------------------------------------------- the controls
 
+def unwired(label, buttons=(), **kw):
+    """Buttons the firmware reports with nothing behind them.
+
+    A `status` and not a `kind`: a row that is not a control has no shape,
+    and the word used to sit in `kind` where nothing could check it.
+    """
+    return control('', label, buttons, status='unwired', **kw)
+
+
 def control(kind, label, buttons=(), names=(), dirs=(), stages=(),
             positions=(), push=None, rest_contact=None, travel_contact=None,
             transient=(), reach=UNSAID, **kw):
@@ -72,7 +81,7 @@ def control(kind, label, buttons=(), names=(), dirs=(), stages=(),
     for n, b in enumerate(buttons):
         name = said[n] if n < len(said) else ''
         states.append({'button': b}
-                      | ({'name': name, 'direction': name} if name and dirs
+                      | ({'direction': name} if name and dirs
                          else {'name': name} if name else {})
                       | ({'latching': True} if latching else {}))
     for role, b in (('push', push), ('rest', rest_contact),
@@ -93,7 +102,7 @@ def button(label, index, **kw):
     return control('button', label, [index], **kw)
 
 
-def hat2(label, first, dirs=('forward', 'back'), **kw):
+def hat2(label, first, dirs=('fwd', 'aft'), **kw):
     return control('hat2', label, [first, first + 1], dirs=list(dirs), **kw)
 
 
@@ -177,8 +186,9 @@ def desk(hand='', *devices):
             if c.get('reach') is None:
                 continue
             level, finger = c['reach']
-            access[c['id']] = [{'part': 'panel' if level == 'OFF' else 'grip',
-                                'level': level, 'finger': finger}]
+            # No `part`: the map works out which piece of rig a hand is
+            # on from the device and the level.
+            access[c['id']] = [{'level': level, 'finger': finger}]
         said.append({'slug': slug, 'hand': hand, 'access': access})
     return devicemap.Profile({'name': 'a desk in a test', 'device': said},
                              '<test-desk>')

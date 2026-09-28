@@ -1,3 +1,5 @@
+# WARNING WARNING 100% VIBECODED WARNING WARNING
+
 # sim-bind-wizard
 
 Generates HOTAS bindings for flight simulators from one description of the

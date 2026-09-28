@@ -24,6 +24,12 @@ def load():
     if path not in sys.path:
         sys.path.insert(0, path)
     import devicemap
+    # The first moment both the rules and the map exist. `core.needs`
+    # cannot check this at import, because it has to load on a clone
+    # with no map at all -- and a shape the rules name and the map has
+    # never heard of matches nothing, silently.
+    from core import needs
+    needs.check_rules(needs.RULES, devicemap)
     return devicemap
 
 

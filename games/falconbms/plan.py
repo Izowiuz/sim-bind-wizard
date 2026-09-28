@@ -144,15 +144,15 @@ def needs(filename):
 
 #: in-game axis, which device, and how to find it in the map
 AXIS_NEEDS = [
-    ('AXIS_ROLL',       'stick',    'kind', 'stick-x'),
-    ('AXIS_PITCH',      'stick',    'kind', 'stick-y'),
-    ('AXIS_YAW',        'stick',    'kind', 'twist'),
+    ('AXIS_ROLL',       'stick',    'axis', ('stick', 'x')),
+    ('AXIS_PITCH',      'stick',    'axis', ('stick', 'y')),
+    ('AXIS_YAW',        'stick',    'axis', ('stick', 'z')),
     ('AXIS_THROTTLE',   'throttle', 'label', 'left throttle lever'),
-    ('AXIS_BRAKE_LEFT', 'stick',    'kind', 'lever'),
+    ('AXIS_BRAKE_LEFT', 'stick',    'axis', ('lever', '')),
     ('AXIS_ANT_ELEV',   'throttle', 'label', 'side lever'),
-    ('AXIS_CURSOR_X',   'throttle', 'kind', 'mini-stick-x'),
-    ('AXIS_CURSOR_Y',   'throttle', 'kind', 'mini-stick-y'),
-    ('AXIS_FOV',        'throttle', 'kind', 'dial'),
+    ('AXIS_CURSOR_X',   'throttle', 'axis', ('ministick', 'x')),
+    ('AXIS_CURSOR_Y',   'throttle', 'axis', ('ministick', 'y')),
+    ('AXIS_FOV',        'throttle', 'axis', ('dial', '')),
 ]
 
 AXIS_NOTE = {
@@ -279,10 +279,17 @@ def dinput_axis(dev, axis):
 
 
 def find_axis(dev, how, what):
-    if how == 'kind':
-        return next((a for a in dev.axes() if a.kind == what), None)
+    """The axis a need names: by the control it is part of, or by label.
+
+    `('stick', 'x')` rather than `stick-x`. One word for both said the
+    control's kind and which axis of it at once, and so said the kind
+    twice -- and a stick is one control with three axes, not three
+    controls with one each.
+    """
+    if how == 'axis':
+        return dev.axis_of(*what)
     return next((a for a in dev.axes()
-                 if what in (a.label or '').lower()), None)
+                 if what in dev.axis_label(a.index).lower()), None)
 
 
 def axis_plan(devs):

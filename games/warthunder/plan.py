@@ -176,7 +176,7 @@ def axis_of(devs, want):
     """Find the axis a need names, by what the map says it is."""
     stick, thr = devs['stick'], devs['throttle']
     def by_kind(dev, kind):
-        return next((a for a in dev.axes() if a.kind == kind), None)
+        return next(iter(dev.axes(kind=kind)), None)
     if want == 'stick-x':
         return 'stick', by_kind(stick, 'stick-x')
     if want == 'stick-y':
@@ -185,7 +185,7 @@ def axis_of(devs, want):
         return 'stick', by_kind(stick, 'twist')
     if want == 'throttle-lever':
         a = next((x for x in thr.axes()
-                  if x.kind == 'lever' and 'left' in (x.label or '').lower()), None)
+                  if 'left' in thr.axis_label(x.index).lower()), None)
         return 'throttle', a or by_kind(thr, 'lever')
     if want in ('view-x', 'view-y'):
         g = next((g for g in thr.groups('ministick')), None)
@@ -225,7 +225,7 @@ def axis_plan(devs):
             continue
         dead = AXIS_DEADZONE.get(name)
         if dead is None:
-            dead = 0.06 if a.kind.startswith('mini-stick') else (
+            dead = 0.06 if a.kind == 'ministick' else (
                 0 if a.kind == 'lever' else 0.02)
         props = {'innerDeadzone': dead}
         props.update(AXIS_PROPS.get(name, {}))
@@ -348,7 +348,7 @@ def _sheet(layout):
     for (role, idx), cell in sorted(seen.items()):
         d = devs[role]
         a_, g = d.axis(idx), d.axis_group(idx)
-        label = g.label if g else (a_.label if a_ else f'axis {idx}')
+        label = g.label if g else dev.axis_label(idx)
         if cell['inv']:
             label += ' (inverted)'
         sh.add_axis(csheet.AxisRow(

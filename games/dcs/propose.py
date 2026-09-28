@@ -341,11 +341,13 @@ def resolve_axis(devs, need, cmds):
     # time, so the combined Thrust axis is not enough -- and binding it as well
     # would have both fighting for the same engines.
     if low.startswith('thrust'):
-        levers = devs['throttle'].axes(kind='lever')
+        thr = devs['throttle']
+        levers = thr.axes(kind='lever')
         side = ('right' if 'right' in low else
                 'left' if 'left' in low else None)
         if side:
-            match = [a for a in levers if side in (a.label or '').lower()]
+            match = [a for a in levers
+                     if side in thr.axis_label(a.index).lower()]
             return ('throttle', match or levers[:1])
         return ('throttle', [])          # combined: superseded by the pair
     if want == 'throttle-lever':

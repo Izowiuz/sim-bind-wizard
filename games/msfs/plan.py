@@ -131,10 +131,11 @@ def axis_plan(devs, known):
     roll, pitch, yaw = (by_kind(stick, 'stick-x'), by_kind(stick, 'stick-y'),
                         by_kind(stick, 'twist'))
     lever = next((a for a in thr.axes(kind='lever')
-                  if 'left' in (a.label or '').lower()),
+                  if 'left' in thr.axis_label(a.index).lower()),
                  next(iter(thr.axes(kind='lever')), None))
     brake = next((a for a in stick.axes()
-                  if a.kind in ('slider', 'lever') and a.safe_for_absolute), None)
+                  if stick.axis_kind(a.index) in ('slider', 'lever')
+                  and a.safe_for_absolute), None)
     # a dial is for dialling a value, not for a lever's job: keep it out of
     # the prop-pitch search and give it the vertical speed selector instead
     prop = next((a for a in thr.axes()

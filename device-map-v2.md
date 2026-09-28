@@ -18,8 +18,8 @@ Zasada nadrzędna: **device map przechowuje fakty i tiery, a nie wyniki.** Scori
 | `axis.detents` | lista pozycji | detenty (afterburner, idle) |
 | `axis.range` / `axis.noise` | liczby | precyzja osi |
 | `access` | lista `(pozycja, palec)` | skąd i czym się obsługuje |
-| `blind_distinct` | `none` / `low` / `high` | rozróżnialność na ślepo (kształt, faktura, izolacja) |
-| `accident_risk` | `low` / `med` / `high` | osłony, klapki, bliskość triggera |
+| `blind_distinct` | `0` / `1` / `2` | czy znajdziesz ją bez patrzenia: nie / trochę / tak |
+| `accident_risk` | `0` / `1` / `2` | czy da się ją nacisnąć przez pomyłkę: nie / trochę / tak |
 | `hold_ok` | bool | wygoda długiego trzymania |
 | `rapid_ok` | bool | wygoda szybkiego wielokrotnego klikania |
 | `direction` | `up`, `down`, `fwd`, `aft`, `left`, `right`, `cw`, `ccw` | pary akcji (zoom in/out, range up/down) na przeciwne kierunki |

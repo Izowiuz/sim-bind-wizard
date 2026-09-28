@@ -324,7 +324,7 @@ class ByPress(unittest.TestCase):
                       refused(self.rv, self.gear, 'stick', None))
 
     def test_a_control_that_carries_nothing_is_refused(self):
-        devs = stick(fake.control('unwired', 'Phantom', [0]),
+        devs = stick(fake.unwired('Phantom', [0]),
                      fake.button('Panel button', 1, reach=fake.PANEL))
         rv = made([Need('Gear', 'button', [[Bind('GEAR')]])], devs=devs)
         phantom = next(c for c in rv.layout.devices['stick']._groups
@@ -1366,7 +1366,7 @@ class WhatItFound(unittest.TestCase):
         self.assertIn('Thumb hat', lines, 'a control nobody took is listed')
 
     def test_it_marks_a_control_that_can_carry_nothing(self):
-        devs = stick(fake.control('unwired', 'Phantom', [0]),
+        devs = stick(fake.unwired('Phantom', [0]),
                      fake.button('Real', 1, reach=fake.PANEL))
         rv = made([Need('Gear', 'button', [[Bind('GEAR')]])], devs=devs)
         phantom = map_text(rv).splitlines()
