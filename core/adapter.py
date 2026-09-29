@@ -52,6 +52,7 @@ import typing
 from core import actions as cactions
 from core import backup
 from core import needs as corneeds
+from core import overlay as coverlay
 from core import solvers as csolvers
 from core import sheet as csheet
 from core import review as creview
@@ -309,13 +310,28 @@ class Adapter(abc.ABC):
     #: `cache()` is told which.
     CACHE: dict = {}
 
-    #: Where this game's judgements live, relative to its own directory --
-    #: which band a thing is in, what shape it wants, what you filed it
-    #: under. Empty for a game that derives its needs instead: DCS reads
-    #: them off the aircraft, so there is nothing to keep.
+    #: Where this game's description of its functions lives, relative to
+    #: its own directory -- which band a thing is in, what shape it wants,
+    #: whether you hold it down. Empty for a game that derives its needs
+    #: instead: DCS reads them off the aircraft, so there is nothing to
+    #: keep.
     #:
     #: Deliberately not in `CACHE`. That names what the harvest wrote, and
     #: a harvest cannot write a judgement.
+    NEEDS_FILE: str = ''
+
+    #: Which overlay this game is laid out with, from `overlays/`: which
+    #: device a family belongs on, which control carries the shift, which
+    #: two things your hand has to work at once. `--overlay` replaces it
+    #: for one run and `--overlay none` runs without any, which is the
+    #: allocator judging every control on reach and shape alone.
+    OVERLAY: str = ''
+
+    #: Where what sits where lives. The answer, not the question: one row
+    #: per placed function saying which control took it and who decided.
+    #: This used to be the same file as the description above, so one
+    #: wrote the question and the answer into one line and a reader could
+    #: not tell which half the planner had produced.
     BINDS: str = ''
 
     #: Which of `CACHE`'s files the catalogue is read out of. Named rather
@@ -323,11 +339,6 @@ class Adapter(abc.ABC):
     #: top bar, and a plausible wrong filename there is worse than none --
     #: the question it answers is "is this the file I just re-harvested".
     CATALOGUE: str = ''
-
-    #: Fields this game keeps of its own that travel with them. BMS marks
-    #: a need as living on the shifted layer and nobody else has the idea;
-    #: a generic bag would be the opaque payload this contract replaced.
-    EXTRA: tuple = ()
 
     #: constructor parameter -> extra flag spellings, for a game whose own
     #: word for something predates the common one.
@@ -452,10 +463,11 @@ class Adapter(abc.ABC):
     def drop_cache(self) -> list[str]:
         """Remove what the harvest wrote, and only that.
 
-        `CACHE` names what the harvest wrote; `BINDS` is deliberately not
-        in it. So this walk cannot reach the judgements however it is
-        written -- which matters, because a harvest is one command away
-        from coming back and a judgement is not.
+        `CACHE` names what the harvest wrote; `NEEDS_FILE` and `BINDS`
+        are deliberately not in it. So this walk cannot reach the
+        judgements however it is written -- which matters, because a
+        harvest is one command away from coming back and a judgement is
+        not.
         """
         out = []
         for name in sorted(self.CACHE):
@@ -483,7 +495,12 @@ class Adapter(abc.ABC):
 
     @typing.final
     def save_needs(self, needs) -> str:
-        """Write the judgements down, or say why there is nowhere to.
+        """Write both halves down, or say why there is nowhere to.
+
+        The description and where things sit go to different files, and
+        both are written together because one keystroke saves what you
+        did: adding a function and putting it somewhere are the same
+        evening's work.
 
         A judgement is derived from nothing: delete it and it is gone. So
         a screen that lets somebody make one has to be able to keep it,
@@ -496,13 +513,16 @@ class Adapter(abc.ABC):
         with it. Anything the file has never seen, which is what `a` makes,
         goes on the end.
         """
-        if not self.BINDS:
+        if not self.NEEDS_FILE:
             raise RuntimeError(
                 f'{self.game} derives its needs rather than keeping them, '
                 'so there is no list to write')
-        corneeds.save_needs(self.here, self.BINDS, self.as_filed(needs),
-                            self.EXTRA)
-        return f'wrote {len(needs)} to {self.BINDS}'
+        filed = self.as_filed(needs)
+        corneeds.save_needs(self.here, self.NEEDS_FILE, filed)
+        corneeds.save_assignments(self.here, self.BINDS, filed)
+        return (f'wrote {len(needs)} to {self.NEEDS_FILE} and where '
+                f'{sum(1 for n in needs if n.assignment)} of them sit to '
+                f'{self.BINDS}')
 
     def as_filed(self, needs):
         """`needs` in the order the file on disk has them."""
@@ -566,6 +586,11 @@ class Adapter(abc.ABC):
                        help='review the layout, write what you keep')
         p.add_argument('--write', action='store_true',
                        help='write the whole layout into the game')
+        p.add_argument('--overlay', metavar='NAME',
+                       help='which layout to ask for, from overlays/: '
+                            + (', '.join(coverlay.names()) or 'none written')
+                            + f'. {self.OVERLAY or "none"}, by default; '
+                              '`none` asks for nothing.')
         p.add_argument('--solver', metavar='NAME',
                        choices=[n for n, _s, _w in csolvers.choices()],
                        help='who decides which need takes which control: '
@@ -606,6 +631,31 @@ class Adapter(abc.ABC):
         return who()
 
     @typing.final
+    def overlay(self, name):
+        """The overlay this run uses, and one line saying which.
+
+        Said out loud for the reason the solver is: it changes where things
+        land, so a layout you cannot explain is a layout you cannot trust.
+        A name nothing answers to stops the run rather than quietly laying
+        the desk out with no wishes at all -- that is the error, and it
+        looks exactly like the planner ignoring you.
+        """
+        want = name or self.OVERLAY
+        if not want or want == 'none':
+            print('overlay: none', file=sys.stderr)
+            return None
+        got = coverlay.named(want, self.game)
+        # Over the needs now, rather than leaving it to `allocate`. A game
+        # reads the wishes itself before any allocation happens: BMS splits
+        # its list into the plain layer and the shifted one, so a `shift`
+        # nothing had set yet put all five shifted needs on the plain
+        # layer and moved 44 bindings. `apply` sets the same values twice
+        # if `allocate` runs it again, which is no change.
+        got.apply(self.NEEDS)
+        print(f'overlay: {got.name}', file=sys.stderr)
+        return got
+
+    @typing.final
     def main(self, argv=None):
         """Everything that was asked for, in one order.
 
@@ -621,6 +671,7 @@ class Adapter(abc.ABC):
         if args.desk:
             os.environ['SIM_DEVICE_PROFILE'] = args.desk
         corneeds.SOLVER = self.solver(args.solver)
+        corneeds.OVERLAY = self.overlay(args.overlay)
 
         bad = self.unknown()
         if bad:

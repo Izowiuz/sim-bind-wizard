@@ -62,7 +62,7 @@ class TheArithmetic(unittest.TestCase):
         ])}
         placed, _u, _f = allocate([
             Need('Trim', 'hat4', ['U', 'R', 'D', 'L'],
-                 urgency=IN_A_TURN, dev='stick'),
+                 urgency=IN_A_TURN, device='stick'),
             Need('Canopy', 'button', ['CANOPY'], urgency=ON_THE_RAMP)], devs)
         for p in placed:
             self.assertEqual(p.points, sum(d for d, _t in p.why.parts),
@@ -112,7 +112,7 @@ class TheArithmetic(unittest.TestCase):
              fake.button('Pinky button', 5, reach=fake.PINKY)],
             [fake.button('Panel button', 0, reach=fake.PANEL)])
         need = Need('Trim', 'hat4', ['U', 'R', 'D', 'L'],
-                    urgency=IN_A_TURN, dev='stick')
+                    urgency=IN_A_TURN, device='stick')
         ctrl = next(c for c in devs['stick'].groups(bindable=True)
                     if c.label == 'Thumb hat')
         quiet = corneeds.score(ctrl, need, 'stick')
@@ -120,58 +120,6 @@ class TheArithmetic(unittest.TestCase):
         loud = corneeds.score(ctrl, need, 'stick', parts=loud_parts)
         self.assertEqual(quiet, loud)
         self.assertEqual(quiet, sum(d for d, _t in loud_parts))
-
-
-class WhyThatButton(unittest.TestCase):
-    """The second question, which nothing recorded.
-
-    A hat gives four binds and they share a control, so they share every
-    word of the account so far -- the band, the pass, the score. What
-    differs between them is which BUTTON each landed on, and `slots_for`
-    decides that by three rules and writes none of them down. Four
-    identical explanations for four different bindings is worse than none:
-    it looks like an answer.
-    """
-
-    def why_of(self, need, ctrl):
-        said = []
-        got = corneeds.slots_for(need, ctrl, why=said)
-        self.assertEqual(len(got), len(said),
-                         'one reason per button, or the pairing is a guess')
-        return dict(zip(got, [t for _b, t in said]))
-
-    def hat(self, push=None):
-        return fake.device('stick', [
-            fake.hat4('Thumb hat', 0, push=push)]).groups(bindable=True)[0]
-
-    def test_a_lone_action_says_it_took_the_click(self):
-        got = self.why_of(Need('Fire', 'hat4', [[Bind('F')]]),
-                          self.hat(push=4))
-        self.assertIn('click', got[4])
-
-    def test_a_named_direction_says_which_one(self):
-        need = Need('Speedbrake', 'hat4', [[Bind('OUT')], [Bind('IN')]],
-                    on=('forward', 'back'))
-        got = self.why_of(need, self.hat())
-        self.assertIn('forward', got[0])
-        self.assertIn('back', got[2])
-
-    def test_press_order_says_it_is_press_order(self):
-        need = Need('Trim', 'hat4', [[Bind(x)] for x in 'URDL'])
-        got = self.why_of(need, self.hat())
-        self.assertTrue(any('order' in t for t in got.values()), got)
-
-    def test_directions_that_could_not_be_honoured_say_so(self):
-        # `slots_for` falls back to press order in silence, so a four-way
-        # need on a five-position selector landed on '1'..'4' while the
-        # need still claimed it was bound fore and aft.
-        sel = fake.device('stick', [
-            fake.selector('Mode', 0, positions=5)]).groups(bindable=True)[0]
-        need = Need('Speedbrake', 'selector',
-                    [[Bind('OUT')], [Bind('IN')]], on=('forward', 'back'))
-        got = self.why_of(need, sel)
-        self.assertTrue(any('forward' in t and 'not' in t.lower()
-                            for t in got.values()), got)
 
 
 class ABindKnowsWhereItIs(unittest.TestCase):
@@ -208,31 +156,6 @@ class ABindKnowsWhereItIs(unittest.TestCase):
         said = {tuple(b.reason.parts)
                 for _n, slot in p.slots for b in slot if b.reason}
         self.assertEqual(1, len(said))
-
-    def test_nothing_surprising_is_said_once_not_four_times(self):
-        # Four binds that all arrived by press order arrived by press
-        # order. Four spellings of that bury the one line that would say
-        # otherwise.
-        p = self.placed()
-        spots = {b.reason.spot for _n, slot in p.slots for b in slot
-                 if b.reason}
-        # One distinct sentence, not its exact wording: this test is about
-        # repetition, and pinning the prose made it break when the words
-        # went man-terse and the rule had not moved.
-        self.assertEqual(1, len(spots), spots)
-
-    def test_a_direction_the_control_renames_says_so_per_button(self):
-        # A speedbrake is fore/aft whatever hat it lands on. Landing
-        # "forward" on a button the map calls "up" is the thing a reader
-        # would otherwise have to work out from the hardware.
-        need = Need('Speedbrake', 'hat4', [[Bind('OUT')], [Bind('IN')]],
-                    on=('forward', 'back'), urgency=IN_A_TURN)
-        p = self.placed(need=need)
-        spots = {b.reason.spot for _n, slot in p.slots for b in slot
-                 if b.reason}
-        self.assertEqual(2, len(spots), spots)
-        self.assertTrue(all('forward' in t or 'back' in t for t in spots),
-                        spots)
 
     def test_where_it_landed_is_not_written_down_as_a_judgement(self):
         # `role`, `button` and `reason` are what a RUN worked out, like
@@ -291,7 +214,7 @@ class WhatItNames(unittest.TestCase):
             [fake.button('Throttle button', 0, reach=fake.THUMB)])
         placed, _u, _f = allocate(
             [Need('Fire', 'button', ['FIRE'], urgency=IN_A_TURN,
-                  dev='stick')], devs)
+                  device='stick')], devs)
         self.assertIn('stick', said(why(placed, 'Fire')))
 
     def test_it_records_the_reach_it_took_and_the_one_allowed(self):

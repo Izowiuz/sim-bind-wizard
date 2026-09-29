@@ -30,6 +30,10 @@
       core/solvers.py         Solver, Greedy, CpSat: who gets what, once the
                               scoring has said what each is worth
       core/vocab.py           load a harvest's output; save it
+      core/overlay.py         Overlay: what you want of a layout, read from
+                              overlays/ -- which device a family belongs on,
+                              and the pair rules, which are the only claims
+                              in the tool about two controls at once
       core/backup.py          copy what a writer is about to replace; put it back
       core/review.py          the plan on screen: keep or drop each binding
       core/sheet.py           Sheet, Row, AxisRow -> markdown and html
@@ -39,7 +43,15 @@
                               and Theme, which is what colour it draws in
       games/<game>/harvest.py     a Harvest subclass
       games/<game>/plan.py        an Adapter subclass (DCS: propose.py)
+      games/<game>/<game>-needs.json   what each function is, and how you
+                              use it. In the repo: nothing derives it
+      games/<game>/<game>-binds.json   what sits where, and who decided.
+                              Written by the review screen
+      games/<game>/<game>-actions.json the harvest's cache. NOT in the repo
       games/<game>/README.md
+      overlays/*.toml         how you like a desk laid out. Not per game:
+                              `weapons on the stick` is the same wish in
+                              all six
       tests/run.py            every test; stdlib unittest, nothing to install
       tests/test_contract.py  the adapter contract, on a clone with no data
       tests/test_types.py     pyright, when it is installed
@@ -106,14 +118,18 @@ in scope in those two files.
 | kneeboard rendering | `core/sheet` |
 | the action vocabulary and its readable names | `games/<g>/harvest` |
 | device slots, button codes, global numbering | `games/<g>/harvest` |
-| what a pilot must be able to do | `games/<g>/plan.NEEDS` |
+| what a pilot must be able to do | `games/<g>/<g>-needs.json` |
+| where you want it, and which two things your hand must work at once | `overlays/*.toml` |
+| what sits where now, and who decided | `games/<g>/<g>-binds.json` |
 | reading and writing the game's config | `games/<g>/plan` |
 | what goes on the kneeboard | `games/<g>/plan._sheet()` |
 
 ## core.needs
 
     Need(what, shape, bindings=(), push=None, urgency=IN_THE_AIR,
-         suits=None, dev=None, prefer=None, on=None, note='')
+         suits=None, dev=None, prefer=None, on=None, rank=0,
+         category=None, yours=None, held=False, rapid=False,
+         by_feel=False, costly=False, modifier=False)
 
 | field | meaning |
 |---|---|
@@ -220,7 +236,7 @@ design:
     c / C   confirm this one / every proposal
     p / P   put the planner's choice on this one / into every gap
     RETURN  press the control you want it on
-    l       or pick one from a list, with no hardware
+    l       or assign from the free controls that fit, with no hardware
     x / X   clear this one / drop every proposal, leaving yours
     m       the device map, and where the game was found
     y       why a control is chosen: the weights, and what they are for

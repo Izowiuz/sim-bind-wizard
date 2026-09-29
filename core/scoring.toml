@@ -100,6 +100,32 @@ the thumb mini-stick -- a control you cannot hold as a modifier while working \
 the thumb hats the shifted layer sits on."""
 
 [[term]]
+name   = "stayed"
+weight = 20
+when   = "stayed"
+says   = "where you left it"
+note   = """A layout is learnt with the hands, so where a binding already is \
+is worth points. Without this the allocator answered every regeneration from \
+scratch: moving ONE binding by hand moved 21 of X4's 32, because every other \
+decision was taken afresh against a board that had shifted under it.
+
+Twenty is measured, not judged. Thirty forced moves across the five games, \
+one hand-placed binding each:
+
+    weight    bindings moved    layout worth
+         0              16.8          116897
+        10               3.4          116897
+        20               3.4          116897
+        30               3.1          116799
+        50               2.9          116753
+       100               3.0          116683
+
+Eighty per cent of the churn goes for nothing at all -- the layouts at 20 \
+are worth exactly what they were worth at 0. Past 20 you start buying \
+tenths of a binding with real quality. And about three is the floor: that is \
+the true cascade, the one you moved plus what it displaces."""
+
+[[term]]
 name   = "fits"
 weight = 100
 when   = "always"
@@ -127,7 +153,7 @@ general = "on the device it asked for"
 name   = "device_wrong"
 weight = -50
 when   = "device_differs"
-says   = "wrong device; wanted the {dev}"
+says   = "wrong device; wanted the {device}"
 general = "on a different device"
 
 [[term]]

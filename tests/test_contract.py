@@ -410,13 +410,18 @@ class TheJudgementsHaveAHome(unittest.TestCase):
                 self.assertTrue(os.path.exists(where),
                                 f'{game} names {cls.BINDS} and it is not there')
 
-    def test_a_field_a_game_keeps_of_its_own_is_named(self):
-        # BMS marks a need as living on the shifted layer and nobody else
-        # has the idea. A generic bag would be the opaque payload this
-        # contract replaced, so the game says which field travels.
+    def test_the_description_and_the_answer_are_different_files(self):
+        # They were one, so a row said what the function is AND where the
+        # allocator had put it, and nothing in the file said which half
+        # was which.
         for game, cls in self.planners():
             with self.subTest(game=game):
-                self.assertIsInstance(cls.EXTRA, tuple)
+                if not cls.NEEDS_FILE:
+                    continue
+                self.assertNotEqual(cls.NEEDS_FILE, cls.BINDS)
+                for name in (cls.NEEDS_FILE, cls.BINDS):
+                    self.assertNotIn(name, cls.CACHE,
+                                     f'{game} lets the harvest write {name}')
 
 
 class TheCatalogueSaysWhereItCameFrom(unittest.TestCase):

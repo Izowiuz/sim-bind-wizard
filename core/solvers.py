@@ -71,7 +71,13 @@ class Greedy(Solver):
             free = {j: s for j, s in may.items() if j not in used}
             if not free:
                 continue
-            j = max(free, key=lambda j: free[j])
+            # `-j` says the tie-break out loud. `max` keeps the first of
+            # equals, which is the first the dict was BUILT in -- true to
+            # the pool order only because the one caller happens to build
+            # it that way. A rule that holds by coincidence is one the
+            # other solver cannot be held to, and both of them now break
+            # a tie towards the earlier control.
+            j = max(free, key=lambda j: (free[j], -j))
             used.add(j)
             out.append((want, j))
         return out
@@ -111,6 +117,7 @@ class CpSat(Solver):
         is already whole numbers, and rounding one that was not would
         change the ranking rather than the arithmetic."""
         from ortools.sat.python import cp_model
+        room = list(room)
         model = cp_model.CpModel()
         pick = {}
         for n, (_want, may) in enumerate(wants):
@@ -124,7 +131,26 @@ class CpSat(Solver):
                     if where in may]
             if mine:
                 model.add_at_most_one(mine)
-        model.maximize(sum((self.PLACED + points) * pick[n, where]
+        # Scaled, so that the same sum can carry a tie-break underneath
+        # it. Without one the model has no preference between equally
+        # good answers -- and most of a layout is equally good answers,
+        # because a dozen thumb buttons are worth exactly the same to a
+        # binding asking for a button. So every change re-rolled every
+        # tie: moving ONE binding by hand moved 21 of X4's 32, and the
+        # twenty were not consequences, they were noise.
+        #
+        # `- where` under the scale breaks a tie towards the earlier
+        # control in the pool, which is what walking the list does
+        # already: `max` over a dict built in pool order keeps the first.
+        # So the two solvers now agree about ties and disagree only where
+        # the model can actually do better.
+        #
+        # `big` is wider than every index in the model added together, so
+        # the tie-break can never reach into a real difference of one
+        # point.
+        big = len(pick) * max(room, default=0) + 1
+        model.maximize(sum(((self.PLACED + points) * big - where)
+                           * pick[n, where]
                            for n, (_want, may) in enumerate(wants)
                            for where, points in may.items()))
         solver = cp_model.CpSolver()

@@ -27,16 +27,16 @@ War Thunder · air simulator + helicopters · VIRPIL. Generated — do not edit,
 | 61 | Top thumb hat — down | Change Radar/IRST mode | Change radar mode |
 | 62 | Top thumb hat — right | Change Radar/IRST scope scale | Change radar scope scale |
 | 63 | Thumb bottom button | Weapon lock (air-to-air) | Weapon lock (air-to-air) |
-| 64 | Bottom thumb hat — push | Mouse look activation | Mouse look activation |
-| 65 | Bottom thumb hat — up | Default view | Default view |
-| 66 | Bottom thumb hat — left | Look back | Look back |
-| 67 | Bottom thumb hat — down | Look down | Look down |
-| 68 | Bottom thumb hat — right | — | Gunner View |
-| 73 | Grip thumb hat — push | Trim aircraft | Trim helicopter |
-| 74 | Grip thumb hat — up | Elevator Trim Positive | Elevator Trim Positive |
-| 75 | Grip thumb hat — left | Aileron Trim Left | Aileron Trim Left |
-| 76 | Grip thumb hat — down | Reset trimming | Reset trimming |
-| 77 | Grip thumb hat — right | Aileron Trim Right | Aileron Trim Right |
+| 64 | Bottom thumb hat — push | Trim aircraft | Trim helicopter |
+| 65 | Bottom thumb hat — up | Elevator Trim Positive | Elevator Trim Positive |
+| 66 | Bottom thumb hat — left | Aileron Trim Left | Aileron Trim Left |
+| 67 | Bottom thumb hat — down | Reset trimming | Reset trimming |
+| 68 | Bottom thumb hat — right | Aileron Trim Right | Aileron Trim Right |
+| 73 | Grip thumb hat — push | Mouse look activation | Mouse look activation |
+| 74 | Grip thumb hat — up | Default view | Default view |
+| 75 | Grip thumb hat — left | Look back | Look back |
+| 76 | Grip thumb hat — down | Look down | Look down |
+| 77 | Grip thumb hat — right | — | Gunner View |
 | 81 | Grip pinky button | Fire air-to-air missile | Fire air-to-ground missile |
 
 ## L-VPC VMAX Prime Throttle  (buttons 0–50)
@@ -54,32 +54,32 @@ War Thunder · air simulator + helicopters · VIRPIL. Generated — do not edit,
 
 | WT | Control | Air | Helicopter |
 |---|---|---|---|
-| 0 | Pinky button | Weapon lock (air-to-ground) | Weapon lock (air-to-ground) |
+| 0 | Pinky button | Toggle Cockpit Sight | Toggle Cockpit Sight |
 | 1 | Left side dial — push | Switch between Radar and IRST | — |
-| 2 | Middle finger button | Ignite boosters | Ignite boosters |
-| 8 | Right side dial — push | Drop bomb | Drop bomb |
-| 9 | Thumb two-way hat — push | Toggle Airbrake | — |
+| 2 | Middle finger button | Fire countermeasures | Fire countermeasures |
+| 8 | Right side dial — push | — | Toggle SAS mode |
+| 9 | Thumb two-way hat — push | Weapon lock (air-to-ground) | Weapon lock (air-to-ground) |
 | 10 | Thumb two-way hat — fwd | Flaps Up | — |
 | 12 | Thumb two-way hat — aft | Flaps Down | — |
-| 15 | Thumb button | — | Sight stabilization |
-| 16 | Bottom thumb button | Fire countermeasures | Fire countermeasures |
-| 17 | Thumb hat — push | Toggle Cockpit Sight | Toggle Cockpit Sight |
+| 15 | Thumb button | Ignite boosters | Ignite boosters |
+| 16 | Bottom thumb button | — | Sight stabilization |
+| 17 | Thumb hat — push | Toggle Airbrake | — |
 | 18 | Thumb hat — up | Lock Target | Lock Target |
 | 19 | Thumb hat — right | Lock Next Target | Lock Next Target |
 | 20 | Thumb hat — down | Reset target | Reset target |
 | 21 | Thumb hat — left | Lock Prev Target | Lock Prev Target |
 | 22 | Keyboard B1 button | Toggle Gear | Toggle Gear |
-| 23 | Keyboard B2 button | Toggle Engine | Toggle Engine |
-| 24 | Keyboard B3 button | Open bomb bay door | Open bomb bay door |
-| 25 | Keyboard B4 button | — | Hover mode |
-| 26 | Keyboard B5 button | — | Toggle Laser Designator |
-| 27 | Keyboard B6 button | Drag chute | Drag chute |
-| 28 | Big red button | — | Toggle SAS mode |
+| 23 | Keyboard B2 button | — | Toggle Laser Designator |
+| 24 | Keyboard B3 button | Toggle Engine | Toggle Engine |
+| 25 | Keyboard B4 button | Tactical Map | Tactical Map |
+| 26 | Keyboard B5 button | Open bomb bay door | Open bomb bay door |
+| 27 | Keyboard B6 button | — | Hover mode |
+| 28 | Big red button | Drop bomb | Drop bomb |
 | 29 | T1 rocker — up | — | Switch primary weapons |
 | 30 | T1 rocker — down | — | Switch secondary weapons |
 | 33 | T3 rocker — up | Cockpit view | Cockpit view |
 | 34 | T3 rocker — down | External View | External View |
-| 39 | APU button | Tactical Map | Tactical Map |
+| 39 | APU button | Drag chute | Drag chute |
 
 ## Check in flight
 

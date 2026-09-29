@@ -135,10 +135,12 @@ class Need(corneeds.Need):
 #: harvest wrote, and a harvest cannot write a judgement.
 
 
-def needs(filename):
+def needs(described, placed):
     """[Need] -- the hand-written list, read rather than executed."""
-    return corneeds.read_needs(vocab.load(HERE, filename, key='needs'),
-                               also=('shift',), make=Need)
+    out = corneeds.read_needs(vocab.load(HERE, described, key='needs'),
+                              make=Need)
+    corneeds.load_assignments(HERE, placed, out)
+    return out
 
 
 
@@ -586,14 +588,12 @@ def show(layout, why=False, free_only=False):
             if why:
                 out.append('      why    '
                            + '; '.join(corneeds.why_bits(p_, out_of=22)))
-                if need.dev and need.dev != role:
+                if need.device and need.device != role:
                     # BMS's own: the only game that calls a wrong device a
                     # compromise rather than a minus fifty.
                     out.append(f'             COMPROMISE: belongs on the '
-                               f'{need.dev}, nothing of that shape was '
+                               f'{need.device}, nothing of that shape was '
                                f'left there')
-                if need.note:
-                    out.append(f'{"":<13}{wrap(need.note, 60, " " * 13)}')
             out.append("")
 
         if unmet:
@@ -733,8 +733,9 @@ class FalconBms(adapter.Planner):
 
     game = 'falconbms'
     title = 'Falcon BMS'
+    OVERLAY = 'by-hand'
+    NEEDS_FILE = 'falconbms-needs.json'
     BINDS = 'falconbms-binds.json'
-    EXTRA = ('shift',)
     CATALOGUE = 'bms-actions.json'
     CACHE = {'bms-actions.json': ('actions', 'devices'),
              'bms-rank.json': 'votes'}
@@ -767,7 +768,7 @@ class FalconBms(adapter.Planner):
         ACTIONS.update(cactions.by_id(CAT))
         DEVICES[:] = self.cache('bms-actions.json', key='devices')
         VOTES.update(self.cache('bms-rank.json'))
-        self._needs = needs(self.BINDS)
+        self._needs = needs(self.NEEDS_FILE, self.BINDS)
 
     @typing.override
     def build(self):

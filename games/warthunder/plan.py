@@ -85,11 +85,6 @@ class Need(corneeds.Need):
     a thumb button and the list had to be hand-sorted around it.
     """
 
-    @property
-    def device(self):
-        return self.dev
-
-
 # Ordered by what you lose first if it is missing. The matcher works down the
 # list, so the earliest needs get the best control that fits them.
 #: Where the judgements live. Which band a thing is in, what shape it wants,
@@ -101,10 +96,12 @@ class Need(corneeds.Need):
 #: harvest wrote, and a harvest cannot write a judgement.
 
 
-def needs(filename):
+def needs(described, placed):
     """[Need] -- the hand-written list, read rather than executed."""
-    return corneeds.read_needs(vocab.load(HERE, filename, key='needs'),
-                               make=Need)
+    out = corneeds.read_needs(vocab.load(HERE, described, key='needs'),
+                              make=Need)
+    corneeds.load_assignments(HERE, placed, out)
+    return out
 
 
 # name in WT, the control kind it belongs on, and which of its axes
@@ -348,7 +345,7 @@ def _sheet(layout):
     for (role, idx), cell in sorted(seen.items()):
         d = devs[role]
         a_, g = d.axis(idx), d.axis_group(idx)
-        label = g.label if g else dev.axis_label(idx)
+        label = g.label if g else d.axis_label(idx)
         if cell['inv']:
             label += ' (inverted)'
         for ctx in ('Air', 'Helicopter'):
@@ -406,6 +403,8 @@ class WarThunder(adapter.Planner):
     game = 'warthunder'
     title = 'War Thunder'
     subtitle = 'air simulator + helicopters · VIRPIL'
+    OVERLAY = 'by-hand'
+    NEEDS_FILE = 'warthunder-needs.json'
     BINDS = 'warthunder-binds.json'
     CATALOGUE = 'wt-actions.json'
     CACHE = {'wt-actions.json': 'actions',
@@ -432,7 +431,7 @@ class WarThunder(adapter.Planner):
             FACTORY.update(self.cache('wt-factory-rank.json'))
         except vocab.Missing:
             pass          # only annotates --why, so it may be absent
-        self._needs = needs(self.BINDS)
+        self._needs = needs(self.NEEDS_FILE, self.BINDS)
         # The writer owns machine.blk and where the install is; these were
         # module constants in it with no override at all.
         self.writer = typing.cast(Preset,
@@ -503,8 +502,6 @@ class WarThunder(adapter.Planner):
                        + (f' — {where}' if where else ''))
             if why:
                 out.append('      ' + ', '.join(corneeds.why_bits(p_)))
-                if need.note:
-                    out.append(f'      {need.note}')
                 # War Thunder's own: the count is keyed by the ACTION ids
                 # this need carries, not by `need.rank`, because one need
                 # binds several and the busiest of them is the answer.

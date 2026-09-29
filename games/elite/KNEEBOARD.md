@@ -18,23 +18,23 @@ Elite Dangerous · VIRPIL. Generated — do not edit, regenerate.
 
 | Joy | Control | Ship | SRV |
 |---|---|---|---|
-| Joy_15 | Bottom thumb hat — up | Cycle next subsystem | — |
-| Joy_17 | Bottom thumb hat — down | Cycle previous subsystem | — |
-| Joy_14 | Bottom thumb hat — push | Select highest threat | — |
-| Joy_18 | Bottom thumb hat — right | Night vision toggle | — |
-| Joy_16 | Bottom thumb hat — left | Galaxy map open | Galaxy map open buggy |
-| Joy_31 | Grip pinky button — press | Deploy hardpoint toggle | — |
-| Joy_27 | Grip thumb hat — right | Cycle next target | — |
-| Joy_25 | Grip thumb hat — left | Cycle previous target | — |
-| Joy_23 | Grip thumb hat — push | System map open | System map open buggy |
+| Joy_18 | Bottom thumb hat — right | Cycle next target | — |
+| Joy_16 | Bottom thumb hat — left | Cycle previous target | — |
+| Joy_14 | Bottom thumb hat — push | Galaxy map open | Galaxy map open buggy |
+| Joy_15 | Bottom thumb hat — up | System map open | System map open buggy |
+| Joy_31 | Grip pinky button — press | Select highest threat | — |
+| Joy_24 | Grip thumb hat — up | Increase systems power | Increase systems power buggy |
+| Joy_27 | Grip thumb hat — right | Increase weapons power | Increase weapons power buggy |
+| Joy_26 | Grip thumb hat — down | Reset power distribution | Reset power distribution buggy |
+| Joy_25 | Grip thumb hat — left | Increase engines power | Increase engines power buggy |
 | Joy_3 | Main trigger — first | Primary fire | Buggy primary fire button |
 | Joy_13 | Thumb bottom button — press | Cycle next hostile target | — |
 | Joy_7 | Thumb top button — press | Secondary fire | Buggy secondary fire button |
-| Joy_9 | Top thumb hat — up | Increase systems power | Increase systems power buggy |
-| Joy_12 | Top thumb hat — right | Increase weapons power | Increase weapons power buggy |
-| Joy_11 | Top thumb hat — down | Reset power distribution | Reset power distribution buggy |
-| Joy_10 | Top thumb hat — left | Increase engines power | Increase engines power buggy |
+| Joy_9 | Top thumb hat — up | Cycle fire group next | — |
+| Joy_11 | Top thumb hat — down | Cycle fire group previous | — |
 | Joy_8 | Top thumb hat — push | Select target | Select target buggy |
+| Joy_12 | Top thumb hat — right | Deploy hardpoint toggle | — |
+| Joy_10 | Top thumb hat — left | Night vision toggle | — |
 
 ## L-VPC VMAX Prime Throttle
 
@@ -50,28 +50,28 @@ Elite Dangerous · VIRPIL. Generated — do not edit, regenerate.
 
 | Joy | Control | Ship | SRV |
 |---|---|---|---|
-| Joy_40 | APU button — press | Toggle cargo scoop | Toggle cargo scoop buggy |
+| Joy_40 | APU button — press | Exploration FSS discovery scan | — |
 | Joy_29 | Big red button — press | Eject all cargo | Eject all cargo buggy |
 | Joy_17 | Bottom thumb button — press | Use shield cell | — |
 | Joy_23 | Keyboard B1 button — press | Toggle reverse throttle input | Buggy toggle reverse throttle input |
 | Joy_24 | Keyboard B2 button — press | Hyper super combination | — |
 | Joy_25 | Keyboard B3 button — press | Set speed zero | — |
-| Joy_26 | Keyboard B4 button — press | Exploration FSS discovery scan | — |
-| Joy_27 | Keyboard B5 button — press | Ship spot light toggle | Headlights buggy button |
-| Joy_28 | Keyboard B6 button — press | Head look reset | — |
+| Joy_26 | Keyboard B4 button — press | Ship spot light toggle | Headlights buggy button |
+| Joy_27 | Keyboard B5 button — press | Head look reset | — |
+| Joy_28 | Keyboard B6 button — press | Toggle cargo scoop | Toggle cargo scoop buggy |
 | Joy_2 | Left side dial — push | Landing gear toggle | — |
-| Joy_3 | Middle finger button — press | Deploy heat sink | — |
-| Joy_1 | Pinky button — press | Toggle flight assist | Toggle drive assist |
-| Joy_9 | Right side dial — push | Use boost juice | — |
-| Joy_34 | T3 rocker — up | Cycle next panel | — |
-| Joy_35 | T3 rocker — down | Cycle previous panel | — |
-| Joy_36 | T4 rocker — up | Cycle next page | — |
-| Joy_37 | T4 rocker — down | Cycle previous page | — |
-| Joy_16 | Thumb button — press | Fire chaff launcher | — |
-| Joy_19 | Thumb hat — up | Cycle fire group next | — |
-| Joy_21 | Thumb hat — down | Cycle fire group previous | — |
-| Joy_11 | Thumb two-way hat — fwd | Radar increase range | — |
-| Joy_13 | Thumb two-way hat — aft | Radar decrease range | — |
+| Joy_3 | Middle finger button — press | Toggle flight assist | Toggle drive assist |
+| Joy_1 | Pinky button — press | Fire chaff launcher | — |
+| Joy_9 | Right side dial — push | Deploy heat sink | — |
+| Joy_34 | T3 rocker — up | Cycle next page | — |
+| Joy_35 | T3 rocker — down | Cycle previous page | — |
+| Joy_36 | T4 rocker — up | Cycle next panel | — |
+| Joy_37 | T4 rocker — down | Cycle previous panel | — |
+| Joy_16 | Thumb button — press | Use boost juice | — |
+| Joy_19 | Thumb hat — up | Radar increase range | — |
+| Joy_21 | Thumb hat — down | Radar decrease range | — |
+| Joy_11 | Thumb two-way hat — fwd | Cycle next subsystem | — |
+| Joy_13 | Thumb two-way hat — aft | Cycle previous subsystem | — |
 
 ## Still free
 

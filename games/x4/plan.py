@@ -99,11 +99,6 @@ class Need(corneeds.Need):
     slot needs no room for it.
     """
 
-    @property
-    def device(self):
-        return self.dev
-
-
 # --------------------------------------------------------------- the layout --
 
 #: Axes are resolved by what the device map says a control IS, never by index.
@@ -135,10 +130,12 @@ AXIS_NEEDS = [
 #: harvest cannot write a judgement.
 
 
-def needs(filename):
+def needs(described, placed):
     """[Need] -- the hand-written list, read rather than executed."""
-    return corneeds.read_needs(vocab.load(HERE, filename, key='needs'),
-                               make=Need)
+    out = corneeds.read_needs(vocab.load(HERE, described, key='needs'),
+                              make=Need)
+    corneeds.load_assignments(HERE, placed, out)
+    return out
 
 
 
@@ -409,6 +406,8 @@ class X4(adapter.Planner):
 
     game = 'x4'
     title = 'X4 Foundations'
+    OVERLAY = 'by-hand'
+    NEEDS_FILE = 'x4-needs.json'
     BINDS = 'x4-binds.json'
     CATALOGUE = 'x4-actions.json'
     CACHE = {'x4-actions.json': 'actions'}
@@ -439,7 +438,7 @@ class X4(adapter.Planner):
         # tells a clone with no cache from an adapter that is broken.
         self.rows = self.cache('x4-actions.json',
                                build=harvest.action_rows)
-        self._needs = needs(self.BINDS)
+        self._needs = needs(self.NEEDS_FILE, self.BINDS)
 
     @typing.override
     def build(self):
@@ -512,8 +511,6 @@ class X4(adapter.Planner):
                                f'{harvest.readable(ident)}')
             if why:
                 out.append('      ' + ' · '.join(corneeds.why_bits(p_)))
-                if n.note:
-                    out.append(f'      {n.note}')
         out.append('')
         for ident, role, a in axes:
             out.append(f'  {harvest.readable(ident):28} {role:9} '

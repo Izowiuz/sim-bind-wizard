@@ -51,7 +51,7 @@ found it a home or not, and each row is in one of three states:
     c / C   confirm this one / every proposal
     p / P   put the planner's choice on this one / into every gap
     RETURN  press the control you want it on
-    l       or pick one from a list, with no hardware
+    l       or assign from the free controls that fit, with no hardware
     x / X   clear this one / drop every proposal, leaving yours
     m       the device map, and where the game was found
     y       why a control is chosen: the weights, and what they are for
@@ -67,7 +67,9 @@ still written; clearing it is how you say no.
 
 What you decide is written to `games/<game>/<game>-binds.json` as you decide
 it — there is no save key for it, and `s` writes the game's own files, not
-these. Two strengths, because pressing RETURN and pressing `c` are not the
+these. That file holds only where things sit. What each function IS lives
+beside it in `<game>-needs.json`, and what you want of the layout lives in
+`overlays/`, picked with `--overlay`. Two strengths, because pressing RETURN and pressing `c` are not the
 same claim:
 
     RETURN / l   you put it there. The control is taken before anything is

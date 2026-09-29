@@ -58,12 +58,18 @@ one is free. Both are **preferences**, not laws: the relaxed pass lifts them.
 all — wrong shape, too few buttons, outside the reach band, vetoed by the
 game's `usable()`, or refused by a fact — and otherwise a sum of terms.
 
-**The weights are not written here.** They live in `core/scoring.toml`, every
-one of them with a note saying what it is for, and `y` on the review screen
-prints that file rather than a transcription of it. A table in this document
-is a second copy that nobody edits when the first one moves: this one said
-`+ 25 the map says this control suits it` for months after that term was
-deleted, and omitted the two direction penalties entirely.
+**The weights are not written here.** They live in `core/scoring.toml`, and
+`y` on the review screen reads them out of it rather than out of a
+transcription. A table in this document is a second copy that nobody edits
+when the first one moves: this one said `+ 25 the map says this control suits
+it` for months after that term was deleted, and omitted the two direction
+penalties entirely.
+
+Each weight carries a `note` in the file saying why it is what it is. Those
+stay in the file. They were drawn on the `y` screen once and they read as
+somebody else's working — half a page about a retune, under some rows and not
+others — so the screen carries the numbers and the words they stand for, and
+nothing else. Whoever is about to change a number is looking at the file.
 
 Two halves. **Terms** — `[[term]]` — are named predicates over a control and a
 need, written in `core/needs.py` because a file that could define one would
@@ -262,10 +268,17 @@ Three layers, and two of them are global:
   `travel_contact`. One TOML edit moves every game. The WarBRD's "paddle"
   turned out to be the brake lever's travel contact; one correction there and
   three games stopped binding it, with no game code touched.
-- **`games/*/<game>-binds.json`** — `urgency`, `prefer`, `on`, `dev`, the
-  ergonomic flags, and `yours` once you have used the review screen. These are claims
-  about *a game's functions*. "Airbrake is used in a turn" is a statement about
-  War Thunder and cannot be hoisted.
+- **`games/*/<game>-needs.json`** — `urgency`, `on`, `suits` and the ergonomic
+  flags. These are claims about *a game's functions*. "Airbrake is used in a
+  turn" is a statement about War Thunder and cannot be hoisted.
+- **`overlays/*.toml`** — `device`, `prefer`, `shift`, `modifier`, and the
+  `[[pair]]` rules. These are claims about *your desk habits*, not about any
+  game: "weapons on the stick" is the same wish in all six. One rule over a
+  family replaces a field repeated per function — there were 86 such fields,
+  which is one opinion written 86 times.
+
+`games/*/<game>-binds.json` is in neither list: it is the answer, not a
+policy. It holds what sits where and who decided.
 
 So a new trait keyed on vocabulary that already exists costs one edit and no
 per-game work; one that needs a new `Need` field costs an edit in every game

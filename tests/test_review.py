@@ -20,6 +20,7 @@ import unittest
 import fake
 from core.actions import Action, Bind
 from core import needs as corneeds
+from core import solvers as csolvers
 from core import review
 from core import tui as ctui
 from core.review import UNSET, PROPOSED, MINE, MARK
@@ -379,9 +380,49 @@ class ByPress(unittest.TestCase):
         rv = self.rv
         trim = by(rv, 'Trim')
         held = at(rv, trim).ctrl
-        self.assertIs(trim, rv.who_has('stick', held))
+        self.assertEqual([trim], rv.who_has('stick', held))
         rv.clear(trim)
-        self.assertIsNone(rv.who_has('stick', held))
+        self.assertEqual([], rv.who_has('stick', held))
+
+    def test_the_reach_column_is_a_number_and_a_finger(self):
+        # It printed the words cut to ten, so a control nobody recorded a
+        # finger for came out as `the hand o`. Asserted as the property,
+        # not as the absence of one particular truncation: a column ten
+        # wide can only hold a number, and a number needs the legend.
+        import re
+        lines = [t for _tone, t in self.rv.map_lines()]
+        head = next(i for i, t in enumerate(lines) if 'REACH' in t
+                    and 'CONTROL' in t)
+        at = lines[head].index('REACH')
+        rows = [t for t in lines[head + 1:] if t.startswith(('  +', '  ?',
+                                                             '   '))]
+        self.assertTrue(rows)
+        for row in rows:
+            cell = row[at:at + 10].strip()
+            self.assertRegex(cell, r'^[0-9-]( \w+)?$', row)
+        said = '\n'.join(lines)
+        for n in corneeds.REACH_MEANS:
+            if n != corneeds.UNMEASURED:
+                self.assertIn(f'{n} {corneeds.REACH_MEANS[n]}', said)
+
+    def test_who_has_names_every_need_on_one_control(self):
+        # The borrow pass hands a leftover need one spare button of a
+        # control something else took, so a hat can hold four needs at
+        # once -- thirteen controls across the five games do. It answered
+        # with the first it found, and the map named that one as if the
+        # rest were nowhere.
+        devs = {'stick': fake.device('stick', [
+            fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4)])}
+        rv = made([Need('Trim', 'hat4', [[Bind('U')], [Bind('R')],
+                                         [Bind('D')], [Bind('L')]]),
+                   Need('Fire', 'button', [[Bind('FIRE')]])], devs=devs)
+        ctrl = at(rv, by(rv, 'Trim')).ctrl
+        self.assertEqual({'Trim', 'Fire'},
+                         {n.what for n in rv.who_has('stick', ctrl)})
+        said = '\n'.join(t for _tone, t in rv.map_lines())
+        row = [ln for ln in said.splitlines() if 'Thumb hat' in ln][0]
+        self.assertIn('Trim', row)
+        self.assertIn('Fire', row)
 
 
 class Took(unittest.TestCase):
@@ -649,14 +690,150 @@ class TheDetailPanel(unittest.TestCase):
 
     # ---- the why segment ----
 
-    def test_it_says_which_band_the_need_is_in(self):
-        self.assertIn('in a turn', self.text(self.rv(), 'Trim'))
+    def test_it_says_what_else_was_in_the_running_and_who_has_it(self):
+        # The panel drew the score: the band, the reach ceiling, and the
+        # terms that summed to a total. That answers "how was this
+        # scored", which for most bindings is not the reason. Over the
+        # five games, 85 placements of 146 were ties and 24 more went
+        # where they went because something better was taken; the score
+        # breakdown was the true account of 16. So the panel names the
+        # controls that beat it, and who is sitting on them.
+        devs = stick(fake.button('Thumb', 0, reach=fake.THUMB),
+                     fake.button('Pinky', 1, reach=fake.PINKY))
+        rv = made([Need('First', 'button', [[Bind('A')]],
+                        urgency=IN_A_TURN),
+                   Need('Second', 'button', [[Bind('B')]],
+                        urgency=IN_A_TURN)], devs=devs)
+        got = self.text(rv, 'Second', width=44)
+        self.assertIn('Thumb', got)
+        self.assertIn('First', got, 'who is on the one that beat it')
 
-    def test_it_gives_the_terms_the_score_was_made_of(self):
-        # Not the total: 137 says nothing to a reader. The terms say what
-        # the control was picked FOR, and each carries what it was worth.
-        got = self.text(self.rv(), 'Trim')
-        self.assertRegex(got, r'[+-]\d+ \S')
+    def test_every_token_of_wants_comes_from_the_needs_own_row(self):
+        # Not derived and not prose: shape, device, band, and whichever
+        # of the five flags somebody set, straight out of
+        # `games/<g>/<g>-binds.json`. There is no sentence here to get
+        # wrong.
+        one = Need('Chaff', 'button', [[Bind('A')]], urgency=IN_A_TURN,
+                   device='stick')
+        setattr(one, 'by_feel', True)
+        rv = made([one], devs=stick(fake.button('Thumb', 0,
+                                                reach=fake.THUMB)))
+        got = self.text(rv, 'Chaff', width=60)
+        asked = got[got.index('WHAT IT ASKED FOR'):]
+        asked = asked[:asked.index('WHICH CONTROL')]
+        for token in ('button', 'stick', 'in a turn', 'found blind'):
+            self.assertIn(token, asked)
+
+    def test_a_flag_nobody_set_is_not_in_wants(self):
+        rv = made([Need('Chaff', 'button', [[Bind('A')]])],
+                  devs=stick(fake.button('Thumb', 0, reach=fake.THUMB)))
+        got = self.text(rv, 'Chaff', 60)
+        asked = got[got.index('WHAT IT ASKED FOR'):]
+        asked = asked[:asked.index('WHICH CONTROL')]
+        for phrase in ('held down', 'tapped', 'found blind'):
+            self.assertNotIn(phrase, asked)
+
+    def test_each_control_says_what_it_was_worth(self):
+        # Every control is worth points to an action; the actions go in
+        # order; each takes the free control worth most. The points are
+        # the mechanism, so the points are a column.
+        devs = stick(fake.button('Thumb', 0, reach=fake.THUMB),
+                     fake.button('Pinky', 1, reach=fake.PINKY))
+        rv = made([Need('A', 'button', [[Bind('A')]], urgency=IN_A_TURN),
+                   Need('B', 'button', [[Bind('B')]], urgency=IN_A_TURN)],
+                  devs=devs)
+        got = self.text(rv, 'B', width=60)
+        self.assertIn('points', got)
+        for _s, role, ctrl in corneeds.ran_against(by(rv, 'B'),
+                                                   rv.layout.devices):
+            self.assertIn(ctrl.label, got)
+            self.assertIn(str(_s), got)
+
+    def test_the_winners_points_are_broken_down(self):
+        # The last section: what the number was made of. The middle
+        # section says which control, this one says how that control got
+        # the number it did.
+        devs = stick(fake.button('Thumb', 0, reach=fake.THUMB))
+        rv = made([Need('A', 'button', [[Bind('A')]], urgency=IN_A_TURN)],
+                  devs=devs)
+        got = self.text(rv, 'A', width=60)
+        self.assertIn('shape and count fit', got)
+        self.assertRegex(got, r'\+\d+  \S')
+
+    def test_a_control_carrying_several_needs_says_how_many(self):
+        # The borrow pass hands a leftover need a spare button of a
+        # control something else took, so several names can belong on
+        # one row. The first and a count; the map screen has room for
+        # all of them and this column has room for one.
+        # `Flaps` wants a hat2, which a hat4 will stand in for, so the
+        # shared hat is a real candidate for it -- a button need is
+        # never ranked against a hat and would see nothing.
+        devs = stick(fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4),
+                     fake.hat2('Rocker', 5, reach=fake.PINKY))
+        rv = made([Need('Trim', 'hat4', [[Bind(x)] for x in 'URDL']),
+                   Need('Fire', 'button', [[Bind('F')]]),
+                   Need('Flaps', 'hat2', [[Bind('U')], [Bind('D')]])],
+                  devs=devs)
+        hat = next(c for c in devs['stick'].groups()
+                   if c.label == 'Thumb hat')
+        self.assertGreater(len(rv.who_has('stick', hat)), 1,
+                           'the rig must share the hat')
+        self.assertRegex(self.text(rv, 'Flaps', width=60), r'Trim \+\d')
+
+    def test_a_tie_shows_the_others_and_claims_nothing(self):
+        # The commonest case by far. Equal rows side by side are the
+        # answer; a line saying `nothing chose` repeats what they show.
+        devs = stick(fake.button('One', 0, reach=fake.THUMB),
+                     fake.button('Two', 1, reach=fake.THUMB))
+        rv = made([Need('A', 'button', [[Bind('A')]]),
+                   Need('B', 'button', [[Bind('B')]])], devs=devs)
+        got = self.text(rv, 'B', width=60)
+        self.assertIn('One', got)
+        self.assertIn('Two', got)
+        self.assertNotIn('freely', got)
+        self.assertNotIn('nothing chose', got)
+
+    def test_this_one_is_marked_and_says_nothing_else(self):
+        # A mark at the start of the row does what `← this one` did.
+        devs = stick(fake.button('Thumb', 0, reach=fake.THUMB))
+        rv = made([Need('A', 'button', [[Bind('A')]])], devs=devs)
+        got = self.text(rv, 'A', width=60)
+        self.assertIn('\u25b6', got)
+        self.assertNotIn('this one', got)
+
+    def test_choosing_it_yourself_says_so_and_what_you_overrode(self):
+        rv = self.rv()
+        gear = by(rv, 'Gear')
+        was = at(rv, gear).ctrl
+        # Somewhere the planner did not pick, whichever solver ran: the
+        # two of them disagree about most of a layout.
+        ctrl = next(c for c in rv.layout.devices['stick'].groups(bindable=True)
+                    if c is not was and c.kind in gear.shapes)
+        for holder in rv.who_has('stick', ctrl):
+            rv.clear(holder)
+        rv.assign(gear, 'stick', ctrl)
+        got = self.text(rv, 'Gear', width=60)
+        self.assertIn('you chose it', got)
+        self.assertIn(was.label, got, 'where the planner had wanted it')
+        self.assertIn('the planner wanted this', got)
+
+    def test_a_borrowed_button_names_whose_control_it_is(self):
+        devs = stick(fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4))
+        rv = made([Need('Trim', 'hat4', [[Bind(x)] for x in 'URDL']),
+                   Need('Fire', 'button', [[Bind('F')]])], devs=devs)
+        got = self.text(rv, 'Fire', width=60)
+        self.assertIn('spare button', got)
+        self.assertIn('Trim', got)
+
+    def test_the_only_control_that_fits_is_one_row_and_no_words(self):
+        rv = made([Need('Trim', 'hat4', [[Bind('U')], [Bind('R')],
+                                         [Bind('D')], [Bind('L')]])],
+                  devs=stick(fake.hat4('Only hat', 0, reach=fake.THUMB)))
+        got = self.text(rv, 'Trim', width=60)
+        tail = got[got.index('WHICH CONTROL GOT IT'):].splitlines()
+        rows = [ln for ln in tail if '\u25b6' in ln]
+        self.assertEqual(1, len(rows))
+        self.assertIn('Only hat', rows[0])
 
     def test_it_names_the_shape_the_control_matched(self):
         self.assertIn('hat4', self.text(self.rv(), 'Trim'))
@@ -666,15 +843,11 @@ class TheDetailPanel(unittest.TestCase):
                         urgency=IN_A_TURN)],
                   devs=stick(fake.hat2('Panel rocker', 0,
                                        reach=fake.PANEL)))
-        self.assertIn('floor', self.text(rv, 'Airbrake').lower())
+        self.assertIn('nothing nearer was free',
+                      self.text(rv, 'Airbrake', width=44))
 
     # ---- the override mention ----
 
-    def test_it_says_whose_decision_this_was(self):
-        # In the words the map's legend and `?` use, not its own: one
-        # wording for one state, wherever it is named.
-        self.assertIn(review.MARK_SAID[PROPOSED],
-                      self.text(self.rv(), 'Trim'))
 
     def test_moving_it_by_hand_is_said_out_loud(self):
         rv = self.rv()
@@ -704,28 +877,6 @@ class TheDetailPanel(unittest.TestCase):
 
     # ---- the decision, drawn ----
 
-    def test_it_shows_the_reach_it_took_and_the_one_allowed(self):
-        # `Reason` has recorded both since it existed and nothing ever
-        # drew them, so the constraint the whole scoring turns on was the
-        # one thing the panel would not say.
-        got = self.text(self.rv(), 'Trim')
-        self.assertRegex(got, r'reach \d+, allowed \d+')
-
-    def test_the_terms_hang_off_the_score(self):
-        # A flat list of numbers beside a total is two facts; a tree says
-        # the second is made of the first.
-        got = self.text(self.rv(), 'Trim')
-        self.assertIn('points', got)
-        self.assertTrue(any(ln.strip().startswith(('├', '└'))
-                            for ln in got.splitlines()), got)
-
-    def test_a_lifted_ceiling_is_a_branch_of_its_own(self):
-        rv = made([Need('Airbrake', 'hat2', [[Bind('OUT')], [Bind('IN')]],
-                        urgency=IN_A_TURN)],
-                  devs=stick(fake.hat2('Panel rocker', 0,
-                                       reach=fake.PANEL)))
-        self.assertIn('floor', self.text(rv, 'Airbrake').lower())
-
     def test_a_hand_placed_one_has_no_score_to_draw(self):
         # You did not score it, you chose it. A tree of terms under
         # "assigned by you" would be the screen inventing an argument.
@@ -738,42 +889,15 @@ class TheDetailPanel(unittest.TestCase):
 
     # ---- which button of the control ----
 
-    def test_a_control_with_several_binds_says_which_is_which(self):
-        # Four binds on a hat share the control, so they share every word
-        # of the account except this one. Without it the panel repeats one
-        # sentence four times, which looks like an answer.
-        got = self.text(self.rv(), 'Trim')
-        self.assertIn('press order', got)
-
-    def test_a_single_bind_is_not_told_which_of_one_button(self):
-        # There is nothing to tell apart, and a heading over one obvious
-        # line is a line you learn to skip.
-        rv = self.rv()
-        gear = by(rv, 'Gear')
-        self.assertEqual(1, len(at(rv, gear).slots))
-        self.assertNotIn('WHICH BUTTON', self.text(rv, 'Gear'))
-
-    def test_a_hand_placed_bind_is_told_too(self):
-        rv = self.rv()
-        trim = by(rv, 'Trim')
-        ctrl = at(rv, trim).ctrl
-        rv.assign(trim, 'stick', ctrl)
-        spots = [b.reason.spot for _n, slot in at(rv, trim).slots
-                 for b in slot if b.reason]
-        self.assertTrue(all(spots), spots)
-
-    # ---- the colours ----
-
-    def test_the_override_line_wears_the_same_tone_as_the_row(self):
-        # `MINE` is a tone name as well as a state, deliberately, so the
-        # table and the panel cannot disagree about what green means.
-        rv = self.rv()
-        gear = by(rv, 'Gear')
-        ctrl = next(c for c in rv.layout.devices['stick'].groups(bindable=True)
-                    if c.label == 'Panel button')
-        rv.assign(gear, 'stick', ctrl)
-        self.assertEqual(MINE, self.tone_of(rv, 'Gear', 'you'))
-
+    def test_which_button_is_not_a_section(self):
+        # It drew a phrase per binding saying why that button. Of the 223
+        # it ever produced across the five games, 221 said nothing had
+        # happened -- `press order`, `as asked`, and `asked for back;
+        # this control calls it aft` about two words for one direction.
+        got = self.text(self.rv(), 'Trim', width=60)
+        self.assertNotIn('WHICH BUTTON', got)
+        for rule in ('press order', 'as asked'):
+            self.assertNotIn(rule, got)
     def test_the_sections_are_headings_not_plain_text(self):
         tones = {tone for tone, t in self.side(self.rv(), 'Trim')
                  if t.isupper() and t.strip()}
@@ -1145,7 +1269,7 @@ class WhatYouDecidedOutLastsTheSession(unittest.TestCase):
         rv = self.open()
         rv.confirm_all()
         need = self.only(rv)
-        self.assertEqual(corneeds.ACCEPTED, need.yours['how'])
+        self.assertEqual(corneeds.ACCEPTED, need.assignment['how'])
         placed, _un, _free = allocate(self.needs, self.rig('Thumb B'))
         self.assertEqual('Thumb B', placed[0].ctrl.label)
 
@@ -1183,7 +1307,7 @@ class WhatYouDecidedOutLastsTheSession(unittest.TestCase):
         other = next(c for c in self.devs['stick'].groups()
                      if c.label == 'Thumb B')
         rv.assign(self.only(rv), 'stick', other)
-        self.assertEqual(corneeds.CHOSE, self.only(rv).yours['how'])
+        self.assertEqual(corneeds.CHOSE, self.only(rv).assignment['how'])
         # Something the allocator would rather have there cannot have it.
         rival = Need('Guns', 'button', [[Bind('GUNS')]],
                      urgency=corneeds.IN_A_TURN)
@@ -1234,8 +1358,8 @@ class WhatYouDecidedOutLastsTheSession(unittest.TestCase):
         other = next(c for c in self.devs['stick'].groups()
                      if c.label == 'Thumb B')
         rv.assign(self.only(rv), 'stick', other)
-        self.assertEqual(other.id, self.only(rv).yours['control'])
-        self.assertNotIn(other.label, self.only(rv).yours.values())
+        self.assertEqual(other.id, self.only(rv).assignment['control'])
+        self.assertNotIn(other.label, self.only(rv).assignment.values())
 
     # ---- clearing ----
 
@@ -1246,7 +1370,7 @@ class WhatYouDecidedOutLastsTheSession(unittest.TestCase):
                      if c.label == 'Thumb B')
         rv.assign(self.only(rv), 'stick', other)
         rv.clear(self.only(rv))
-        self.assertIsNone(self.only(rv).yours)
+        self.assertIsNone(self.only(rv).assignment)
         again = self.open()
         self.assertEqual(review.PROPOSED, again.mark[self.only(again)])
 
@@ -1256,17 +1380,37 @@ class WhatYouDecidedOutLastsTheSession(unittest.TestCase):
                      if c.label == 'Thumb B')
         rv.assign(self.only(rv), 'stick', other)
         rv.clear_all()
-        self.assertIsNotNone(self.only(rv).yours)
+        self.assertIsNotNone(self.only(rv).assignment)
 
     # ---- and it all round trips ----
 
     def test_it_survives_the_file(self):
+        # Through the binds file, which is where it lives: the needs file
+        # describes the function and says nothing about where it sits.
         rv = self.open()
         other = next(c for c in self.devs['stick'].groups()
                      if c.label == 'Thumb B')
         rv.assign(self.only(rv), 'stick', other)
+        was = self.only(rv).assignment
         (back,) = corneeds.read_needs(corneeds.dump_needs(self.needs))
-        self.assertEqual(self.only(rv).yours, back.yours)
+        self.assertIsNone(back.assignment)
+        corneeds.read_assignments(corneeds.dump_assignments(self.needs),
+                                  [back])
+        self.assertEqual(was, back.assignment)
+
+    def test_what_the_allocator_chose_comes_back_as_nothing(self):
+        # It is written so a screen can show what moved since last time,
+        # and read back as no claim at all -- otherwise every run starts
+        # from wherever the last one happened to stop.
+        rv = self.open()
+        need = self.only(rv)
+        need.assignment = {'role': 'stick', 'control': 'thumb-b',
+                           'how': corneeds.SOLVED}
+        (row,) = corneeds.dump_assignments([need])
+        self.assertEqual(corneeds.SOLVED, row['how'])
+        (back,) = corneeds.read_needs(corneeds.dump_needs([need]))
+        corneeds.read_assignments([row], [back])
+        self.assertIsNone(back.assignment)
 
 
 class EveryKeyTheScreenNamesIsOneItAnswers(unittest.TestCase):
@@ -1359,15 +1503,42 @@ class TheRulesScreen(unittest.TestCase):
         for term in corneeds.TERMS:
             self.assertIn(str(term['weight']), said, term['name'])
 
-    def test_it_tells_the_story_behind_a_number(self):
-        # The reason a limit is what it is was a comment only a reader of
-        # the code ever saw. It is the most valuable text in the repo and
-        # it belongs on the screen that explains the limit.
+    def test_it_leaves_the_working_out_in_the_file(self):
+        # It drew every `note` once -- the reason a limit is what it is,
+        # on the screen beside the limit. Half a page of why a weight was
+        # retuned, under some rows and not others, reads as noise that
+        # turns up at random. Whoever is about to change a number is
+        # looking at scoring.toml, and that is where they are.
+        said = self.said()
         noted = [x for x in list(corneeds.RULES['band'])
-                 + list(corneeds.TERMS) if 'note' in x]
+                 + list(corneeds.TERMS) + list(corneeds.FACTS)
+                 if 'note' in x]
         self.assertTrue(noted, 'nothing carries a note')
         for one in noted:
-            self.assertIn(one['note'].split('.')[0][:40], self.said())
+            self.assertNotIn(one['note'].split('.')[0][:40], said)
+
+    def test_it_says_who_chooses_between_two_equal_answers(self):
+        # Most of a layout is ties, and which answer you get out of them
+        # is `--solver`: greedy and the model differ on 25 of X4's 32
+        # bindings. A screen called "why a control is chosen" that never
+        # mentions this is explaining half the decision.
+        said = self.said()
+        for name, what, _why in csolvers.choices():
+            self.assertIn(name, said)
+            # A prefix: the screen wraps, so a whole sentence is not in
+            # it as one string.
+            self.assertIn(what[:28], said)
+
+    def test_it_names_every_step_of_which_binding_goes_first(self):
+        # This was a paragraph, and a paragraph does not move when the
+        # sort key does: it still said a pin went first long after what
+        # you choose by hand started outranking one, and stopped at the
+        # factory count after a step was added under it.
+        said = self.said()
+        for what, why in corneeds.ORDERED_BY:
+            self.assertIn(what, said)
+            # A prefix: the screen wraps at the width it is given.
+            self.assertIn(why.split()[0] + ' ' + why.split()[1], said)
 
     def test_it_names_every_refusal(self):
         # These four were transcribed into the screen as literals, which

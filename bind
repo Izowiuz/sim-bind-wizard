@@ -14,6 +14,10 @@ DESCRIPTION
     asks which. Say it outright with `--desk NAME` or
     SIM_DEVICE_PROFILE.
 
+    `--overlay NAME` picks which of `overlays/` a layout is laid out
+    to -- which device a family belongs on, which control carries the
+    shift. `--overlay none` asks for nothing.
+
 VERBS
     harvest   read the game's files, write the vocabulary cache
     plan      what it would bind, and where

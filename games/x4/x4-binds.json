@@ -1,703 +1,196 @@
 {
-"needs": [
+"binds": [
 {
 "what": "Fire primary",
-"shape": "trigger",
-"bindings": [
-[
-{
-"action": "INPUT_STATE_FIRE_PRIMARY_WEAPON"
-}
-]
-],
-"urgency": 0,
-"suits": "fire",
-"dev": "stick",
-"note": "already on the stick by hand; the trigger is what it is for",
-"yours": {
 "role": "stick",
 "control": "main-trigger",
 "how": "accepted"
 },
-"held": true,
-"by_feel": true
-},
 {
 "what": "Fire secondary",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_STATE_FIRE_SECONDARY_WEAPON"
-}
-]
-],
-"urgency": 0,
-"suits": "fire",
-"dev": "stick",
-"yours": {
 "role": "stick",
 "control": "thumb-bottom-button",
 "how": "accepted"
 },
-"held": true,
-"by_feel": true
-},
 {
 "what": "Boost",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_STATE_BOOST"
-},
-{
-"action": "INPUT_ACTION_FP_RUN"
-}
-]
-],
-"urgency": 0,
-"suits": "reflex",
-"dev": "throttle",
-"note": "held, not tapped, so it wants a button you can hold",
-"yours": {
 "role": "throttle",
 "control": "bottom-thumb-button",
 "how": "accepted"
 },
-"held": true,
-"by_feel": true
-},
 {
 "what": "Target next enemy",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_TARGET_NEXT_ENEMY"
-}
-]
-],
-"urgency": 0,
-"suits": "lock",
-"dev": "stick",
-"yours": {
 "role": "stick",
 "control": "thumb-top-button",
 "how": "accepted"
 },
-"rapid": true,
-"by_feel": true
-},
 {
 "what": "Strafe",
-"shape": "hat4",
-"bindings": [
-[
-{
-"action": "INPUT_STATE_STRAFE_UP"
-}
-],
-[
-{
-"action": "INPUT_STATE_STRAFE_RIGHT"
-}
-],
-[
-{
-"action": "INPUT_STATE_STRAFE_DOWN"
-}
-],
-[
-{
-"action": "INPUT_STATE_STRAFE_LEFT"
-}
-]
-],
-"urgency": 0,
-"dev": "stick",
-"note": "the axes get it too; the hat is for a precise nudge",
-"yours": {
 "role": "stick",
 "control": "top-thumb-hat",
 "how": "accepted"
 },
-"held": true,
-"by_feel": true,
-"on": [
-"up",
-"right",
-"down",
-"left"
-]
-},
 {
 "what": "Weapon group",
-"shape": "hat2",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_CYCLE_NEXT_PRIMARY_WEAPONGROUP"
-}
-],
-[
-{
-"action": "INPUT_ACTION_CYCLE_PREV_PRIMARY_WEAPONGROUP"
-}
-]
-],
-"urgency": 0,
-"dev": "stick",
-"yours": {
 "role": "stick",
 "control": "bottom-thumb-hat",
 "how": "accepted"
 },
-"rapid": true,
-"by_feel": true,
-"on": [
-"forward",
-"back"
-]
-},
 {
 "what": "Missile group",
-"shape": "hat2",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_CYCLE_NEXT_SECONDARY_WEAPONGROUP"
-}
-],
-[
-{
-"action": "INPUT_ACTION_CYCLE_PREV_SECONDARY_WEAPONGROUP"
-}
-]
-],
-"urgency": 0,
-"yours": {
 "role": "throttle",
 "control": "thumb-two-way-hat",
 "how": "accepted"
 },
-"rapid": true,
-"by_feel": true,
-"on": [
-"forward",
-"back"
-]
-},
 {
 "what": "Match speed",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_STATE_MATCH_SPEED"
-}
-]
-],
-"urgency": 0,
-"dev": "throttle",
-"note": "latches in the game (toggle=\"1\"), so a plain button is right",
-"yours": {
 "role": "throttle",
 "control": "middle-finger-button",
 "how": "accepted"
 },
-"by_feel": true
-},
 {
 "what": "Travel mode",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_TOGGLE_TRAVEL_MODE"
-}
-]
-],
-"urgency": 1,
-"dev": "throttle",
-"yours": {
 "role": "throttle",
 "control": "thumb-button",
 "how": "accepted"
 },
-"by_feel": true
-},
 {
 "what": "Flight assist",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_TOGGLE_FLIGHT_ASSIST"
-}
-]
-],
-"urgency": 1,
-"dev": "throttle",
-"yours": {
 "role": "throttle",
 "control": "left-side-dial",
 "how": "accepted"
 },
-"by_feel": true
-},
 {
 "what": "Dock / undock",
-"shape": "hat2",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_DOCK_ACTION"
-}
-],
-[
-{
-"action": "INPUT_ACTION_UNDOCK"
-}
-]
-],
-"urgency": 1,
-"dev": "throttle",
-"yours": {
 "role": "throttle",
 "control": "t4-rocker",
 "how": "accepted"
 },
-"on": [
-"forward",
-"back"
-]
-},
 {
 "what": "Autopilot",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_TOGGLE_AUTOPILOT"
-}
-]
-],
-"urgency": 1,
-"dev": "throttle",
-"yours": {
 "role": "throttle",
 "control": "keyboard-b1-button",
 "how": "accepted"
-}
 },
 {
 "what": "Target action",
-"shape": "hat2",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_NEXT_TARGET_ACTION"
-}
-],
-[
-{
-"action": "INPUT_ACTION_PREV_TARGET_ACTION"
-}
-]
-],
-"urgency": 1,
-"dev": "stick",
-"yours": {
 "role": "throttle",
 "control": "t3-rocker",
 "how": "accepted"
 },
-"on": [
-"forward",
-"back"
-]
-},
 {
 "what": "Subcomponent",
-"shape": "hat2",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_NEXT_SUBCOMPONENT"
-}
-],
-[
-{
-"action": "INPUT_ACTION_PREV_SUBCOMPONENT"
-}
-]
-],
-"urgency": 1,
-"dev": "stick",
-"yours": {
 "role": "stick",
 "control": "grip-thumb-hat",
 "how": "accepted"
 },
-"rapid": true,
-"on": [
-"right",
-"left"
-]
-},
 {
 "what": "Deselect target",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_DESELECT_TARGET"
-},
-{
-"action": "INPUT_STATE_MAP_BACK"
-}
-]
-],
-"urgency": 1,
-"dev": "stick",
-"yours": {
 "role": "stick",
 "control": "bottom-thumb-hat",
 "how": "accepted"
 },
-"by_feel": true
-},
 {
 "what": "Scan mode",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_TOGGLE_SCAN_MODE"
-}
-]
-],
-"dev": "throttle",
-"yours": {
 "role": "throttle",
 "control": "big-red-button",
 "how": "accepted"
-}
 },
 {
 "what": "Long-range scan",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_TOGGLE_LONGRANGE_SCAN_MODE"
-}
-]
-],
-"dev": "throttle",
-"yours": {
 "role": "throttle",
 "control": "keyboard-b4-button",
 "how": "accepted"
-}
 },
 {
 "what": "Scan action",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_SCAN_ACTION"
-}
-]
-],
-"yours": {
 "role": "throttle",
 "control": "pinky-button",
 "how": "accepted"
-}
 },
 {
 "what": "SETA",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_TOGGLE_SETA_MODE"
-}
-]
-],
-"dev": "throttle",
-"yours": {
 "role": "throttle",
 "control": "right-side-dial",
 "how": "accepted"
-}
 },
 {
 "what": "Map",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_OPEN_MAP"
-}
-]
-],
-"note": "the one menu worth a hand",
-"yours": {
 "role": "throttle",
 "control": "keyboard-b3-button",
 "how": "accepted"
-}
 },
 {
 "what": "View",
-"shape": "hat4",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_COCKPIT_VIEW"
-},
-{
-"action": "INPUT_STATE_MAP_RESET_POSITION"
-}
-],
-[
-{
-"action": "INPUT_ACTION_TARGET_VIEW"
-}
-],
-[
-{
-"action": "INPUT_ACTION_EXTERNAL_VIEW"
-},
-{
-"action": "INPUT_STATE_MAP_RESET_ROTATION"
-}
-],
-[
-{
-"action": "INPUT_ACTION_CYCLE_VIEW"
-}
-]
-],
-"suits": "view",
-"yours": {
 "role": "throttle",
 "control": "thumb-hat",
 "how": "accepted"
 },
-"rapid": true,
-"by_feel": true
-},
 {
 "what": "Map rotate",
-"shape": "hat4",
-"bindings": [
-[
-{
-"action": "INPUT_STATE_MAP_PAN_TO_ROTATE"
-}
-],
-[],
-[],
-[]
-],
-"note": "only answers in the map; harmless in flight",
-"yours": {
 "role": "throttle",
 "control": "mode-selector",
 "how": "accepted"
-}
 },
 {
 "what": "Cockpit menu",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_OPEN_COCKPIT_MENU"
-}
-]
-],
-"urgency": 3,
-"yours": {
 "role": "throttle",
 "control": "keyboard-b2-button",
 "how": "accepted"
-}
 },
 {
 "what": "Quicksave",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_QUICKSAVE"
-}
-]
-],
-"urgency": 3,
-"note": "deliberately far from the hand",
-"yours": {
 "role": "throttle",
 "control": "apu-button",
 "how": "accepted"
-}
 },
 {
 "what": "Pause",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_PAUSE"
-}
-]
-],
-"urgency": 3,
-"yours": {
 "role": "stick",
 "control": "bottom-thumb-hat",
 "how": "accepted"
-}
 },
 {
 "what": "Jump / crouch",
-"shape": "hat2",
-"bindings": [
-[
-{
-"action": "INPUT_STATE_FP_JUMP"
-}
-],
-[
-{
-"action": "INPUT_STATE_FP_CROUCH"
-}
-]
-],
-"urgency": 3,
-"yours": {
 "role": "throttle",
 "control": "t5-rocker",
 "how": "accepted"
 },
-"on": [
-"forward",
-"back"
-]
-},
 {
 "what": "Player ship info",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_OPEN_PLAYERSHIP_INFO"
-}
-]
-],
-"urgency": 3,
-"yours": {
 "role": "stick",
 "control": "grip-thumb-hat",
 "how": "accepted"
-}
 },
 {
 "what": "Target under cursor",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_TARGET_NEXT_TARGET"
-},
-{
-"action": "INPUT_STATE_MAP_SELECT"
-}
-]
-],
-"urgency": 0,
-"suits": "lock",
-"dev": "stick",
-"yours": {
 "role": "stick",
 "control": "top-thumb-hat",
 "how": "accepted"
 },
-"by_feel": true
-},
 {
 "what": "Countermeasure",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_DEPLOY_COUNTERMEASURE"
-}
-]
-],
-"urgency": 0,
-"dev": "stick",
-"yours": {
 "role": "stick",
 "control": "grip-pinky-button",
 "how": "accepted"
 },
-"by_feel": true
-},
 {
 "what": "Comms",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_COMM_ACTION"
-}
-]
-],
-"yours": {
 "role": "throttle",
 "control": "keyboard-b5-button",
 "how": "accepted"
-}
 },
 {
 "what": "Zoom goggles",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_ZOOMGOGGLES"
-}
-]
-],
-"suits": "view",
-"yours": {
 "role": "throttle",
 "control": "keyboard-b6-button",
 "how": "accepted"
-}
 },
 {
 "what": "Missions",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_OPEN_MISSIONS"
-}
-]
-],
-"urgency": 3,
-"yours": {
 "role": "stick",
 "control": "bottom-thumb-hat",
 "how": "accepted"
-}
 }
 ]
 }

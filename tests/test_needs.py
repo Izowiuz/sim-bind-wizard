@@ -12,6 +12,9 @@ author's own stick plugged in is not a test.
 """
 
 import importlib.util
+import json
+import os
+import tempfile
 import unittest
 from unittest import mock
 
@@ -217,28 +220,38 @@ class NeedsOnDisk(unittest.TestCase):
     be the same fact twice.
     """
 
-    def back(self, need, also=()):
-        (got,) = read_needs(dump_needs([need], also), also)
+    def back(self, need):
+        (got,) = read_needs(dump_needs([need]))
         return got
 
     def test_every_judgement_survives(self):
         one = Need('Airbrake', 'hat2', [[Bind('OUT')], [Bind('IN')]],
-                   urgency=IN_A_TURN, suits='reflex', dev='throttle',
-                   prefer='T1 rocker', on=('forward', 'back'), rank=17,
-                   note='held, not tapped')
+                   urgency=IN_A_TURN, suits='reflex',
+                   on=('forward', 'back'), rank=17)
         got = self.back(one)
-        for f in ('what', 'shape', 'urgency', 'suits', 'dev', 'prefer',
-                  'on', 'rank', 'note'):
+        for f in ('what', 'shape', 'urgency', 'suits', 'on', 'rank'):
             self.assertEqual(getattr(one, f), getattr(got, f), f)
+
+    def test_a_wish_is_not_a_judgement_about_the_function(self):
+        # `stick` is not a property of firing a gun, and `this one carries
+        # the shift` is not one either. They were written per need, 86
+        # times, and an opinion recorded 86 times is one you cannot
+        # change. An overlay says them now, so the file does not.
+        one = Need('Airbrake', 'hat2', [[Bind('OUT')]],
+                   device='throttle', prefer='T1 rocker')
+        setattr(one, 'modifier', True)
+        (row,) = dump_needs([one])
+        for wish in corneeds.WISHES:
+            self.assertNotIn(wish, row, wish)
 
     def test_the_fact_flags_survive(self):
         # Named from the table rather than listed here, so a sixth fact is
         # covered the moment somebody writes the block.
         one = Need('Airbrake', 'hat2', [[Bind('OUT')]])
-        for flag in corneeds.FLAGS:
+        for flag in corneeds.TOLD:
             setattr(one, flag, True)
         got = self.back(one)
-        for flag in corneeds.FLAGS:
+        for flag in corneeds.TOLD:
             self.assertTrue(getattr(got, flag), flag)
 
     def test_a_flag_nobody_set_is_not_written_down(self):
@@ -246,7 +259,7 @@ class NeedsOnDisk(unittest.TestCase):
         # diff on five hand-edited files to the rows somebody judged
         # rather than 147 rows of `false`.
         (row,) = dump_needs([Need('Airbrake', 'hat2', [[Bind('OUT')]])])
-        for flag in corneeds.FLAGS:
+        for flag in corneeds.TOLD:
             self.assertNotIn(flag, row)
 
     def test_the_slots_come_back_in_the_order_they_went(self):
@@ -276,18 +289,45 @@ class NeedsOnDisk(unittest.TestCase):
         got = self.back(one)
         self.assertEqual('button', got.first_shape)
 
-    def test_a_field_only_one_game_has_is_named_not_bagged(self):
-        # BMS alone marks a need as living on the shifted layer. A generic
-        # `extra` bag would be the opaque payload this project spent its
-        # time removing, so the game says which field it wants carried.
-        class Shifted(Need):
-            """What BMS's own subclass is, minus everything else."""
-            shift = False
+    def test_both_halves_go_to_their_own_file_and_come_back(self):
+        # Through real files, because the two of them are the point: the
+        # description in one, where it sits in the other, and a reader of
+        # either can tell which it is holding.
+        one = Need('Boost', 'button', [[Bind('BOOST')]], suits='reflex')
+        one.assignment = {'role': 'stick', 'control': 'thumb-b',
+                          'how': corneeds.CHOSE}
+        with tempfile.TemporaryDirectory() as where:
+            corneeds.save_needs(where, 'g-needs.json', [one])
+            corneeds.save_assignments(where, 'g-binds.json', [one])
+            with open(os.path.join(where, 'g-needs.json'),
+                      encoding='utf-8') as f:
+                described = json.load(f)['needs']
+            self.assertNotIn('assignment', described[0])
+            (back,) = read_needs(described)
+            self.assertIsNone(back.assignment)
+            kept = corneeds.load_assignments(where, 'g-binds.json', [back])
+        self.assertEqual(1, kept)
+        self.assertEqual(one.assignment, back.assignment)
 
-        one = Shifted('Pinky shift', 'button', [[Bind('SHIFT')]])
-        one.shift = True
-        back = read_needs(dump_needs([one], ('shift',)), ('shift',), Shifted)
-        self.assertIs(True, back[0].shift)
+    def test_a_desk_nobody_has_saved_yet_is_not_an_error(self):
+        # The binds file is written by the review screen. A game somebody
+        # has planned and never saved has no answers on disk, and the
+        # allocator is about to produce them.
+        one = Need('Boost', 'button', [[Bind('BOOST')]])
+        with tempfile.TemporaryDirectory() as where:
+            self.assertEqual(
+                0, corneeds.load_assignments(where, 'g-binds.json', [one]))
+        self.assertIsNone(one.assignment)
+
+    def test_a_row_naming_a_function_that_is_gone_is_dropped(self):
+        # Rather than kept: the quiet alternative is a file that grows
+        # graves, one per function anybody ever renamed.
+        one = Need('Boost', 'button', [[Bind('BOOST')]])
+        kept = corneeds.read_assignments(
+            [{'what': 'Something else', 'role': 'stick', 'control': 'x',
+              'how': corneeds.CHOSE}], [one])
+        self.assertEqual(0, kept)
+        self.assertIsNone(one.assignment)
 
     def test_a_need_the_allocator_has_touched_comes_back_untouched(self):
         # `relaxed` is set BY a run; it is not a judgement and writing it
@@ -506,7 +546,7 @@ class Devices(unittest.TestCase):
             throttle_controls=[fake.button('Throttle button', 0,
                                            reach=fake.PANEL)])
         placed, _un, _free = allocate(
-            [Need('Speedbrake', 'button', ['SB'], dev='throttle')], devs)
+            [Need('Speedbrake', 'button', ['SB'], device='throttle')], devs)
         self.assertEqual('throttle', placed[0].role)
 
 
@@ -929,6 +969,219 @@ class TheRulesNameOnlyWordsTheMapProduces(unittest.TestCase):
         self.assertIn('back', corneeds.RULES['directions'])
 
 
+class TheOrderTheScreenNamesIsTheOrderItUses(unittest.TestCase):
+    """`ORDERED_BY` sits beside the sort key so the screen can read it.
+
+    That only helps if it is true. It was a paragraph on the screen
+    before, and a paragraph does not move when the key does: it still
+    said a pin went first long after what you choose by hand started
+    outranking one, and it stopped at the factory count after a fourth
+    step was added under it.
+
+    One control both needs want and only one can have. Two needs alike
+    in everything but the step being tested, and the one the screen
+    names first is the one that gets it.
+    """
+
+    def rig(self):
+        return {'stick': fake.device('stick', [
+            fake.button('Only one', 0, reach=fake.THUMB)])}
+
+    def wins(self, first, second):
+        placed, _left, _free = allocate([first, second], self.rig())
+        self.assertEqual(1, len(placed), 'the rig must fit only one')
+        return placed[0].need.what
+
+    def need(self, what, **kw):
+        yours = kw.pop('yours', None)
+        one = Need(what, 'button', [[Bind('A')]], **kw)
+        if yours:
+            one.assignment = yours
+        return one
+
+    def test_1_what_you_put_there_beats_a_pin(self):
+        mine = self.need('Mine', assignment={'role': 'stick',
+                                        'control': 'only-one',
+                                        'how': corneeds.CHOSE})
+        self.assertEqual('Mine', self.wins(
+            mine, self.need('Pinned', prefer='Only one')))
+
+    def test_2_a_pin_beats_being_more_urgent(self):
+        self.assertEqual('Pinned', self.wins(
+            self.need('Urgent', urgency=IN_A_TURN),
+            self.need('Pinned', prefer='Only one', urgency=ON_THE_RAMP)))
+
+    def test_3_being_more_urgent_beats_the_factory_count(self):
+        self.assertEqual('Urgent', self.wins(
+            self.need('Counted', urgency=IN_THE_AIR, rank=99),
+            self.need('Urgent', urgency=IN_A_TURN, rank=0)))
+
+    def test_4_the_factory_count_beats_the_name(self):
+        # `Aaa` sorts first, so only the count can put `Zzz` ahead.
+        self.assertEqual('Zzz', self.wins(
+            self.need('Aaa', rank=1), self.need('Zzz', rank=9)))
+
+    def test_5_the_name_is_the_last_word(self):
+        self.assertEqual('Aaa', self.wins(
+            self.need('Zzz'), self.need('Aaa')))
+
+    def test_6_and_the_name_does_not_depend_on_the_order_they_came_in(self):
+        # The step that exists so that moving two lines in a file does
+        # not move a binding.
+        self.assertEqual('Aaa', self.wins(
+            self.need('Aaa'), self.need('Zzz')))
+
+    def test_the_screen_names_every_step_and_no_more(self):
+        self.assertEqual(6, len([m for m in dir(self)
+                                 if m.startswith('test_') and m[5].isdigit()]))
+        self.assertEqual(5, len(corneeds.ORDERED_BY))
+        for what, why in corneeds.ORDERED_BY:
+            self.assertTrue(what and why)
+
+
+class WhatItRanAgainst(unittest.TestCase):
+    """The comparison the panel shows: what else could have taken this.
+
+    `offers` computes it at every placement and throws it away, so the
+    screen recomputes it for the one need it is asked about.
+    """
+
+    def rig(self):
+        return {'stick': fake.device('stick', [
+            fake.button('Thumb', 0, reach=fake.THUMB),
+            fake.button('Pinky', 1, reach=fake.PINKY)])}
+
+    def test_it_does_not_count_being_where_it_already_is(self):
+        # `stayed` pays whichever control the need is on, so a comparison
+        # counting it answers "it is here because it is here": every
+        # alternative sits 20 below and the screen says nothing else fit.
+        devs = self.rig()
+        one = Need('A', 'button', [[Bind('A')]])
+        bare = [s for s, _r, _c in corneeds.ran_against(one, devs)]
+        one.assignment = {'role': 'stick', 'control': 'thumb',
+                     'how': corneeds.ACCEPTED}
+        self.assertEqual(bare,
+                         [s for s, _r, _c in corneeds.ran_against(one, devs)])
+
+    def test_it_answers_best_first(self):
+        got = corneeds.ran_against(Need('A', 'button', [[Bind('A')]]),
+                                   self.rig())
+        self.assertEqual(sorted(got, key=lambda x: -x[0]), got)
+
+    def test_two_controls_are_told_apart_by_term_and_not_by_words(self):
+        # `1 spare button` and `2 spare buttons` are ONE term wearing two
+        # sets of words. Compared by the words, each control looked to
+        # have a term the other had never heard of, and the panel drew
+        # `+0` beside a term that had in fact moved by four.
+        devs = {'stick': fake.device('stick', [
+            fake.hat2('Rocker', 0, reach=fake.THUMB),
+            fake.hat4('Hat', 2, reach=fake.THUMB)])}
+        one = Need('A', 'hat2', [[Bind('U')], [Bind('D')]])
+        rocker = next(c for c in devs['stick'].groups() if c.label == 'Rocker')
+        hat = next(c for c in devs['stick'].groups() if c.label == 'Hat')
+        got = corneeds.what_differs(one, ('stick', rocker), ('stick', hat))
+        spare = [d for d, t in got if 'spare' in t]
+        self.assertEqual(1, len(spare), 'one term, not two')
+        self.assertTrue(spare[0], 'and it moved, so it is not zero')
+
+    def test_what_they_share_is_not_mentioned(self):
+        # Both fit, both are the right shape: that cancels. A five-line
+        # score becomes the one line the two of them differ by.
+        devs = self.rig()
+        one = Need('A', 'button', [[Bind('A')]])
+        a = next(c for c in devs['stick'].groups() if c.label == 'Thumb')
+        b = next(c for c in devs['stick'].groups() if c.label == 'Pinky')
+        got = corneeds.what_differs(one, ('stick', a), ('stick', b))
+        self.assertNotIn('shape and count fit', [t for _d, t in got])
+
+
+class ALayoutStaysWhereYouLeftIt(unittest.TestCase):
+    """The allocator answered every regeneration from scratch.
+
+    Moving ONE binding by hand moved 21 of X4's 32: the one you moved,
+    and twenty others re-decided against a board that had shifted. A
+    layout is learnt with the hands, so that is not an improvement, it is
+    the tool undoing your week.
+
+    `stayed` is the memory. It is worth 20 -- measured, not judged:
+    across thirty forced moves in five games it took the churn from 16.8
+    bindings to 3.4 and the layouts came out worth exactly what they were
+    worth without it.
+    """
+
+    def rig(self):
+        return {'stick': fake.device('stick', [
+            fake.button(f'Button {n}', n, reach=fake.THUMB)
+            for n in range(6)])}
+
+    def accepted(self, needs, devs):
+        """Place them, then record where, the way `c` does."""
+        placed, _left, _free = allocate(needs, devs)
+        for p in placed:
+            p.need.assignment = {'role': p.role, 'control': p.ctrl.id,
+                            'how': corneeds.ACCEPTED}
+        return {p.need.what: p.ctrl.id for p in placed}
+
+    def test_it_counts_only_where_you_left_this_one(self):
+        devs = self.rig()
+        one = Need('A', 'button', [[Bind('A')]])
+        ctrl = next(iter(devs['stick'].groups()))
+        plain = corneeds.score(ctrl, one, 'stick')
+        assert plain is not None
+        one.assignment = {'role': 'stick', 'control': ctrl.id,
+                     'how': corneeds.ACCEPTED}
+        remembered = corneeds.score(ctrl, one, 'stick')
+        assert remembered is not None
+        self.assertGreater(remembered, plain)
+        one.assignment = {'role': 'stick', 'control': 'somewhere-else',
+                     'how': corneeds.ACCEPTED}
+        self.assertEqual(plain, corneeds.score(ctrl, one, 'stick'))
+
+    def test_a_layout_with_no_history_scores_as_before(self):
+        devs = self.rig()
+        one = Need('A', 'button', [[Bind('A')]])
+        self.assertIsNone(one.assignment)
+        weights = {t['name']: t['weight'] for t in corneeds.TERMS}
+        bare = corneeds.merge_rules(corneeds.RULES,
+                                    {'term': [{'name': 'stayed',
+                                               'weight': 0}]})
+        ctrl = next(iter(devs['stick'].groups()))
+        self.assertEqual(corneeds.score(ctrl, one, 'stick', rules=bare),
+                         corneeds.score(ctrl, one, 'stick'))
+        self.assertTrue(weights['stayed'])
+
+    def test_moving_one_binding_does_not_move_the_rest(self):
+        # The whole point. Six buttons, five needs that all fit any of
+        # them: every placement is a tie, so without a memory the board
+        # re-rolls entirely the moment one thing is pinned by hand.
+        devs = self.rig()
+        needs = [Need(f'N{n}', 'button', [[Bind(f'A{n}')]]) for n in range(5)]
+        was = self.accepted(needs, devs)
+        moved = needs[0]
+        spare = next(c for c in devs['stick'].groups()
+                     if c.id not in was.values())
+        moved.assignment = {'role': 'stick', 'control': spare.id,
+                       'how': corneeds.CHOSE}
+        placed, _left, _free = allocate(needs, devs)
+        now = {p.need.what: p.ctrl.id for p in placed}
+        self.assertEqual(spare.id, now['N0'], 'the one you moved')
+        stayed = [w for w in was if w != 'N0' and was[w] == now.get(w)]
+        self.assertEqual(4, len(stayed), 'the rest should not have moved')
+
+    def test_but_something_much_better_still_takes_it(self):
+        # Small improvements are not worth relearning a layout. Large
+        # ones are, and the screen goes back to `?` to say so.
+        devs = {'stick': fake.device('stick', [
+            fake.button('Near', 0, reach=fake.THUMB),
+            fake.hat4('Right shape', 1, reach=fake.THUMB)])}
+        one = Need('A', 'hat4', [[Bind('U')], [Bind('R')],
+                                 [Bind('D')], [Bind('L')]])
+        one.assignment = {'role': 'stick', 'control': 'near',
+                     'how': corneeds.ACCEPTED}
+        placed, _left, _free = allocate([one], devs)
+        self.assertEqual('Right shape', placed[0].ctrl.label)
+
+
 class WhichSolverRunsIsAsked(unittest.TestCase):
     """Not guessed. It was guessed, and that was the bug.
 
@@ -986,9 +1239,9 @@ class WhichSolverRunsIsAsked(unittest.TestCase):
             fake.button('Thumb', 0, reach=fake.THUMB),
             fake.hat2('Rocker', 1, reach=fake.THUMB)])}
         needs = [Need('Anything', ('hat2', 'button'), [[Bind('A')]],
-                      urgency=IN_A_TURN, dev='stick'),
+                      urgency=IN_A_TURN, device='stick'),
                  Need('Bigger', 'hat2', [[Bind('B')], [Bind('C')]],
-                      urgency=IN_A_TURN, dev='stick')]
+                      urgency=IN_A_TURN, device='stick')]
         best, _l, _f = allocate(needs, devs, solver=csolvers.best())
         for one in csolvers.SOLVERS:
             if one.why_not():
@@ -1004,6 +1257,32 @@ class WhichSolverRunsIsAsked(unittest.TestCase):
         # the silent difference is back.
         here = importlib.util.find_spec('ortools') is not None
         self.assertEqual(here, not csolvers.CpSat.why_not())
+
+    def test_the_model_breaks_a_tie_the_same_way_walking_the_list_does(self):
+        # Without a tie-break the model has no preference between equally
+        # good answers, and most of a layout is equally good answers. The
+        # two solvers now agree about ties and differ only where the
+        # model can actually do better.
+        if csolvers.CpSat.why_not():
+            self.skipTest('no ortools here')
+        model, walk = csolvers.CpSat(), csolvers.Greedy()
+        # Offered highest-first, so a solver with no preference has every
+        # reason to answer with the last one it happened to try.
+        flat = [('a', {3: 50, 2: 50, 1: 50, 0: 50})]
+        self.assertEqual([('a', 0)], model.best(flat, range(4)))
+        self.assertEqual(walk.best(flat, range(4)),
+                         model.best(flat, range(4)))
+        two = [('a', {2: 50, 1: 50, 0: 50}), ('b', {2: 50, 1: 50, 0: 50})]
+        got = model.best(two, range(3))
+        assert got is not None
+        self.assertEqual({0, 1}, {r for _w, r in got})
+
+    def test_the_tie_break_never_reaches_into_a_real_difference(self):
+        # One point has to beat any number of tie-break steps under it.
+        if csolvers.CpSat.why_not():
+            self.skipTest('no ortools here')
+        got = csolvers.CpSat().best([('a', {0: 50, 9: 51})], range(10))
+        self.assertEqual([('a', 9)], got)
 
     def test_a_name_no_solver_answers_to_is_refused(self):
         # Not answered with the other one. You asked for an answer, not
@@ -1084,9 +1363,9 @@ class TheSolverIsNeverWorseThanWalkingTheList(unittest.TestCase):
             fake.button('Thumb', 0, reach=fake.THUMB),
             fake.hat2('Rocker', 1, reach=fake.THUMB)])}
         return [Need('Anything', ('hat2', 'button'), [[Bind('A')]],
-                     urgency=IN_A_TURN, dev='stick'),
+                     urgency=IN_A_TURN, device='stick'),
                 Need('Bigger', 'hat2', [[Bind('B')], [Bind('C')]],
-                     urgency=IN_A_TURN, dev='stick')], devs
+                     urgency=IN_A_TURN, device='stick')], devs
 
     def test_the_rig_itself_separates_them(self):
         # The test that earns the three below. They assert `>=`, which two
@@ -1126,9 +1405,9 @@ class TheSolverIsNeverWorseThanWalkingTheList(unittest.TestCase):
         devs = {'stick': fake.device('stick', [
             fake.button('Thumb', 0, reach=fake.THUMB),
             fake.button('Pinky', 1, reach=fake.PANEL)])}
-        needs = [Need('Pinned', 'button', [[Bind('A')]], dev='stick',
+        needs = [Need('Pinned', 'button', [[Bind('A')]], device='stick',
                       prefer='Pinky', urgency=IN_A_TURN)]
-        loose = Need('Pinned', 'button', [[Bind('A')]], dev='stick',
+        loose = Need('Pinned', 'button', [[Bind('A')]], device='stick',
                      urgency=IN_A_TURN)
         free, _l, _f = allocate([loose], devs, solver=csolvers.CpSat())
         self.assertEqual(['Thumb'], [p.ctrl.label for p in free])
@@ -1229,9 +1508,9 @@ class APinIsAConstraintAndNotABigNumber(unittest.TestCase):
         devs = {'stick': fake.device('stick', [
             fake.button('Pin', 0, reach=fake.THUMB),
             fake.button('Spare', 1, reach=fake.THUMB)])}
-        return [Need('Mine', 'button', [[Bind('A')]], dev='stick',
+        return [Need('Mine', 'button', [[Bind('A')]], device='stick',
                      prefer='Pin', urgency=IN_A_TURN),
-                Need('Other', 'button', [[Bind('B')]], dev='stick',
+                Need('Other', 'button', [[Bind('B')]], device='stick',
                      prefer='Pin', urgency=ON_THE_RAMP)], devs
 
     def test_the_pin_holds_even_where_breaking_it_places_more(self):

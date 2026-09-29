@@ -1,0 +1,424 @@
+name = "By hand"
+says = "the wishes as they were written, one function at a time"
+
+# Not rules: these are the 86 hand-written wishes that used to sit in the
+# needs files, one `[[want]]` each, carried over so that splitting the files
+# moved nothing on the desk. It is the baseline a real overlay is diffed
+# against -- write `overlays/<yours>.toml` keyed on `suits` and `urgency`, lay
+# the same game out with both, and the difference is what the rule says.
+#
+# Every want names its `game`, because a want naming `what` is not general:
+# MSFS and Falcon BMS both have a function called `Gear`, and without the
+# scope MSFS's landing gear took Falcon's pin to a keyboard button.
+
+# ---- Elite Dangerous -----------------------------------------------
+
+[[want]]
+game   = "elite"
+what   = "Boost"
+device = "throttle"
+
+[[want]]
+game   = "elite"
+what   = "Cargo scoop"
+device = "throttle"
+
+[[want]]
+game   = "elite"
+what   = "Chaff"
+device = "throttle"
+
+[[want]]
+game   = "elite"
+what   = "Discovery scan"
+device = "throttle"
+
+[[want]]
+game   = "elite"
+what   = "Eject cargo"
+prefer = "Big red button"
+
+[[want]]
+game   = "elite"
+what   = "Fire group"
+device = "stick"
+
+[[want]]
+game   = "elite"
+what   = "Flight assist"
+device = "throttle"
+
+[[want]]
+game   = "elite"
+what   = "Frame shift"
+device = "throttle"
+
+[[want]]
+game   = "elite"
+what   = "Hardpoints"
+device = "stick"
+
+[[want]]
+game   = "elite"
+what   = "Head look"
+device = "throttle"
+
+[[want]]
+game   = "elite"
+what   = "Head look reset"
+device = "throttle"
+
+[[want]]
+game   = "elite"
+what   = "Heat sink"
+device = "throttle"
+
+[[want]]
+game   = "elite"
+what   = "Highest threat"
+device = "stick"
+
+[[want]]
+game   = "elite"
+what   = "Landing gear"
+device = "throttle"
+
+[[want]]
+game   = "elite"
+what   = "Next hostile"
+device = "stick"
+
+[[want]]
+game   = "elite"
+what   = "Panel"
+device = "throttle"
+
+[[want]]
+game   = "elite"
+what   = "Panel page"
+device = "throttle"
+
+[[want]]
+game   = "elite"
+what   = "Power distribution"
+device = "stick"
+
+[[want]]
+game   = "elite"
+what   = "Primary fire"
+device = "stick"
+
+[[want]]
+game   = "elite"
+what   = "Radar range"
+device = "throttle"
+
+[[want]]
+game   = "elite"
+what   = "Reverse throttle"
+device = "throttle"
+
+[[want]]
+game   = "elite"
+what   = "Secondary fire"
+device = "stick"
+
+[[want]]
+game   = "elite"
+what   = "Select target"
+device = "stick"
+
+[[want]]
+game   = "elite"
+what   = "Shield cell"
+device = "throttle"
+
+[[want]]
+game   = "elite"
+what   = "Speed zero"
+device = "throttle"
+
+[[want]]
+game   = "elite"
+what   = "Subsystem"
+device = "stick"
+
+[[want]]
+game   = "elite"
+what   = "Target"
+device = "stick"
+
+# ---- Falcon BMS ----------------------------------------------------
+
+[[want]]
+game   = "falconbms"
+what   = "CMS — countermeasures"
+device = "stick"
+
+[[want]]
+game   = "falconbms"
+what   = "COMMS switch"
+device = "throttle"
+
+[[want]]
+game   = "falconbms"
+what   = "DMS — display management"
+device = "stick"
+
+[[want]]
+game   = "falconbms"
+what   = "DOGFIGHT / MRM override"
+device = "throttle"
+
+[[want]]
+game   = "falconbms"
+what   = "DX shift (pinky)"
+device = "stick"
+prefer = "Grip pinky button"
+modifier = true
+
+[[want]]
+game   = "falconbms"
+what   = "IFF MASTER knob"
+device = "throttle"
+shift  = true
+
+[[want]]
+game   = "falconbms"
+what   = "Landing gear"
+shift  = true
+
+[[want]]
+game   = "falconbms"
+what   = "MAN RANGE knob"
+device = "throttle"
+shift  = true
+
+[[want]]
+game   = "falconbms"
+what   = "MAN RANGE knob — UNCAGE"
+device = "throttle"
+
+[[want]]
+game   = "falconbms"
+what   = "Master arm"
+device = "stick"
+
+[[want]]
+game   = "falconbms"
+what   = "NWS / AR DISC / MSL STEP"
+device = "stick"
+
+[[want]]
+game   = "falconbms"
+what   = "Paddle — AP / trim disconnect"
+device = "stick"
+
+[[want]]
+game   = "falconbms"
+what   = "Parking brake"
+shift  = true
+
+[[want]]
+game   = "falconbms"
+what   = "Radar cursor (slew)"
+device = "throttle"
+
+[[want]]
+game   = "falconbms"
+what   = "Radar cursor zero"
+device = "throttle"
+
+[[want]]
+game   = "falconbms"
+what   = "Radar gain"
+device = "throttle"
+shift  = true
+
+[[want]]
+game   = "falconbms"
+what   = "SPD BRAKE switch"
+device = "throttle"
+
+[[want]]
+game   = "falconbms"
+what   = "TMS — target management"
+device = "stick"
+
+[[want]]
+game   = "falconbms"
+what   = "Trigger"
+device = "stick"
+
+[[want]]
+game   = "falconbms"
+what   = "Trim — pitch"
+device = "stick"
+
+[[want]]
+game   = "falconbms"
+what   = "Weapon release (Pickle)"
+device = "stick"
+
+# ---- Microsoft Flight Simulator ------------------------------------
+
+[[want]]
+game   = "msfs"
+what   = "Look around"
+device = "throttle"
+
+[[want]]
+game   = "msfs"
+what   = "Trim"
+device = "stick"
+
+[[want]]
+game   = "msfs"
+what   = "Views"
+device = "stick"
+
+# ---- War Thunder ---------------------------------------------------
+
+[[want]]
+game   = "warthunder"
+what   = "Fire missile"
+device = "stick"
+
+[[want]]
+game   = "warthunder"
+what   = "Fire rockets"
+device = "stick"
+
+[[want]]
+game   = "warthunder"
+what   = "Gear"
+device = "throttle"
+prefer = "Keyboard B1 button"
+
+[[want]]
+game   = "warthunder"
+what   = "Radar / IRST"
+device = "stick"
+
+[[want]]
+game   = "warthunder"
+what   = "Target lock"
+device = "throttle"
+prefer = "Thumb hat"
+
+[[want]]
+game   = "warthunder"
+what   = "Trim"
+device = "stick"
+
+[[want]]
+game   = "warthunder"
+what   = "Views"
+device = "stick"
+
+[[want]]
+game   = "warthunder"
+what   = "WEP / afterburner"
+device = "throttle"
+
+[[want]]
+game   = "warthunder"
+what   = "Weapon lock"
+device = "stick"
+
+# ---- X4: Foundations -----------------------------------------------
+
+[[want]]
+game   = "x4"
+what   = "Autopilot"
+device = "throttle"
+
+[[want]]
+game   = "x4"
+what   = "Boost"
+device = "throttle"
+
+[[want]]
+game   = "x4"
+what   = "Countermeasure"
+device = "stick"
+
+[[want]]
+game   = "x4"
+what   = "Deselect target"
+device = "stick"
+
+[[want]]
+game   = "x4"
+what   = "Dock / undock"
+device = "throttle"
+
+[[want]]
+game   = "x4"
+what   = "Fire primary"
+device = "stick"
+
+[[want]]
+game   = "x4"
+what   = "Fire secondary"
+device = "stick"
+
+[[want]]
+game   = "x4"
+what   = "Flight assist"
+device = "throttle"
+
+[[want]]
+game   = "x4"
+what   = "Long-range scan"
+device = "throttle"
+
+[[want]]
+game   = "x4"
+what   = "Match speed"
+device = "throttle"
+
+[[want]]
+game   = "x4"
+what   = "SETA"
+device = "throttle"
+
+[[want]]
+game   = "x4"
+what   = "Scan mode"
+device = "throttle"
+
+[[want]]
+game   = "x4"
+what   = "Strafe"
+device = "stick"
+
+[[want]]
+game   = "x4"
+what   = "Subcomponent"
+device = "stick"
+
+[[want]]
+game   = "x4"
+what   = "Target action"
+device = "stick"
+
+[[want]]
+game   = "x4"
+what   = "Target next enemy"
+device = "stick"
+
+[[want]]
+game   = "x4"
+what   = "Target under cursor"
+device = "stick"
+
+[[want]]
+game   = "x4"
+what   = "Travel mode"
+device = "throttle"
+
+[[want]]
+game   = "x4"
+what   = "Weapon group"
+device = "stick"

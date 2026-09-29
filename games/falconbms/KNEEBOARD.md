@@ -22,23 +22,23 @@ Falcon BMS · F-16C · VIRPIL. Generated — do not edit, regenerate.
 | 2 | Main trigger — first | Trigger | `SimTriggerFirstDetent` |
 | 3 | Main trigger — second | Trigger | `SimTriggerSecondDetent` |
 | 6 | Thumb top button — press | NWS / AR DISC / MSL STEP | `SimMissileStep` |
-| 7 | Top thumb hat — push | Slap switch (ECM) | `SimSlapSwitch` |
-| 8 | Top thumb hat — up | TMS — target management | `SimTMSUp` |
-| 9 | Top thumb hat — left | TMS — target management | `SimTMSLeft` |
-| 10 | Top thumb hat — down | TMS — target management | `SimTMSDown` |
-| 11 | Top thumb hat — right | TMS — target management | `SimTMSRight` |
+| 7 | Top thumb hat — push | AVTR | `SimAVTRToggle` |
+| 8 | Top thumb hat — up | DMS — display management | `SimDMSUp` |
+| 9 | Top thumb hat — left | DMS — display management | `SimDMSLeft` |
+| 10 | Top thumb hat — down | DMS — display management | `SimDMSDown` |
+| 11 | Top thumb hat — right | DMS — display management | `SimDMSRight` |
 | 12 | Thumb bottom button — press | Paddle — AP / trim disconnect | `SimAPOverride` |
-| 14 | Bottom thumb hat — up | DMS — display management | `SimDMSUp` |
-| 15 | Bottom thumb hat — left | DMS — display management | `SimDMSLeft` |
-| 16 | Bottom thumb hat — down | DMS — display management | `SimDMSDown` |
-| 17 | Bottom thumb hat — right | DMS — display management | `SimDMSRight` |
+| 14 | Bottom thumb hat — up | CMS — countermeasures | `SimCMSUp` |
+| 15 | Bottom thumb hat — left | CMS — countermeasures | `SimCMSLeft` |
+| 16 | Bottom thumb hat — down | CMS — countermeasures | `SimCMSDown` |
+| 17 | Bottom thumb hat — right | CMS — countermeasures | `SimCMSRight` |
 | 18 | Stick encoder and click — push | Trim — pitch | `AFResetTrim` |
 | 20 | Stick encoder and click — cw | Trim — pitch | `AFElevatorTrimUp` |
 | 21 | Stick encoder and click — ccw | Trim — pitch | `AFElevatorTrimDown` |
-| 23 | Grip thumb hat — up | CMS — countermeasures | `SimCMSUp` |
-| 24 | Grip thumb hat — left | CMS — countermeasures | `SimCMSLeft` |
-| 25 | Grip thumb hat — down | CMS — countermeasures | `SimCMSDown` |
-| 26 | Grip thumb hat — right | CMS — countermeasures | `SimCMSRight` |
+| 23 | Grip thumb hat — up | TMS — target management | `SimTMSUp` |
+| 24 | Grip thumb hat — left | TMS — target management | `SimTMSLeft` |
+| 25 | Grip thumb hat — down | TMS — target management | `SimTMSDown` |
+| 26 | Grip thumb hat — right | TMS — target management | `SimTMSRight` |
 | 30 | Grip pinky button — press | Weapon release (Pickle) | `SimPickle` |
 | 276 | Stick encoder and click — cw | MAN RANGE knob | `SimRangeKnobUp` |
 | 277 | Stick encoder and click — ccw | MAN RANGE knob | `SimRangeKnobDown` |
@@ -59,15 +59,15 @@ Falcon BMS · F-16C · VIRPIL. Generated — do not edit, regenerate.
 
 | DX | Control | Does | Binding |
 |---|---|---|---|
-| 32 | Pinky button — press | Laser arm | `SimLaserArmToggle` |
-| 33 | Left side dial — push | Visor | `SimVisorToggle` |
+| 32 | Pinky button — press | ICP — NAV mode | `SimICPNav` |
+| 33 | Left side dial — push | Slap switch (ECM) | `SimSlapSwitch` |
 | 34 | Middle finger button — press | Look closer | `FOVToggle` |
 | 35 | Middle finger hat — push | DX shift (pinky) | `SimHotasPinkyShift` |
 | 36 | Middle finger hat — up | SPD BRAKE switch | `AFBrakesIn` |
 | 38 | Middle finger hat — down | SPD BRAKE switch | `AFBrakesOut` |
-| 40 | Right side dial — push | ICP — NAV mode | `SimICPNav` |
-| 42 | Thumb two-way hat — fwd | DOGFIGHT / MRM override | `SimSelectMRMOverride<br>release: `SimDeselectOverride`` |
-| 44 | Thumb two-way hat — aft | DOGFIGHT / MRM override | `SimSelectSRMOverride<br>release: `SimDeselectOverride`` |
+| 40 | Right side dial — push | Laser arm | `SimLaserArmToggle` |
+| 42 | Thumb two-way hat — fwd | ICP — master mode | `SimICPAA` |
+| 44 | Thumb two-way hat — aft | ICP — master mode | `SimICPAG` |
 | 46 | Thumb mini-stick — push | Radar cursor (slew) | `SimCursorEnable` |
 | 47 | Thumb button — press | MAN RANGE knob — UNCAGE | `SimToggleMissileCage` |
 | 48 | Bottom thumb button — press | Radar cursor zero | `SimRadarCursorZero` |
@@ -75,15 +75,15 @@ Falcon BMS · F-16C · VIRPIL. Generated — do not edit, regenerate.
 | 51 | Thumb hat — right | COMMS switch | `SimCommsSwitchRight` |
 | 52 | Thumb hat — down | COMMS switch | `SimTransmitCom2` |
 | 53 | Thumb hat — left | COMMS switch | `SimCommsSwitchLeft` |
-| 54 | Keyboard B1 button — press | Night vision | `ToggleNVGMode` |
-| 55 | Keyboard B2 button — press | AVTR | `SimAVTRToggle` |
-| 56 | Keyboard B3 button — press | Stores config (CAT I / III) | `SimCATSwitch` |
-| 57 | Keyboard B4 button — press | Air refuelling door | `SimFuelDoorToggle` |
-| 58 | Keyboard B5 button — press | Canopy | `AFCanopyToggle` |
-| 59 | Keyboard B6 button — press | Recentre head tracking | `RecenterTrackIR` |
-| 60 | Big red button — press | Landing / taxi lights | `SimLandingLightCycle` |
-| 61 | T1 rocker — up | ICP — master mode | `SimICPAA` |
-| 62 | T1 rocker — down | ICP — master mode | `SimICPAG` |
+| 54 | Keyboard B1 button — press | Visor | `SimVisorToggle` |
+| 55 | Keyboard B2 button — press | Stores config (CAT I / III) | `SimCATSwitch` |
+| 56 | Keyboard B3 button — press | Night vision | `ToggleNVGMode` |
+| 57 | Keyboard B4 button — press | Landing / taxi lights | `SimLandingLightCycle` |
+| 58 | Keyboard B5 button — press | Air refuelling door | `SimFuelDoorToggle` |
+| 59 | Keyboard B6 button — press | Canopy | `AFCanopyToggle` |
+| 60 | Big red button — press | Recentre head tracking | `RecenterTrackIR` |
+| 61 | T1 rocker — up | DOGFIGHT / MRM override | `SimSelectMRMOverride<br>release: `SimDeselectOverride`` |
+| 62 | T1 rocker — down | DOGFIGHT / MRM override | `SimSelectSRMOverride<br>release: `SimDeselectOverride`` |
 | 298 | Thumb two-way hat — fwd | Landing gear | `AFGearUp` |
 | 300 | Thumb two-way hat — aft | Landing gear | `AFGearDown` |
 | 317 | T1 rocker — up | Parking brake | `SimParkingBrakeUp` |

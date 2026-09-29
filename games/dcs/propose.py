@@ -131,14 +131,14 @@ class Need(corneeds.Need):
     and `lay_out` still decides which button each command lands on.
     """
 
-    def __init__(self, what, shape, members, dev=None, urgency=IN_THE_AIR,
+    def __init__(self, what, shape, members, device=None, urgency=IN_THE_AIR,
                  rank=0):
         # A slot is a list of Binds now. DCS has no contexts and no
         # release half, so every slot is exactly one -- `members` is the
         # list of command hashes the family covers.
         super().__init__(what, shape,
                          bindings=[[cactions.Bind(h)] for h in members],
-                         dev=dev, urgency=urgency, rank=rank)
+                         device=device, urgency=urgency, rank=rank)
         #: the hashes, in order, for the places that still think in them:
         #: `lay_out` matches each command against the module's own prose.
         self.members = list(members)
@@ -191,7 +191,7 @@ def families(cmds, guide, chosen):
         together = shape == 'latch' or (c.get('ways') or 0) > 1
         if fam and together and shape in ('hat4', 'hat2', 'button', 'latch'):
             key = (fam, shape)
-            groups.setdefault(key, {'shape': shape, 'dev': dev,
+            groups.setdefault(key, {'shape': shape, 'device': dev,
                                     'urgency': urgency, 'members': [],
                                     'votes': 0})
             g = groups[key]
@@ -230,10 +230,10 @@ def families(cmds, guide, chosen):
         if shape == 'button' and len(members) > 1:
             # a pair of buttons that are one switch wants one switch
             shape = 'hat2' if len(members) == 2 else 'hat4'
-        out.append(Need(fam, shape, members, dev=g['dev'],
+        out.append(Need(fam, shape, members, device=g['device'],
                         urgency=g['urgency'], rank=g['votes']))
     for h, shape, dev, urgency, votes in singles:
-        out.append(Need(cmds[h]['name'], shape, [h], dev=dev,
+        out.append(Need(cmds[h]['name'], shape, [h], device=dev,
                         urgency=urgency, rank=votes))
     # most urgent first, and only then by how many factory profiles agree
     out.sort(key=lambda x: (x.urgency, -x.rank))
@@ -1138,7 +1138,7 @@ class Dcs(adapter.Proposer):
                 bits = (corneeds.why_bits(p_) if p_ is not None
                         else [corneeds.URGENCY_NAME[need.urgency]])
                 lines.append(f'      wants {need.shape}'
-                             + (f', {need.dev}' if need.dev else '')
+                             + (f', {need.device}' if need.device else '')
                              + '   ' + '   '.join(bits))
                 lines.append(f'      '
                              f'{self.guide[need.members[0]]["place"][:74]}')
@@ -1158,7 +1158,7 @@ class Dcs(adapter.Proposer):
             lines.append(f'{len(unplaced)} found no control:')
             for n in unplaced:
                 lines.append(f'  {n.what[:40]:42s} wanted {n.shape}'
-                             + (f' on the {n.dev}' if n.dev else ''))
+                             + (f' on the {n.device}' if n.device else ''))
         return lines
 
 

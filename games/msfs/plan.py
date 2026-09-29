@@ -87,11 +87,6 @@ class Need(corneeds.Need):
     match the core's 0, 1 and 3 exactly, so the only change is the name.
     """
 
-    @property
-    def device(self):
-        return self.dev
-
-
 #: Where the judgements live. Which band a thing is in, what shape it wants,
 #: which device it belongs on, what somebody wrote about it -- and nothing
 #: derives any of it.
@@ -101,10 +96,12 @@ class Need(corneeds.Need):
 #: harvest wrote, and a harvest cannot write a judgement.
 
 
-def needs(filename):
+def needs(described, placed):
     """[Need] -- the hand-written list, read rather than executed."""
-    return corneeds.read_needs(vocab.load(HERE, filename, key='needs'),
-                               make=Need)
+    out = corneeds.read_needs(vocab.load(HERE, described, key='needs'),
+                              make=Need)
+    corneeds.load_assignments(HERE, placed, out)
+    return out
 
 
 def rank_of(rank, action):
@@ -407,6 +404,8 @@ class Msfs(adapter.Planner):
     #: moved to core.vocab.save. A working copy harvested before that has a
     #: cache with no envelope, and core.vocab raises Stale for it rather
     #: than KeyError: run ./bind msfs harvest.
+    OVERLAY = 'by-hand'
+    NEEDS_FILE = 'msfs-needs.json'
     BINDS = 'msfs-binds.json'
     CATALOGUE = 'msfs-actions.json'
     CACHE = {'msfs-actions.json': 'actions', 'msfs-rank.json': None}
@@ -431,7 +430,7 @@ class Msfs(adapter.Planner):
         self.cat = cactions.read(self.cache('msfs-actions.json'))
         self.by_id = cactions.by_id(self.cat)
         self.rank = self.cache('msfs-rank.json')
-        self._needs = needs(self.BINDS)
+        self._needs = needs(self.NEEDS_FILE, self.BINDS)
 
     @typing.override
     def build(self):
@@ -496,8 +495,6 @@ class Msfs(adapter.Planner):
                 if n:
                     out.append(f'      {n} of the factory {cat} profiles '
                                'bind this')
-                if need.note:
-                    out.append(f'      {need.note}')
             out.append('')
         out.append('AXES')
         for ctx, action, role, ax in axes:

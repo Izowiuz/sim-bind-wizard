@@ -50,6 +50,7 @@ import textwrap
 from core import actions as cactions
 from core import capture as ccapture
 from core import needs as corneeds
+from core import solvers as csolvers
 from core import tui as ctui
 
 #: What a row can be. `MINE` covers both "I confirmed the proposal" and "I
@@ -180,12 +181,12 @@ class Review:
         decision waiting. The allocator says this on stderr, which under
         curses is the inside of the screen it is drawing.
         """
-        want = need.yours or {}
+        want = need.assignment or {}
         if want.get('how') != corneeds.CHOSE or self.at[need] is not None:
             return ''
         pool = [(role, c) for role, d in sorted(self.layout.devices.items())
                 for c in d.groups(bindable=True)]
-        j = corneeds.yours_at(pool, want)
+        j = corneeds.assigned_at(pool, want)
         if j is None:
             return (f'you put it on {want.get("control")}, and this desk '
                     'has no such control')
@@ -211,7 +212,7 @@ class Review:
             return UNSET
         if at.why.how == 'yours':
             return MINE
-        mine = need.yours or {}
+        mine = need.assignment or {}
         if (mine.get('how') == corneeds.ACCEPTED
                 and mine.get('role') == at.role
                 and mine.get('control') == at.ctrl.id):
@@ -276,11 +277,20 @@ class Review:
                 and len(c.bindable_buttons) >= need.wanted]
 
     def who_has(self, role, ctrl):
-        """The need sitting on this control right now, or None."""
-        for need, p in self.at.items():
-            if p is not None and p.role == role and p.ctrl is ctrl:
-                return need
-        return None
+        """Every need sitting on this control right now, in row order.
+
+        A list, and it answered with the first one it found. A control
+        carries more than the need that took it: the borrow pass hands a
+        leftover need one spare button of a control something else owns,
+        so X4's bottom thumb hat holds Weapon group AND three borrowed
+        needs. The map named one of the four and read as if the other
+        three were nowhere -- on the screen you open to find out what is
+        still spare. Thirteen controls across the five games are like
+        this.
+        """
+        return [need for need in self.needs
+                if (p := self.at[need]) is not None
+                and p.role == role and p.ctrl is ctrl]
 
     def why_not(self, need, role, ctrl):
         """None if this need may go on this control, else the reason.
@@ -302,9 +312,10 @@ class Review:
                     f'{ctui.plural(len(ctrl.bindable_buttons), "bindable "
                                        "button")}; {need.what} needs '
                     f'{need.wanted}')
-        holder = self.who_has(role, ctrl)
-        if holder is not None and holder is not need:
-            return f'{ctrl.label} is carrying {holder.what} — x clears it'
+        others = [n for n in self.who_has(role, ctrl) if n is not need]
+        if others:
+            return (f'{ctrl.label} is carrying '
+                    + ' · '.join(n.what for n in others) + ' — x clears it')
         return None
 
     def control_at(self, role, button):
@@ -378,6 +389,14 @@ class Review:
         # legend not drawn in the colours it explains explains nothing.
         for state in (MINE, PROPOSED, UNSET):
             out.append((state, f'  {MARK[state]} {MARK_SAID[state]}'))
+        # The number the REACH column prints. One line, because the column
+        # is ten characters and a phrase does not fit in ten characters.
+        out.append(('plain', ''))
+        out.append(('head', 'REACH'))
+        for n in sorted(corneeds.REACH_MEANS):
+            if n != corneeds.UNMEASURED:
+                out.append(('meta', f'  {n} {corneeds.REACH_MEANS[n]}'))
+        out.append(('meta', '  - nobody has measured it'))
         for role, dev in self.devices():
             ids = f'{dev.slug} · usb {dev.usb or "?"}'
             if dev.serial:
@@ -392,7 +411,7 @@ class Review:
             # which was which: `2,3,4` is a button list, and the only way
             # to learn that was to work it out from the numbers.
             out.append(('meta', f'    {"KIND":10} {"CONTROL":24} '
-                                f'{"BUTTONS":16} {"REACH":20} ON IT'))
+                                f'{"BUTTONS":16} {"REACH":10} ON IT'))
             for ctrl in dev.groups():
                 held = self.who_has(role, ctrl)
                 parts = [','.join(str(b) for b in ctrl.buttons)]
@@ -406,16 +425,19 @@ class Review:
                 # bindable -> plain, because a spare control is the normal
                 # case and colouring the normal case says nothing. Bindable
                 # by nothing -> as dim as the ids above it.
-                state = self.mark[held] if held else None
+                # The first one's mark and colour. They can differ -- one
+                # accepted, one still proposed -- and a row carries one
+                # tone, so the names say the rest.
+                state = self.mark[held[0]] if held else None
                 tone = state or ('plain' if ctrl.bindable else 'meta')
+                on = (' · '.join(n.what for n in held) if held
+                      else '' if ctrl.bindable else '(carries nothing)')
                 out.append((tone,
                             f'  {MARK[state] if state else " "} '
                             f'{ctrl.kind:10} {ctrl.label[:24]:24} '
                             f'{(btns or "-")[:16]:16} '
-                            f'{_hand(corneeds.reach_said(ctrl)):20.20} '
-                            + (held.what if held else
-                               ('' if ctrl.bindable
-                                else '(carries nothing)'))))
+                            f'{_hand(ctrl):10.10} '
+                            + on))
         if self.paths:
             out.append(('plain', ''))
             out.append(('head', 'WHERE'))
@@ -493,7 +515,7 @@ class Review:
         claiming you agreed.
         """
         self.mark[need] = MINE
-        need.yours = {'role': at.role, 'control': at.ctrl.id,
+        need.assignment = {'role': at.role, 'control': at.ctrl.id,
                       'how': corneeds.ACCEPTED}
 
     def confirm_all(self):
@@ -510,13 +532,13 @@ class Review:
                 else 'nothing left to confirm')
 
     def clear(self, need):
-        if self.at[need] is None and not need.yours:
+        if self.at[need] is None and not need.assignment:
             return f'{need.what}: already unset'
         self.at[need] = None
         self.mark[need] = UNSET
         # And forget that you chose it, or `x` clears the screen and the
         # next open puts it straight back.
-        was, need.yours = need.yours, None
+        was, need.assignment = need.assignment, None
         if was:
             self._kept()
         return f'{need.what}: cleared — its control is free again'
@@ -557,10 +579,10 @@ class Review:
         # Written down at the moment it is decided. The alternative was a
         # save key, and a save key you can forget is how an evening of
         # choices comes back purple.
-        need.yours = {'role': role, 'control': ctrl.id,
+        need.assignment = {'role': role, 'control': ctrl.id,
                       'how': corneeds.CHOSE}
         if button is not None and corneeds.honours_press(need, ctrl, button):
-            need.yours['button'] = button
+            need.assignment['button'] = button
         self._kept()
         return placed
 
@@ -647,6 +669,15 @@ class Review:
         Every number is still read from the table the allocator itself
         reads -- tune a limit and this rewrites itself -- but a number
         with nothing around it explained nothing.
+
+        What is NOT here is the `note` each band, term and fact carries.
+        Those were drawn here once, on the argument that the reason a
+        limit is what it is was the most valuable text in the repo and
+        belonged beside the limit. On a screen they are somebody else's
+        working: half a page of why a weight was retuned, under some rows
+        and not others, so they read as noise that turns up at random.
+        They are in `scoring.toml`, where whoever is about to change a
+        number is already looking.
         """
         out = []
 
@@ -682,15 +713,16 @@ class Review:
             low, high = band['takes']
             say('plain', f'may take {low} to {high}',
                 lead=f'  {band["name"]:16} ')
-            if band.get('note'):
-                say('note', band['note'], lead='     ')
         say('plain')
 
         say('head', 'WHICH BINDING GOES FIRST')
-        say('plain', 'Anything you pinned to a control by name. Then '
-                     'the rest, most urgent first. Two of equal urgency '
-                     'are split by how many of the game\'s own profiles '
-                     'bind each one.', lead='  ')
+        # Written out from `allocate`'s sort key, in its order, because
+        # this paragraph was prose and prose does not move when the key
+        # does. It said pins went first -- they had not since what you
+        # choose by hand started outranking them -- and stopped at the
+        # factory count, which is no longer the last word.
+        for n, (what, why) in enumerate(corneeds.ORDERED_BY, 1):
+            say('plain', f'{what} — {why}', lead=f'  {n}  ')
         say('plain')
 
         say('head', 'WHEN IT REFUSES A CONTROL')
@@ -704,6 +736,15 @@ class Review:
             if fact.get('refuses'):
                 say('plain', f'{fact["says"]}, where a binding asks to be'
                              f' the {fact["asked"]}', lead='  · ')
+        say('plain')
+
+        say('head', 'WHO CHOOSES, ONCE THE SCORES ARE IN')
+        say('meta', 'Most of a layout is ties: a dozen thumb buttons are '
+                    'worth exactly the same to a binding that asks for a '
+                    'button. Which of two answers you get is a choice, and '
+                    '`--solver` makes it.', lead='  ')
+        for name, what, _why_not in csolvers.choices():
+            say('plain', what, lead=f'  {name:9} ')
         say('plain')
 
         say('head', 'HOW MANY TRIES IT GETS')
@@ -720,8 +761,6 @@ class Review:
             # same rule with nothing in the holes.
             say('plain', term.get('general', term['says']),
                 lead=f'  {term["weight"]:+5}  ')
-            if term.get('note'):
-                say('note', term['note'], lead='         ')
         say('plain')
 
         say('head', 'WHAT A BINDING ASKS OF A CONTROL')
@@ -735,14 +774,12 @@ class Review:
             say('plain', f'a binding marked {fact["asked"]}', lead='  ')
             words = fact.get('general', fact['says'])
             if fact.get('refuses'):
-                say('plain', words, lead='  refuses  ')
+                say('plain', words, lead=f'{"refuses":>9}  ')
             elif 'yes' in fact:
                 say('plain', fact['says'], lead=f'    {fact["yes"]:+5}  ')
                 say('plain', fact['not'], lead=f'    {fact["no"]:+5}  ')
             else:
                 say('plain', words, lead=f'    {fact["scale"]:+5}  ')
-            if fact.get('note'):
-                say('note', fact['note'], lead='         ')
             say('plain')
 
         say('head', 'WHAT COUNTS AS THE RIGHT SHAPE')
@@ -867,7 +904,7 @@ KEYS = (
     ('plain', ''),
     ('head', 'ASSIGNING'),
     ('plain', '  ↵           assign by pressing a control'),
-    ('plain', '  l           assign from a list of controls that fit'),
+    ('plain', '  l           assign from the free controls that fit'),
     ('plain', '  c  C        accept this proposal / every proposal'),
     ('plain', '  SPACE       accept, then move down'),
     ('plain', '  p  P        restore the proposal here / in every gap'),
@@ -886,14 +923,19 @@ KEYS = (
 )
 
 
-def _hand(reach):
-    """`thumb, without releasing grip` -> `thumb`, for a column.
+def _hand(ctrl):
+    """`0 thumb` -- how far, and what gets there, for a column.
 
-    The clause before the comma is the part that tells two reaches apart;
-    what follows it is the same phrase on most of them. At twenty columns
-    the full string was cut mid-word, which told nobody anything.
+    It printed the words, cut to twenty: a control somebody reached with
+    a named finger came out as `thumb`, and one with no finger recorded
+    came out as `the hand off the dev`, which is not a word. Half a
+    sentence in a column is worse than a number, because a number can be
+    explained once at the top and a truncation cannot be explained at
+    all. The legend above says what 0 to 3 mean.
     """
-    return (reach or '').split(',')[0]
+    tier = corneeds.reach_tier(ctrl)
+    far = '-' if tier == corneeds.UNMEASURED else str(tier)
+    return f'{far} {corneeds.reach_finger(ctrl)}'.strip()
 
 
 def _tilde(path):
@@ -980,7 +1022,7 @@ def _layout(width, height, wants=None):
 
 #: In the sill, most-needed first: what is dropped on a narrow panel is
 #: dropped from the end, and nothing else is reachable without moving.
-HINTS = ('↑↓ move', '↵ assign', 'l list', 'c accept', 'x unassign',
+HINTS = ('↑↓ move', '↵ assign', 'l from free', 'c accept', 'x unassign',
          'a add', 'r category', 'f filter', 'h binds', 'y why', 'm map',
          's write')
 
@@ -1047,26 +1089,25 @@ def _side(rv, row, width=DETAIL_MIN - 4):
         return out
 
     say('head', 'WHERE')
-    say('subhead', p.role)
     dev = rv.layout.devices.get(p.role)
-    if dev is not None:
-        say('meta', dev.product)
-    say('plain', p.ctrl.label)
-    say('meta', f'{p.ctrl.kind} · {ctui.plural(len(p.slots), "binding")}')
-    said = corneeds.reach_said(p.ctrl)
-    if said:
-        say('meta', said)
+    _fields(say, [('role', p.role)]
+            + ([('device', dev.product)] if dev is not None else [])
+            + [('control', p.ctrl.label), ('shape', p.ctrl.kind),
+               ('bindings', str(len(p.slots)))])
 
     binds = rv.binds(need)
     if binds:
         say('plain')
         say('head', 'BINDS')
-        for part, what in binds:
-            say('plain', what, lead=f'{part[:7]:<7} ')
+        # Fields, like every other panel. It had its own shape -- the part
+        # cut to seven characters and left-aligned -- so one panel read
+        # `press   Map: Map pan to rotate` under three that read
+        # `  control  Thumb hat`, and the column the eye follows moved
+        # between sections of the same box.
+        _fields(say, list(binds))
 
     say('plain')
-    say('head', 'WHY')
-    _why(rv, need, p, say)
+    _why(rv, need, p, say, width)
     return out
 
 
@@ -1082,95 +1123,170 @@ def _group_side(rv, name, width):
         out.extend((tone, piece) for piece in _fit(width, text, lead))
 
     members = dict(rv.groups()).get(name, [])
-    say('head', 'CATEGORY')
-    say('subhead', name)
-    if name in corneeds.URGENCY_NAME:
-        # Before the keystroke rather than after it: `R` refuses a band,
-        # and finding that out by pressing it is finding it out late.
-        say('note', 'a band, not yours to rename')
-        say('meta', 'r files things out of it')
-    say('plain')
-    say('head', 'HOLDS')
-    say('plain', ctui.plural(len(members), 'entry', 'entries'))
     tally = collections.Counter(rv.mark[n] for n in members)
-    for state in (MINE, PROPOSED, UNSET):
-        if tally[state]:
-            say(state, f'{tally[state]} {MARK_SAID[state]}')
+    say('head', 'GROUP')
+    # Fields, like every other panel. `a band, not yours to rename` and
+    # `r files things out of it` were two keystroke notes wearing the
+    # grammar of statements, under a heading that says neither which key
+    # nor what it would do.
+    _fields(say, [('name', name),
+                  ('kind', 'band of urgency' if name in corneeds.URGENCY_NAME
+                   else 'yours'),
+                  ('entries', str(len(members)))]
+            + [(MARK[state], f'{tally[state]} {MARK_SAID[state]}')
+               for state in (MINE, PROPOSED, UNSET) if tally[state]])
     return out
 
 
-def _why(rv, need, p, say):
-    """The account of how this binding came to be here.
+#: What a need asks of a control: the flag in the file, and the phrase a
+#: reader gets. Beside the flags rather than inside the panel, so a sixth
+#: one is a row here.
+ASKS = (('held', 'held down'), ('rapid', 'tapped'),
+        ('by_feel', 'found blind'), ('costly', 'a slip hurts'),
+        ('modifier', 'held as a modifier'))
 
-    Whose decision it was comes first, because it is the one a reader may
-    want to undo. `instead` is not consulted for the wording: it records
-    the placement a hand displaced, which is the immediate history, while
-    the question on screen is what the PLANNER wanted -- and `rv.plan` is
-    the only thing that still answers that after a second move.
+
+def _fields(say, rows):
+    """`label  value`, one field to a line, aligned on the gutter.
+
+    Loose sentences are what this replaced. `thumb, your hand where it
+    lives, nothing moved` sat under WHERE with nothing saying what it
+    was an answer to, so a reader had to work out that it was a
+    measurement and not a remark.
+
+    The gutter comes from the longest label there is. Fixed at twelve it
+    put `         shape  hat4` -- twenty characters -- into a panel
+    eighteen wide, and right-aligning in a narrower field does not
+    shorten a label, it only stops padding it.
     """
-    r, plan = p.why, rv.plan.get(need)
-    # The legend's words, not new ones: three screens name these states
-    # and one wording is one thing to learn.
-    state = rv.mark[need]
-    say(state, MARK_SAID[state])
-    if r is not None and r.overridden:
-        if plan is None:
-            say('meta', 'planner had no control for it')
-        elif plan.role == p.role and plan.ctrl is p.ctrl:
-            say('meta', "same as the planner's choice")
-        else:
-            say('meta', f'moved from {plan.ctrl.label}')
-    elif state == MINE:
-        say('meta', 'proposal accepted')
+    gutter = max(len(label) for label, _v in rows)
+    for label, value in rows:
+        say('plain', value, lead=f'  {label:>{gutter}}  ')
+
+
+def _asked_for(need, say):
+    """The need's own row, one field to a line.
+
+    Its shape, its band and whichever flags somebody set come from
+    `games/<g>/<g>-needs.json`, which describes the function. The device
+    comes from the overlay, which is where wanting one is said. Nothing
+    here is derived and nothing is prose.
+    """
+    say('head', 'WHAT IT ASKED FOR')
+    said = [('shape', need.first_shape)]
+    if need.device:
+        said.append(('device', need.device))
+    said.append(('when', corneeds.URGENCY_NAME[need.urgency]))
+    said += [('', phrase) for flag, phrase in ASKS
+             if getattr(need, flag, False)]
+    _fields(say, said)
+
+
+def _why(rv, need, p, say, width=DETAIL_MIN - 4):
+    """Why this binding is on this control, in the allocator's own terms.
+
+    Every control is worth points to an action; the actions go in order,
+    most urgent first; each takes the free control worth most. So three
+    things account for a placement, and the panel is those three: what
+    the action asked for, what each control was worth and who is sitting
+    on it, and what the winner's points were made of.
+
+    It drew only the last of those once -- a total and its terms -- which
+    is how the score was reached and not why this control. Measured over
+    the five games, 85 placements of 146 were ties and 24 more went where
+    they went because something better was taken: for 109 of 146 the
+    answer is in the middle section and nowhere else.
+    """
+    LEAD, NUM = 2, 7
+    r = p.why
+    how = r.how if r is not None else ''
+    _asked_for(need, say)
+
+    # Scored without `stayed`, which pays whichever control the need is
+    # already on: counted, every alternative sits 20 below and the panel
+    # reports that nothing else came close. So these totals are what the
+    # controls are worth to the action, not what the run added up.
+    ran = corneeds.ran_against(need, rv.layout.devices, rules=rv.rules,
+                               floor=how != 'relaxed')
+    mine = next((s for s, role, ctrl in ran
+                 if ctrl is p.ctrl and role == p.role), None)
 
     say('plain')
-
-    # Drawn as what it is: a band, the gates that band imposed, and a
-    # score made of named terms. It was a flat list of lines, so the one
-    # thing the whole scoring turns on -- how far the reach ceiling let it
-    # go -- was recorded in `Reason` and shown nowhere.
-    say('subhead', corneeds.URGENCY_NAME[need.urgency])
-    if r is None:
-        say('note', 'no account recorded')
+    say('head', 'WHICH CONTROL GOT IT')
+    if how in ('yours', 'pinned', 'borrowed') or mine is None:
+        say('plain', p.ctrl.label, lead='  \u25b6   ')
+        word = {'yours': 'you chose it', 'pinned': 'you pinned it',
+                'borrowed': 'a spare button'}.get(how, '')
+        if how == 'borrowed':
+            owner = [n for n in rv.who_has(p.role, p.ctrl) if n is not need]
+            if owner:
+                word = f'a spare button; {owner[0].what} owns it'
+        if word:
+            say('meta', word, lead='      ')
+        plan = rv.plan.get(need)
+        if how == 'yours' and plan and not (plan.role == p.role
+                                            and plan.ctrl is p.ctrl):
+            say('plain', plan.ctrl.label, lead='      ')
+            say('meta', 'the planner wanted this', lead='      ')
         return
-    branch = []
-    if r.tier is not None and r.ceiling is not None:
-        branch.append(('meta', f'reach {r.tier}, allowed {r.ceiling}'))
-    if r.how in corneeds.CAME_BY:
-        branch.append(('note', corneeds.CAME_BY[r.how]))
-    if need.rank:
-        branch.append(('meta', ctui.plural(need.rank, 'factory profile')
-                       + ' bind it'))
-    terms = sorted(r.parts, key=lambda q: -abs(q[0]))
-    if terms:
-        branch.append(('plain', f'{r.points} points'))
-    for n, (tone, text) in enumerate(branch):
-        last = n == len(branch) - 1
-        say(tone, text, lead=f'  {"└" if last else "├"} ')
-    for n, (delta, what) in enumerate(terms):
-        last = n == len(terms) - 1
-        say('meta', what, lead=f'    {"└" if last else "├"} {delta:+5} ')
 
-    if need.note:
-        say('plain')
-        say('note', need.note)
+    # Everything that could have had it, and the next best under it. Only
+    # what beat it made a binding that won outright read as the only one
+    # that fitted, which was a lie wherever anything else fitted at all.
+    rows = ([x for x in ran if x[0] >= mine]
+            + [x for x in ran if x[0] < mine][:1])
+    def whos_on(role, ctrl):
+        """`Strafe +1` -- a control carries more than one need.
 
-    # Only where there is something to tell apart. One bind on one button
-    # has nothing to say about which, and a heading over the obvious is a
-    # line you learn to skip past.
-    spots = [(p.ctrl.direction(n) or 'press', b.reason.spot)
-             for n, slot in p.slots for b in slot
-             if getattr(b, 'reason', None) and b.reason.spot]
-    if len(p.slots) > 1 and spots:
-        say('plain')
-        say('head', 'WHICH BUTTON')
-        if len({t for _part, t in spots}) == 1:
-            # One sentence four times is one sentence. The labels add
-            # nothing here -- BINDS above already lists them in order.
-            say('meta', spots[0][1])
-        else:
-            for part, spot in spots:
-                say('meta', spot, lead=f'{part[:7]:<7} ')
+        The borrow pass hands a leftover need a spare button of a
+        control something else took, so four names can belong on one
+        line. The first and a count: the map screen has room for all of
+        them and this column has room for one.
+        """
+        if ctrl is p.ctrl and role == p.role:
+            return ''
+        on = [n.what for n in rv.who_has(role, ctrl) if n is not need]
+        if not on:
+            return 'free'
+        return on[0] + (f' +{len(on) - 1}' if len(on) > 1 else '')
+
+    held = {(role, ctrl.id): whos_on(role, ctrl)
+            for _s, role, ctrl in rows}
+    lab = max(len(c.label) for _s, _r, c in rows) + 2
+    # One shape for the block, decided by whether the names fit whole.
+    # Per row, a name a character too long wrapped while the four around
+    # it did not, and the block read as though that line meant something
+    # the others did not. And the name wins over the columns: a control
+    # whose name you cannot read is not one you can find, and `Thumb top
+    # butto` was on screen before this.
+    room = width - LEAD - NUM - 2
+    wide = lab <= room
+    if wide:
+        say('plain', 'taken by' if any(held.values()) else '',
+            lead=f'  {"points":>{NUM}}  {"control":<{lab}}')
+    for _s, role, ctrl in rows:
+        here = ctrl is p.ctrl and role == p.role
+        tone = rv.mark[need] if here else 'plain'
+        mark = '\u25b6' if here else ' '
+        who = held[(role, ctrl.id)]
+        if wide:
+            say(tone, f'{mark} {_s:>{NUM}}  {ctrl.label:<{lab}}{who}')
+            continue
+        # Stacked: the name on its own line, what it was worth under it.
+        say(tone, f'{mark} {ctrl.label}')
+        say('meta', who, lead=f'  {_s:>{NUM}}  ')
+    if how == 'relaxed':
+        say('note', 'nothing nearer was free', lead='  ')
+
+    say('plain')
+    say('head', f'WHERE {p.ctrl.label.upper()} GOT ITS {mine}')
+    parts = []
+    corneeds.score(p.ctrl, need, p.role, parts=parts, floor=how != 'relaxed',
+                   rules=corneeds.merge_rules(rv.rules,
+                                              {'term': [{'name': 'stayed',
+                                                         'weight': 0}]}))
+    for delta, text in sorted(parts, key=lambda q: -q[0]):
+        say('meta', text, lead=f'  {delta:>+{NUM}}  ')
 
 
 def _panel(scr, theme, rect, title, right='', keys=(), tail='', note=''):

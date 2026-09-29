@@ -122,11 +122,6 @@ class Need(corneeds.Need):
     Thunder's air/heli pair and MSFS's plane/heli/global triple have.
     """
 
-    @property
-    def device(self):
-        return self.dev
-
-
 def twinned(*ship):
     """The SRV forms of these ship functions, positionally, None where absent.
 
@@ -164,7 +159,7 @@ AXIS_NEEDS = [
     ('CamTranslateYAxis', 'Ship', 'stick',    ('axis', 'ministick', 'y'), False),
 ]
 
-def _needs(filename):
+def _needs(described, placed):
     """[Need] -- the hand-written list, read rather than executed.
 
     This used to BUILD them, and two parts were derived on the way: the
@@ -177,8 +172,10 @@ def _needs(filename):
     leaving source to escape. Re-deriving is something to ask for rather
     than something that happens to you.
     """
-    return corneeds.read_needs(vocab.load(HERE, filename, key='needs'),
-                               make=Need)
+    out = corneeds.read_needs(vocab.load(HERE, described, key='needs'),
+                              make=Need)
+    corneeds.load_assignments(HERE, placed, out)
+    return out
 
 
 def unknown(needs):
@@ -394,6 +391,8 @@ class Elite(adapter.Planner):
 
     game = 'elite'
     title = 'Elite Dangerous'
+    OVERLAY = 'by-hand'
+    NEEDS_FILE = 'elite-needs.json'
     BINDS = 'elite-binds.json'
     CATALOGUE = 'ed-actions.json'
     CACHE = {'ed-actions.json': 'actions', 'ed-rank.json': 'ranking'}
@@ -410,7 +409,7 @@ class Elite(adapter.Planner):
         # Elite has one element per function, so a function two needs both
         # claim does not clash -- the second simply wins, silently. The
         # adapter refuses to exist rather than write that.
-        self._needs = _needs(self.BINDS)
+        self._needs = _needs(self.NEEDS_FILE, self.BINDS)
         dup = duplicates(self._needs)
         if dup:
             raise SystemExit('claimed by more than one need: '
@@ -508,8 +507,6 @@ class Elite(adapter.Planner):
                 # else's.
                 out.append('      ' + ' · '.join(
                     corneeds.why_bits(p_, out_of=13)))
-                if n.note:
-                    out.append(f'      {n.note}')
         out.append('')
         for func, ctx, role, a_, invert in axes:
             out.append(f'  {harvest.readable(func):34} {ctx:5} {role:9} '

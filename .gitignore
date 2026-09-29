@@ -12,12 +12,20 @@ __pycache__/
 games/*/*-actions.json
 games/*/*-rank.json
 
-# NOT ignored, and the distinction matters: games/*/<game>-binds.json holds
-# the judgements -- which band a thing is in, what shape it wants, which
-# device it belongs on, what somebody wrote about it. 382 of them. They were
-# a Python literal until they moved here, they are nobody's copyright, and
-# nothing derives them: delete one and it is gone. A blanket rule over
-# games/*/*.json would take them with the caches.
+# NOT ignored, and the distinction matters. Two files per game hold what
+# nobody can derive, and a blanket rule over games/*/*.json would take them
+# with the caches:
+#
+#   <game>-needs.json   what each function IS and how you use it -- which
+#                       band it is in, what shape it wants, whether you hold
+#                       it down. 147 of them.
+#   <game>-binds.json   what sits where, and who decided: your choices, your
+#                       acceptances, and what the allocator last produced.
+#
+# They were one file until the split, so a row said what a function is AND
+# where it had ended up, and nothing in it said which half was which. What
+# you want of the LAYOUT is in neither: that is overlays/, also in the repo.
+!games/*/*-needs.json
 !games/*/*-binds.json
 
 # Rendered for review by a writer's --render, never the real thing.
