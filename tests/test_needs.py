@@ -11,13 +11,14 @@ Real captures are too rich to isolate a rule in -- and a test that needs the
 author's own stick plugged in is not a test.
 """
 
+import importlib.util
 import unittest
 from unittest import mock
 
 import fake
 from core import devmap
 from core import needs as corneeds
-from core import solve as csolve
+from core import solvers as csolvers
 from core.actions import Bind
 from core.needs import (Layout, Need, allocate, dump_needs, read_needs,
                         reach_tier, IN_A_TURN, ON_APPROACH, IN_THE_AIR,
@@ -230,6 +231,24 @@ class NeedsOnDisk(unittest.TestCase):
                   'on', 'rank', 'note'):
             self.assertEqual(getattr(one, f), getattr(got, f), f)
 
+    def test_the_fact_flags_survive(self):
+        # Named from the table rather than listed here, so a sixth fact is
+        # covered the moment somebody writes the block.
+        one = Need('Airbrake', 'hat2', [[Bind('OUT')]])
+        for flag in corneeds.FLAGS:
+            setattr(one, flag, True)
+        got = self.back(one)
+        for flag in corneeds.FLAGS:
+            self.assertTrue(getattr(got, flag), flag)
+
+    def test_a_flag_nobody_set_is_not_written_down(self):
+        # The same rule `suits` and `note` follow. It is what keeps the
+        # diff on five hand-edited files to the rows somebody judged
+        # rather than 147 rows of `false`.
+        (row,) = dump_needs([Need('Airbrake', 'hat2', [[Bind('OUT')]])])
+        for flag in corneeds.FLAGS:
+            self.assertNotIn(flag, row)
+
     def test_the_slots_come_back_in_the_order_they_went(self):
         # A slot's position is which button it lands on. Reordered, a trim
         # hat's directions land on different buttons and nothing raises.
@@ -292,6 +311,27 @@ class Borrowing(unittest.TestCase):
         placed, unplaced, _free = allocate(needs, devs)
         self.assertEqual([], unplaced)
         self.assertEqual([(4, 'FIRE')], one(placed, 'Fire').slots)
+
+    def test_a_refusing_fact_refuses_here_too(self):
+        # The borrow pass has its own formula and its own loop, so a gate
+        # in `score` does not reach it. A modifier need wants one button,
+        # which is exactly the shape that gets this far.
+        def rig(**facts):
+            return {'stick': fake.device('stick', [
+                fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4,
+                          **facts)])}
+
+        def run(**facts):
+            shift = Need('Shift', 'button', ['SHIFT'])
+            setattr(shift, 'modifier', True)
+            return allocate([Need('Trim', 'hat4', ['U', 'R', 'D', 'L']),
+                             shift], rig(**facts))
+
+        placed, unplaced, _free = run(modifier_ok=False)
+        self.assertEqual(['Shift'], [n.what for n in unplaced])
+        placed, unplaced, _free = run(modifier_ok=True)
+        self.assertEqual([], unplaced)
+        self.assertEqual('borrowed', one(placed, 'Shift').why.how)
 
     def test_nothing_is_borrowed_for_a_whole_control_need(self):
         devs = {'stick': fake.device('stick', [
@@ -882,6 +922,107 @@ class TheRulesNameOnlyWordsTheMapProduces(unittest.TestCase):
         self.assertIn('back', corneeds.RULES['directions'])
 
 
+class WhichSolverRunsIsAsked(unittest.TestCase):
+    """Not guessed. It was guessed, and that was the bug.
+
+    `ortools` imported meant the model, and not importing meant walking
+    the list, with nothing said either way. So `./bind x4 sheet` under a
+    python that had it and the same command under one that did not
+    produced two different kneeboards for the same desk, 77 lines apart.
+    Nobody had changed anything; the interpreter on PATH had.
+
+    They are classes so that adding one is a class and a line in
+    `SOLVERS`. The next is already written down in `device-map-v2.md`:
+    the Hungarian algorithm, as a fast first answer to hand the model.
+    """
+
+    def rig(self):
+        devs = {'stick': fake.device('stick', [
+            fake.button(f'B{n}', n, reach=fake.THUMB) for n in range(4)])}
+        return [Need(f'N{n}', 'button', [[Bind(f'A{n}')]])
+                for n in range(3)], devs
+
+    def test_every_solver_answers_the_same_question(self):
+        # The contract, for whatever gets added next: same arguments,
+        # same shape back, and every need placed somewhere it was offered.
+        needs, devs = self.rig()
+        for one in csolvers.SOLVERS:
+            if one.why_not():
+                continue
+            placed, _left, _free = allocate(needs, devs, solver=one())
+            with self.subTest(solver=one.name):
+                self.assertEqual(len(needs), len(placed))
+                seen = [(p.role, p.ctrl.id) for p in placed]
+                self.assertEqual(len(seen), len(set(seen)))
+
+    def test_asking_for_one_gets_that_one(self):
+        needs, devs = self.rig()
+        got = [tuple((p.need.what, p.ctrl.label)
+                     for p in allocate(needs, devs, solver=one())[0])
+               for one in (csolvers.Greedy, csolvers.CpSat)
+               if not one.why_not()]
+        if len(got) < 2:
+            self.skipTest('only one solver runs here')
+        self.assertNotEqual(got[0], got[1],
+                            'two solvers that never differ prove nothing')
+
+    def test_the_fallback_needs_nothing(self):
+        # Whatever else is missing, this one runs: a layout found by
+        # walking the list is worse than the best and much better than
+        # none, and a clone with no dependencies still gets one.
+        self.assertEqual('', csolvers.FALLBACK.why_not())
+
+    def test_the_best_available_is_the_one_that_answers_best(self):
+        # Not "the first in the tuple that runs" -- that is the same
+        # sentence as the code and passes with the tuple reversed.
+        devs = {'stick': fake.device('stick', [
+            fake.button('Thumb', 0, reach=fake.THUMB),
+            fake.hat2('Rocker', 1, reach=fake.THUMB)])}
+        needs = [Need('Urgent', ('hat2', 'button'), [[Bind('A')]],
+                      urgency=IN_A_TURN, dev='stick'),
+                 Need('Other', 'hat2', [[Bind('B')], [Bind('C')]],
+                      urgency=IN_A_TURN, dev='stick')]
+        best, _l, _f = allocate(needs, devs, solver=csolvers.best())
+        for one in csolvers.SOLVERS:
+            if one.why_not():
+                continue
+            mine, _l, _f = allocate(needs, devs, solver=one())
+            with self.subTest(solver=one.name):
+                self.assertGreaterEqual(len(best), len(mine))
+        self.assertEqual('', type(csolvers.best()).why_not())
+
+    def test_a_solver_that_cannot_run_here_says_so(self):
+        # What stops `--solver cp-sat` handing back the other one on a
+        # python that cannot run it. Answered wrongly, the flag lies and
+        # the silent difference is back.
+        here = importlib.util.find_spec('ortools') is not None
+        self.assertEqual(here, not csolvers.CpSat.why_not())
+
+    def test_a_name_no_solver_answers_to_is_refused(self):
+        # Not answered with the other one. You asked for an answer, not
+        # for whichever answer happened to be available.
+        with self.assertRaises(ValueError):
+            csolvers.named('hungarian')
+
+    def test_every_solver_says_what_it_is_for(self):
+        # `--solver` prints these, and so does the screen.
+        for name, said, _why in csolvers.choices():
+            self.assertTrue(name and said, name)
+            self.assertEqual(name, name.lower())
+
+    def test_the_module_level_default_is_what_the_flag_sets(self):
+        needs, devs = self.rig()
+        was = corneeds.SOLVER
+        try:
+            corneeds.SOLVER = csolvers.Greedy()
+            mine, _l, _f = allocate(needs, devs)
+            theirs, _l, _f = allocate(needs, devs, solver=csolvers.Greedy())
+            self.assertEqual([p.ctrl.label for p in theirs],
+                             [p.ctrl.label for p in mine])
+        finally:
+            corneeds.SOLVER = was
+
+
 class TheSolverIsNeverWorseThanWalkingTheList(unittest.TestCase):
     """Greedy takes the needs in urgency order and gives each the best
     control still free. It cannot undo a choice, so an early urgent need
@@ -895,13 +1036,17 @@ class TheSolverIsNeverWorseThanWalkingTheList(unittest.TestCase):
     """
 
     def both(self, needs, devs):
-        """(greedy, solver) -- (total points, placed, unplaced) for each."""
-        if not csolve.have_it():
-            self.skipTest('no ortools here; the solver half cannot run')
+        """(greedy, model) -- (total points, placed, unplaced) for each.
+
+        Asked for by name rather than by patching an import away: which
+        solver runs is an argument now, because it being a guess was how
+        the same command produced two different kneeboards.
+        """
+        if csolvers.CpSat.why_not():
+            self.skipTest('no ortools here; the model half cannot run')
         out = []
-        for on in (False, True):
-            with mock.patch.object(csolve, 'have_it', lambda: on):
-                placed, left, _free = allocate(needs, devs)
+        for one in (csolvers.Greedy(), csolvers.CpSat()):
+            placed, left, _free = allocate(needs, devs, solver=one)
             out.append((sum(p.points or 0 for p in placed), len(placed),
                         len(left)))
         return out
@@ -911,32 +1056,52 @@ class TheSolverIsNeverWorseThanWalkingTheList(unittest.TestCase):
 
         The urgent need scores well on both; the other only on the one
         the urgent one would take. Walking the list places one of two.
+
+        Two things this rig has to get right, and an earlier one got
+        neither, so it compared two equal numbers and proved nothing:
+
+        Both needs in ONE band, or they are never in the same pass and
+        there is nothing for a model to trade -- the pass order decides
+        it and both solvers agree.
+
+        And the loser wants TWO buttons, so the borrow pass cannot
+        quietly rescue it. Borrowing serves a need wanting one button,
+        which is what made the old rig place two of two either way.
         """
         devs = {'stick': fake.device('stick', [
             fake.button('Thumb', 0, reach=fake.THUMB),
-            fake.hat4('Hat', 1, reach=fake.THUMB)])}
-        return [Need('Urgent', ('button', 'hat4'), [[Bind('A')]],
+            fake.hat2('Rocker', 1, reach=fake.THUMB)])}
+        return [Need('Urgent', ('hat2', 'button'), [[Bind('A')]],
                      urgency=IN_A_TURN, dev='stick'),
-                Need('Other', 'button', [[Bind('B')]],
-                     urgency=ON_THE_RAMP, dev='stick')], devs
+                Need('Other', 'hat2', [[Bind('B')], [Bind('C')]],
+                     urgency=IN_A_TURN, dev='stick')], devs
+
+    def test_the_rig_itself_separates_them(self):
+        # The test that earns the three below. They assert `>=`, which two
+        # equal numbers satisfy -- so a rig that stopped separating would
+        # leave them green and testing nothing.
+        if csolvers.CpSat.why_not():
+            self.skipTest('no ortools here; the model half cannot run')
+        greedy, model = self.both(*self.tight())
+        self.assertGreater(model[1], greedy[1])
 
     def test_it_places_at_least_as_many(self):
         needs, devs = self.tight()
-        greedy, solver = self.both(needs, devs)
-        self.assertGreaterEqual(solver[1], greedy[1])
+        greedy, model = self.both(needs, devs)
+        self.assertGreaterEqual(model[1], greedy[1])
 
     def test_and_scores_at_least_as_well(self):
         needs, devs = self.tight()
-        greedy, solver = self.both(needs, devs)
-        self.assertGreaterEqual(solver[0], greedy[0])
+        greedy, model = self.both(needs, devs)
+        self.assertGreaterEqual(model[0], greedy[0])
 
-    def test_without_the_solver_it_still_answers(self):
+    def test_without_the_model_it_still_answers(self):
         # ortools is the one dependency outside the standard library in
         # this family. A clone without it gets the greedy layout, which
         # is worse than the best and much better than none.
         needs, devs = self.tight()
-        with mock.patch.object(csolve, 'have_it', lambda: False):
-            placed, _left, _free = allocate(needs, devs)
+        placed, _left, _free = allocate(needs, devs,
+                                        solver=csolvers.Greedy())
         self.assertTrue(placed)
 
     def test_a_pinned_need_still_gets_its_pin(self):
@@ -944,8 +1109,8 @@ class TheSolverIsNeverWorseThanWalkingTheList(unittest.TestCase):
         # elsewhere: a pin that only tips the scales is no use once
         # something outranks it. BMS's pinky shift lost the grip pinky
         # button to the landing lights exactly that way.
-        if not csolve.have_it():
-            self.skipTest('no ortools here; the solver half cannot run')
+        if csolvers.CpSat.why_not():
+            self.skipTest('no ortools here; the model half cannot run')
         devs = {'stick': fake.device('stick', [
             fake.button('Thumb', 0, reach=fake.THUMB),
             fake.button('Pinky', 1, reach=fake.PANEL)])}
@@ -953,23 +1118,48 @@ class TheSolverIsNeverWorseThanWalkingTheList(unittest.TestCase):
                       prefer='Pinky', urgency=IN_A_TURN)]
         loose = Need('Pinned', 'button', [[Bind('A')]], dev='stick',
                      urgency=IN_A_TURN)
-        with mock.patch.object(csolve, 'have_it', lambda: True):
-            free, _l, _f = allocate([loose], devs)
+        free, _l, _f = allocate([loose], devs, solver=csolvers.CpSat())
         self.assertEqual(['Thumb'], [p.ctrl.label for p in free])
-        for on in (False, True):
-            with mock.patch.object(csolve, 'have_it', lambda on=on: on):
-                placed, _left, _free = allocate(needs, devs)
-            with self.subTest(solver=on):
+        for one in (csolvers.Greedy(), csolvers.CpSat()):
+            placed, _left, _free = allocate(needs, devs, solver=one)
+            with self.subTest(solver=one.name):
                 self.assertEqual(['Pinky'], [p.ctrl.label for p in placed])
 
     def test_no_control_takes_two_needs(self):
-        if not csolve.have_it():
-            self.skipTest('no ortools here; the solver half cannot run')
+        if csolvers.CpSat.why_not():
+            self.skipTest('no ortools here; the model half cannot run')
         needs, devs = self.tight()
-        with mock.patch.object(csolve, 'have_it', lambda: True):
-            placed, _left, _free = allocate(needs, devs)
+        placed, _left, _free = allocate(needs, devs,
+                                        solver=csolvers.CpSat())
         seen = [(p.role, p.ctrl.id) for p in placed]
         self.assertEqual(len(seen), len(set(seen)))
+
+
+class TheSolverAnswersTheSameWayTwice(unittest.TestCase):
+    """The same needs on the same desk give the same layout.
+
+    Most of a layout is ties: a dozen thumb buttons are worth exactly the
+    same to a need asking for a button, and nothing in the objective
+    prefers one. Eight search workers raced for those and whichever won
+    was the answer, so three of the six games rebound 51 lines between
+    two runs that differed in nothing at all -- the muscle memory the
+    tool exists to keep, reshuffled by the scheduler.
+    """
+
+    def test_the_same_question_gets_the_same_answer(self):
+        if csolvers.CpSat.why_not():
+            self.skipTest('no ortools here; greedy is deterministic anyway')
+        devs = {'stick': fake.device('stick', [
+            fake.button(f'Thumb {n}', n, reach=fake.THUMB) for n in range(12)
+        ])}
+        # Every need can go anywhere and every control is worth the same,
+        # so the model is nothing BUT ties.
+        needs = [Need(f'Need {n}', 'button', [f'A{n}']) for n in range(8)]
+        got = set()
+        for _ in range(5):
+            placed, _left, _free = allocate(needs, devs)
+            got.add(tuple((p.need.what, p.ctrl.label) for p in placed))
+        self.assertEqual(1, len(got), 'the same model answered two ways')
 
 
 class WhatTheModelIsNotAllowedToDo(unittest.TestCase):
@@ -978,15 +1168,16 @@ class WhatTheModelIsNotAllowedToDo(unittest.TestCase):
     twice looked like one placement."""
 
     def setUp(self):
-        if not csolve.have_it():
+        if csolvers.CpSat.why_not():
             self.skipTest('no ortools here')
+        self.model = csolvers.CpSat()
 
     def test_a_want_takes_one_room(self):
-        got = csolve.best([('a', {1: 100, 2: 100})], [1, 2])
+        got = self.model.best([('a', {1: 100, 2: 100})], [1, 2])
         self.assertEqual(1, len(got))
 
     def test_a_room_takes_one_want(self):
-        got = csolve.best([('a', {1: 100}), ('b', {1: 100})], [1])
+        got = self.model.best([('a', {1: 100}), ('b', {1: 100})], [1])
         self.assertEqual(1, len(got))
 
     def test_placing_beats_scoring(self):
@@ -994,17 +1185,17 @@ class WhatTheModelIsNotAllowedToDo(unittest.TestCase):
         # directions and buttons to spare -- and the only home for a
         # need can be one of those. Left unplaced it is a thing you
         # cannot do in the aircraft; placed badly it is a stretch.
-        got = csolve.best([('a', {1: -200})], [1])
+        got = self.model.best([('a', {1: -200})], [1])
         self.assertEqual([('a', 1)], got)
 
     def test_and_it_still_prefers_the_better_room(self):
-        got = csolve.best([('a', {1: 10, 2: 90})], [1, 2])
+        got = self.model.best([('a', {1: 10, 2: 90})], [1, 2])
         self.assertEqual([('a', 2)], got)
 
     def test_it_gives_up_the_better_room_to_place_two(self):
         # The whole reason for the model: walking the list gives `a` the
         # 90 and leaves `b` nowhere.
-        got = dict(csolve.best([('a', {1: 10, 2: 90}), ('b', {2: 90})],
+        got = dict(self.model.best([('a', {1: 10, 2: 90}), ('b', {2: 90})],
                                [1, 2]))
         self.assertEqual({'a': 1, 'b': 2}, got)
 
@@ -1016,8 +1207,9 @@ class APinIsAConstraintAndNotABigNumber(unittest.TestCase):
     trade away is not a choice."""
 
     def setUp(self):
-        if not csolve.have_it():
+        if csolvers.CpSat.why_not():
             self.skipTest('no ortools here')
+        self.model = csolvers.CpSat()
 
     def rig(self):
         """Two buttons. The pinned need fits either; the other fits only

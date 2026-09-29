@@ -15,7 +15,8 @@ So the two halves have to be held to each other, which is what these do.
 
 import unittest
 
-import fake                                                  # noqa: F401
+import fake
+from core import devmap
 from core import needs as corneeds
 
 
@@ -87,6 +88,183 @@ class TheDescriptor(unittest.TestCase):
         # head is something else hands the bonus to a substitute.
         for shape, subs in corneeds.FITS.items():
             self.assertEqual(shape, subs[0])
+
+
+class TheFactTable(unittest.TestCase):
+    """The five ergonomic answers the map collects, and what they cost.
+
+    Unlike a term, a fact names no predicate: `reads` names a field on the
+    control and the row's shape does the rest. So the lock here is not
+    "every name has a definition" -- it is `check_rules`, which fails the
+    whole map load on a `reads` the map does not measure, and these, which
+    hold the three shapes to what they promise.
+    """
+
+    def ctrl(self, **facts):
+        dev = fake.device('stick', [fake.button('B', 0, reach=fake.THUMB,
+                                                **facts)])
+        return list(dev.groups())[0]
+
+    def need(self, urgency=corneeds.IN_A_TURN, **flags):
+        one = corneeds.Need('X', 'button', [['A']], urgency=urgency)
+        for flag, value in flags.items():
+            setattr(one, flag, value)
+        return one
+
+    def points(self, ctrl, need):
+        # Asserted rather than returned raw: a gate answers None and
+        # every caller here is doing arithmetic. `refused` is the one
+        # that wants the other answer.
+        got = corneeds.score(ctrl, need, 'stick')
+        assert got is not None
+        return got
+
+    def refused(self, ctrl, need):
+        return corneeds.score(ctrl, need, 'stick') is None
+
+    def words(self, ctrl, need):
+        parts = []
+        corneeds.score(ctrl, need, 'stick', parts=parts)
+        return [text for delta, text in parts if delta]
+
+    # ---- the three shapes ----
+
+    def test_a_bool_fact_pays_both_ways(self):
+        yes = self.points(self.ctrl(hold_ok=True), self.need(held=True))
+        no = self.points(self.ctrl(hold_ok=False), self.need(held=True))
+        plain = self.points(self.ctrl(), self.need())
+        self.assertGreater(yes, plain)
+        self.assertLess(no, plain)
+        self.assertIn('you can hold it', self.words(self.ctrl(hold_ok=True),
+                                                    self.need(held=True)))
+
+    def test_a_scale_fact_pays_per_step(self):
+        # Generic over the table: both the shapes in it are here, one
+        # charging the answer and one charging the shortfall from it.
+        for fact in corneeds.FACTS:
+            if 'scale' not in fact:
+                continue
+            asked = self.need(**{fact['asked']: True})
+            got = [self.points(self.ctrl(**{fact['reads']: n}), asked)
+                   for n in (0, 1, 2)]
+            self.assertEqual(got[1] - got[0], got[2] - got[1], fact['reads'])
+            self.assertNotEqual(got[0], got[2], fact['reads'])
+
+    def test_a_scale_fact_worth_nothing_says_nothing(self):
+        # `0  hard to find by feel` on a screen reads as a fact about the
+        # control, and it is the absence of one.
+        self.assertNotIn('hard to find by feel',
+                         self.words(self.ctrl(blind_distinct=2),
+                                    self.need(by_feel=True)))
+
+    def test_a_scale_fact_has_words_for_more_than_one(self):
+        self.assertIn('you cannot find it by feel',
+                      self.words(self.ctrl(blind_distinct=0),
+                                 self.need(by_feel=True)))
+
+    def test_a_shortfall_is_charged_from_the_best_answer_down(self):
+        # The other way round -- paying for the answer -- paid nearly
+        # every control on this desk the same and decided nothing.
+        best = self.points(self.ctrl(blind_distinct=2),
+                           self.need(by_feel=True))
+        self.assertEqual(self.points(self.ctrl(), self.need()), best)
+        self.assertLess(self.points(self.ctrl(blind_distinct=1),
+                                    self.need(by_feel=True)), best)
+
+    def test_a_refusing_fact_refuses(self):
+        self.assertTrue(self.refused(self.ctrl(modifier_ok=False),
+                                     self.need(modifier=True)))
+
+    # ---- the two rules that hold for every row, present and future ----
+
+    def test_a_fact_nobody_answered_counts_for_nothing(self):
+        # None is an unwalked desk, not a middling answer. Generic over
+        # the table, so a sixth fact is covered the day it is written.
+        plain = self.points(self.ctrl(), self.need())
+        for fact in corneeds.FACTS:
+            self.assertEqual(
+                plain, self.points(self.ctrl(),
+                                   self.need(**{fact['asked']: True})),
+                fact['reads'])
+
+    def test_a_fact_the_need_does_not_ask_for_counts_for_nothing(self):
+        # The thing that keeps a term from being weather: it moves the
+        # handful of needs somebody judged, and nothing else.
+        plain = self.points(self.ctrl(), self.need())
+        for fact in corneeds.FACTS:
+            for answer in (True, False):
+                self.assertEqual(
+                    plain, self.points(self.ctrl(**{fact['reads']: answer}),
+                                       self.need()),
+                    f'{fact["reads"]} = {answer}')
+
+    def test_a_refusing_fact_refuses_only_on_a_measured_no(self):
+        # A gate that refused out of ignorance would leave BMS's shift
+        # nowhere at all on a map nobody has answered yet.
+        for fact in corneeds.FACTS:
+            if not fact.get('refuses'):
+                continue
+            asked = self.need(**{fact['asked']: True})
+            self.assertFalse(self.refused(self.ctrl(), asked),
+                             fact['reads'])
+            self.assertFalse(
+                self.refused(self.ctrl(**{fact['reads']: True}), asked))
+            self.assertTrue(
+                self.refused(self.ctrl(**{fact['reads']: False}), asked))
+
+    # ---- the property the whole table exists for ----
+
+    def test_a_new_fact_costs_no_python(self):
+        # This is the point of the table rather than five more lambdas in
+        # WHEN, so it is the one thing that has to be tested directly: a
+        # block in the file, and the flag, the predicate and the words all
+        # appear. Nothing below imports or patches any code.
+        rules = corneeds.merge_rules(corneeds.RULES, {})
+        rules['fact'] = list(rules['fact']) + [
+            {'reads': 'cumulative', 'asked': 'staged', 'yes': 7, 'no': -3,
+             'says': 'it stages', 'not': 'it does not stage'}]
+        one = corneeds.Need('X', 'button', [['A']])
+        setattr(one, 'staged', True)
+        staged = self.ctrl()
+        staged.cumulative = True
+        parts = []
+        got = corneeds.score(staged, one, 'stick', parts=parts, rules=rules)
+        self.assertEqual(7, dict((t, d) for d, t in parts)['it stages'])
+        plain = corneeds.score(staged, one, 'stick', rules=rules)
+        self.assertEqual(got, plain)
+
+    # ---- what check_rules will not let into the file ----
+
+    def bad(self, row):
+        rules = corneeds.merge_rules(corneeds.RULES, {})
+        rules['fact'] = [row]
+        with self.assertRaises(ValueError) as caught:
+            corneeds.check_rules(rules, devmap.load())
+        return str(caught.exception)
+
+    def test_a_fact_the_map_does_not_measure_is_refused(self):
+        self.assertIn('hold_okk', self.bad(
+            {'reads': 'hold_okk', 'asked': 'held', 'yes': 1, 'no': -1}))
+
+    def test_a_fact_nothing_turns_on_is_refused(self):
+        self.assertIn('asked', self.bad(
+            {'reads': 'hold_ok', 'yes': 1, 'no': -1}))
+
+    def test_a_shortfall_with_nothing_to_charge_is_refused(self):
+        self.assertIn('no `scale`', self.bad(
+            {'reads': 'blind_distinct', 'asked': 'by_feel', 'below': 2,
+             'yes': 1, 'no': -1}))
+
+    def test_a_fact_weighs_exactly_one_way(self):
+        self.assertIn('at once', self.bad(
+            {'reads': 'hold_ok', 'asked': 'held', 'yes': 1, 'no': -1,
+             'scale': 2}))
+        self.assertIn('weighs nothing', self.bad(
+            {'reads': 'hold_ok', 'asked': 'held'}))
+
+    def test_a_bool_fact_needs_a_weight_for_both_answers(self):
+        self.assertIn('both', self.bad(
+            {'reads': 'hold_ok', 'asked': 'held', 'yes': 1}))
 
 
 class AGameOverTheTop(unittest.TestCase):

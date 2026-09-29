@@ -27,6 +27,8 @@
       core/game.py            Steam libraries, install dirs, prefixes, is-it-running
       core/needs.py           Need, Placement, allocate; shapes, reach, urgency
                               (ALLOCATION.md describes what it does)
+      core/solvers.py         Solver, Greedy, CpSat: who gets what, once the
+                              scoring has said what each is worth
       core/vocab.py           load a harvest's output; save it
       core/backup.py          copy what a writer is about to replace; put it back
       core/review.py          the plan on screen: keep or drop each binding
@@ -96,6 +98,7 @@ in scope in those two files.
 | which captured device plays which role | `core/devmap` |
 | Steam libraries, install dirs, prefixes, is-it-running | `core/game` |
 | shapes, reach tiers, urgency floor, scoring, passes | `core/needs` |
+| choosing an assignment out of the options and their scores | `core/solvers` |
 | loading a vocabulary, cached or reparsed | `core/vocab` |
 | keeping a copy of what a writer replaces | `core/backup` |
 | what the reviewer kept, and the table it is kept in | `core/review` |
@@ -211,6 +214,8 @@ design:
 | proposing fills the **gaps only** | it never overwrites what you chose, which is what makes `P` safe to press at any moment |
 | choosing it yourself means **yours** | no confirming a decision you just made by hand |
 | `?` is advisory, **not a filter** | a proposal nobody looked at is still written; the mark says you did not check it |
+| a decision **outlasts the session** | written to the binds file as it is made; `Need.yours` records which control and how strongly |
+| **two** strengths of yours | `chose` (RETURN) takes the control before scoring; `accepted` (`c`) records what you said yes to and still scores |
 
     c / C   confirm this one / every proposal
     p / P   put the planner's choice on this one / into every gap
@@ -218,7 +223,8 @@ design:
     l       or pick one from a list, with no hardware
     x / X   clear this one / drop every proposal, leaving yours
     m       the device map, and where the game was found
-    w       write everything that has a control
+    y       why a control is chosen: the weights, and what they are for
+    s       write everything that has a control
 
 The header names the device behind each role. `devmap.by_role` keys on the
 map's `kind`, so two sticks make you choose one with `SIM_DEVICE_ROLES` -- and

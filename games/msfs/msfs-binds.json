@@ -119,7 +119,9 @@
 "urgency": 0,
 "suits": "trim",
 "dev": "stick",
-"note": "the single most-bound thing after the flight axes"
+"note": "the single most-bound thing after the flight axes",
+"rapid": true,
+"by_feel": true
 },
 {
 "what": "Views",
@@ -158,7 +160,9 @@
 ],
 "urgency": 0,
 "suits": "view",
-"dev": "stick"
+"dev": "stick",
+"rapid": true,
+"by_feel": true
 },
 {
 "what": "Look around",
@@ -187,7 +191,9 @@
 ]
 ],
 "urgency": 1,
-"suits": "stepped-pair"
+"suits": "stepped-pair",
+"rapid": true,
+"by_feel": true
 },
 {
 "what": "Gear",
@@ -218,7 +224,8 @@
 ]
 ],
 "urgency": 1,
-"suits": "toggle"
+"suits": "toggle",
+"by_feel": true
 },
 {
 "what": "Spoilers",
@@ -238,7 +245,9 @@
 ]
 ],
 "urgency": 1,
-"suits": "stepped-pair"
+"suits": "stepped-pair",
+"rapid": true,
+"by_feel": true
 },
 {
 "what": "Parking brake",
@@ -271,7 +280,8 @@
 ],
 "urgency": 0,
 "suits": "occasional",
-"note": "the most-bound global action in the factory profiles"
+"note": "the most-bound global action in the factory profiles",
+"by_feel": true
 },
 {
 "what": "Radio panel",
@@ -353,7 +363,8 @@
 ]
 ],
 "urgency": 0,
-"suits": "trim"
+"suits": "trim",
+"by_feel": true
 },
 {
 "what": "Rotor brake",

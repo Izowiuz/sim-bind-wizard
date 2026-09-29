@@ -52,6 +52,7 @@ import typing
 from core import actions as cactions
 from core import backup
 from core import needs as corneeds
+from core import solvers as csolvers
 from core import sheet as csheet
 from core import review as creview
 from core import vocab
@@ -550,9 +551,44 @@ class Adapter(abc.ABC):
                        help='review the layout, write what you keep')
         p.add_argument('--write', action='store_true',
                        help='write the whole layout into the game')
+        p.add_argument('--solver', metavar='NAME',
+                       choices=[n for n, _s, _w in csolvers.choices()],
+                       help='who decides which need takes which control: '
+                            + '; '.join(f'{n} — {said}'
+                                        for n, said, _w in
+                                        csolvers.choices())
+                            + '. The best one that runs here, by default.')
         backup.add_argument(p, self.game)
         self.arguments(p)
         return p
+
+    @typing.final
+    def solver(self, name):
+        """The solver this run uses, and one line saying which.
+
+        The name alone. Which solver ran is the fact; which one did not
+        and why is a road not taken, and a status line that lists what is
+        absent makes a one-word answer into a sentence to parse.
+
+        Said at all because it never was: the model was used when
+        `ortools` imported and the list-walk when it did not, so the same
+        command on the same desk produced two different kneeboards
+        depending on which python found it, 77 lines apart.
+
+        Naming one that cannot run here stops the run rather than quietly
+        handing back the other. That absence IS worth a line, because it
+        is the error -- you asked for an answer, not for whichever answer
+        was available.
+        """
+        if name:
+            who = csolvers.named(name)
+            why = who.why_not()
+            if why:
+                raise SystemExit(f'--solver {name}: {why}')
+        else:
+            who = type(csolvers.best())
+        print(f'solver: {who.name}', file=sys.stderr)
+        return who()
 
     @typing.final
     def main(self, argv=None):
@@ -569,6 +605,7 @@ class Adapter(abc.ABC):
         # control is. The map will not guess, and neither will this.
         if args.desk:
             os.environ['SIM_DEVICE_PROFILE'] = args.desk
+        corneeds.SOLVER = self.solver(args.solver)
 
         bad = self.unknown()
         if bad:

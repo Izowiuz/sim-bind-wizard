@@ -20,6 +20,25 @@ which does the same work and takes its own flags.
 
 Close the game first. Writers refuse while it is running.
 
+### Which solver
+
+`--solver NAME` says who decides which need takes which control. Every verb
+that plans takes it, and every run prints the one it used.
+
+    cp-sat   the whole assignment as one model; needs `ortools`
+    greedy   walk the list, each taking the best still free
+
+Without the flag you get the best one that runs under the python you started.
+That is the difference `cp-sat` can find and `greedy` cannot: greedy places a
+need on the best control still free and can never take it back, so an early
+urgent need keeps a control a later one needed more.
+
+`ortools` is the one dependency outside the standard library, so a python
+without it runs `greedy` — which is why the flag exists. The same command
+under two pythons used to produce two different kneeboards for the same desk,
+77 lines apart, and said nothing. Naming a solver that cannot run stops the
+run rather than handing back the other one.
+
 ### The review screen
 
 `tui` is `write` with a say in it. Every need is a row, whether the planner
@@ -35,13 +54,35 @@ found it a home or not, and each row is in one of three states:
     l       or pick one from a list, with no hardware
     x / X   clear this one / drop every proposal, leaving yours
     m       the device map, and where the game was found
-    w       write everything that has a control
+    y       why a control is chosen: the weights, and what they are for
+    s       write everything that has a control
 
 `P` only fills gaps and `X` only drops proposals, so neither can undo a choice
 of yours: both are safe to press at any point.
 
 `?` is a note to yourself, not a switch. A proposal you never confirmed is
 still written; clearing it is how you say no.
+
+### What outlasts the session
+
+What you decide is written to `games/<game>/<game>-binds.json` as you decide
+it — there is no save key for it, and `s` writes the game's own files, not
+these. Two strengths, because pressing RETURN and pressing `c` are not the
+same claim:
+
+    RETURN / l   you put it there. The control is taken before anything is
+                 scored, so nothing outranks it and nothing moves it. If
+                 that control later leaves the map the row comes back
+                 empty and says so, rather than being quietly re-homed.
+    c / C        you looked at where the planner put it and said yes. It
+                 still scores exactly as before -- so if the map or the
+                 needs change and it lands somewhere else, the row goes
+                 back to `?` to tell you.
+
+`c` is deliberately the weak one. It is a single keystroke over a whole
+list, and if it froze every row the planner would never speak again.
+
+`x` on a row forgets both, and hands it back to the planner.
 
 What `RETURN` does with the press depends on the need, and the screen says
 which of the two you are in before you press anything:

@@ -70,15 +70,25 @@ class TheArithmetic(unittest.TestCase):
 
     def test_a_borrowed_button_adds_up_too(self):
         # The borrow pass scores by its own formula -- the polarity of the
-        # reach term is flipped -- so it is a second sum to get wrong.
+        # reach term is flipped -- so it is a second sum to get wrong. The
+        # facts are the part most likely to drift, because the sum is
+        # computed in the loop and the words are rebuilt afterwards.
         devs = {'stick': fake.device('stick', [
-            fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4),
+            fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4,
+                      hold_ok=True, blind_distinct=0),
         ])}
+        fire = Need('Fire', 'button', ['FIRE'], urgency=IN_A_TURN)
+        setattr(fire, 'held', True)
+        setattr(fire, 'by_feel', True)
         placed, _u, _f = allocate([
             Need('Trim', 'hat4', ['U', 'R', 'D', 'L'], urgency=IN_A_TURN),
-            Need('Fire', 'button', ['FIRE'], urgency=IN_A_TURN)], devs)
+            fire], devs)
         p = next(p for p in placed if p.need.what == 'Fire')
+        self.assertEqual('borrowed', p.why.how)
         self.assertEqual(p.points, sum(d for d, _t in p.why.parts))
+        said = [t for _d, t in p.why.parts]
+        self.assertIn('you can hold it', said)
+        self.assertIn('you cannot find it by feel', said)
 
     def test_every_part_says_what_it_was_for(self):
         # A list of bare numbers is the thing being replaced.

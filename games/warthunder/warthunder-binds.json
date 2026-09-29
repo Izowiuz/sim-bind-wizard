@@ -30,7 +30,9 @@
 ]
 ],
 "urgency": 0,
-"note": "cumulative stages: pulling through fires everything up to it"
+"note": "cumulative stages: pulling through fires everything up to it",
+"held": true,
+"by_feel": true
 },
 {
 "what": "Countermeasures",
@@ -50,7 +52,9 @@
 ],
 "urgency": 0,
 "suits": "reflex",
-"note": "has to be reachable mid-manoeuvre without regripping"
+"note": "has to be reachable mid-manoeuvre without regripping",
+"rapid": true,
+"by_feel": true
 },
 {
 "what": "Fire missile",
@@ -67,7 +71,8 @@
 ],
 "urgency": 0,
 "suits": "fire",
-"dev": "stick"
+"dev": "stick",
+"by_feel": true
 },
 {
 "what": "Fire rockets",
@@ -84,7 +89,9 @@
 ],
 "urgency": 0,
 "suits": "fire",
-"dev": "stick"
+"dev": "stick",
+"rapid": true,
+"by_feel": true
 },
 {
 "what": "Views",
@@ -131,7 +138,9 @@
 "urgency": 0,
 "suits": "view",
 "dev": "stick",
-"note": "look back matters more in a dogfight than anything else here"
+"note": "look back matters more in a dogfight than anything else here",
+"rapid": true,
+"by_feel": true
 },
 {
 "what": "Radar / IRST",
@@ -180,7 +189,8 @@
 ],
 "urgency": 0,
 "suits": "sensor",
-"dev": "stick"
+"dev": "stick",
+"by_feel": true
 },
 {
 "what": "Weapon lock",
@@ -198,7 +208,9 @@
 "urgency": 0,
 "suits": "lock",
 "dev": "stick",
-"note": "the seeker lock you hold while a heater growls"
+"note": "the seeker lock you hold while a heater growls",
+"held": true,
+"by_feel": true
 },
 {
 "what": "Cockpit sight on/off",
@@ -214,7 +226,8 @@
 ]
 ],
 "urgency": 0,
-"suits": "view"
+"suits": "view",
+"by_feel": true
 },
 {
 "what": "Target lock",
@@ -245,7 +258,9 @@
 "suits": "lock",
 "dev": "throttle",
 "prefer": "Thumb hat",
-"note": "up locks what you are pointing at, left and right step through the others, back drops it"
+"note": "up locks what you are pointing at, left and right step through the others, back drops it",
+"rapid": true,
+"by_feel": true
 },
 {
 "what": "Trim",
@@ -285,7 +300,9 @@
 ],
 "suits": "trim",
 "dev": "stick",
-"note": "hat trim is the DCS habit; ID_TRIM on the push is the WT idiom"
+"note": "hat trim is the DCS habit; ID_TRIM on the push is the WT idiom",
+"rapid": true,
+"by_feel": true
 },
 {
 "what": "WEP / afterburner",
@@ -299,7 +316,9 @@
 ],
 "urgency": 0,
 "suits": "reflex",
-"dev": "throttle"
+"dev": "throttle",
+"held": true,
+"by_feel": true
 },
 {
 "what": "Radar ACM",
@@ -313,7 +332,8 @@
 ],
 "urgency": 0,
 "suits": "sensor",
-"note": "short-range auto-acquire; matters from the 1970s on"
+"note": "short-range auto-acquire; matters from the 1970s on",
+"by_feel": true
 },
 {
 "what": "Sight stabilization",
@@ -327,7 +347,9 @@
 ],
 "urgency": 0,
 "suits": "lock",
-"note": "the core of the ATGM workflow"
+"note": "the core of the ATGM workflow",
+"held": true,
+"by_feel": true
 },
 {
 "what": "Bombs",
@@ -343,7 +365,8 @@
 ]
 ],
 "urgency": 0,
-"suits": "release"
+"suits": "release",
+"by_feel": true
 },
 {
 "what": "Air-to-ground lock",
@@ -359,7 +382,8 @@
 ]
 ],
 "urgency": 0,
-"suits": "lock"
+"suits": "lock",
+"by_feel": true
 },
 {
 "what": "Gear",
@@ -378,7 +402,8 @@
 "suits": "toggle",
 "dev": "throttle",
 "prefer": "Keyboard B1 button",
-"note": "pinned by hand: War Thunder only has a toggle, so the two ends of a rocker both did the same thing anyway -- a labelled button you can find by feel is worth more"
+"note": "pinned by hand: War Thunder only has a toggle, so the two ends of a rocker both did the same thing anyway -- a labelled button you can find by feel is worth more",
+"by_feel": true
 },
 {
 "what": "Flaps",
@@ -397,7 +422,9 @@
 ],
 "urgency": 1,
 "suits": "stepped-pair",
-"note": "WT steps through combat, takeoff and landing settings"
+"note": "WT steps through combat, takeoff and landing settings",
+"rapid": true,
+"by_feel": true
 },
 {
 "what": "Airbrake",
@@ -410,7 +437,8 @@
 ]
 ],
 "urgency": 0,
-"suits": "toggle"
+"suits": "toggle",
+"by_feel": true
 },
 {
 "what": "Hover mode",
@@ -469,7 +497,8 @@
 }
 ]
 ],
-"suits": "sensor"
+"suits": "sensor",
+"by_feel": true
 },
 {
 "what": "Engine",
@@ -525,7 +554,8 @@
 ]
 ],
 "urgency": 3,
-"suits": "occasional"
+"suits": "occasional",
+"costly": true
 },
 {
 "what": "Laser designator",
@@ -554,7 +584,9 @@
 }
 ]
 ],
-"suits": "stepped-pair"
+"suits": "stepped-pair",
+"rapid": true,
+"by_feel": true
 }
 ]
 }

@@ -40,8 +40,8 @@ and `sim-device-map`. A `?` is proposed and not yet confirmed.
 | Middle finger hat — right | `BTN6` | COMM Switch - MIDS A |
 | Middle finger hat — down | `BTN7` | COMM Switch - MIDS B |
 | Thumb two-way hat — push | `BTN10` | RAID/FLIR FOV Select Button |
-| Thumb two-way hat — forward | `BTN11` | Dispense Switch - Aft(FLARE)/Center(OFF) |
-| Thumb two-way hat — back | `BTN13` | Dispense Switch - Forward(CHAFF)/Center(OFF) |
+| Thumb two-way hat — fwd | `BTN11` | Dispense Switch - Aft(FLARE)/Center(OFF) |
+| Thumb two-way hat — aft | `BTN13` | Dispense Switch - Forward(CHAFF)/Center(OFF) |
 | Thumb mini-stick — push | `BTN15` | Throttle Designator Controller - Depress |
 | Thumb button | `BTN16` | Master Mode Button - A/G |
 | Bottom thumb button | `BTN17` | Cage/Uncage Button |
@@ -68,9 +68,9 @@ and `sim-device-map`. A `?` is proposed and not yet confirmed.
 
 | Control | Axis | Command |
 |---|---|---|
-| Main stick, left/right | `stick 0` | Roll |
-| Main stick, fore/aft | `stick 1` | Pitch (inverted) |
-| Stick twist | `stick 2` | Rudder |
+| Main stick | `stick 0` | Roll |
+| Main stick | `stick 1` | Pitch (inverted) |
+| Main stick | `stick 2` | Rudder |
 | Analogue brake lever on the grip | `stick 5` | Wheel Brake |
 | Thumb mini-stick | `throttle 0` | Throttle Designator Controller - Horizontal Axis |
 | Thumb mini-stick | `throttle 1` | Throttle Designator Controller - Vertical Axis |

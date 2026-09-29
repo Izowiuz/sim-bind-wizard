@@ -13,6 +13,7 @@ a War Thunder action id, a BMS callback, or a pair of X4 source/code strings
 without the allocator knowing the difference.
 """
 
+import dataclasses
 import os
 import sys
 import tomllib
@@ -69,7 +70,7 @@ def merge_rules(base, extra):
 
 
 from core import actions as cactions
-from core import solve as csolve
+from core import solvers as csolvers
 
 
 # ---------------------------------------------------------------- vocabulary
@@ -104,12 +105,31 @@ URGENCY_NAME = tuple(b['name'] for b in RULES['band'])
 MIN_REACH = {n: b['takes'][0] for n, b in enumerate(RULES['band'])}
 MAX_REACH = {n: b['takes'][1] for n, b in enumerate(RULES['band'])}
 
-#: The passes, in the order `allocate` runs them.
+#: The passes, in the order `allocate` runs them. From the file, because
+#: the screen that explains the allocator has to read them from somewhere
+#: and `CAME_BY` is not that somewhere: it holds what is worth SAYING
+#: about a placement, so it leaves out the ordinary pass and takes in two
+#: things that are not passes at all. Using it as the list showed three of
+#: four -- and the fix, a literal written out here, was worse: it shadowed
+#: THIS line, so the file's table became decoration and the screen went on
+#: reading source. Two definitions of one name, and the second wins
+#: silently.
 PASSES = tuple((p['name'], p['does']) for p in RULES['pass'])
 
 #: What makes one control beat another, and why one is refused outright.
 TERMS = RULES['term']
 GATES = RULES['gate']
+
+#: What the map measured about a control, and what turns it on in a need.
+#: Unlike a term, a fact names no predicate: every row has one of three
+#: fixed shapes, so `_facts` builds the test from the row. See the table's
+#: own header in scoring.toml for what each key means.
+FACTS = tuple(RULES['fact'])
+
+#: The flags the facts put on every Need, taken from the table rather than
+#: written out -- which is what makes a sixth fact a block in a file and
+#: nothing else. A need that sets none of them scores exactly as before.
+FLAGS = tuple(f['asked'] for f in FACTS if f.get('asked'))
 
 #: What may stand in for what when the exact shape is not on the hardware.
 #: Order matters: the first entry is the shape actually asked for and
@@ -155,6 +175,30 @@ def check_rules(rules, devicemap):
             if one not in ways:
                 bad.append(f'directions: {want} accepts {one!r},'
                            ' which no control says')
+    # A fact names a field on the control rather than a predicate in this
+    # module, which is the whole point of the table -- so this is the only
+    # thing standing between a typo and a fact that silently never fires.
+    told = {f.name for f in dataclasses.fields(devicemap.Group)}
+    for fact in rules['fact']:
+        if fact['reads'] not in told:
+            bad.append(f'fact: {fact["reads"]!r} is not something the map'
+                       ' measures about a control')
+        if 'asked' not in fact:
+            bad.append(f'fact: {fact["reads"]} has no `asked`, so nothing'
+                       ' turns it on; a fact is what a NEED asks of a'
+                       ' control, not a charge on every control')
+        if 'below' in fact and 'scale' not in fact:
+            bad.append(f'fact: {fact["reads"]} charges below'
+                       f' {fact["below"]} but has no `scale` to charge')
+        kinds = [k for k in ('yes', 'scale', 'refuses') if k in fact]
+        if len(kinds) != 1:
+            bad.append(f'fact: {fact["reads"]} is {" and ".join(kinds)}'
+                       ' at once; it has to be exactly one of yes/no,'
+                       ' scale, refuses' if kinds else
+                       f'fact: {fact["reads"]} weighs nothing')
+        if ('yes' in fact) != ('no' in fact):
+            bad.append(f'fact: {fact["reads"]} answers yes and no, so it'
+                       ' needs a weight for both')
     if bad:
         raise ValueError('scoring.toml:\n  ' + '\n  '.join(sorted(set(bad))))
     return rules
@@ -198,7 +242,7 @@ class Need:
 
     def __init__(self, what, shape, bindings=(), push=None,
                  urgency=IN_THE_AIR, suits=None, dev=None, prefer=None,
-                 on=None, rank=0, note='', category=None):
+                 on=None, rank=0, note='', category=None, yours=None):
         self.what = what
         self.shape = shape
         self.bindings = list(bindings)
@@ -232,6 +276,43 @@ class Need:
         #: to know which is which. Absent means the screen falls back to
         #: the band, which is what it grouped by before there were any.
         self.category = category
+        #: How this got where it is, when it was you who decided:
+        #: {role, control, how} plus `button` when a press picked one.
+        #: `control` is the map's own id rather than the label, because
+        #: the map promises an id survives renaming a control and
+        #: renumbering its buttons.
+        #:
+        #: `how` is the strength, and there are two because pressing ENTER
+        #: and pressing `c` are not the same claim:
+        #:
+        #:   chose     you put it here. The allocator is not asked: the
+        #:             control is taken before anything is scored.
+        #:   accepted  you looked at where the allocator put it and said
+        #:             yes. It scores exactly as before -- so if the desk
+        #:             or the needs change and it lands somewhere else,
+        #:             the row goes back to `?` and tells you.
+        #:
+        #: `accepted` is deliberately weak. `c` over a full list is one
+        #: keystroke, and if it froze every row the allocator would never
+        #: speak again and there would be no way back but clearing each
+        #: row by hand.
+        #:
+        #: Neither is `prefer`, which is the third thing: an opinion
+        #: written into the file by hand that outranks the ordering but
+        #: that the scoring still has to agree with -- a gate can refuse
+        #: it, and one did, which is how BMS's pinky shift left the button
+        #: it was pinned to.
+        #:
+        #: Until this was written down, all of it lasted until `q`.
+        self.yours = yours
+        #: What this need ASKS OF a control, against what the map measured
+        #: about one: `held` meets `hold_ok`, `costly` meets `accident_risk`.
+        #: Not written out, because the fact table in scoring.toml is what
+        #: decides they exist -- a sixth fact grows a sixth flag here with
+        #: nothing to edit. Three of the map's five questions answer "can
+        #: you", and a score needs "must you", which is what these say.
+        for flag in FLAGS:
+            setattr(self, flag, False)
         #: set by the allocator when it had to reach past the floor
         self.relaxed = False
 
@@ -289,7 +370,8 @@ def dump_needs(needs, also=()):
             row['push'] = cactions.dump_binds(n.push)
         if n.urgency != IN_THE_AIR:
             row['urgency'] = n.urgency
-        for field in ('suits', 'dev', 'prefer', 'note', 'category'):
+        for field in ('suits', 'dev', 'prefer', 'note', 'category',
+                      'yours') + FLAGS:
             if getattr(n, field):
                 row[field] = getattr(n, field)
         if n.on:
@@ -335,7 +417,9 @@ def read_needs(rows, also=(), make=None):
             suits=r.get('suits'), dev=r.get('dev'),
             prefer=r.get('prefer'), on=r.get('on'),
             rank=r.get('rank', 0), note=r.get('note', ''),
-            category=r.get('category'))
+            category=r.get('category'), yours=r.get('yours'))
+        for flag in FLAGS:
+            setattr(need, flag, r.get(flag, False))
         for field in also:
             setattr(need, field, r.get(field))
         out.append(need)
@@ -472,6 +556,94 @@ PER = {
     'spare': lambda c, n, r, t: len(c.bindable_buttons) - n.wanted,
 }
 
+def _adder(parts):
+    """The two-step, in one place: score everything, describe the winner.
+
+    Scoring runs over every control against every need and wants a number.
+    The winner is scored a second time, with somewhere to put the terms,
+    which is what makes the explanation the same arithmetic as the
+    decision rather than a second telling of it.
+
+    A term worth nothing is left out rather than listed as zero: a screen
+    saying `0  findable by feel` reads as a fact about the control, and it
+    is the absence of one.
+    """
+    def part(delta, text):
+        if parts is not None and delta:
+            parts.append((delta, text))
+        return delta
+    return part
+
+
+def _facts(rules, ctrl, need, role, part):
+    """What the map measured about this control, weighed against the need.
+
+    Not in `WHEN`, because none of these is a predicate somebody wrote: a
+    row in the fact table names a FIELD on the control, and the three
+    shapes a row can take are fixed here instead. That is what makes a
+    sixth question the wizard starts asking cost a block in a file.
+
+    Two rules live here rather than in each row, so that no future fact
+    can be written without them:
+
+    A fact nobody answered counts for nothing. `None` is not a middling
+    answer, it is an unwalked desk -- the same reasoning that keeps the
+    reach term off an unmeasured control, where paying for distance
+    nobody measured let an unmeasured button beat a measured thumb.
+
+    A fact only counts where the need asks for it. "Can you hold this
+    down" is a fact about a control; whether it matters is a fact about
+    the action, and charging every control for it would push everything
+    away from the same homes when something still has to go there. The
+    fact that counted for every need, however sensibly chosen, moves half
+    the list at once: the one that rode the band instead of asking
+    reshuffled 99 bindings, 46 of them between controls that answered it
+    the same way.
+    """
+    s = 0
+    for fact in rules['fact']:
+        if fact.get('refuses'):
+            continue
+        told = getattr(ctrl, fact['reads'])
+        if told is None:
+            continue
+        if not getattr(need, fact['asked']):
+            continue
+        if 'scale' in fact:
+            # A 0/1/2 answer pays per step. `below` charges the SHORTFALL
+            # instead -- how far under the best answer this control is --
+            # which is what a fact almost everything answers well has to
+            # do to say anything: your desk has 20 of 22 home controls at
+            # the top of `blind_distinct`, so paying for it paid everyone
+            # the same +20 and merely disturbed the ties underneath. 99
+            # bindings moved between equally findable controls for it.
+            # Either way the best answer costs nothing, and `part` drops a
+            # term worth nothing, so nothing says `0 findable by feel`.
+            n = fact['below'] - told if 'below' in fact else told
+            words = (fact['plural'] if n != 1 and 'plural' in fact
+                     else fact['says'])
+            s += part(fact['scale'] * n, words)
+        else:
+            s += part(fact['yes'] if told else fact['no'],
+                      fact['says'] if told else fact['not'])
+    return s
+
+
+def _fact_refuses(rules, ctrl, need):
+    """The fact that puts this control out of the question, or None.
+
+    Only on a measured "no". A map nobody has answered would otherwise
+    refuse every control for a need asking to be a modifier, and a need
+    with nowhere to go reads as a broken planner rather than as a desk
+    nobody has walked -- which is the argument `out_of_reach` makes.
+    """
+    for fact in rules['fact']:
+        if (fact.get('refuses') and getattr(need, fact['asked'])
+                and getattr(ctrl, fact['reads']) is False):
+            return fact
+    return None
+
+
 #: Why a control is refused outright. `x` is the run's own state, which is
 #: what tells these from `WHEN`: a gate reads the pass it is in.
 REFUSE = {
@@ -525,10 +697,7 @@ def score(ctrl, need, role, floor=True, usable=None, parts=None,
     the absence of one.
     """
     rules = rules or RULES
-    def part(delta, text):
-        if parts is not None and delta:
-            parts.append((delta, text))
-        return delta
+    part = _adder(parts)
 
     tier = reach_tier(ctrl)
     table = {n: b['takes'][1] for n, b in enumerate(rules['band'])}
@@ -561,6 +730,13 @@ def score(ctrl, need, role, floor=True, usable=None, parts=None,
     for name in ('unusable', 'wrong_shape', 'too_few'):
         if REFUSE[name](run):
             return None
+    # With the shape gates rather than the pass gate, and so BEFORE the pin,
+    # which stops. A pin is an opinion about which control is right and this
+    # is a fact about which cannot do the job at all: pinning a shift to
+    # something you cannot hold down while working the layer it reaches is
+    # exactly the failure the `pinned` term's own note describes.
+    if _fact_refuses(rules, ctrl, need):
+        return None
     for term in rules['term']:
         if term.get('stops') and WHEN[term['when']](ctrl, need, role, tier):
             return part(term['weight'], _says(term, ctrl, need, role, 1))
@@ -574,7 +750,7 @@ def score(ctrl, need, role, floor=True, usable=None, parts=None,
             continue
         n = PER[term['per']](ctrl, need, role, tier) if 'per' in term else 1
         s += part(term['weight'] * n, _says(term, ctrl, need, role, n))
-    return s
+    return s + _facts(rules, ctrl, need, role, part)
 
 
 def _says(term, ctrl, need, role, n):
@@ -646,18 +822,6 @@ class Reason:
     def __repr__(self):
         return f'<Reason {self.how} {self.points}>'
 
-
-#: The passes, in the order `allocate` runs them. A table because the
-#: screen that explains the allocator has to read it from somewhere, and
-#: `CAME_BY` is not that somewhere: it holds what is worth SAYING about a
-#: placement, so it leaves out the ordinary pass and takes in two things
-#: that are not passes at all. Using it as the list showed three of four.
-PASSES = (
-    ('pinned', 'a control you named, before anything else is placed'),
-    ('floored', 'the ordinary one; the limits above both hold'),
-    ('relaxed', 'nothing was left inside them, so the far end opens up'),
-    ('borrowed', 'a spare button on a control something else owns'),
-)
 
 #: How a placement came about, as a reader wants it said. `floored` is
 #: absent on purpose: it is the ordinary case, and a line announcing that
@@ -736,6 +900,72 @@ def hand_out(slots, role, why, spots=()):
             tell(role, button,
                  Reason(why.how, why.points, why.parts, why.tier,
                         why.ceiling, why.instead, spot=said.get(button, '')))
+
+
+#: The two strengths a decision of yours can have. `CHOSE` takes the
+#: control before anything is scored; `ACCEPTED` changes no allocation at
+#: all and only tells the screen you have looked. See `Need.yours`.
+CHOSE, ACCEPTED = 'chose', 'accepted'
+
+
+def yours_at(pool, want):
+    """Where in the pool the control you chose is, or None if it is gone.
+
+    On the id, not the label: the map promises an id outlives renaming a
+    control and renumbering its buttons, and a label is the thing the
+    capture wizard lets you retype. The role is checked too, because one
+    desk had the same label on both devices.
+    """
+    for j, (role, ctrl) in enumerate(pool):
+        if role == want.get('role') and ctrl.id == want.get('control'):
+            return j
+    return None
+
+
+def honours_press(need, ctrl, button):
+    """Whether the exact button pressed is what this need should land on.
+
+    `slots_for` picks for a need with one binding: on a control that
+    clicks it takes the click, otherwise the first position -- which is
+    right when nobody said where, and wrong the moment somebody presses a
+    thing. Pressing the second detent of a trigger and being given the
+    first is the tool overruling a choice you just made by hand.
+
+    Two exceptions. A need wanting several bindings is asking for the
+    whole control and its own direction order decides, not the corner you
+    happened to touch. And a need with `on` has made a claim about the
+    hardware -- a speedbrake is fore/aft whatever hat it lands on -- which
+    is exactly the lie `on` exists to stop, so it keeps winning.
+    """
+    return (len(need.bindings) == 1 and not need.on
+            and button in ctrl.bindable_buttons)
+
+
+def put(need, role, ctrl, why, button=None, points: int | None = 0):
+    """The placement: which button takes which binding, and everyone told.
+
+    Two callers had a copy -- the allocator's passes and the review
+    screen's assign -- and they had already drifted: one told the click
+    what it was for and the other did not. A third copy was about to be
+    written for the pass that honours what you chose, which is the point
+    at which a copy becomes a definition.
+
+    `button` is the one actually pressed, when a press is what decided.
+    """
+    spots = []
+    buttons = slots_for(need, ctrl, why=spots)
+    if button is not None and honours_press(need, ctrl, button):
+        buttons = [button]
+        spots = [(button, 'the button you pressed')]
+    # `if v` rather than `is not None`: a payload is a list of Binds and an
+    # empty one means this direction was left alone, which is what `None`
+    # used to say.
+    slots = [(b, v) for b, v in zip(buttons, need.bindings) if v]
+    if need.push is not None and ctrl.push is not None:
+        slots.append((ctrl.push, need.push))
+        spots.append((ctrl.push, 'the click, as asked'))
+    hand_out(slots, role, why, spots)
+    return Placement(need, role, ctrl, slots, points, why)
 
 
 class Placement:
@@ -853,7 +1083,15 @@ class Layout:
         return sorted(out.items())
 
 
-def allocate(needs, devices, usable=None, rules=None):
+#: The solver this run uses, which `--solver` sets once at startup. A
+#: module-level default rather than an argument threaded through seven
+#: call sites, because it is one decision per run and not a property of
+#: any one allocation -- `allocate` still takes it explicitly, which is
+#: how the tests ask for one without touching anything else.
+SOLVER = None
+
+
+def allocate(needs, devices, usable=None, rules=None, solver=None):
     """(placements, unplaced, free), most urgent first.
 
     Two passes. The first keeps the reach floor: something you do on the ramp
@@ -877,18 +1115,62 @@ def allocate(needs, devices, usable=None, rules=None):
     whole keyboard buttons, which is what it was for.
     """
     rules = rules or RULES
+    who = solver or SOLVER or csolvers.best()
     top = {n: b['takes'][1] for n, b in enumerate(rules['band'])}
     low = {n: b['takes'][0] for n, b in enumerate(rules['band'])}
     pool = [(role, c) for role, d in sorted(devices.items())
             for c in d.groups(bindable=True)]
     taken, placed = set(), []
+
+    # Before anything is scored: what YOU put there. Not a strong opinion
+    # -- `prefer` below is the strong opinion, and the difference is the
+    # whole point. A pin outranks the ordering and the ranking, and the
+    # scoring still has to agree with it: a gate can refuse a pinned
+    # control, and one did, which is how BMS's pinky shift left the button
+    # it was pinned to and turned up on the throttle. Nothing refuses
+    # this. You sat at the desk with the stick in your hand and put the
+    # thing where you wanted it; there is no opinion here to overrule.
+    #
+    # Until it was written down it lasted until `q`: every mark and every
+    # hand-placed binding was rebuilt from the planner on the next open,
+    # so an evening of walking the list came back purple and in the
+    # planner's order.
+    chose, orphan = set(), []
+    for i, need in enumerate(needs):
+        if not need.yours or need.yours.get('how') != CHOSE:
+            continue
+        j = yours_at(pool, need.yours)
+        if j is None:
+            # Say it and leave the need empty. Quietly allocating it
+            # somewhere else is the one thing this must not do: the whole
+            # reason it is written down is that it does not move.
+            print(f'!! {need.what!r} is where you put it, on '
+                  f'{need.yours.get("control")!r}, and this desk has no '
+                  'such control; leaving it unplaced rather than moving it',
+                  file=sys.stderr)
+            chose.add(i)
+            orphan.append(i)
+            continue
+        if j in taken:
+            print(f'!! {need.what!r} and something else are both on '
+                  f'{need.yours.get("control")!r}; the first keeps it',
+                  file=sys.stderr)
+            chose.add(i)
+            orphan.append(i)
+            continue
+        taken.add(j)
+        role, ctrl = pool[j]
+        placed.append(put(need, role, ctrl, Reason('yours'),
+                          button=need.yours.get('button')))
+        chose.add(i)
+
     #: Pinned needs go first, before urgency is consulted at all. `prefer` used
     #: to only tip the scales, which is no use once something more urgent has
     #: already taken the control: BMS's pinky shift was pinned to the grip
     #: pinky button and still lost it to the landing lights, because they are
     #: touched on approach and it is not. An explicit choice has to outrank the
     #: ordering as well as the ranking, or it is not a choice.
-    order = sorted(range(len(needs)),
+    order = sorted((i for i in range(len(needs)) if i not in chose),
                    key=lambda i: (needs[i].prefer is None, needs[i].urgency,
                                   -needs[i].rank))
 
@@ -917,21 +1199,13 @@ def allocate(needs, devices, usable=None, rules=None):
         one needed more -- and there is no pass that gives it back.
         """
         wants = [(i, offers(i, floor)) for i in todo]
-        if csolve.have_it():
-            got = csolve.best(wants, range(len(pool)))
-            if got is not None:
-                return dict(got)
-        # No solver installed, or it gave up: the list in urgency order,
-        # each taking the best still free. Worse than the best answer and
-        # much better than none.
-        out, used = {}, set()
-        for i, may in wants:
-            free = {j: s for j, s in may.items() if j not in used}
-            if not free:
-                continue
-            j = max(free, key=lambda j: free[j])
-            out[i], _ = j, used.add(j)
-        return out
+        got = who.best(wants, range(len(pool)))
+        if got is None:
+            # It could not answer -- a model that ran out of time with
+            # nothing feasible. Walking the list is worse than the best
+            # answer and much better than none.
+            got = csolvers.FALLBACK().best(wants, range(len(pool)))
+        return dict(got)
 
     def pass_over(todo, floor):
         left = []
@@ -974,18 +1248,7 @@ def allocate(needs, devices, usable=None, rules=None):
                 else ('floored' if floor else 'relaxed'),
                 points=best_s, parts=terms, tier=reach_tier(ctrl),
                 ceiling=ceiling)
-            spots = []
-            buttons = slots_for(need, ctrl, why=spots)
-            # `if v` rather than `is not None`: a payload is now a
-            # list of Binds and an empty one means this direction was
-            # left alone, which is what `None` used to say.
-            slots = [(b, v) for b, v in zip(buttons, need.bindings)
-                     if v]
-            if need.push is not None and ctrl.push is not None:
-                slots.append((ctrl.push, need.push))
-                spots.append((ctrl.push, 'the click, as asked'))
-            hand_out(slots, role, why, spots)
-            placed.append(Placement(need, role, ctrl, slots, best_s, why))
+            placed.append(put(need, role, ctrl, why, points=best_s))
         return left
 
     unplaced = pass_over(pass_over(order, True), False)
@@ -1006,6 +1269,8 @@ def allocate(needs, devices, usable=None, rules=None):
             if usable is not None and not usable(role, c):
                 continue
             if reach_tier(c) > top[need.urgency]:
+                continue
+            if _fact_refuses(rules, c, need):
                 continue
             spare = [b for b in c.bindable_buttons
                      if (role, b) not in occupied]
@@ -1041,6 +1306,13 @@ def allocate(needs, devices, usable=None, rules=None):
                 # there while a cold-start switch goes homeless, but neither
                 # should one be broken open while a real spare exists.
                 s -= 15
+            # The whole table, not a subset. A fact is a property of the
+            # CONTROL, and a borrowed button sits on a control: whether you
+            # can hold it down does not become irrelevant because something
+            # else owns the rest of it. Called rather than copied, because
+            # the terms below are rebuilt by hand and a hand-kept copy of
+            # this would have to grow with every fact anybody adds.
+            s += _facts(rules, c, need, role, _adder(None))
             if best is None or s > best[0]:
                 best = (s, role, c, button, j)
         if best is None:
@@ -1060,12 +1332,19 @@ def allocate(needs, devices, usable=None, rules=None):
             terms.append((30, f'on the {role}, as asked'))
         if j not in taken:
             terms.append((-15, 'opens an untouched control'))
+        _facts(rules, ctrl, need, role, _adder(terms))
         why = Reason('borrowed', points=_s, parts=terms,
                      tier=reach_tier(ctrl),
                      ceiling=top[need.urgency])
         slots = [(button, need.bindings[0])]
         hand_out(slots, role, why, [(button, 'the one spare button')])
         placed.append(Placement(need, role, ctrl, slots, _s, why))
+
+    # A need whose chosen control is gone comes back here and NOT through
+    # the borrow pass above: borrowing it a spare button somewhere else is
+    # moving it, which is the one thing writing the choice down was for.
+    # It waits, empty, for you to say where it goes now.
+    still += orphan
 
     # Free means every button of it is free, not merely that no need chose it.
     free = [(r, c) for j, (r, c) in enumerate(pool)

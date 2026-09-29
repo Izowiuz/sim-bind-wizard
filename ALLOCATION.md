@@ -1,8 +1,8 @@
 # How the allocator works
 
-`core/needs.py`, about 340 lines. It answers one question: given a list of
-things a pilot has to be able to do, and a description of the hardware, which
-control gets which.
+`core/needs.py`. It answers one question: given a list of things a pilot has
+to be able to do, and a description of the hardware, which control gets
+which.
 
 It knows nothing about any game. A need's payload is opaque to it — Falcon BMS
 puts a callback there, War Thunder a `(air, heli)` pair, MSFS a
@@ -56,16 +56,23 @@ one is free. Both are **preferences**, not laws: the relaxed pass lifts them.
 
 `score(ctrl, need, role)` returns `None` when a control cannot do the job at
 all — wrong shape, too few buttons, outside the reach band, vetoed by the
-game's `usable()` — and otherwise:
+game's `usable()`, or refused by a fact — and otherwise a sum of terms.
 
-    1000                        the need is pinned here, and it fits
-    ────────────────────────────────────────────────────────────────
-     100 + 12 × tier            prefer the LEAST precious that still works
-    + 40 / − 50                 right device / explicitly the wrong one
-    + 20                        exactly the shape asked for
-    + 25                        the map says this control suits it
-    + 15                        both have a click to put something on
-    −  4 × surplus buttons      do not burn a four-way hat on one action
+**The weights are not written here.** They live in `core/scoring.toml`, every
+one of them with a note saying what it is for, and `y` on the review screen
+prints that file rather than a transcription of it. A table in this document
+is a second copy that nobody edits when the first one moves: this one said
+`+ 25 the map says this control suits it` for months after that term was
+deleted, and omitted the two direction penalties entirely.
+
+Two halves. **Terms** — `[[term]]` — are named predicates over a control and a
+need, written in `core/needs.py` because a file that could define one would
+need an expression language. **Facts** — `[[fact]]` — are what the device map
+measured about a control, weighed against what a need asks of it: can you hold
+it down, tap it quickly, find it by feel, hit it by mistake, hold it as a
+modifier. A fact counts only for a need marked as asking for it, and not at
+all for a control nobody answered — an unanswered control is an unwalked desk,
+not a middling one. Adding a sixth is a block in the file and nothing else.
 
 `100 + 12 × tier` rewarding the *worse* reach is deliberate: needs are placed
 most-urgent-first, so anything still waiting is less urgent than what has
@@ -79,19 +86,42 @@ scored 721 with a loose ceiling and nothing with a tight one, and moved
 silently to the thumb mini-stick. A pin is a decision, so it outranks the
 tables and not just the ranking.
 
-## Four passes
+## Five passes
 
-Needs are ordered `(pinned first, then urgency, then −rank)` and walked four
+Needs are ordered `(pinned first, then urgency, then −rank)` and walked five
 times. Each pass takes whole controls out of the pool as it places them.
 
-**1 — pinned.** Anything with `prefer` goes before urgency is consulted at
+**1 — yours.** Anything carrying `Need.yours` with `how: chose` — a control
+you put it on yourself, from the review screen. Placed before anything is
+scored, and its control leaves the pool.
+
+This is not `prefer`, and the difference is the point. A pin is an opinion: it
+outranks the ordering, and the scoring still has to agree with it, so a gate
+can refuse a pinned control — one did, and BMS's pinky shift left the button
+it was pinned to. Nothing refuses this one. You sat at the desk with the stick
+in your hand and put the thing where you wanted it; there is no opinion here
+to overrule.
+
+If the control is no longer on the desk, the need comes back **empty** and is
+not offered to pass 5 either: borrowing it a spare button somewhere else is
+moving it, which is the one thing writing the choice down was for. The review
+screen says which kind of empty it is.
+
+`how: accepted` — what `c` writes, when you look at where the allocator put
+something and say yes — is deliberately *not* here. It records which control
+you agreed to and changes no allocation, so if the desk or the needs change
+and it lands elsewhere the row goes back to `?` and tells you. `c` over a full
+list is one keystroke, and if it froze every row the allocator would never
+speak again.
+
+**2 — pinned.** Anything with `prefer` goes before urgency is consulted at
 all. `prefer` used only to tip the scales, which is no use once something more
 urgent has already taken the control.
 
-**2 — floored.** Everything else, honouring both floor and ceiling. Most of a
+**3 — floored.** Everything else, honouring both floor and ceiling. Most of a
 layout lands here.
 
-**3 — relaxed.** Whatever is left, with the floor dropped — an unbound engine
+**4 — relaxed.** Whatever is left, with the floor dropped — an unbound engine
 start is worse than a canopy switch under the thumb, and by now everything
 urgent has chosen. The **ceiling** lifts here too, but *only for a need that
 wants more than one button*, because:
@@ -100,12 +130,12 @@ wants more than one button*, because:
   this hardware needs letting go of the grip, so without the lift BMS's MAN
   RANGE knob, radar gain, ICP master mode and IFF MASTER had nowhere to go at
   all;
-- a single-button need *does* have one — pass 4 — and a borrowed thumb press
+- a single-button need *does* have one — pass 5 — and a borrowed thumb press
   beats a whole control you must let go of the grip to reach. Lifting the
   ceiling for those made it lose: War Thunder's radar ACM and sight
   stabilisation, both `in a turn`, left the thumb for the side dials.
 
-**4 — borrowed.** A control carries more than the need that took it: a hat has
+**5 — borrowed.** A control carries more than the need that took it: a hat has
 four directions *and* a press, a rocker nobody claimed has two positions. What
 counts as spare is tracked per `(device, button)`, not per control. A
 single-slot need with nowhere else to go takes one spare button, scored
@@ -126,6 +156,41 @@ are one switch, an encoder's two contacts are one more/less pair, and a latch
 *holds* whichever position it is in, so a press action borrowed from one fires
 for as long as the lever sits there. Bomb release landed on the master-arm
 latch exactly that way.
+
+## Who gets what, once the scores are in
+
+By the time a solver is asked the question is arithmetic: here are the things
+to place, here is where each may go and what each would be worth, choose.
+`core/solvers.py` has two answers to it and `--solver NAME` picks one.
+
+**`greedy`** walks the list, each taking the best still free. It cannot undo a
+choice, which is the whole of the difference: an early urgent need takes the
+control a later one needed more, and passes 4 and 5 are what it does instead
+of backtracking. Needs nothing, so every clone has it.
+
+**`cp-sat`** states the whole assignment as one model and solves it together,
+so it can give up a better control for one need to place two. The judgement is
+unchanged — `score()` still says how well a control plays a part, and its
+number is the objective coefficient — and only the search changes. So a
+difference in the output is one greedy could not reach, not a difference of
+opinion. Needs `ortools`.
+
+It picks the best one that runs, and every run prints which. It used to pick
+silently on whether the import worked, so the same command under two pythons
+produced two different kneeboards for one desk, 77 lines apart, with nothing
+on either saying so. Naming one that cannot run stops the run rather than
+handing back the other.
+
+The model runs one worker with a fixed seed. Eight workers race and whichever
+reaches an optimum first is the answer — and most of a layout is ties, because
+a dozen thumb buttons are worth exactly the same to a need asking for a
+button. Three of the six games rebound 51 lines between two runs that differed
+in nothing at all. These models solve in milliseconds, so the parallel search
+was buying nothing.
+
+Adding a third is a class and a line in `SOLVERS`. `device-map-v2.md` already
+names the next one: the Hungarian algorithm, as a fast first answer to hand
+the model as a hint.
 
 ## Which button each binding lands on
 
@@ -197,7 +262,8 @@ Three layers, and two of them are global:
   `travel_contact`. One TOML edit moves every game. The WarBRD's "paddle"
   turned out to be the brake lever's travel contact; one correction there and
   three games stopped binding it, with no game code touched.
-- **`games/*/plan.py`** — `urgency`, `prefer`, `on`, `dev`. These are claims
+- **`games/*/<game>-binds.json`** — `urgency`, `prefer`, `on`, `dev`, the
+  ergonomic flags, and `yours` once you have used the review screen. These are claims
   about *a game's functions*. "Airbrake is used in a turn" is a statement about
   War Thunder and cannot be hoisted.
 

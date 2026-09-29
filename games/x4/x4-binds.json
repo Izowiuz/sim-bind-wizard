@@ -13,7 +13,9 @@
 "urgency": 0,
 "suits": "fire",
 "dev": "stick",
-"note": "already on the stick by hand; the trigger is what it is for"
+"note": "already on the stick by hand; the trigger is what it is for",
+"held": true,
+"by_feel": true
 },
 {
 "what": "Fire secondary",
@@ -27,7 +29,9 @@
 ],
 "urgency": 0,
 "suits": "fire",
-"dev": "stick"
+"dev": "stick",
+"held": true,
+"by_feel": true
 },
 {
 "what": "Boost",
@@ -45,7 +49,9 @@
 "urgency": 0,
 "suits": "reflex",
 "dev": "throttle",
-"note": "held, not tapped, so it wants a button you can hold"
+"note": "held, not tapped, so it wants a button you can hold",
+"held": true,
+"by_feel": true
 },
 {
 "what": "Target next enemy",
@@ -59,7 +65,9 @@
 ],
 "urgency": 0,
 "suits": "lock",
-"dev": "stick"
+"dev": "stick",
+"rapid": true,
+"by_feel": true
 },
 {
 "what": "Target under cursor",
@@ -76,7 +84,8 @@
 ],
 "urgency": 0,
 "suits": "lock",
-"dev": "stick"
+"dev": "stick",
+"by_feel": true
 },
 {
 "what": "Countermeasure",
@@ -89,7 +98,8 @@
 ]
 ],
 "urgency": 0,
-"dev": "stick"
+"dev": "stick",
+"by_feel": true
 },
 {
 "what": "Strafe",
@@ -119,6 +129,8 @@
 "urgency": 0,
 "dev": "stick",
 "note": "the axes get it too; the hat is for a precise nudge",
+"held": true,
+"by_feel": true,
 "on": [
 "up",
 "right",
@@ -143,6 +155,8 @@
 ],
 "urgency": 0,
 "dev": "stick",
+"rapid": true,
+"by_feel": true,
 "on": [
 "forward",
 "back"
@@ -164,6 +178,8 @@
 ]
 ],
 "urgency": 0,
+"rapid": true,
+"by_feel": true,
 "on": [
 "forward",
 "back"
@@ -181,7 +197,8 @@
 ],
 "urgency": 0,
 "dev": "throttle",
-"note": "latches in the game (toggle=\"1\"), so a plain button is right"
+"note": "latches in the game (toggle=\"1\"), so a plain button is right",
+"by_feel": true
 },
 {
 "what": "Travel mode",
@@ -194,7 +211,8 @@
 ]
 ],
 "urgency": 1,
-"dev": "throttle"
+"dev": "throttle",
+"by_feel": true
 },
 {
 "what": "Flight assist",
@@ -207,7 +225,8 @@
 ]
 ],
 "urgency": 1,
-"dev": "throttle"
+"dev": "throttle",
+"by_feel": true
 },
 {
 "what": "Dock / undock",
@@ -283,6 +302,7 @@
 ],
 "urgency": 1,
 "dev": "stick",
+"rapid": true,
 "on": [
 "right",
 "left"
@@ -302,7 +322,8 @@
 ]
 ],
 "urgency": 1,
-"dev": "stick"
+"dev": "stick",
+"by_feel": true
 },
 {
 "what": "Scan mode",
@@ -405,7 +426,9 @@
 }
 ]
 ],
-"suits": "view"
+"suits": "view",
+"rapid": true,
+"by_feel": true
 },
 {
 "what": "Zoom goggles",

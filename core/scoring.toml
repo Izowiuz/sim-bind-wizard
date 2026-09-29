@@ -64,6 +64,10 @@ reduced to."""
 
 # The passes, in the order they run.
 [[pass]]
+name = "yours"
+does = "where you put it yourself; nothing is asked and nothing argues"
+
+[[pass]]
 name = "pinned"
 does = "a control you named, before anything else is placed"
 
@@ -183,6 +187,99 @@ says = "it has too few bindable buttons"
 [[gate]]
 when = "out_of_reach"
 says = "its reach is outside the limits above"
+
+# What the device map MEASURED about a control, and what turns it on in a
+# need. The map answers five questions per control -- can you hold it, can
+# you tap it, can you find it blind, can you hit it by mistake, can you hold
+# it as a modifier -- and for a year nothing here read any of them.
+#
+# The rows above are each a named predicate written in core/needs.py. These
+# are not: they all have one of three shapes, so one predicate is built from
+# the row instead. Adding a sixth fact is a block here and nothing else --
+# the flag appears on every Need, the words appear in every reason, and
+# `check_rules` fails loudly if `reads` is not a field the map has.
+#
+# This is not the expression language the header refuses. The file still
+# cannot say what `device_matches` MEANS; it fills in a shape that is fixed
+# here. A fact about a PAIR of controls -- "can you work these two at once"
+# -- does not fit and will cost code, which is the honest limit.
+#
+#   reads    the control's field in devicemap.Group
+#   asked    the flag this puts on every Need; the fact only counts for a
+#            need that sets it
+#   yes/no   weights for a bool the map answered either way
+#   scale    weight per step of a 0/1/2 answer
+#   below    charge the SHORTFALL from this answer instead of the answer
+#   refuses  a gate rather than a term: the control is not offered at all
+#
+# A fact NOBODY answered counts for nothing, either way. That is the same
+# rule as `measured` on the reach term, and it lives in the predicate rather
+# than in each row, so no future fact can forget it.
+
+[[fact]]
+reads = "hold_ok"
+asked = "held"
+yes   = 25
+no    = -45
+says  = "you can hold it"
+not   = "awkward to hold down"
+note  = """Asymmetric on purpose, like device_right/device_wrong. Your 41 \
+controls split 19/22 on this, so both answers carry information -- and "you \
+cannot hold this one" is a fault, not merely the absence of a virtue."""
+
+[[fact]]
+reads = "rapid_ok"
+asked = "rapid"
+yes   = 25
+no    = -45
+says  = "you can tap it quickly"
+not   = "awkward to tap repeatedly"
+
+[[fact]]
+reads  = "blind_distinct"
+asked  = "by_feel"
+scale  = -20
+below  = 2
+says   = "hard to find by feel"
+plural = "you cannot find it by feel"
+general = "for each step short of finding it by feel"
+note   = """This rode the need's band at first, on the argument that finding \
+a thing without looking matters exactly when you are busy. It moved 81 \
+bindings of 201 -- 19 onto a better control and 19 onto a worse one. A fact \
+that counts for every need in the two fastest bands touches half the list at \
+once, and half a list moving for no gain is weather, not a rule. So it asks, \
+like the others, and what it asks is not the band: X4's map is not urgent AND \
+does not want finding blind, while a canopy you set on the ramp is one you \
+are looking straight at.
+
+Charged as a shortfall rather than paid as a bonus, because 20 of the 22 \
+controls a hand reaches without moving answer this at the top: a bonus paid \
+nearly every candidate the same and decided nothing. The information is in \
+the minority answer, which is why `no_directions` is a penalty and there is \
+no term for merely having directions."""
+
+[[fact]]
+reads  = "accident_risk"
+asked  = "costly"
+scale  = -30
+says   = "easy to hit by mistake"
+plural = "very easy to hit by mistake"
+general = "for each step of how easily it is hit by mistake"
+note   = """Gated by the need rather than charged to every control, because \
+a control you can knock is only a problem under something that hurts when \
+knocked. Charged flatly it would push everything away from the same \
+controls, and something still has to go there."""
+
+[[fact]]
+reads   = "modifier_ok"
+asked   = "modifier"
+refuses = true
+says    = "you cannot hold it as a modifier"
+note    = """A gate, not a bonus: five of 41 controls qualify, so this is a \
+constraint on where a shift can live and not a preference between homes. It \
+refuses only on a measured "no" -- on a map nobody has answered, a gate that \
+refused out of ignorance would leave the shift nowhere at all, which is the \
+same argument `out_of_reach` makes."""
 
 [shapes]
 # What may stand in for what. The first entry is the shape actually asked

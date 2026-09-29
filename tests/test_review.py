@@ -12,6 +12,7 @@ yourself rather than a filter.
 """
 
 import curses
+import inspect
 import os
 import re
 import unittest
@@ -498,11 +499,12 @@ class WhereThePressLands(unittest.TestCase):
         rv = self.trigger_plan()
         fire = by(rv, 'Fire')
         ctrl = at(rv, fire).ctrl
-        self.assertTrue(rv.honours_press(fire, ctrl, 1))
+        self.assertTrue(corneeds.honours_press(fire, ctrl, 1))
         many = Need('Trim', 'trigger', [[Bind('A')], [Bind('B')]])
-        self.assertFalse(rv.honours_press(many, ctrl, 1), 'wants the control')
+        self.assertFalse(corneeds.honours_press(many, ctrl, 1),
+                         'wants the control')
         aimed = Need('Brake', 'trigger', [[Bind('A')]], on=('first',))
-        self.assertFalse(rv.honours_press(aimed, ctrl, 1), 'on wins')
+        self.assertFalse(corneeds.honours_press(aimed, ctrl, 1), 'on wins')
 
 
 class Writing(unittest.TestCase):
@@ -1093,6 +1095,233 @@ class BeforeWriting(unittest.TestCase):
         self.assertNotIn(review.MARK_SAID[PROPOSED], self.text(rv))
 
 
+class WhatYouDecidedOutLastsTheSession(unittest.TestCase):
+    """The marks and the placements used to be rebuilt from the planner on
+    every open, so `C` over the whole list came back purple and in the
+    planner's order, and a binding moved by hand moved back. Three things
+    reached disk -- a category, a rename, an added entry -- and nothing
+    about where anything sat.
+
+    Two strengths, because pressing ENTER and pressing `c` are not the
+    same claim. `chose` takes the control before anything is scored.
+    `accepted` changes no allocation at all: it records WHICH control you
+    said yes to, so the row can go back to `?` the day the allocator
+    moves it.
+    """
+
+    def rig(self, *labels):
+        return {'stick': fake.device('stick', [
+            fake.button(l, i, reach=fake.THUMB)
+            for i, l in enumerate(labels)])}
+
+    def setUp(self):
+        self.saved = []
+        self.devs = self.rig('Thumb A', 'Thumb B')
+        self.needs = [Need('Boost', 'button', [[Bind('BOOST')]])]
+
+    def open(self, devs=None):
+        return made(self.needs, devs=devs or self.devs,
+                    save=self.saved.append)
+
+    def only(self, rv):
+        return rv.needs[0]
+
+    # ---- accepted: a note that survives, and knows when it is stale ----
+
+    def test_accepting_survives_a_reopen(self):
+        rv = self.open()
+        rv.confirm_all()
+        self.assertEqual(review.MINE, self.open().mark[self.only(rv)])
+
+    def test_accepting_writes_it_down_once_for_the_whole_list(self):
+        rv = self.open()
+        rv.confirm_all()
+        self.assertEqual(1, len(self.saved), 'one write, not one per need')
+
+    def test_accepting_does_not_freeze_the_allocator(self):
+        # `c` over a full list is one keystroke. If it pinned every row
+        # the allocator would never speak again, and the only way back
+        # would be clearing forty-five rows by hand.
+        rv = self.open()
+        rv.confirm_all()
+        need = self.only(rv)
+        self.assertEqual(corneeds.ACCEPTED, need.yours['how'])
+        placed, _un, _free = allocate(self.needs, self.rig('Thumb B'))
+        self.assertEqual('Thumb B', placed[0].ctrl.label)
+
+    def test_a_row_the_allocator_moved_goes_back_to_asking(self):
+        # The one moment the mark has something to tell you.
+        rv = self.open()
+        rv.confirm_all()
+        moved = self.open(self.rig('Thumb B', 'Thumb C'))
+        self.assertEqual(review.PROPOSED, moved.mark[self.only(moved)])
+
+    # ---- chose: a fact, and nothing argues with it ----
+
+    def test_choosing_by_hand_survives_a_reopen(self):
+        rv = self.open()
+        other = next(c for c in self.devs['stick'].groups()
+                     if c.label == 'Thumb B')
+        rv.assign(self.only(rv), 'stick', other)
+        again = self.open()
+        self.assertEqual(review.MINE, again.mark[self.only(again)])
+        self.assertEqual('Thumb B', at(again, self.only(again)).ctrl.label)
+
+    def test_choosing_by_hand_is_written_down_at_once(self):
+        # At the moment it is decided, not on a save key: a save key you
+        # can forget is how an evening of choices comes back purple. The
+        # test asserts the WRITE, because the objects live on in memory
+        # either way and a reopen in one process proves nothing.
+        rv = self.open()
+        other = next(c for c in self.devs['stick'].groups()
+                     if c.label == 'Thumb B')
+        rv.assign(self.only(rv), 'stick', other)
+        self.assertEqual(1, len(self.saved))
+
+    def test_what_you_chose_is_taken_before_anything_is_scored(self):
+        rv = self.open()
+        other = next(c for c in self.devs['stick'].groups()
+                     if c.label == 'Thumb B')
+        rv.assign(self.only(rv), 'stick', other)
+        self.assertEqual(corneeds.CHOSE, self.only(rv).yours['how'])
+        # Something the allocator would rather have there cannot have it.
+        rival = Need('Guns', 'button', [[Bind('GUNS')]],
+                     urgency=corneeds.IN_A_TURN)
+        placed, _un, _free = allocate(self.needs + [rival], self.devs)
+        where = {p.need.what: p.ctrl.label for p in placed}
+        self.assertEqual('Thumb B', where['Boost'])
+
+    def test_a_control_you_chose_that_is_gone_leaves_the_row_empty(self):
+        # Not moved, and not borrowed a button somewhere else either:
+        # moving it is the one thing writing the choice down was for.
+        rv = self.open()
+        other = next(c for c in self.devs['stick'].groups()
+                     if c.label == 'Thumb B')
+        rv.assign(self.only(rv), 'stick', other)
+        placed, unplaced, _free = allocate(self.needs, self.rig('Thumb A'))
+        self.assertEqual([], placed)
+        self.assertEqual(['Boost'], [n.what for n in unplaced])
+
+    def test_an_empty_row_says_which_kind_of_empty_it_is(self):
+        # "the planner had nowhere to put it" and "the thing you chose is
+        # gone" look identical on a row and want opposite things from you.
+        rv = self.open()
+        other = next(c for c in self.devs['stick'].groups()
+                     if c.label == 'Thumb B')
+        rv.assign(self.only(rv), 'stick', other)
+        gone = self.open(self.rig('Thumb A'))
+        need = self.only(gone)
+        self.assertIsNone(gone.at[need])
+        said = gone.unhonoured(need)
+        self.assertIn('thumb-b', said)
+        self.assertIn('no such control', said)
+        panel = '\n'.join(t for _tone, t in review._side(
+            gone, review.Row('need', '', need=need), 60))
+        self.assertIn('no such control', panel)
+
+    def test_a_row_the_planner_simply_could_not_fill_says_no_such_thing(self):
+        rv = made([Need('Trim', 'hat4', [[Bind('U')], [Bind('R')],
+                                         [Bind('D')], [Bind('L')]])],
+                  devs=self.rig('Only button'))
+        need = rv.needs[0]
+        self.assertIsNone(rv.at[need])
+        self.assertEqual('', rv.unhonoured(need))
+
+    def test_the_id_is_what_is_written_down_not_the_label(self):
+        # A label is the thing the capture wizard lets you retype; the map
+        # promises an id outlives that and renumbering the buttons.
+        rv = self.open()
+        other = next(c for c in self.devs['stick'].groups()
+                     if c.label == 'Thumb B')
+        rv.assign(self.only(rv), 'stick', other)
+        self.assertEqual(other.id, self.only(rv).yours['control'])
+        self.assertNotIn(other.label, self.only(rv).yours.values())
+
+    # ---- clearing ----
+
+    def test_clearing_forgets_that_you_chose_it(self):
+        # Otherwise `x` clears the screen and the next open puts it back.
+        rv = self.open()
+        other = next(c for c in self.devs['stick'].groups()
+                     if c.label == 'Thumb B')
+        rv.assign(self.only(rv), 'stick', other)
+        rv.clear(self.only(rv))
+        self.assertIsNone(self.only(rv).yours)
+        again = self.open()
+        self.assertEqual(review.PROPOSED, again.mark[self.only(again)])
+
+    def test_dropping_proposals_leaves_what_you_chose(self):
+        rv = self.open()
+        other = next(c for c in self.devs['stick'].groups()
+                     if c.label == 'Thumb B')
+        rv.assign(self.only(rv), 'stick', other)
+        rv.clear_all()
+        self.assertIsNotNone(self.only(rv).yours)
+
+    # ---- and it all round trips ----
+
+    def test_it_survives_the_file(self):
+        rv = self.open()
+        other = next(c for c in self.devs['stick'].groups()
+                     if c.label == 'Thumb B')
+        rv.assign(self.only(rv), 'stick', other)
+        (back,) = corneeds.read_needs(corneeds.dump_needs(self.needs))
+        self.assertEqual(self.only(rv).yours, back.yours)
+
+
+class EveryKeyTheScreenNamesIsOneItAnswers(unittest.TestCase):
+    """The help, the sill and the handler, held to each other.
+
+    Three places name the keys and a person renaming one has to find all
+    three. Moving write from `w` to `s` -- to match the capture wizard,
+    where `s` has always saved -- touched every one of them, and the only
+    thing that would have caught a miss was pressing the key.
+
+    A key named but not answered is worse than a missing line: you press
+    it, nothing happens, and nothing says why. The one that would have
+    lost work is `w` still reading "write" in the sill while the handler
+    had stopped listening.
+    """
+
+    def named(self, rows):
+        """The single letters a help table offers as keys."""
+        out = set()
+        for row in rows:
+            text = row[1] if isinstance(row, tuple) else row
+            if isinstance(row, tuple) and row[0] != 'plain':
+                continue
+            head = re.split(r'\s{3,}', text.strip(), maxsplit=1)[0]
+            out |= {t for t in head.split() if len(t) == 1 and t.isalpha()}
+        return out
+
+    def answered(self):
+        """The keys `_loop` compares against, read out of its source."""
+        src = inspect.getsource(review._loop)
+        return set(re.findall(r"k (?:==|in \()\s*'(\w)'", src)) | set(
+            re.findall(r"'(\w)'[,)]", src))
+
+    def test_every_key_the_help_names_is_answered(self):
+        missing = self.named(review.KEYS) - self.answered()
+        self.assertEqual(set(), missing, 'named in `?` and never answered')
+
+    def test_every_key_the_sill_names_is_answered(self):
+        missing = self.named(review.HINTS) - self.answered()
+        self.assertEqual(set(), missing, 'shown in the sill and dead')
+
+    def test_the_sill_and_the_help_agree(self):
+        # The sill is a subset by design -- it holds what you reach for
+        # constantly -- but a key in it that the help has never heard of
+        # is one of them left behind by a rename.
+        self.assertEqual(set(), self.named(review.HINTS)
+                         - self.named(review.KEYS))
+
+    def test_write_is_where_the_capture_wizard_puts_it(self):
+        # The pair of tools is used in one sitting, and `s` saved in the
+        # capture wizard from the first commit.
+        self.assertIn('s write', review.HINTS)
+        self.assertIn('s', self.answered())
+
+
 class TheRulesScreen(unittest.TestCase):
     """How a control is chosen, drawn from the tables that choose it.
 
@@ -1139,6 +1368,54 @@ class TheRulesScreen(unittest.TestCase):
         self.assertTrue(noted, 'nothing carries a note')
         for one in noted:
             self.assertIn(one['note'].split('.')[0][:40], self.said())
+
+    def test_it_names_every_refusal(self):
+        # These four were transcribed into the screen as literals, which
+        # made this the one place that could disagree with the allocator.
+        # It then did: a fifth refusal arrived and the screen kept saying
+        # there were four.
+        said = self.said()
+        for gate in corneeds.GATES:
+            self.assertIn(gate['says'], said)
+        for fact in corneeds.FACTS:
+            if fact.get('refuses'):
+                self.assertIn(fact['says'], said, fact['reads'])
+        # Asserting the four strings are present passes whether they were
+        # read or typed, because typed they were copied correctly. So say
+        # something else in the table and see whether the screen changes
+        # its mind: transcribed, it cannot.
+        mine = corneeds.merge_rules(corneeds.RULES, {})
+        mine['gate'] = [dict(g, says='the dog ate it')
+                        for g in mine['gate']]
+        self.assertIn('the dog ate it', self.said(made(rules=mine)))
+        for gate in corneeds.GATES:
+            self.assertNotIn(gate['says'], self.said(made(rules=mine)))
+
+    def test_it_shows_what_the_desk_measured(self):
+        # 205 answers you gave the capture wizard decide bindings now, so
+        # the screen that explains the decision has to name them -- and
+        # name what turns each one on, because a fact the binding does not
+        # ask for counts for nothing and a screen that omitted that would
+        # be describing a harsher allocator than the one that ran.
+        said = self.said()
+        for fact in corneeds.FACTS:
+            self.assertIn(fact['asked'], said, fact['reads'])
+            self.assertIn(fact.get('general', fact['says']), said)
+            for key in ('yes', 'no', 'scale'):
+                if key in fact:
+                    self.assertIn(str(fact[key]), said, fact['reads'])
+
+    def test_a_fact_added_to_the_file_appears_without_touching_this(self):
+        # The same property the scoring has: a sixth question the capture
+        # wizard starts asking is a block in a file. A screen somebody has
+        # to remember to update is a screen that will be wrong.
+        mine = corneeds.merge_rules(corneeds.RULES, {})
+        mine['fact'] = list(mine['fact']) + [
+            {'reads': 'cumulative', 'asked': 'staged', 'yes': 7, 'no': -3,
+             'says': 'it stages', 'not': 'it does not stage'}]
+        said = self.said(made(rules=mine))
+        self.assertIn('staged', said)
+        self.assertIn('it stages', said)
 
     def test_it_is_derived_and_not_transcribed(self):
         # The test that earns the screen. Move a limit and it has to move

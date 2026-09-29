@@ -164,8 +164,59 @@ class Review:
         self.needs = [p.need for p in layout.placed] + list(layout.unplaced)
         #: where each need sits now, and how it got there
         self.at = {n: self.plan.get(n) for n in self.needs}
-        self.mark = {n: (PROPOSED if self.at[n] else UNSET)
-                     for n in self.needs}
+        # Who put it there, not merely that something did. A placement
+        # the allocator made from `yours` carries `how == 'yours'`, so a
+        # choice you made last week opens green and the planner's opens
+        # purple -- which is what the mark was always for and what it
+        # could not do while it was rebuilt from nothing each time.
+        self.mark = {n: self._came_by(n) for n in self.needs}
+
+    def unhonoured(self, need):
+        """Why what you chose is not under this need, or '' if it is.
+
+        An empty row reads the same whether the planner had nowhere to
+        put it or the control you chose is gone, and those want opposite
+        things from you: one is a hardware problem, the other is a
+        decision waiting. The allocator says this on stderr, which under
+        curses is the inside of the screen it is drawing.
+        """
+        want = need.yours or {}
+        if want.get('how') != corneeds.CHOSE or self.at[need] is not None:
+            return ''
+        pool = [(role, c) for role, d in sorted(self.layout.devices.items())
+                for c in d.groups(bindable=True)]
+        j = corneeds.yours_at(pool, want)
+        if j is None:
+            return (f'you put it on {want.get("control")}, and this desk '
+                    'has no such control')
+        return (f'you put it on {pool[j][1].label}, and something else '
+                'is on it')
+
+    def _came_by(self, need):
+        """Who put this where it is, as a mark.
+
+        The mark was rebuilt from nothing on every open -- anything placed
+        was `?` -- so an evening spent walking the list came back purple
+        and in the planner's order. It now reads what the placement says
+        about itself.
+
+        `accepted` is checked against WHERE it landed, not merely that it
+        landed: you said yes to a control, not to a row. If the desk or
+        the needs have changed since and the allocator has moved it, the
+        row goes back to `?`, which is the one moment the mark has
+        something to tell you.
+        """
+        at = self.at[need]
+        if at is None:
+            return UNSET
+        if at.why.how == 'yours':
+            return MINE
+        mine = need.yours or {}
+        if (mine.get('how') == corneeds.ACCEPTED
+                and mine.get('role') == at.role
+                and mine.get('control') == at.ctrl.id):
+            return MINE
+        return PROPOSED
 
     # -------------------------------------------------------------- reading
 
@@ -425,26 +476,49 @@ class Review:
                 if done else 'nothing left for the plan to fill')
 
     def confirm(self, need):
-        if self.at[need] is None:
+        at = self.at[need]
+        if at is None:
             return f'{need.what}: nothing to confirm'
         if self.mark[need] == MINE:
             return f'{need.what}: already yours'
-        self.mark[need] = MINE
+        self._accept(need, at)
+        self._kept()
         return f'{need.what}: confirmed — {self.where(need)}'
 
+    def _accept(self, need, at):
+        """Mark it yours, and write down WHICH control you said yes to.
+
+        The control, not just the fact: you said yes to a home, not to a
+        row, so the day the allocator moves it the mark has to stop
+        claiming you agreed.
+        """
+        self.mark[need] = MINE
+        need.yours = {'role': at.role, 'control': at.ctrl.id,
+                      'how': corneeds.ACCEPTED}
+
     def confirm_all(self):
-        n = sum(1 for need in self.needs if self.mark[need] == PROPOSED)
-        for need in self.needs:
-            if self.mark[need] == PROPOSED:
-                self.mark[need] = MINE
+        # One `_kept` for the lot: it writes the whole list every time, so
+        # forty-five of them is forty-five writes of the same file.
+        todo = [(n, self.at[n]) for n in self.needs
+                if self.mark[n] == PROPOSED and self.at[n] is not None]
+        for need, at in todo:
+            self._accept(need, at)
+        if todo:
+            self._kept()
+        n = len(todo)
         return (f'confirmed {n} proposal{"" if n == 1 else "s"}' if n
                 else 'nothing left to confirm')
 
     def clear(self, need):
-        if self.at[need] is None:
+        if self.at[need] is None and not need.yours:
             return f'{need.what}: already unset'
         self.at[need] = None
         self.mark[need] = UNSET
+        # And forget that you chose it, or `x` clears the screen and the
+        # next open puts it straight back.
+        was, need.yours = need.yours, None
+        if was:
+            self._kept()
         return f'{need.what}: cleared — its control is free again'
 
     def clear_all(self):
@@ -462,39 +536,12 @@ class Review:
         return (f'dropped {n} proposal{"" if n == 1 else "s"} — what is '
                 'yours stayed' if n else 'no proposals left to drop')
 
-    def honours_press(self, need, ctrl, button):
-        """Whether the exact button pressed is what this need should land on.
-
-        `slots_for` picks for a need with one binding: on a control that
-        clicks it takes the click, otherwise the first position -- which is
-        right when nobody said where, and wrong the moment somebody presses a
-        thing. Pressing the second detent of a trigger and being given the
-        first is the tool overruling a choice you just made by hand.
-
-        Two exceptions. A need wanting several bindings is asking for the
-        whole control and its own direction order decides, not the corner you
-        happened to touch. And a need with `on` has made a claim about the
-        hardware -- a speedbrake is fore/aft whatever hat it lands on -- which
-        is exactly the lie `on` exists to stop, so it keeps winning.
-        """
-        return (len(need.bindings) == 1 and not need.on
-                and button in ctrl.bindable_buttons)
-
     def assign(self, need, role, ctrl, button=None):
         """Give a need a control by hand. Yours at once, with no confirming
         step: you just chose it.
 
         `button` is the one actually pressed, when a press is what did this.
         """
-        spots = []
-        buttons = corneeds.slots_for(need, ctrl, why=spots)
-        if button is not None and self.honours_press(need, ctrl, button):
-            buttons = [button]
-            spots = [(button, 'the button you pressed')]
-        slots = [(b, v) for b, v in zip(buttons, need.bindings)
-                 if v]
-        if need.push is not None and ctrl.push is not None:
-            slots.append((ctrl.push, need.push))
         was = self.at[need]
         # Putting it back where it already was is not an override, and a
         # panel saying "moved from Thumb button" about a binding ON the
@@ -504,10 +551,17 @@ class Review:
         moved = was is not None and not (was.role == role
                                          and was.ctrl is ctrl)
         why = corneeds.Reason('yours', instead=was if moved else None)
-        corneeds.hand_out(slots, role, why, spots)
-        placed = corneeds.Placement(need, role, ctrl, slots, 0, why)
+        placed = corneeds.put(need, role, ctrl, why, button=button)
         self.at[need] = placed
         self.mark[need] = MINE
+        # Written down at the moment it is decided. The alternative was a
+        # save key, and a save key you can forget is how an evening of
+        # choices comes back purple.
+        need.yours = {'role': role, 'control': ctrl.id,
+                      'how': corneeds.CHOSE}
+        if button is not None and corneeds.honours_press(need, ctrl, button):
+            need.yours['button'] = button
+        self._kept()
         return placed
 
     def categories(self):
@@ -640,11 +694,16 @@ class Review:
         say('plain')
 
         say('head', 'WHEN IT REFUSES A CONTROL')
-        for line in ('the game cannot address it',
-                     'it is the wrong shape',
-                     'it has too few bindable buttons',
-                     'its reach is outside the limits above'):
-            say('plain', line, lead='  · ')
+        # Read out, not written out. These four were transcribed here and
+        # the transcription was already the only thing on this screen that
+        # could disagree with the allocator -- which it then did, the day a
+        # fifth refusal arrived and nobody thought to come back here.
+        for gate in self.rules['gate']:
+            say('plain', gate['says'], lead='  · ')
+        for fact in self.rules['fact']:
+            if fact.get('refuses'):
+                say('plain', f'{fact["says"]}, where a binding asks to be'
+                             f' the {fact["asked"]}', lead='  · ')
         say('plain')
 
         say('head', 'HOW MANY TRIES IT GETS')
@@ -664,6 +723,27 @@ class Review:
             if term.get('note'):
                 say('note', term['note'], lead='         ')
         say('plain')
+
+        say('head', 'WHAT A BINDING ASKS OF A CONTROL')
+        say('meta', 'The device map measured these on your own desk, one '
+                    'control at a time. Each counts only for a binding '
+                    'marked as asking for it, and not at all for a control '
+                    'nobody answered — an unanswered control is an unwalked '
+                    'desk, not a middling one.', lead='  ')
+        say('plain')
+        for fact in self.rules['fact']:
+            say('plain', f'a binding marked {fact["asked"]}', lead='  ')
+            words = fact.get('general', fact['says'])
+            if fact.get('refuses'):
+                say('plain', words, lead='  refuses  ')
+            elif 'yes' in fact:
+                say('plain', fact['says'], lead=f'    {fact["yes"]:+5}  ')
+                say('plain', fact['not'], lead=f'    {fact["no"]:+5}  ')
+            else:
+                say('plain', words, lead=f'    {fact["scale"]:+5}  ')
+            if fact.get('note'):
+                say('note', fact['note'], lead='         ')
+            say('plain')
 
         say('head', 'WHAT COUNTS AS THE RIGHT SHAPE')
         say('meta', f'{"asked for":11} will also take', lead='  ')
@@ -749,7 +829,7 @@ class Review:
 
 # ------------------------------------------------------------------- drawing
 
-#: Two lines, because one was 96 characters and a terminal is 80: `w write`
+#: Two lines, because one was 96 characters and a terminal is 80: `s write`
 #: and `q quit` fell off the end of the screen that documents them. Moving
 #: comes first -- it is what you need before any of the rest is reachable.
 #: The whole list, shown by `?`. The border carries the handful you reach
@@ -772,7 +852,7 @@ KEYS = (
     ('head', 'DESCRIPTION'),
     ('plain', "  A row is an entry: one or more of the game's actions,"),
     ('plain', '  and the control they landed on. Entries are grouped by'),
-    ('plain', '  category, and nothing reaches the game until w.'),
+    ('plain', '  category, and nothing reaches the game until s.'),
     ('plain', ''),
     ('head', 'MARKS'),
     ('mine', f'  {MARK[MINE]}           {MARK_SAID[MINE]}'),
@@ -799,9 +879,9 @@ KEYS = (
     ('plain', '  R           rename the category it is in; all of it moves'),
     ('plain', ''),
     ('head', 'OTHER'),
-    ('plain', '  s           how a control is chosen'),
+    ('plain', '  y           why a control is chosen'),
     ('plain', '  m           device map and install paths'),
-    ('plain', '  w           write the plan to the game'),
+    ('plain', '  s           write the plan to the game'),
     ('plain', '  q           quit'),
 )
 
@@ -901,7 +981,8 @@ def _layout(width, height, wants=None):
 #: In the sill, most-needed first: what is dropped on a narrow panel is
 #: dropped from the end, and nothing else is reachable without moving.
 HINTS = ('↑↓ move', '↵ assign', 'l list', 'c accept', 'x unassign',
-         'a add', 'r category', 'f filter', 'h binds', 'm map', 'w write')
+         'a add', 'r category', 'f filter', 'h binds', 'y why', 'm map',
+         's write')
 
 
 def _fit(width, text, lead=''):
@@ -950,6 +1031,15 @@ def _side(rv, row, width=DETAIL_MIN - 4):
         say('meta', f'wants {need.first_shape}, '
             f'{ctui.plural(need.wanted, "button")}')
         say('plain')
+        # First, because it is the only one of these you can act on, and
+        # because it is the reason the row is empty: the planner was not
+        # asked, so what the planner would have done is beside the point.
+        gone = rv.unhonoured(need)
+        if gone:
+            say('unset', gone)
+            say('note', 'left empty rather than moved — x hands it back '
+                        'to the planner')
+            say('plain')
         say('meta', f'the planner would use {plan.ctrl.label}' if plan
             else 'the planner had nowhere to put it')
         say('plain')
@@ -1543,13 +1633,13 @@ def _loop(scr, rv, write, sticks):
                 # at means nothing now. Every other shape change here
                 # resets to the top; that would lose what you were doing.
                 sel = _row_of(rv, need, sel)
-        elif k == 's':
-            tui.popup('how a control is chosen',
+        elif k in ('y', 'Y'):
+            tui.popup('why a control is chosen',
                    rv.rules_lines(tui.inner()), full=True)
         elif k in ('m', 'M'):
             tui.popup('device map', rv.map_lines(),
                    full=True)
-        elif k in ('w', 'W'):
+        elif k in ('s', 'S'):
             written = _write(scr, tui, rv, write) or written
         elif k == ' ' and need is not None:
             # SPACE was keep/drop before the table grew a third state. It is

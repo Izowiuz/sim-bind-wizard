@@ -17,6 +17,8 @@
 "suits": "fire",
 "dev": "stick",
 "note": "13/13 factory presets, all of them on the stick",
+"held": true,
+"by_feel": true,
 "rank": 13
 },
 {
@@ -35,6 +37,8 @@
 "urgency": 0,
 "suits": "fire",
 "dev": "stick",
+"held": true,
+"by_feel": true,
 "rank": 13
 },
 {
@@ -50,6 +54,7 @@
 "urgency": 0,
 "dev": "throttle",
 "note": "13/13, and every split preset puts it on the throttle",
+"by_feel": true,
 "rank": 13
 },
 {
@@ -68,6 +73,7 @@
 "urgency": 0,
 "suits": "lock",
 "dev": "stick",
+"by_feel": true,
 "rank": 13
 },
 {
@@ -83,6 +89,8 @@
 "urgency": 0,
 "suits": "lock",
 "dev": "stick",
+"rapid": true,
+"by_feel": true,
 "rank": 9
 },
 {
@@ -98,6 +106,7 @@
 "urgency": 0,
 "suits": "lock",
 "dev": "stick",
+"by_feel": true,
 "rank": 5
 },
 {
@@ -140,6 +149,8 @@
 "urgency": 0,
 "dev": "stick",
 "note": "four functions at 13/13; pips are the whole of ED combat",
+"rapid": true,
+"by_feel": true,
 "on": [
 "up",
 "right",
@@ -165,6 +176,8 @@
 ],
 "urgency": 0,
 "dev": "stick",
+"rapid": true,
+"by_feel": true,
 "on": [
 "forward",
 "back"
@@ -183,6 +196,7 @@
 ],
 "urgency": 0,
 "dev": "stick",
+"by_feel": true,
 "rank": 12
 },
 {
@@ -197,6 +211,7 @@
 ],
 "urgency": 0,
 "dev": "throttle",
+"by_feel": true,
 "rank": 3
 },
 {
@@ -211,6 +226,7 @@
 ],
 "urgency": 0,
 "dev": "throttle",
+"by_feel": true,
 "rank": 6
 },
 {
@@ -225,6 +241,7 @@
 ],
 "urgency": 0,
 "dev": "throttle",
+"by_feel": true,
 "rank": 3
 },
 {
@@ -241,6 +258,7 @@
 "suits": "toggle",
 "dev": "throttle",
 "note": "a toggle, so one button: ED has no separate up and down. 9/13, four of five split presets on the throttle",
+"by_feel": true,
 "rank": 9
 },
 {
@@ -275,6 +293,7 @@
 ],
 "urgency": 1,
 "dev": "throttle",
+"by_feel": true,
 "rank": 12
 },
 {
@@ -288,7 +307,8 @@
 ]
 ],
 "urgency": 1,
-"dev": "throttle"
+"dev": "throttle",
+"by_feel": true
 },
 {
 "what": "Reverse throttle",
@@ -305,6 +325,7 @@
 ],
 "urgency": 1,
 "dev": "throttle",
+"by_feel": true,
 "rank": 8
 },
 {
@@ -320,6 +341,7 @@
 "urgency": 1,
 "dev": "throttle",
 "note": "supercruise and hyperspace on one button, as the game intends",
+"by_feel": true,
 "rank": 4
 },
 {
@@ -339,6 +361,8 @@
 ],
 "suits": "sensor",
 "dev": "stick",
+"rapid": true,
+"by_feel": true,
 "on": [
 "forward",
 "back"
@@ -362,6 +386,8 @@
 ],
 "suits": "lock",
 "dev": "stick",
+"rapid": true,
+"by_feel": true,
 "on": [
 "right",
 "left"
@@ -385,6 +411,7 @@
 ],
 "suits": "sensor",
 "dev": "throttle",
+"rapid": true,
 "on": [
 "forward",
 "back"
@@ -544,7 +571,8 @@
 ],
 "urgency": 3,
 "prefer": "Big red button",
-"note": "pinned away from the hand: it throws the cargo out"
+"note": "pinned away from the hand: it throws the cargo out",
+"costly": true
 }
 ]
 }
