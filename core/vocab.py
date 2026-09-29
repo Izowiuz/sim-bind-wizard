@@ -103,15 +103,21 @@ def load(directory, filename, key=None, build=None):
 
 
 def save(directory, filename, **sections):
-    """Write a harvest's output, and say what went where.
+    """Write a harvest's output. Returns (path, what went where).
 
-    Every harvest printed its own variation of this line; one wording means a
-    reader who has seen one has seen them all.
+    It used to print that second half. Every harvest had printed its own
+    variation and one wording is one thing to learn -- but printing it
+    here meant every caller printed, including the review screen, where
+    stdout is the inside of the curses window being drawn. The line
+    landed mid-status, glued to whatever was already there:
+
+        10 assigned by youwrote x4-binds.json: 32 needs
+
+    So it is returned, and the caller with a terminal prints it.
     """
     path = os.path.join(directory, filename)
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(sections, f, ensure_ascii=False, indent=0)
     sizes = ', '.join(f'{len(v)} {k}' for k, v in sections.items()
                       if hasattr(v, '__len__'))
-    print(f'wrote {filename}: {sizes}')
-    return path
+    return path, f'wrote {filename}: {sizes}'

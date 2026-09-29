@@ -351,10 +351,9 @@ def _sheet(layout):
         label = g.label if g else dev.axis_label(idx)
         if cell['inv']:
             label += ' (inverted)'
-        sh.add_axis(csheet.AxisRow(
-            role, label, ident=str(off[role][0] + idx),
-            does=' / '.join(filter(None, [' · '.join(cell['Air']),
-                                          ' · '.join(cell['Helicopter'])]))))
+        for ctx in ('Air', 'Helicopter'):
+            for name in cell[ctx]:
+                sh.add_axis(role, label, str(off[role][0] + idx), name, ctx)
 
     sh.note('Check in flight', [
         ('Elevator trim', 'hat forward should drop the nose, the way it does '
@@ -366,9 +365,10 @@ def _sheet(layout):
     sh.note('Undo', 'Run ./wt-bind-preset.py --restore with the game closed.')
     sh.unplaced = [(n.what, n.shape if isinstance(n.shape, str)
                     else '/'.join(n.shape)) for n in unmet]
-    sh.free = [(role, c.label,
-                ', '.join(str(off[role][1] + x) for x in c.bindable_buttons),
-                corneeds.reach_said(c)) for role, c in free]
+    for role, c in free:
+        sh.add_free(role, c.label,
+                    ', '.join(str(off[role][1] + x)
+                              for x in c.bindable_buttons))
     return sh
 
 

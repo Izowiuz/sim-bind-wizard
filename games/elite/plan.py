@@ -353,28 +353,14 @@ def _sheet(layout):
 
     for func, ctx, role, a, invert in axes:
         g = devs[role].axis_group(a.index)
-        sh.add_axis(csheet.AxisRow(
-            role, g.label if g else a.label,
-            ident=f'axis {a.index}',
-            does=f'{ctx}: {harvest.readable(func)}'
-                 + (' (inverted)' if invert else '')))
+        sh.add_axis(role, g.label if g else a.label, f'axis {a.index}',
+                    harvest.readable(func)
+                    + (' (inverted)' if invert else ''), ctx)
 
-    sh.free = [(r, c.label, '', corneeds.reach_said(c)) for r, c in free]
+    for r, c in free:
+        sh.add_free(r, c.label)
     sh.unplaced = [(n.what, n.shape if isinstance(n.shape, str)
                     else '/'.join(n.shape)) for n in unmet]
-    sh.note('Writing it', [
-        ('Preset', f'{PRESET} — the capture TUI owns whatever you bound by '
-                   'hand, so neither overwrites the other.'),
-        ('Selecting it', 'Elite records the active preset in '
-                         'StartPreset.4.start, which nothing here writes: '
-                         'choose it once in the game\'s control options.'),
-        ('Contexts', 'A function name carries its own context — an SRV '
-                     'binding is a `_Buggy` suffix or a `Buggy` prefix — so '
-                     'one control means both without clashing.'),
-        ('Ranking', 'Counted from the 13 HOTAS presets Elite ships, five of '
-                    'which name the stick and the throttle separately and so '
-                    'say which device a function belongs on.'),
-    ])
     return sh
 
 

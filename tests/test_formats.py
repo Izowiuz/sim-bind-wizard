@@ -440,3 +440,161 @@ class BmsText(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TheKneeboardPanels(unittest.TestCase):
+    """What a sheet shows, in both formats it writes.
+
+    `Left free` carried a reach column: `index, the hand off the grip,
+    still on the device`, fifteen rows of it beside fifteen control names.
+    A column is for something you scan; that was an essay, and what it
+    answered the control's own name answers better.
+
+    Nothing held the row shape together -- four adapters built the tuple
+    and one renderer unpacked it -- so taking a field out meant changing
+    five places and hoping. `add_free` is what holds them now.
+    """
+
+    def contextual(self):
+        """A sheet for a game with more than one context."""
+        from core import sheet as csheet
+        sh = csheet.Sheet('Test', 'fake hardware', ident='DX',
+                          contexts=('Ship', 'On foot'),
+                          devices={'stick': 'A Stick'})
+        sh.add(csheet.Row('stick', 'Thumb hat', 'up', '23', 'CMS',
+                          {'Ship': 'Chaff', 'On foot': 'Torch'}))
+        sh.add_axis('stick', 'Main stick', 'X', 'Roll', 'Ship')
+        sh.add_axis('stick', 'Main stick', 'X', 'Strafe', 'On foot')
+        return sh
+
+    def sheet(self):
+        from core import sheet as csheet
+        sh = csheet.Sheet('Test', 'fake hardware', ident='DX',
+                          devices={'stick': 'A Stick', 'rudder': 'Pedals'})
+        sh.add(csheet.Row('stick', 'Thumb hat', 'up', '23', 'CMS',
+                          {'': 'SimCMSUp'}))
+        sh.add_axis('stick', 'Main stick', 'X', 'Roll')
+        # A device with axes and no buttons at all: pedals are exactly
+        # that, and they used to vanish because the panels were built
+        # from the button rows alone.
+        sh.add_axis('rudder', 'Pedals', 'RZ', 'Yaw')
+        sh.add_free('throttle', 'T3 rocker', '65, 66')
+        return sh
+
+    def panels(self, said):
+        """{device heading: what follows it}, for either format."""
+        import re
+        heads = re.split(r'<h2>|^## ', said, flags=re.M)
+        return {h.split('</h2>')[0].split('\n')[0].strip(): h
+                for h in heads[1:]}
+
+    def written(self, how):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, 'out')
+            getattr(self.sheet(), how)(path)
+            with open(path, encoding='utf-8') as f:
+                return f.read()
+
+    def test_the_free_panel_names_the_control_and_its_number(self):
+        for how in ('markdown', 'html'):
+            with self.subTest(format=how):
+                said = self.written(how)
+                self.assertIn('T3 rocker', said)
+                self.assertIn('65, 66', said)
+
+    def test_and_says_nothing_about_reach(self):
+        for how in ('markdown', 'html'):
+            with self.subTest(format=how):
+                said = self.written(how)
+                self.assertNotIn('Reach', said)
+                self.assertNotIn('the hand off the grip', said)
+
+    def test_an_axis_sits_under_its_own_device(self):
+        # Axes had a panel of their own, off at the bottom with the
+        # leftovers -- a fact about how the file grew, not about the
+        # hardware. A kneeboard answers "what does this stick do".
+        for how in ('markdown', 'html'):
+            with self.subTest(format=how):
+                panels = self.panels(self.written(how))
+                self.assertIn('Main stick', panels['A Stick'])
+                self.assertNotIn('Main stick', panels.get('Pedals', ''))
+
+    def test_a_device_with_only_axes_still_gets_a_panel(self):
+        # The panels were built from the button rows, so a device with
+        # nothing but axes on it had nowhere to appear at all.
+        for how in ('markdown', 'html'):
+            with self.subTest(format=how):
+                panels = self.panels(self.written(how))
+                self.assertIn('Pedals', panels)
+                self.assertIn('Yaw', panels['Pedals'])
+
+    def test_there_is_no_panel_of_loose_axes(self):
+        # A device's own section may head one `### Axes`; what is gone is
+        # the panel that stood beside the devices and held all of them.
+        import re
+        for how in ('markdown', 'html'):
+            with self.subTest(format=how):
+                said = self.written(how)
+                self.assertNotIn('<h2>Axes</h2>', said)
+                self.assertIsNone(re.search(r'^## Axes$', said, re.M))
+
+    def test_an_axis_answers_each_context_in_its_own_column(self):
+        # The buttons had a column per context and the axes wrote the
+        # context into the text -- `Ship: Steering pitch` -- and listed
+        # one physical lever once per context. Two halves of one sheet
+        # answering the same question two ways.
+        import tempfile
+        for how in ('markdown', 'html'):
+            with self.subTest(format=how):
+                with tempfile.TemporaryDirectory() as d:
+                    path = os.path.join(d, 'out')
+                    getattr(self.contextual(), how)(path)
+                    with open(path, encoding='utf-8') as f:
+                        said = f.read()
+                self.assertIn('Roll', said)
+                self.assertIn('Strafe', said)
+                # One row for the lever, not one per context, and the
+                # context named by the column rather than by the text.
+                self.assertNotIn('Ship: Roll', said)
+                self.assertEqual(1, said.count('Main stick'))
+
+    def test_an_axis_that_does_two_things_in_one_context_says_both(self):
+        # Elite's main stick answers the SRV with both `Buggy roll axis`
+        # and `Steering axis` on axis 0. Five games each merged this for
+        # themselves and one of the five assigned instead of collecting,
+        # so it kept whichever came last. The merge is `Sheet.add_axis`'s
+        # job now, which is why one test covers all five.
+        from core import sheet as csheet
+        import tempfile
+        sh = csheet.Sheet('Test', '', ident='DX', devices={'stick': 'A Stick'})
+        sh.add_axis('stick', 'Main stick', 'X', 'Roll')
+        sh.add_axis('stick', 'Main stick', 'X', 'Steering')
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, 'out')
+            sh.markdown(path)
+            with open(path, encoding='utf-8') as f:
+                said = f.read()
+        self.assertIn('Roll', said)
+        self.assertIn('Steering', said)
+
+    def test_the_leftovers_are_grouped_by_device(self):
+        # One run of fifteen control names made you work out which stick
+        # each was on, which is what the panels answer for everything
+        # that got a binding.
+        for how in ('markdown', 'html'):
+            with self.subTest(format=how):
+                said = self.written(how)
+                self.assertIn('T3 rocker', said)
+                # Named by its device, not lumped in one list.
+                head = said.split('T3 rocker')[0]
+                self.assertIn('throttle', head)
+
+    def test_a_row_of_the_wrong_shape_fails_where_it_is_written(self):
+        # Not at render time, three files away from the mistake. Splatted
+        # so the type checker does not read the deliberate mistake as a
+        # real one -- this repo carries no ignore comments and a test is
+        # a poor place to start.
+        four = ['stick', 'T1 rocker', '1, 2', 'thumb']
+        with self.assertRaises(TypeError):
+            self.sheet().add_free(*four)

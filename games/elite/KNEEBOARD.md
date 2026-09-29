@@ -2,26 +2,19 @@
 
 Elite Dangerous · VIRPIL. Generated — do not edit, regenerate.
 
-## Axes
+## R-VPC Stick WarBRD-D
 
-| Control | Joy | Does |
-|---|---|---|
-| Main stick | `axis 0` | Ship: Roll axis raw |
-| Main stick | `axis 1` | Ship: Pitch axis raw (inverted) |
-| Main stick | `axis 2` | Ship: Yaw axis raw |
-| Left throttle lever | `axis 2` | Ship: Throttle axis |
-| Thumb mini-stick | `axis 0` | Ship: Lateral thrust raw |
-| Thumb mini-stick | `axis 1` | Ship: Vertical thrust raw |
-| Main stick | `axis 0` | SRV: Buggy roll axis raw |
-| Main stick | `axis 1` | SRV: Buggy pitch axis (inverted) |
-| Main stick | `axis 0` | SRV: Steering axis |
-| Left throttle lever | `axis 2` | SRV: Drive speed axis |
-| Mini-stick | `axis 3` | Ship: Cam translate x axis |
-| Mini-stick | `axis 4` | Ship: Cam translate y axis |
+### Axes
 
-## Buttons
+| Axis | Joy | Ship | SRV |
+|---|---|---|---|
+| Main stick | `axis 0` | Roll axis raw | Buggy roll axis raw · Steering axis |
+| Main stick | `axis 1` | Pitch axis raw (inverted) | Buggy pitch axis (inverted) |
+| Main stick | `axis 2` | Yaw axis raw | — |
+| Mini-stick | `axis 3` | Cam translate x axis | — |
+| Mini-stick | `axis 4` | Cam translate y axis | — |
 
-### R-VPC Stick WarBRD-D
+### Buttons
 
 | Joy | Control | Ship | SRV |
 |---|---|---|---|
@@ -43,7 +36,17 @@ Elite Dangerous · VIRPIL. Generated — do not edit, regenerate.
 | Joy_10 | Top thumb hat — left | Increase engines power | Increase engines power buggy |
 | Joy_8 | Top thumb hat — push | Select target | Select target buggy |
 
-### L-VPC VMAX Prime Throttle
+## L-VPC VMAX Prime Throttle
+
+### Axes
+
+| Axis | Joy | Ship | SRV |
+|---|---|---|---|
+| Left throttle lever | `axis 2` | Throttle axis | Drive speed axis |
+| Thumb mini-stick | `axis 0` | Lateral thrust raw | — |
+| Thumb mini-stick | `axis 1` | Vertical thrust raw | — |
+
+### Buttons
 
 | Joy | Control | Ship | SRV |
 |---|---|---|---|
@@ -70,28 +73,26 @@ Elite Dangerous · VIRPIL. Generated — do not edit, regenerate.
 | Joy_11 | Thumb two-way hat — fwd | Radar increase range | — |
 | Joy_13 | Thumb two-way hat — aft | Radar decrease range | — |
 
-## Writing it
-
-- **Preset** — Izowiuz-PLAN — the capture TUI owns whatever you bound by hand, so neither overwrites the other.
-- **Selecting it** — Elite records the active preset in StartPreset.4.start, which nothing here writes: choose it once in the game's control options.
-- **Contexts** — A function name carries its own context — an SRV binding is a `_Buggy` suffix or a `Buggy` prefix — so one control means both without clashing.
-- **Ranking** — Counted from the 13 HOTAS presets Elite ships, five of which name the stick and the throttle separately and so say which device a function belongs on.
-
 ## Still free
 
-- Trigger initial lever (stick) — no buttons
-- Main stick (stick) — no buttons
-- Mini-stick (stick) — no buttons
-- Stick encoder and click (stick) — no buttons
-- Analogue brake lever on the grip (stick) — no buttons
-- Left throttle lever (throttle) — no buttons
-- Right throttle lever (throttle) — no buttons
-- Side lever (throttle) — no buttons
-- Middle finger hat (throttle) — no buttons
-- T1 rocker (throttle) — no buttons
-- T2 rocker (throttle) — no buttons
-- T5 rocker (throttle) — no buttons
-- E1 encoder (throttle) — no buttons
-- E2 encoder (throttle) — no buttons
-- Mode selector (throttle) — no buttons
+### R-VPC Stick WarBRD-D
+
+- Trigger initial lever — no buttons
+- Main stick — no buttons
+- Mini-stick — no buttons
+- Stick encoder and click — no buttons
+- Analogue brake lever on the grip — no buttons
+
+### L-VPC VMAX Prime Throttle
+
+- Left throttle lever — no buttons
+- Right throttle lever — no buttons
+- Side lever — no buttons
+- Middle finger hat — no buttons
+- T1 rocker — no buttons
+- T2 rocker — no buttons
+- T5 rocker — no buttons
+- E1 encoder — no buttons
+- E2 encoder — no buttons
+- Mode selector — no buttons
 

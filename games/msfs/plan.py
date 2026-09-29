@@ -380,15 +380,14 @@ def _sheet(layout):
     for ctx, action, role, ax in axes:
         pair = AXIS_CODE.get(ax.hid)
         g = devs[role].axis_group(ax.index)
-        sh.add_axis(csheet.AxisRow(role, g.label if g else ax.label,
-                                   ident=(pair[0] if pair else ax.hid),
-                                   does=action))
+        sh.add_axis(role, g.label if g else ax.label,
+                    pair[0] if pair else ax.hid, action,
+                    #  is the sheet's own spelling for the
+                    # unnamed context, which is what no context is.
+                    CTX.get(ctx, ctx) or '')
 
     sh.unplaced = [(n.what, n.shape if isinstance(n.shape, str)
                     else '/'.join(n.shape)) for n in unmet]
-    sh.note('Writing it', 'Close Steam first -- it syncs these files from the '
-                          'cloud and will overwrite what we write. '
-                          './plan.py --write')
     return sh
 
 

@@ -14,6 +14,11 @@
 "suits": "fire",
 "dev": "stick",
 "note": "already on the stick by hand; the trigger is what it is for",
+"yours": {
+"role": "stick",
+"control": "main-trigger",
+"how": "accepted"
+},
 "held": true,
 "by_feel": true
 },
@@ -30,6 +35,11 @@
 "urgency": 0,
 "suits": "fire",
 "dev": "stick",
+"yours": {
+"role": "stick",
+"control": "thumb-bottom-button",
+"how": "accepted"
+},
 "held": true,
 "by_feel": true
 },
@@ -50,6 +60,11 @@
 "suits": "reflex",
 "dev": "throttle",
 "note": "held, not tapped, so it wants a button you can hold",
+"yours": {
+"role": "throttle",
+"control": "bottom-thumb-button",
+"how": "accepted"
+},
 "held": true,
 "by_feel": true
 },
@@ -66,39 +81,12 @@
 "urgency": 0,
 "suits": "lock",
 "dev": "stick",
+"yours": {
+"role": "stick",
+"control": "thumb-top-button",
+"how": "accepted"
+},
 "rapid": true,
-"by_feel": true
-},
-{
-"what": "Target under cursor",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_TARGET_NEXT_TARGET"
-},
-{
-"action": "INPUT_STATE_MAP_SELECT"
-}
-]
-],
-"urgency": 0,
-"suits": "lock",
-"dev": "stick",
-"by_feel": true
-},
-{
-"what": "Countermeasure",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_DEPLOY_COUNTERMEASURE"
-}
-]
-],
-"urgency": 0,
-"dev": "stick",
 "by_feel": true
 },
 {
@@ -129,6 +117,11 @@
 "urgency": 0,
 "dev": "stick",
 "note": "the axes get it too; the hat is for a precise nudge",
+"yours": {
+"role": "stick",
+"control": "top-thumb-hat",
+"how": "accepted"
+},
 "held": true,
 "by_feel": true,
 "on": [
@@ -155,6 +148,11 @@
 ],
 "urgency": 0,
 "dev": "stick",
+"yours": {
+"role": "stick",
+"control": "bottom-thumb-hat",
+"how": "accepted"
+},
 "rapid": true,
 "by_feel": true,
 "on": [
@@ -178,6 +176,11 @@
 ]
 ],
 "urgency": 0,
+"yours": {
+"role": "throttle",
+"control": "thumb-two-way-hat",
+"how": "accepted"
+},
 "rapid": true,
 "by_feel": true,
 "on": [
@@ -198,6 +201,11 @@
 "urgency": 0,
 "dev": "throttle",
 "note": "latches in the game (toggle=\"1\"), so a plain button is right",
+"yours": {
+"role": "throttle",
+"control": "middle-finger-button",
+"how": "accepted"
+},
 "by_feel": true
 },
 {
@@ -212,6 +220,11 @@
 ],
 "urgency": 1,
 "dev": "throttle",
+"yours": {
+"role": "throttle",
+"control": "thumb-button",
+"how": "accepted"
+},
 "by_feel": true
 },
 {
@@ -226,6 +239,11 @@
 ],
 "urgency": 1,
 "dev": "throttle",
+"yours": {
+"role": "throttle",
+"control": "left-side-dial",
+"how": "accepted"
+},
 "by_feel": true
 },
 {
@@ -245,6 +263,11 @@
 ],
 "urgency": 1,
 "dev": "throttle",
+"yours": {
+"role": "throttle",
+"control": "t4-rocker",
+"how": "accepted"
+},
 "on": [
 "forward",
 "back"
@@ -261,7 +284,12 @@
 ]
 ],
 "urgency": 1,
-"dev": "throttle"
+"dev": "throttle",
+"yours": {
+"role": "throttle",
+"control": "keyboard-b1-button",
+"how": "accepted"
+}
 },
 {
 "what": "Target action",
@@ -280,6 +308,11 @@
 ],
 "urgency": 1,
 "dev": "stick",
+"yours": {
+"role": "throttle",
+"control": "t3-rocker",
+"how": "accepted"
+},
 "on": [
 "forward",
 "back"
@@ -302,6 +335,11 @@
 ],
 "urgency": 1,
 "dev": "stick",
+"yours": {
+"role": "stick",
+"control": "grip-thumb-hat",
+"how": "accepted"
+},
 "rapid": true,
 "on": [
 "right",
@@ -323,6 +361,11 @@
 ],
 "urgency": 1,
 "dev": "stick",
+"yours": {
+"role": "stick",
+"control": "bottom-thumb-hat",
+"how": "accepted"
+},
 "by_feel": true
 },
 {
@@ -335,7 +378,12 @@
 }
 ]
 ],
-"dev": "throttle"
+"dev": "throttle",
+"yours": {
+"role": "throttle",
+"control": "big-red-button",
+"how": "accepted"
+}
 },
 {
 "what": "Long-range scan",
@@ -347,7 +395,12 @@
 }
 ]
 ],
-"dev": "throttle"
+"dev": "throttle",
+"yours": {
+"role": "throttle",
+"control": "keyboard-b4-button",
+"how": "accepted"
+}
 },
 {
 "what": "Scan action",
@@ -358,7 +411,12 @@
 "action": "INPUT_ACTION_SCAN_ACTION"
 }
 ]
-]
+],
+"yours": {
+"role": "throttle",
+"control": "pinky-button",
+"how": "accepted"
+}
 },
 {
 "what": "SETA",
@@ -370,7 +428,12 @@
 }
 ]
 ],
-"dev": "throttle"
+"dev": "throttle",
+"yours": {
+"role": "throttle",
+"control": "right-side-dial",
+"how": "accepted"
+}
 },
 {
 "what": "Map",
@@ -382,18 +445,12 @@
 }
 ]
 ],
-"note": "the one menu worth a hand"
-},
-{
-"what": "Comms",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_COMM_ACTION"
+"note": "the one menu worth a hand",
+"yours": {
+"role": "throttle",
+"control": "keyboard-b3-button",
+"how": "accepted"
 }
-]
-]
 },
 {
 "what": "View",
@@ -427,20 +484,13 @@
 ]
 ],
 "suits": "view",
+"yours": {
+"role": "throttle",
+"control": "thumb-hat",
+"how": "accepted"
+},
 "rapid": true,
 "by_feel": true
-},
-{
-"what": "Zoom goggles",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_ZOOMGOGGLES"
-}
-]
-],
-"suits": "view"
 },
 {
 "what": "Map rotate",
@@ -455,7 +505,12 @@
 [],
 []
 ],
-"note": "only answers in the map; harmless in flight"
+"note": "only answers in the map; harmless in flight",
+"yours": {
+"role": "throttle",
+"control": "mode-selector",
+"how": "accepted"
+}
 },
 {
 "what": "Cockpit menu",
@@ -467,31 +522,12 @@
 }
 ]
 ],
-"urgency": 3
-},
-{
-"what": "Player ship info",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_OPEN_PLAYERSHIP_INFO"
+"urgency": 3,
+"yours": {
+"role": "throttle",
+"control": "keyboard-b2-button",
+"how": "accepted"
 }
-]
-],
-"urgency": 3
-},
-{
-"what": "Missions",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_OPEN_MISSIONS"
-}
-]
-],
-"urgency": 3
 },
 {
 "what": "Quicksave",
@@ -504,7 +540,12 @@
 ]
 ],
 "urgency": 3,
-"note": "deliberately far from the hand"
+"note": "deliberately far from the hand",
+"yours": {
+"role": "throttle",
+"control": "apu-button",
+"how": "accepted"
+}
 },
 {
 "what": "Pause",
@@ -516,7 +557,12 @@
 }
 ]
 ],
-"urgency": 3
+"urgency": 3,
+"yours": {
+"role": "stick",
+"control": "bottom-thumb-hat",
+"how": "accepted"
+}
 },
 {
 "what": "Jump / crouch",
@@ -534,10 +580,124 @@
 ]
 ],
 "urgency": 3,
+"yours": {
+"role": "throttle",
+"control": "t5-rocker",
+"how": "accepted"
+},
 "on": [
 "forward",
 "back"
 ]
+},
+{
+"what": "Player ship info",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_OPEN_PLAYERSHIP_INFO"
+}
+]
+],
+"urgency": 3,
+"yours": {
+"role": "stick",
+"control": "grip-thumb-hat",
+"how": "accepted"
+}
+},
+{
+"what": "Target under cursor",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_TARGET_NEXT_TARGET"
+},
+{
+"action": "INPUT_STATE_MAP_SELECT"
+}
+]
+],
+"urgency": 0,
+"suits": "lock",
+"dev": "stick",
+"yours": {
+"role": "stick",
+"control": "top-thumb-hat",
+"how": "accepted"
+},
+"by_feel": true
+},
+{
+"what": "Countermeasure",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_DEPLOY_COUNTERMEASURE"
+}
+]
+],
+"urgency": 0,
+"dev": "stick",
+"yours": {
+"role": "stick",
+"control": "grip-pinky-button",
+"how": "accepted"
+},
+"by_feel": true
+},
+{
+"what": "Comms",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_COMM_ACTION"
+}
+]
+],
+"yours": {
+"role": "throttle",
+"control": "keyboard-b5-button",
+"how": "accepted"
+}
+},
+{
+"what": "Zoom goggles",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_ZOOMGOGGLES"
+}
+]
+],
+"suits": "view",
+"yours": {
+"role": "throttle",
+"control": "keyboard-b6-button",
+"how": "accepted"
+}
+},
+{
+"what": "Missions",
+"shape": "button",
+"bindings": [
+[
+{
+"action": "INPUT_ACTION_OPEN_MISSIONS"
+}
+]
+],
+"urgency": 3,
+"yours": {
+"role": "stick",
+"control": "bottom-thumb-hat",
+"how": "accepted"
+}
 }
 ]
 }

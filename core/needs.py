@@ -393,7 +393,9 @@ def save_needs(directory, filename, needs, also=()):
     until this existed, promoting an action lasted until `q`.
     """
     from core import vocab
-    return vocab.save(directory, filename, needs=dump_needs(needs, also))
+    path, _said = vocab.save(directory, filename,
+                             needs=dump_needs(needs, also))
+    return path
 
 
 def read_needs(rows, also=(), make=None):
@@ -1170,9 +1172,18 @@ def allocate(needs, devices, usable=None, rules=None, solver=None):
     #: pinky button and still lost it to the landing lights, because they are
     #: touched on approach and it is not. An explicit choice has to outrank the
     #: ordering as well as the ranking, or it is not a choice.
+    # `what` last, and it is load-bearing. Without it this is not a total
+    # order, `sorted` is stable, and every tie falls back to the order the
+    # needs happen to sit in the file -- so the layout was a function of
+    # the file's line order. Moving two lines about moved bindings, and
+    # the review screen moved them itself: it saves the list back in
+    # PLACEMENT order, so every save reshuffled the ties, and the next
+    # open placed them differently. X4 came back with four rows purple
+    # after a save that changed nothing but the order they were written
+    # in. Nothing in a layout should turn on that.
     order = sorted((i for i in range(len(needs)) if i not in chose),
                    key=lambda i: (needs[i].prefer is None, needs[i].urgency,
-                                  -needs[i].rank))
+                                  -needs[i].rank, needs[i].what))
 
     def offers(i, floor):
         """{pool index: points} -- where this need may go, and what each

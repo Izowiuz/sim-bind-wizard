@@ -61,11 +61,21 @@ class Row:
 
 @dataclass
 class AxisRow:
+    """One axis, and what it does in each context.
+
+    The same shape as `Row`, and it was not: `does` was one string, so a
+    game whose axis means different things in different contexts had to
+    write the context INTO the text -- `Ship: Steering pitch` -- and list
+    the same physical lever once per context. Beside a button table with
+    a column per context, the two halves of one sheet answered the same
+    question two different ways. X4's own comment owned up to it.
+    """
     role: str
     control: str
     ident: str = ''                 # SLIDER1, WT 24, L-Axis X
-    does: str = ''                  # the game's axis name
-    note: str = ''
+    #: context -> what the axis does there. A game with one context uses
+    #: the empty-string key, exactly as `Row` does.
+    bindings: dict = field(default_factory=dict)
 
 
 class Sheet:
@@ -80,25 +90,85 @@ class Sheet:
         self.rows = []
         self.axes = []
         self.notes = []             # (heading, [(term, text)]) or (heading, text)
-        self.free = []              # (role, control, ident, reach)
+        self.free = []              # (role, control, ident)
         self.unplaced = []          # (what, wanted)
 
     # ---- building ----
     def add(self, row):
         self.rows.append(row)
 
-    def add_axis(self, row):
-        self.axes.append(row)
+    def add_axis(self, role, control, ident, does, context=''):
+        """One thing an axis does, merged onto that axis's row.
+
+        Games hand these over one at a time, because that is how their
+        own config reads them -- and one physical lever is one row, with
+        what it does in each context as a column. So the same
+        (role, control, ident) twice is not two rows.
+
+        Collected into a list, never assigned. Elite's main stick answers
+        the SRV with `Buggy roll axis raw` AND `Steering axis`, both on
+        axis 0, and assigning kept whichever came last. Five games each
+        merged this for themselves before it lived here; one of the five
+        had the bug.
+        """
+        for row in self.axes:
+            if (row.role, row.control, row.ident) == (role, control, ident):
+                break
+        else:
+            row = AxisRow(role, control, ident)
+            self.axes.append(row)
+        row.bindings.setdefault(context, []).append(does)
+
+    def add_free(self, role, control, ident=''):
+        """One control nothing was put on.
+
+        A method rather than four adapters each building the tuple: they
+        did, and the tuple carried a fifth field -- how far the control is
+        -- rendered as `index, the hand off the grip, still on the device`
+        in a column beside a control's name. Fifteen rows of that is not a
+        column, it is an essay nobody reads, and what it answered ("could
+        I still use this?") the control's own name answers better.
+
+        Taking it out meant changing the shape in five places at once,
+        with nothing holding them together. Now there is: pass the wrong
+        number here and it fails at the call, naming the caller.
+        """
+        self.free.append((role, control, ident))
 
     def note(self, heading, body):
         self.notes.append((heading, body))
 
     # ---- shared shaping ----
     def _roles(self):
+        """Every device with anything on it, in the order it turns up.
+
+        Axes count. They used to have a panel of their own, off at the
+        bottom with the leftovers, which is a fact about how this file
+        grew and not about the hardware: an axis is part of a device the
+        same way a button is, and the question a kneeboard answers is
+        "what does this stick do", not "what do the buttons do".
+        """
         seen = []
-        for r in self.rows:
+        for r in list(self.rows) + list(self.axes):
             if r.role not in seen:
                 seen.append(r.role)
+        return seen
+
+    def _axes_of(self, role):
+        return [a for a in self.axes if a.role == role]
+
+    def _free_roles(self):
+        """Devices with something spare, the bound ones first.
+
+        Not `_roles()`: a device nothing was put on has no panel, and
+        grouping the leftovers by that list dropped its controls off the
+        sheet altogether -- which is the one list they belonged on.
+        """
+        seen = [r for r in self._roles()
+                if any(x == r for x, _c, _i in self.free)]
+        for role, _c, _i in self.free:
+            if role not in seen:
+                seen.append(role)
         return seen
 
     def _cell(self, row, ctx):
@@ -116,22 +186,33 @@ class Sheet:
         named = [c for c in self.contexts if c]
         L = [f'# {self.title}', '',
              f'{self.subtitle}. Generated — do not edit, regenerate.', '']
-        if self.axes:
-            L += ['## Axes', '',
-                  f'| Control | {self.ident} | Does |', '|---|---|---|']
-            for a in self.axes:
-                L.append(f'| {a.control} | `{a.ident}` | {a.does} |')
-            L.append('')
-        L += ['## Buttons', '']
         for role in self._roles():
-            L += [f'### {self.devices.get(role, role)}', '']
+            L += [f'## {self.devices.get(role, role)}', '']
+            axes = self._axes_of(role)
+            if axes:
+                L += ['### Axes', '']
+                if named:
+                    L += ['| ' + ' | '.join(['Axis', self.ident] + named)
+                          + ' |', '|' + '---|' * (2 + len(named))]
+                else:
+                    L += [f'| Axis | {self.ident} | Does |', '|---|---|---|']
+                for a in axes:
+                    cells = ([self._cell(a, c) or '—' for c in named]
+                             if named else [self._cell(a, '')])
+                    L.append(f'| {a.control} | `{a.ident}` | '
+                             + ' | '.join(cells) + ' |')
+                L.append('')
+            mine = [x for x in self.rows if x.role == role]
+            if not mine:
+                continue
+            L += ['### Buttons', '']
             if named:
                 L += ['| ' + ' | '.join([self.ident, 'Control'] + named) + ' |',
                       '|' + '---|' * (2 + len(named))]
             else:
                 L += [f'| {self.ident} | Control | Does | Binding |',
                       '|---|---|---|---|']
-            for r in (x for x in self.rows if x.role == role):
+            for r in mine:
                 ctrl = f'{r.control}' + (f' — {r.part}' if r.part else '')
                 if named:
                     cells = [self._cell(r, c) or '—' for c in named]
@@ -153,9 +234,13 @@ class Sheet:
             L += ['## Not placed', ''] + \
                  [f'- {w} (wanted a `{s}`)' for w, s in self.unplaced] + ['']
         if self.free:
-            L += ['## Still free', ''] + \
-                 [f'- {c} ({role}) — {i or "no buttons"}'
-                  for role, c, i, _reach in self.free] + ['']
+            L += ['## Still free', '']
+            for role in self._free_roles():
+                mine = [(c, i) for r, c, i in self.free if r == role]
+                if not mine:
+                    continue
+                L += [f'### {self.devices.get(role, role)}', '']
+                L += [f'- {c} — {i or "no buttons"}' for c, i in mine] + ['']
         open(path, 'w', encoding='utf-8').write('\n'.join(L) + '\n')
         return path, len(self.rows), len(self.axes)
 
@@ -186,25 +271,51 @@ class Sheet:
                 cells.append(f'<td>{does}<span class="cb">{b}</span></td>')
             out.append('<tr>' + ''.join(cells) + '</tr>')
         title = esc(self.devices.get(role, role))
-        return (f'<div class="panel"><h2>{title}</h2><table>'
-                f'<tr>{th}</tr>' + ''.join(out) + '</table></div>')
+        # The axes first: they are the flight controls, and the buttons
+        # are what you reach for while already holding them. Two tables
+        # rather than one because the columns are not the same question --
+        # an axis has no context split and no press order -- and each
+        # header row names which is which without a label to read.
+        tables = ''
+        axes = self._axes_of(role)
+        if axes:
+            ahead = ''.join(
+                f'<th{cls if named and i > 1 else ""}>{esc(h)}</th>'
+                for i, h in enumerate(['Axis', self.ident]
+                                      + (named or ['Does'])))
+            arows = ''
+            for a in axes:
+                cells = [f'<td class="c">{esc(a.control)}</td>',
+                         f'<td class="n">{esc(a.ident)}</td>']
+                for c in (named or ['']):
+                    v = self._cell(a, c)
+                    cells.append(f'<td{"" if v else " class=\"none\""}>'
+                                 f'{esc(v) or "—"}</td>')
+                arows += '<tr>' + ''.join(cells) + '</tr>'
+            tables += f'<table><tr>{ahead}</tr>{arows}</table>'
+        if out:
+            tables += f'<table><tr>{th}</tr>' + ''.join(out) + '</table>'
+        return f'<div class="panel"><h2>{title}</h2>{tables}</div>'
 
     def html(self, path, template=None):
         tpl = open(template or TEMPLATE, encoding='utf-8').read()
-        arows = ''.join(
-            f'<tr><td class="c">{esc(a.control)}</td>'
-            f'<td class="n">{esc(a.ident)}</td><td>{esc(a.does)}</td></tr>'
-            for a in self.axes)
-        axes = (f'<div class="panel"><h2>Axes</h2><table><tr><th>Control</th>'
-                f'<th>{esc(self.ident)}</th><th>Does</th></tr>'
-                f'{arows}</table></div>') if self.axes else ''
-        frows = ''.join(
-            f'<tr><td class="c">{esc(c)}</td><td class="n">{esc(i) or "—"}</td>'
-            f'<td class="h">{esc(reach)}</td></tr>'
-            for _role, c, i, reach in self.free)
-        free = (f'<div class="panel"><h2>Left free</h2><table><tr>'
-                f'<th>Control</th><th>{esc(self.ident)}</th><th>Reach</th></tr>'
-                f'{frows}</table></div>') if self.free else ''
+        # By device, like everything else on the sheet. One run of
+        # fifteen control names made you work out which stick each was
+        # on, which is the question the panels above already answer for
+        # every control that got something.
+        ftables = ''
+        for role in self._free_roles():
+            mine = [(c, i) for r, c, i in self.free if r == role]
+            if not mine:
+                continue
+            frows = ''.join(f'<tr><td class="c">{esc(c)}</td>'
+                            f'<td class="n">{esc(i) or "—"}</td></tr>'
+                            for c, i in mine)
+            ftables += (f'<table><tr><th>{esc(self.devices.get(role, role))}'
+                        f'</th><th>{esc(self.ident)}</th></tr>'
+                        f'{frows}</table>')
+        free = (f'<div class="panel"><h2>Left free</h2>{ftables}</div>'
+                if ftables else '')
         notes = ''
         for heading, body in self.notes:
             if isinstance(body, (list, tuple)):
@@ -220,7 +331,6 @@ class Sheet:
                   .replace('__SUBTITLE__', self.subtitle)
                   .replace('__PANELS__', ''.join(self._panel(r)
                                                  for r in self._roles()))
-                  .replace('__AXES__', axes)
                   .replace('__FREE__', free)
                   .replace('__NOTES__', notes)
                   .replace('__STAMP__', esc(self._stamp())))

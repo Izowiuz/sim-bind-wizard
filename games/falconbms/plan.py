@@ -702,8 +702,7 @@ def _sheet(layout):
 
     for name, role, a_, di in axes:
         g = devs[role].axis_group(a_.index)
-        sh.add_axis(csheet.AxisRow(role, g.label if g else a_.label,
-                                   ident=di, does=name))
+        sh.add_axis(role, g.label if g else a_.label, di, name)
 
     for b in sorted(binds, key=lambda x: x['dx']):
         sh.add(csheet.Row(
@@ -719,9 +718,10 @@ def _sheet(layout):
             'Regenerate with ./plan.py --write; never hand-edit.')
     sh.unplaced = [(n.what, n.shape if isinstance(n.shape, str)
                     else '/'.join(n.shape)) for n in unmet]
-    sh.free = [(role, c.label,
-                ', '.join(str(off[role] + x) for x in c.bindable_buttons),
-                corneeds.reach_said(c)) for role, c in free]
+    for role, c in free:
+        sh.add_free(role, c.label,
+                    ', '.join(str(off[role] + x)
+                              for x in c.bindable_buttons))
     return sh
 
 

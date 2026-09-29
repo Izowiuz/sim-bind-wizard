@@ -334,13 +334,20 @@ class Borrowing(unittest.TestCase):
         self.assertEqual('borrowed', one(placed, 'Shift').why.how)
 
     def test_nothing_is_borrowed_for_a_whole_control_need(self):
+        # Which of the two wins is not the point and naming one was a
+        # mistake: it made the test a statement about the order the needs
+        # happened to be listed in. The rule is that the loser gets
+        # NOTHING -- the hat's spare press is not a home for a need
+        # wanting more than one button.
         devs = {'stick': fake.device('stick', [
             fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4),
         ])}
         needs = [Need('Trim', 'hat4', ['U', 'R', 'D', 'L']),
                  Need('Flaps', 'hat2', ['UP', 'DOWN'])]
-        _placed, unplaced, _free = allocate(needs, devs)
-        self.assertEqual(['Flaps'], [n.what for n in unplaced])
+        placed, unplaced, _free = allocate(needs, devs)
+        self.assertEqual(1, len(unplaced))
+        self.assertGreater(unplaced[0].wanted, 1)
+        self.assertNotIn('borrowed', [p.why.how for p in placed])
 
     def test_a_latch_lends_its_click(self):
         # The click is a real button and is fair game.
@@ -978,9 +985,9 @@ class WhichSolverRunsIsAsked(unittest.TestCase):
         devs = {'stick': fake.device('stick', [
             fake.button('Thumb', 0, reach=fake.THUMB),
             fake.hat2('Rocker', 1, reach=fake.THUMB)])}
-        needs = [Need('Urgent', ('hat2', 'button'), [[Bind('A')]],
+        needs = [Need('Anything', ('hat2', 'button'), [[Bind('A')]],
                       urgency=IN_A_TURN, dev='stick'),
-                 Need('Other', 'hat2', [[Bind('B')], [Bind('C')]],
+                 Need('Bigger', 'hat2', [[Bind('B')], [Bind('C')]],
                       urgency=IN_A_TURN, dev='stick')]
         best, _l, _f = allocate(needs, devs, solver=csolvers.best())
         for one in csolvers.SOLVERS:
@@ -1067,13 +1074,18 @@ class TheSolverIsNeverWorseThanWalkingTheList(unittest.TestCase):
         And the loser wants TWO buttons, so the borrow pass cannot
         quietly rescue it. Borrowing serves a need wanting one button,
         which is what made the old rig place two of two either way.
+
+        The names decide which goes first, and that is deliberate: needs
+        are ordered `(pinned, urgency, -rank, what)` and `what` is what
+        breaks a tie. `Anything` fits either control and takes the scarce
+        one; `Bigger` fits only that one and is left with nothing.
         """
         devs = {'stick': fake.device('stick', [
             fake.button('Thumb', 0, reach=fake.THUMB),
             fake.hat2('Rocker', 1, reach=fake.THUMB)])}
-        return [Need('Urgent', ('hat2', 'button'), [[Bind('A')]],
+        return [Need('Anything', ('hat2', 'button'), [[Bind('A')]],
                      urgency=IN_A_TURN, dev='stick'),
-                Need('Other', 'hat2', [[Bind('B')], [Bind('C')]],
+                Need('Bigger', 'hat2', [[Bind('B')], [Bind('C')]],
                      urgency=IN_A_TURN, dev='stick')], devs
 
     def test_the_rig_itself_separates_them(self):

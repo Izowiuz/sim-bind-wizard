@@ -286,7 +286,8 @@ class Harvest(abc.ABC):
             print(line)
         if args.json:
             for filename, sections in data.items():
-                vocab.save(self.here, filename, **sections)
+                _path, said = vocab.save(self.here, filename, **sections)
+                print(said)
         return 0
 
 
@@ -487,13 +488,27 @@ class Adapter(abc.ABC):
         A judgement is derived from nothing: delete it and it is gone. So
         a screen that lets somebody make one has to be able to keep it,
         and until this existed, promoting an action lasted until `q`.
+
+        In the order the file already has them. The review hands them over
+        in PLACEMENT order, which is the screen's order and not the
+        file's, so every save rewrote the whole list -- a diff of 32 moved
+        blocks for one changed field, and the author's own grouping gone
+        with it. Anything the file has never seen, which is what `a` makes,
+        goes on the end.
         """
         if not self.BINDS:
             raise RuntimeError(
                 f'{self.game} derives its needs rather than keeping them, '
                 'so there is no list to write')
-        corneeds.save_needs(self.here, self.BINDS, needs, self.EXTRA)
+        corneeds.save_needs(self.here, self.BINDS, self.as_filed(needs),
+                            self.EXTRA)
         return f'wrote {len(needs)} to {self.BINDS}'
+
+    def as_filed(self, needs):
+        """`needs` in the order the file on disk has them."""
+        was = {n.what: i for i, n in enumerate(self.NEEDS)}
+        end = len(was)
+        return sorted(needs, key=lambda n: was.get(n.what, end))
 
     @typing.final
     def cache(self, filename, key=None, build=None):

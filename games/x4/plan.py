@@ -367,29 +367,19 @@ def _sheet(layout, profile):
                 ident=harvest.code(button).replace('INPUT_XBUTTON_', ''),
                 does=p.need.what, bindings=by_ctx))
 
-    # One physical axis carries up to three ids, one per context, and
-    # AxisRow has no bindings dict -- so the context goes in `does` or the
-    # sheet shows the same lever three times with no way to tell them apart.
+    # One physical axis carries up to three ids, one per context, so it
+    # is one row with a column each -- the same shape the buttons have.
+    # It used to be three rows of one lever with the context written into
+    # the text, because AxisRow had no bindings dict.
     for ident, role, a in axes:
         g = devs[role].axis_group(a.index)
-        sh.add_axis(csheet.AxisRow(
-            role, g.label if g else a.label,
-            ident=AXIS_CODE[a.hid],
-            does=f'{context_of(ident)}: {harvest.readable(ident)}'))
+        sh.add_axis(role, g.label if g else a.label, AXIS_CODE[a.hid],
+                    harvest.readable(ident), context_of(ident))
 
-    sh.free = [(r, c.label, '', corneeds.reach_said(c)) for r, c in free]
+    for r, c in free:
+        sh.add_free(r, c.label)
     sh.unplaced = [(n.what, n.shape if isinstance(n.shape, str)
                     else '/'.join(n.shape)) for n in unmet]
-    sh.note('Writing it', [
-        ('Profile', f'{profile} — X4 puts menu edits in inputmap.xml, so '
-                    'a named profile is the only place this survives.'),
-        ('Slots', ', '.join(f'{r} = {s}' for r, s in sorted(slot.items()))
-                  + '. Enumeration order, not stable: re-read after '
-                    'plugging something in.'),
-        ('Contexts', 'X4 scopes a binding by which id it is — MAP_* answers '
-                     'only in the map, FP_* only on foot — so one button '
-                     'carries three without clashing.'),
-    ])
     return sh
 
 

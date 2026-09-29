@@ -66,6 +66,10 @@
   th.a { color: var(--accent); }
   td { padding: 3px 8px; vertical-align: top; border-top: 1px solid var(--rule); }
   tr:first-child td { border-top: none; }
+  /* A device panel holds its axes and then its buttons, as two tables:
+     the second one's header needs the same rule its panel's does, or the
+     two run together and read as one list with a stray heading in it. */
+  table + table th { border-top: 2px solid var(--rule-hi); }
   td.n { font-family: var(--f-mono); font-weight: 600; font-size: 11.5px;
          font-variant-numeric: tabular-nums; text-align: right;
          white-space: nowrap; width: 1%; }
@@ -111,7 +115,6 @@
   </div>
 
   <div class="cols3">
-    __AXES__
     __FREE__
     __NOTES__
   </div>
