@@ -53,7 +53,9 @@ found it a home or not, and each row is in one of three states:
     RETURN  press the control you want it on
     l       or assign from the free controls that fit, with no hardware
     x / X   clear this one / drop every proposal, leaving yours
-    m       the device map, and where the game was found
+    j       say what this function is FOR, from the ten jobs
+    o       lay the whole thing out to an overlay, or to none
+    m       the device map, which desk, and which overlay
     y       why a control is chosen: the weights, and what they are for
     s       save what you decided
     w       write everything that has a control into the game
@@ -74,6 +76,13 @@ key for the same act in both halves of the pair.
 
 `w` is the other thing: it writes the layout into the game's own config, with
 a backup. Nothing reaches the game until you press it.
+
+`o` lays the whole list out again to a cockpit template from `overlays/` —
+`f-18`, `generic-hotas-spaceship`, or none at all — and says how many of its
+place wishes got through, which is the number two templates are compared on.
+What you chose, accepted, filed and named survives it: the overlay decides
+where the planner leans, not what you decided. The frame says which template
+is on, and `m` names it beside the desk.
 
 What you want of the LAYOUT is in neither file — that is `overlays/`, picked
 with `--overlay`. Two strengths, because pressing RETURN and pressing `c` are not the

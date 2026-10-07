@@ -50,6 +50,7 @@ import textwrap
 from core import actions as cactions
 from core import capture as ccapture
 from core import needs as corneeds
+from core import overlay as coverlay
 from core import solvers as csolvers
 from core import tui as ctui
 
@@ -112,9 +113,13 @@ class Review:
 
     def __init__(self, layout, title, subtitle='', describe=None,
                  paths=(), catalogue=(), source='', save=None,
-                 harvest=None, drop=None, rules=None):
-        self.layout = layout
+                 harvest=None, drop=None, rules=None, rebuild=None,
+                 game=''):
         self.title = title
+        #: `bind`'s own word for this game. Only the overlay needs it: a
+        #: rule naming `what` belongs to one game, and two games can have
+        #: a function of the same name wanting different things.
+        self.game = game
         self.subtitle = subtitle
         self.describe = describe or (lambda p: [])
         #: [(label, path)] the game supplies: where it found the install, the
@@ -161,7 +166,23 @@ class Review:
         #: here to read, and a plan that binds two actions to a button puts
         #: two lines under every row of it before you have asked.
         self.show_binds = False
+        #: Laying the whole thing out again, for `o`. A game that cannot
+        #: -- there is none, but the argument is optional like `save` --
+        #: says so rather than raising: the screen cannot help, and taking
+        #: the review down over it would be worse than a sentence.
+        self.rebuild = rebuild
+        self.relay(layout)
 
+    def relay(self, layout):
+        """Take a freshly allocated layout and show that instead.
+
+        Four fields and nothing else, which is why this is small enough to
+        call from a keystroke: the `Need` objects are the same objects, so
+        everything you decided about them -- what you chose, what you
+        accepted, what you filed them under, what job they do -- is on
+        them already and comes through untouched.
+        """
+        self.layout = layout
         #: what the planner worked out, per need. A need it could not place
         #: has none, and `p` on that row has nothing to offer.
         self.plan = {p.need: p for p in layout.placed}
@@ -175,6 +196,45 @@ class Review:
         # purple -- which is what the mark was always for and what it
         # could not do while it was rebuilt from nothing each time.
         self.mark = {n: self._came_by(n) for n in self.needs}
+
+    def desk(self):
+        """Which rig this layout is for, or '' if nothing says."""
+        return corneeds.desk_of(self.layout)
+
+    def overlay(self):
+        """The overlay this layout was laid out to, or None."""
+        return corneeds.OVERLAY
+
+    def wishes(self):
+        """(kept, of how many) for the overlay on, or None if none is."""
+        got = corneeds.OVERLAY
+        if got is None:
+            return None
+        kept, broken, _lost = got.kept(self.layout)
+        return kept, kept + broken
+
+    def lay_over(self, name):
+        """Put an overlay on -- or take every one off -- and plan again.
+
+        Returns a line. The count comes with it, because "f-18 is on" and
+        "f-18 got 19 of its 34 wishes" are different facts and only the
+        second one tells you whether to keep it.
+        """
+        if self.rebuild is None:
+            return 'this game cannot lay itself out again'
+        try:
+            got = None if name is None else coverlay.named(name, self.game)
+        except coverlay.Bad as e:
+            return str(e)
+        corneeds.OVERLAY = got
+        if got is None:
+            corneeds.forget_wishes(self.needs)
+        self.relay(self.rebuild())
+        if got is None:
+            return 'no overlay: reach and shape alone'
+        kept, of = self.wishes() or (0, 0)
+        return (f'{got.name}: {kept} of {of} place wishes kept' if of
+                else f'{got.name}: it asks for no places')
 
     def unhonoured(self, need):
         """Why what you chose is not under this need, or '' if it is.
@@ -388,6 +448,19 @@ class Review:
         what made it read like a newspaper.
         """
         out = []
+        # What this layout is OF, before what is in it. The screen you
+        # open to ask "what am I actually working on" named neither the
+        # desk nor the overlay, and both decide where everything landed.
+        out.append(('head', 'LAID OUT FOR'))
+        said = [('desk', self.desk() or 'nothing says')]
+        got = corneeds.OVERLAY
+        said.append(('overlay', got.name if got is not None else 'none'))
+        count = self.wishes()
+        if count and count[1]:
+            said.append(('wishes kept', f'{count[0]} of {count[1]}'))
+        _fields(lambda tone, text='', lead='': out.append((tone, lead + text)),
+                said)
+        out.append(('plain', ''))
         out.append(('head', 'MARKS'))
         # The legend is three lines because a line carries one tone, and a
         # legend not drawn in the colours it explains explains nothing.
@@ -960,6 +1033,7 @@ KEYS = (
     ('plain', '  R           rename the category it is in; all of it moves'),
     ('plain', ''),
     ('head', 'OTHER'),
+    ('plain', '  o           lay the whole thing out to an overlay'),
     ('plain', '  y           why a control is chosen'),
     ('plain', '  m           device map and install paths'),
     ('plain', '  s           save what you decided'),
@@ -1068,8 +1142,8 @@ def _layout(width, height, wants=None):
 #: In the sill, most-needed first: what is dropped on a narrow panel is
 #: dropped from the end, and nothing else is reachable without moving.
 HINTS = ('↑↓ move', '↵ assign', 'l from free', 'c accept', 'x unassign',
-         'a add', 'j job', 'r category', 'f filter', 'h binds', 'y why',
-         'm map', 's save', 'w write')
+         'a add', 'j job', 'r category', 'f filter', 'h binds', 'o overlay',
+         'y why', 'm map', 's save', 'w write')
 
 
 def _fit(width, text, lead=''):
@@ -1364,6 +1438,12 @@ def _tally(rv):
     counts = [f'{MARK[MINE]}{mine}' if mine else '',
               f'{MARK[PROPOSED]}{prop}' if prop else '',
               f'{unset} {MARK_SAID[UNSET]}' if unset else '',
+              # Which overlay this was laid out to. A state, so it goes
+              # here rather than in the status line -- and said even when
+              # there is none, because "the planner had no wishes" and
+              # "the planner ignored mine" look identical on a row.
+              rv.overlay().name if rv.overlay() is not None
+              else 'no overlay',
               # Last, and here rather than in the status line: a status
               # line says what just happened and goes on the next
               # keypress, and this is a state of the files.
@@ -1608,6 +1688,28 @@ def _pick_job(tui, need):
     return None if got is None else known[got]
 
 
+def _pick_overlay(tui, rv):
+    """Which overlay to lay this out to. None if you changed your mind.
+
+    `no overlay` is a choice like any other and sits with the rest rather
+    than being a second keystroke: laying one on and taking it off are the
+    same question asked twice.
+    """
+    known = coverlay.names()
+    on = rv.overlay()
+    # By the file's own stem, without reading a single one: working this
+    # out by loading each and comparing display names meant an unreadable
+    # overlay anywhere in the directory took the screen down on `o`. Now
+    # a bad file only bites when you pick it, and `lay_over` catches it.
+    rows = [(MINE if on is not None and k == on.called else 'plain', k)
+            for k in known]
+    rows.append(('plain' if on is not None else MINE, 'no overlay'))
+    got = tui.choose('lay it out to...', rows)
+    if got is None:
+        return None, False
+    return (None if got == len(known) else known[got]), True
+
+
 def _ran(tui, title, lines):
     """Show what a subprocess said, and wait. The transcript model, which
     is what `core/tui.py` keeps it for."""
@@ -1716,12 +1818,12 @@ def _browse(scr, tui, rv):
 
 def run(layout, title, subtitle='', describe=None, write=None, paths=(),
         catalogue=(), source='', save=None, harvest=None, drop=None,
-        rules=None):
+        rules=None, rebuild=None, game=''):
     """Show the need list, let it be filled, write what has a control.
     Returns the `Layout` that was written, or None if nothing was."""
     sticks = Sticks(layout)
     rv = Review(layout, title, subtitle, describe, paths, catalogue,
-                source, save, harvest, drop, rules)
+                source, save, harvest, drop, rules, rebuild, game)
     try:
         return curses.wrapper(_loop, rv, write, sticks)
     finally:
@@ -1831,6 +1933,13 @@ def _loop(scr, rv, write, sticks):
                 # at means nothing now. Every other shape change here
                 # resets to the top; that would lose what you were doing.
                 sel = _row_of(rv, need, sel)
+        elif k in ('o', 'O'):
+            want, said = _pick_overlay(tui, rv)
+            if said:
+                rv.status = rv.lay_over(want)
+                # Every row may have moved, so the index it was at means
+                # nothing. The need under the cursor is still a need.
+                sel = _row_of(rv, need, sel) if need is not None else sel
         elif k == 'j' and need is not None:
             job = _pick_job(tui, need)
             if job:

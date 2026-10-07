@@ -652,7 +652,12 @@ class Adapter(abc.ABC):
             # evidence, and printing evidence nobody asked for is how a
             # summary stops being read.
             for what, word, want, instead in lost:
-                out.append(f'    {what:28} wanted {word} {want}, '
+                # Cut to the column rather than pushing it: DCS names its
+                # controls as the jet does, so `Autopilot/Nosewheel
+                # Steering Disengage (Paddle) Switch` walked the `wanted`
+                # column off into the middle of the line.
+                said = what if len(what) <= 28 else what[:27] + '…'
+                out.append(f'    {said:28} wanted {word} {want}, '
                            f'got {instead or "nothing measured"}')
         return out
 
@@ -866,6 +871,13 @@ class Planner(Adapter):
         """Each argument is None for "not asked", '' for the default path,
         or a path."""
         sh = self.sheet(layout)
+        # One place for six games: a kneeboard printed on a desk it was
+        # not drawn for, or under an overlay you have since changed, reads
+        # as the only layout there could be. Set here rather than asked of
+        # every `sheet()` -- this method is final, so nothing can skip it.
+        sh.desk = corneeds.desk_of(layout)
+        if corneeds.OVERLAY is not None:
+            sh.overlay = corneeds.OVERLAY.name
         out = []
         if markdown is not None:
             out.append('wrote %s (%d rows, %d axes)' % sh.markdown(
@@ -891,7 +903,8 @@ class Planner(Adapter):
                     paths=self.paths(args), catalogue=self.catalogue(),
                     source=os.path.join('games', self.game, self.CATALOGUE),
                     save=self.save_needs, harvest=self.reharvest,
-                    drop=self.drop_cache, rules=self.rules())
+                    drop=self.drop_cache, rules=self.rules(),
+                    rebuild=self.build, game=self.game)
 
 
 class Proposer(Adapter):

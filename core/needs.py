@@ -445,6 +445,42 @@ class Need:
         return f'<Need {self.what!r} {self.shape} u{self.urgency}>'
 
 
+def desk_of(layout):
+    """Which rig a layout is for, or '' if nothing says.
+
+    Off the devices, because that is where it already is: a device
+    remembers the profile it was laid out under (`Device.under`) and a
+    profile has a name. Nothing had to be added to the map for this, and
+    nothing has to be threaded through a planner.
+    """
+    for dev in layout.devices.values():
+        got = getattr(dev, 'profile', None)
+        if got is not None:
+            return got.name
+    return ''
+
+
+def forget_wishes(needs):
+    """Take every overlay wish off these needs. Returns how many it found.
+
+    An overlay is a REPLACEMENT, not an addition, and until this existed
+    `apply` only ever wrote. One overlay per process hid it: a second one
+    laid over the first left every need it says nothing about wearing the
+    first file's finger, and `place_right` then counted a wish nobody had
+    asked for. `--overlay none` after an overlay had the same hole.
+
+    It walks `WISHES` rather than a list of its own, so a seventh wish is
+    cleared by the fact of being in that tuple.
+    """
+    found = 0
+    for need in needs:
+        for wish in WISHES:
+            if getattr(need, wish, None):
+                found += 1
+            setattr(need, wish, None if wish not in FLAGS else False)
+    return found
+
+
 def dump_needs(needs):
     """[Need] -> [dict], what each function IS and how you use it.
 

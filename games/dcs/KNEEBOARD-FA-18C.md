@@ -6,6 +6,8 @@ one higher than the OS number the device map uses.
 **Generated** by `./propose.py -a FA-18C --sheet` from the results file
 and `sim-device-map`. A `?` is proposed and not yet confirmed.
 
+Desk: **IzoDesk**
+
 ## R-VPC Stick WarBRD-D
 
 | Control | DCS | Command |

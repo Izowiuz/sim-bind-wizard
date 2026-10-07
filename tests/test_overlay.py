@@ -433,8 +433,135 @@ class HowMuchOfTheTemplateGotThrough(unittest.TestCase):
         self.assertEqual((0, 0, []), rule.kept(layout))
 
 
+class LayingOneOnReplacesTheLast(unittest.TestCase):
+    """An overlay is a replacement, not an addition.
+
+    `apply` only ever wrote, and one overlay per process hid it: a second
+    laid over the first left every need it says nothing about wearing the
+    first file's finger, and `place_right` then counted a wish nobody had
+    asked for. `--overlay none` had the same hole.
+    """
+
+    def needs(self):
+        return [Need('Guns', 'button', [[Bind('GUNS')]], suits='fire'),
+                Need('Gear', 'button', [[Bind('GEAR')]], suits='systems')]
+
+    def test_the_second_overlay_leaves_no_trace_of_the_first(self):
+        got = self.needs()
+        written('[[want]]\nsuits = "fire"\nfinger = "thumb"\n').apply(got)
+        written('[[want]]\nsuits = "systems"\nfinger = "pinky"\n').apply(got)
+        self.assertIsNone(got[0].finger, 'kept the first overlay\'s finger')
+        self.assertEqual('pinky', got[1].finger)
+
+    def test_forgetting_them_says_how_many_it_found(self):
+        got = self.needs()
+        written('[[want]]\nsuits = "fire"\nfinger = "thumb"\n'
+                'device = "stick"\n').apply(got)
+        self.assertEqual(2, corneeds.forget_wishes(got))
+        self.assertEqual(0, corneeds.forget_wishes(got))
+
+    def test_it_walks_the_wish_list_rather_than_one_of_its_own(self):
+        # So a seventh wish is cleared by the fact of being in `WISHES`.
+        got = self.needs()
+        for wish in corneeds.WISHES:
+            setattr(got[0], wish, 'thumb' if wish == 'finger' else True)
+        corneeds.forget_wishes(got)
+        for wish in corneeds.WISHES:
+            self.assertFalse(getattr(got[0], wish), wish)
+
+
+class DcsWorksOutItsOwnJobs(unittest.TestCase):
+    """The one game with no needs file to write a job in.
+
+    It derives its needs from the module's command vocabulary on every
+    run, so there is nowhere to keep a judgement -- and until `jobs.toml`
+    all 43 of the Hornet's controls had `suits = None`, so `f-18.toml`
+    matched nothing in the one game where it is about the aircraft
+    actually in the cockpit.
+
+    Read off DCS's own names, which are the jet's: `Gun Trigger - SECOND
+    DETENT`, `Sensor Control Switch`, `Throttle Designator Controller`.
+    """
+
+    def propose(self):
+        import os
+        from core import adapter
+        return adapter.from_file(
+            'dcs_propose_for_test',
+            os.path.join(os.path.dirname(os.path.dirname(
+                os.path.abspath(__file__))), 'games', 'dcs', 'propose.py'))
+
+    def test_every_phrase_names_a_job_the_rules_define(self):
+        m = self.propose()
+        for phrase, job in m.jobs():
+            with self.subTest(phrase=phrase):
+                self.assertIn(job, corneeds.JOBS)
+
+    def test_it_reads_the_jet_rather_than_guessing(self):
+        m = self.propose()
+        for name, want in (
+                ('Gun Trigger - SECOND DETENT (Press to shoot)', 'fire'),
+                ('Weapon Release Button', 'fire'),
+                ('Sensor Control Switch', 'sensor'),
+                ('Throttle Designator Controller - Depress', 'sensor'),
+                ('Undesignate/Nose Wheel Steer Switch', 'lock'),
+                ('Dispense Switch', 'defence'),
+                ('Trimmer Switch', 'trim'),
+                ('COMM Switch - MIDS A', 'comms'),
+                ('Landing Gear Control Handle', 'systems'),
+                ('Speed Brake Switch - EXTEND', 'flight'),
+                ('Zoom View', 'view')):
+            with self.subTest(name=name):
+                self.assertEqual(want, m.job_of(name))
+
+    def test_the_order_in_the_file_decides(self):
+        # `fov select` has to be read before `select`, or the FLIR
+        # field-of-view button becomes a weapon control.
+        m = self.propose()
+        self.assertEqual('sensor', m.job_of('RAID/FLIR FOV Select Button'))
+        self.assertEqual('fire', m.job_of('Select'))
+        # And `throttle designator` before `throttle`.
+        self.assertEqual('sensor', m.job_of(
+            'Throttle Designator Controller - Horizontal Axis'))
+        self.assertEqual('flight', m.job_of('Throttle'))
+
+    def test_the_three_axes_the_aircraft_flies_on_find_a_home(self):
+        # `AXIS_FOR` asked the map for `stick-x`, `stick-y` and `twist`,
+        # and the map stopped spelling it that way: a stick is one control
+        # with three axes, so a kind per axis said the kind twice.
+        # `axes(kind=...)` filters on the CONTROL's kind, so all three
+        # asked for a kind nothing has. Pitch, roll and rudder came out as
+        # `no axis on this hardware` on a desk with a full stick on it.
+        m = self.propose()
+        stick = fake.device('stick', axes=[
+            {'index': 0, 'role': 'x'}, {'index': 1, 'role': 'y'},
+            {'index': 2, 'role': 'z'}], controls=[
+                fake.control('stick', 'Main stick', axes=[0, 1, 2])])
+        for want, role in (('stick', 'x'), ('stick', 'y'), ('stick', 'z')):
+            with self.subTest(axis=role):
+                self.assertIsNotNone(stick.axis_of(want, role))
+        for name in ('Pitch', 'Roll', 'Rudder'):
+            with self.subTest(name=name):
+                self.assertIn(m.AXIS_FOR[name][0], ('stick', 'lever'))
+                self.assertIn(m.AXIS_FOR[name][1], ('x', 'y', 'z', ''))
+
+    def test_a_name_nothing_matches_keeps_no_job(self):
+        # Not a failure: a module nobody has been through lays out on
+        # reach and shape, as it did before this file existed.
+        self.assertIsNone(self.propose().job_of('Wobble Lever'))
+
+
 class TheOverlaysOnFile(unittest.TestCase):
     """The ones in `overlays/` have to load, or no planner starts."""
+
+    def test_each_one_remembers_its_own_filename(self):
+        # What `--overlay` and the menu say, as against the display name
+        # out of the file: `f-18.toml` calls itself `F/A-18C`. The menu
+        # compares on this, so it does not have to read every overlay in
+        # the directory to find out which one is on.
+        got = coverlay.named('f-18')
+        self.assertEqual('f-18', got.called)
+        self.assertEqual('F/A-18C', got.name)
 
     def test_every_one_reads(self):
         self.assertTrue(coverlay.names())

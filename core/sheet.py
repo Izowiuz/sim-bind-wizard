@@ -84,6 +84,13 @@ class Sheet:
         self.title = title
         self.heading = heading
         self.subtitle = subtitle
+        #: Which rig it was laid out for, and to which overlay. Both
+        #: decide where everything on the page landed, and a kneeboard
+        #: that does not say reads as the only layout there could be --
+        #: so printing one on a desk it was not drawn for is silent.
+        #: Filled by `Adapter.write_sheets`, one place for six games.
+        self.desk = ''
+        self.overlay = ''
         self.ident = ident          # column header for the game's own numbering
         self.contexts = tuple(contexts)
         self.devices = devices or {}     # role -> product name, for panel titles
@@ -179,13 +186,20 @@ class Sheet:
 
     def _stamp(self):
         return (f'generated {datetime.date.today()} · '
-                f'{len(self.rows)} bindings · {len(self.axes)} axes')
+                f'{len(self.rows)} bindings · {len(self.axes)} axes'
+                + self._for())
+
+    def _for(self):
+        """ · desk · overlay`, or as much of it as is known."""
+        return ''.join(f' · {part}' for part in (self.desk, self.overlay)
+                       if part)
 
     # ---- markdown ----
     def markdown(self, path):
         named = [c for c in self.contexts if c]
         L = [f'# {self.title}', '',
-             f'{self.subtitle}. Generated — do not edit, regenerate.', '']
+             f'{self.subtitle}{self._for()}. '
+             'Generated — do not edit, regenerate.', '']
         for role in self._roles():
             L += [f'## {self.devices.get(role, role)}', '']
             axes = self._axes_of(role)

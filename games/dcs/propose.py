@@ -237,11 +237,66 @@ def families(cmds, guide, chosen):
                         urgency=urgency, rank=votes))
     # most urgent first, and only then by how many factory profiles agree
     out.sort(key=lambda x: (x.urgency, -x.rank))
+    for need in out:
+        need.suits = job_of(need.what)
     return out
 
 
-AXIS_FOR = {'Pitch': 'stick-y', 'Roll': 'stick-x', 'Rudder': 'twist',
-            'Thrust': 'throttle-lever'}
+_JOBS = None
+
+
+def jobs():
+    """[(phrase, job)] from `jobs.toml`, in the file's own order.
+
+    Order is load-bearing -- the first phrase that appears in a command's
+    name wins -- so this keeps the list flat rather than a dict per job:
+    `fov select` has to be read before `select`.
+
+    Checked against the core's table on the way in, the way the overlay
+    reader checks a rule name: a job nobody defines is a word no overlay
+    can match, so a typo here would cost every command it touches every
+    wish in the file, silently.
+    """
+    global _JOBS
+    if _JOBS is None:
+        with open(os.path.join(HERE, 'jobs.toml'), 'rb') as f:
+            got = tomllib.load(f)
+        out = []
+        for row in got.get('job', []):
+            if row['is'] not in corneeds.JOBS:
+                raise SystemExit(
+                    f'jobs.toml: {row["is"]!r} is not a job. There are: '
+                    + ', '.join(corneeds.JOBS))
+            out += [(phrase.lower(), row['is']) for phrase in row['when']]
+        _JOBS = out
+    return _JOBS
+
+
+def job_of(name):
+    """What this command is for, or None if no phrase in the table fits.
+
+    None is not a failure: a module nobody has been through yet lays out
+    on reach and shape exactly as it did before this existed. `Dcs.__init__`
+    says how many went unnamed, because that is the number that tells you
+    whether an overlay had anything to work with.
+    """
+    low = name.lower()
+    return next((job for phrase, job in jobs() if phrase in low), None)
+
+
+#: Which axis of which control a flight command belongs on, in the map's
+#: own two words: the kind of control, and which of its axes.
+#:
+#: It used to say `stick-y`, `stick-x` and `twist` -- one word for both --
+#: and the map stopped spelling it that way: a stick is ONE control with
+#: three axes, not three controls, so a kind per axis said the kind twice.
+#: `Device.axes(kind=...)` filters on the control's kind, so all three
+#: asked for a kind nothing has and got nothing back. Pitch, roll and
+#: rudder -- the three axes the aircraft flies on -- came out as `no axis
+#: on this hardware` on a desk with a full stick on it, and the only sign
+#: was that line. `games/x4/plan.py` has used `axis_of` since the rename.
+AXIS_FOR = {'Pitch': ('stick', 'y'), 'Roll': ('stick', 'x'),
+            'Rudder': ('stick', 'z'), 'Thrust': ('lever', '')}
 
 #: The module says which way a switch goes in its own words; the map says which
 #: way each button points. Joining them is what stops a trim hat coming out
@@ -330,13 +385,10 @@ def resolve_axis(devs, need, cmds):
     """Which axis on which device a flight or slew command belongs to."""
     name = cmds[need.members[0]]['name']
     want = AXIS_FOR.get(name.split(' - ')[0].strip())
-    if want == 'stick-x':
-        return ('stick', devs['stick'].axes(kind='stick-x'))
-    if want == 'stick-y':
-        return ('stick', devs['stick'].axes(kind='stick-y'))
-    if want == 'twist':
-        return ('stick', devs['stick'].axes(kind='twist'))
     low = name.lower()
+    if want is not None and not low.startswith('thrust'):
+        got = devs['stick'].axis_of(*want)
+        return ('stick', [got] if got is not None else [])
     # Two levers, two engines. A cold start in the Hornet runs them up one at a
     # time, so the combined Thrust axis is not enough -- and binding it as well
     # would have both fighting for the same engines.
@@ -350,9 +402,6 @@ def resolve_axis(devs, need, cmds):
                      if side in thr.axis_label(a.index).lower()]
             return ('throttle', match or levers[:1])
         return ('throttle', [])          # combined: superseded by the pair
-    if want == 'throttle-lever':
-        return ('throttle', [a for a in devs['throttle'].axes(kind='lever')
-                             if 'left' in (a.label or '').lower()])
     if 'designator' in low or 'slew' in low:
         # the clue is in the name: it hangs off the throttle
         g = next(iter(devs['throttle'].groups('ministick')), None)
@@ -694,14 +743,35 @@ def unbound(module, cmds, guide, key):
     return out
 
 
+def laid_out_for(devs):
+    """`desk, overlay` -- what the proposal was made against.
+
+    The desk is a fact about this whole sheet: every reach on it is
+    measured from one rig. The overlay is a fact about the PROPOSED rows
+    only -- this sheet is built from the results file, so anything without
+    a `?` was confirmed at the stick and no template put it there.
+    """
+    desk = ''
+    for dev in devs.values():
+        got = getattr(dev, 'profile', None)
+        if got is not None:
+            desk = got.name
+            break
+    over = corneeds.OVERLAY
+    return desk, (over.name if over is not None else '')
+
+
 def write_sheet(module, key, cmds, guide, path):
     rows, devs = bound_rows(module, key, cmds, guide)
+    desk, over = laid_out_for(devs)
     L = [f'# Kneeboard — {key}', '',
          'What sits under which finger. Button numbers are the ones DCS shows,',
          'one higher than the OS number the device map uses.', '',
          '**Generated** by `./propose.py -a %s --sheet` from the results file'
          % key,
-         'and `sim-device-map`. A `?` is proposed and not yet confirmed.', '']
+         'and `sim-device-map`. A `?` is proposed and not yet confirmed.', '',
+         f'Desk: **{desk or "not said"}**'
+         + (f' · proposals laid out to **{over}**' if over else ''), '']
     for role in panel_roles(rows):
         d = devs.get(role)
         if not rows[role]:
@@ -775,7 +845,10 @@ def write_html(module, key, cmds, guide, path):
               .replace('__AXES__', axes_panel)
               .replace('__UNBOUND__', unbound_panel)
               .replace('__STAMP__', f'generated {datetime.date.today()} '
-                                    f'· {n} bindings'))
+                                    f'· {n} bindings'
+                                    + ''.join(f' · {part}' for part
+                                              in laid_out_for(devs)
+                                              if part)))
     open(path, 'w', encoding='utf-8').write(out)
     return path, n
 

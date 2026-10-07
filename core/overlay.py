@@ -128,8 +128,15 @@ def _matches(need, rule):
 class Overlay:
     """A name, and what it asks for."""
 
-    def __init__(self, name, says, wants=(), pairs=()):
+    def __init__(self, name, says, wants=(), pairs=(), called=''):
         self.name = name
+        #: The file's own stem, which is what `--overlay` and the menu
+        #: say. Kept because `name` is the display name out of the file
+        #: and the two differ -- `f-18.toml` calls itself `F/A-18C`. The
+        #: menu used to re-read every overlay to work this out, so one
+        #: unreadable file in the directory took the review down on a
+        #: keypress.
+        self.called = called
         self.says = says
         self.wants = list(wants)
         self.pairs = list(pairs)
@@ -137,9 +144,15 @@ class Overlay:
     def apply(self, needs):
         """Set what the rules ask for. Returns how many needs were touched.
 
+        Every wish is taken off first, so laying this overlay on is
+        REPLACING whatever was on before rather than adding to it. One
+        overlay per process hid the difference; a menu that switches
+        between them does not.
+
         Later rules win, so a file may state the broad wish first and the
         exception after it, which is the order you would say them in.
         """
+        corneeds.forget_wishes(needs)
         touched = set()
         for n, need in enumerate(needs):
             for rule in self.wants:
@@ -276,7 +289,8 @@ def read(path, game=None):
                 raise Bad(f'{os.path.basename(path)}: the {half} side of '
                           f'{rule["rule"]!r} names {", ".join(unknown)}, '
                           f'which is not something to ask about')
-    return Overlay(name, got.get('says', ''), wants, pairs)
+    return Overlay(name, got.get('says', ''), wants, pairs,
+                   called=os.path.splitext(os.path.basename(path))[0])
 
 
 def named(name, game=None):

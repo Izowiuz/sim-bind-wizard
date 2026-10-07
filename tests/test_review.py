@@ -1482,6 +1482,101 @@ class EveryKeyTheScreenNamesIsOneItAnswers(unittest.TestCase):
         self.assertIn('w', self.answered())
 
 
+class LayingItOutToAnOverlay(unittest.TestCase):
+    """`o`: put a cockpit template on, take it off, and plan again.
+
+    It used to be a flag at startup and nothing else, so trying a template
+    meant quitting, and the screen never said whether one was on. Two
+    things that look identical on a row -- "the planner had no wishes" and
+    "the planner ignored mine" -- and no way to tell them apart.
+    """
+
+    def setUp(self):
+        self.devs = {'stick': fake.device('stick', [
+            fake.button('Thumb', 0, reach=fake.THUMB),
+            fake.button('Index', 1, reach=fake.INDEX),
+        ], hand='right')}
+        self.needs = [Need('Guns', 'button', [[Bind('GUNS')]], suits='fire',
+                           urgency=corneeds.IN_A_TURN)]
+
+    def rv(self, rebuild=True):
+        def build():
+            return corneeds.Layout(
+                self.devs, *allocate(self.needs, self.devs))
+
+        return made(self.needs, devs=self.devs, game='x4',
+                    rebuild=build if rebuild else None)
+
+    def tearDown(self):
+        corneeds.OVERLAY = None
+        corneeds.forget_wishes(self.needs)
+
+    def test_it_says_there_is_none_rather_than_staying_quiet(self):
+        self.assertIn('no overlay', review._tally(self.rv()))
+
+    def test_laying_one_on_names_it_and_counts_what_got_through(self):
+        rv = self.rv()
+        said = rv.lay_over('f-18')
+        self.assertIn('F/A-18C', said)
+        self.assertIn('place wishes kept', said)
+        self.assertIn('F/A-18C', review._tally(rv))
+
+    def test_taking_it_off_plans_without_wishes(self):
+        rv = self.rv()
+        rv.lay_over('f-18')
+        said = rv.lay_over(None)
+        self.assertIn('reach and shape', said)
+        self.assertIn('no overlay', review._tally(rv))
+        self.assertIsNone(self.needs[0].finger, 'kept a wish nobody asked')
+
+    def test_switching_is_the_same_as_starting_with_it(self):
+        # The whole point of clearing the wishes first: f-18 after
+        # spaceship has to count what f-18 alone counts.
+        one, other = self.rv(), self.rv()
+        alone = one.lay_over('f-18')
+        other.lay_over('generic-hotas-spaceship')
+        after = other.lay_over('f-18')
+        self.assertEqual(alone, after)
+
+    def test_what_you_decided_survives_the_relay(self):
+        # The Need objects are the same objects, which is what makes this
+        # safe to put on a keystroke.
+        rv = self.rv()
+        need = rv.needs[0]
+        rv.assign(need, 'stick', self.at('Index'))
+        rv.refile(need, 'Combat')
+        rv.lay_over('f-18')
+        self.assertEqual('Combat', need.category)
+        self.assertEqual('fire', need.suits)
+        self.assertEqual(corneeds.CHOSE, (need.assignment or {})['how'])
+        self.assertEqual('Index', at(rv, need).ctrl.label)
+
+    def test_a_game_that_cannot_lay_itself_out_again_says_so(self):
+        said = self.rv(rebuild=False).lay_over('f-18')
+        self.assertIn('cannot lay itself out again', said)
+
+    def test_an_overlay_nobody_wrote_says_which_there_are(self):
+        said = self.rv().lay_over('no-such-thing')
+        self.assertIn('by-hand', said)
+
+    def test_the_map_screen_names_the_desk_and_the_overlay(self):
+        rv = self.rv()
+        rv.lay_over('f-18')
+        got = '\n'.join(t for _tone, t in rv.map_lines())
+        self.assertIn('LAID OUT FOR', got)
+        self.assertIn('a desk in a test', got)
+        self.assertIn('F/A-18C', got)
+        self.assertIn('wishes kept', got)
+
+    def test_the_key_is_in_the_sill_and_the_help(self):
+        self.assertIn('o overlay', review.HINTS)
+        self.assertIn('  o ', '\n'.join(t for _tone, t in review.KEYS))
+
+    def at(self, label):
+        return next(c for c in self.devs['stick'].groups()
+                    if c.label == label)
+
+
 class WhatAFunctionIsFor(unittest.TestCase):
     """The job: the one word an overlay takes hold of.
 
