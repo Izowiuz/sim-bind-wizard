@@ -375,8 +375,9 @@ def _sheet(layout, profile):
 
     for r, c in free:
         sh.add_free(r, c.label)
-    sh.unplaced = [(n.what, n.shape if isinstance(n.shape, str)
-                    else '/'.join(n.shape)) for n in unmet]
+    for n in unmet:
+        sh.add_unplaced(n.what, n.shape if isinstance(n.shape, str)
+                        else '/'.join(n.shape))
     return sh
 
 

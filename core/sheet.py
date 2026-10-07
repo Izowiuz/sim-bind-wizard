@@ -34,6 +34,23 @@ def esc(t):
             .replace('>', '&gt;'))
 
 
+def cell(text):
+    """One markdown table cell: a pipe in the text would end it.
+
+    DCS names a command `Radar | Display Zoom Out`, and that row came out
+    with an extra column -- the table header says three and the row said
+    four, so every renderer after it guessed. Nothing else in the family
+    has a pipe in a name, which is why this went unnoticed until DCS's
+    sheet moved onto this one.
+    """
+    return str(text).replace('|', '\\|')
+
+
+def _mark(row):
+    """A row's mark as the page draws it, or nothing."""
+    return f' <em>{esc(row.mark)}</em>' if row.mark else ''
+
+
 def wrap(text, width, indent):
     out, line = [], ''
     for word in str(text).split():
@@ -57,6 +74,12 @@ class Row:
     does: str = ''                  # the need's human name
     bindings: dict = field(default_factory=dict)   # context -> str or [str]
     edge: str = ''                  # e.g. BMS's release action, shown inline
+    #: A word beside what this does, when the binding is not settled.
+    #: DCS's `?`: its sheet is built from the results file, so half of it
+    #: is what you confirmed at the stick and half is still the planner's
+    #: proposal, and a page that does not say which is which invites you
+    #: to trust the half nobody has pressed.
+    mark: str = ''
 
 
 @dataclass
@@ -76,6 +99,8 @@ class AxisRow:
     #: context -> what the axis does there. A game with one context uses
     #: the empty-string key, exactly as `Row` does.
     bindings: dict = field(default_factory=dict)
+    #: as `Row.mark`
+    mark: str = ''
 
 
 class Sheet:
@@ -98,7 +123,15 @@ class Sheet:
         self.axes = []
         self.notes = []             # (heading, [(term, text)]) or (heading, text)
         self.free = []              # (role, control, ident)
-        self.unplaced = []          # (what, wanted)
+        #: (what, wanted). What has no control on this desk.
+        self.unplaced = []
+        #: What to say about the ORDER of that list, when the order means
+        #: something. DCS sorts its by how many of the shipped profiles
+        #: bind each thing, which makes the top of the list the part
+        #: worth reading -- and the count itself was on the page as
+        #: `5 factory profiles`, which is a number you can do nothing
+        #: with. The order carries it; this says the order is there.
+        self.unplaced_note = 'nothing on the desk for these'
 
     # ---- building ----
     def add(self, row):
@@ -141,6 +174,26 @@ class Sheet:
         number here and it fails at the call, naming the caller.
         """
         self.free.append((role, control, ident))
+
+    def add_unplaced(self, what, wanted=''):
+        """One thing with no control. In the order you add them.
+
+        A method rather than five adapters appending a tuple, for the
+        reason `add_free` is one: the shape changed and nothing held the
+        call sites together. Pass the wrong number here and it fails at
+        the call, naming the caller.
+        """
+        self.unplaced.append((what, wanted))
+
+    def marked(self):
+        """Is anything on this page unsettled?
+
+        What decides whether the legend is printed. A mark nobody has
+        explained is some of the rows being slightly different, and a
+        legend over a page that uses no marks is a line you learn to
+        skip -- so it appears exactly when it is earned.
+        """
+        return any(r.mark for r in list(self.rows) + list(self.axes))
 
     def note(self, heading, body):
         self.notes.append((heading, body))
@@ -194,12 +247,21 @@ class Sheet:
         return ''.join(f' · {part}' for part in (self.desk, self.overlay)
                        if part)
 
+    #: What a mark means, printed only where one is used. See `marked`.
+    LEGEND = 'A `?` is proposed and nobody has confirmed it at the stick.'
+
+    def _said(self, row, ctx=''):
+        """What a row does in this context, with its mark after it."""
+        got = self._cell(row, ctx)
+        return f'{got} {row.mark}'.rstrip() if got else got
+
     # ---- markdown ----
     def markdown(self, path):
         named = [c for c in self.contexts if c]
         L = [f'# {self.title}', '',
              f'{self.subtitle}{self._for()}. '
-             'Generated — do not edit, regenerate.', '']
+             'Generated — do not edit, regenerate.'
+             + (f' {self.LEGEND}' if self.marked() else ''), '']
         for role in self._roles():
             L += [f'## {self.devices.get(role, role)}', '']
             axes = self._axes_of(role)
@@ -211,31 +273,45 @@ class Sheet:
                 else:
                     L += [f'| Axis | {self.ident} | Does |', '|---|---|---|']
                 for a in axes:
-                    cells = ([self._cell(a, c) or '—' for c in named]
-                             if named else [self._cell(a, '')])
-                    L.append(f'| {a.control} | `{a.ident}` | '
-                             + ' | '.join(cells) + ' |')
+                    cells = ([self._said(a, c) or '—' for c in named]
+                             if named else [self._said(a)])
+                    L.append(f'| {cell(a.control)} | `{a.ident}` | '
+                             + ' | '.join(cell(c) for c in cells) + ' |')
                 L.append('')
             mine = [x for x in self.rows if x.role == role]
             if not mine:
                 continue
             L += ['### Buttons', '']
+            # The binding column only where a game has one to show. DCS
+            # binds a command BY its name, so the column repeated the
+            # `Does` column verbatim down the whole page, and a column
+            # that says the same as its neighbour is a column to leave
+            # out rather than one to read twice.
+            shows = any(self._cell(x, '') != x.does or x.edge for x in mine)
             if named:
                 L += ['| ' + ' | '.join([self.ident, 'Control'] + named) + ' |',
                       '|' + '---|' * (2 + len(named))]
-            else:
+            elif shows:
                 L += [f'| {self.ident} | Control | Does | Binding |',
                       '|---|---|---|---|']
+            else:
+                L += [f'| {self.ident} | Control | Does |', '|---|---|---|']
             for r in mine:
-                ctrl = f'{r.control}' + (f' — {r.part}' if r.part else '')
+                ctrl = cell(r.control) + (f' — {cell(r.part)}' if r.part
+                                          else '')
                 if named:
-                    cells = [self._cell(r, c) or '—' for c in named]
-                    L.append(f'| {r.ident} | {ctrl} | ' + ' | '.join(cells) + ' |')
+                    cells = [self._said(r, c) or '—' for c in named]
+                    L.append(f'| {r.ident} | {ctrl} | '
+                             + ' | '.join(cell(c) for c in cells) + ' |')
                 else:
-                    b = self._cell(r, '')
+                    does = cell(f'{r.does} {r.mark}'.rstrip())
+                    if not shows:
+                        L.append(f'| {r.ident} | {ctrl} | {does} |')
+                        continue
+                    b = cell(self._cell(r, ''))
                     if r.edge:
-                        b += f'<br>release: `{r.edge}`'
-                    L.append(f'| {r.ident} | {ctrl} | {r.does} | `{b}` |')
+                        b += f'<br>release: `{cell(r.edge)}`'
+                    L.append(f'| {r.ident} | {ctrl} | {does} | `{b}` |')
             L.append('')
         for heading, body in self.notes:
             L += [f'## {heading}', '']
@@ -245,8 +321,14 @@ class Sheet:
                 L.append(str(body))
             L.append('')
         if self.unplaced:
-            L += ['## Not placed', ''] + \
-                 [f'- {w} (wanted a `{s}`)' for w, s in self.unplaced] + ['']
+            L += ['## Not placed', '', f'{self.unplaced_note[0].upper()}'
+                  f'{self.unplaced_note[1:]}.', '']
+            for what, wanted in self.unplaced:
+                # No article: the shapes are the map's words, and
+                # `a axis` is what one of them came out as.
+                L.append(f'- {what}' + (f' (wanted `{wanted}`)'
+                                        if wanted else ''))
+            L.append('')
         if self.free:
             L += ['## Still free', '']
             for role in self._free_roles():
@@ -261,12 +343,18 @@ class Sheet:
     # ---- html ----
     def _panel(self, role):
         named = [c for c in self.contexts if c]
+        mine = [x for x in self.rows if x.role == role]
+        # The binding under the name only where it says something the
+        # name does not. DCS binds a command BY its name, so every row
+        # carried it twice: once as the heading and once in the small
+        # mono line under it.
+        shows = any(self._cell(x, '') != x.does or x.edge for x in mine)
         head = ['Control', self.ident] + (named or ['Does'])
         cls = ' class="a"'
         th = ''.join(f'<th{cls if named and i > 1 else ""}>{esc(h)}</th>'
                      for i, h in enumerate(head))
         out = []
-        for r in (x for x in self.rows if x.role == role):
+        for r in mine:
             name = esc(r.control) + (f' <em>{esc(r.part)}</em>' if r.part else '')
             cells = [f'<td class="c">{name}</td>',
                      f'<td class="n">{esc(r.ident)}</td>']
@@ -274,15 +362,16 @@ class Sheet:
                 for c in named:
                     v = self._cell(r, c)
                     cells.append(f'<td{"" if v else " class=\"none\""}>'
-                                 f'{esc(v) or "—"}</td>')
+                                 f'{esc(v)}{_mark(r) if v else "—"}</td>')
             else:
                 b = esc(self._cell(r, ''))
                 if r.edge:
                     b += f' / {esc(r.edge)}'
-                does = esc(r.does)
+                does = esc(r.does) + _mark(r)
                 if r.edge:
                     does += ' <span class="edge">+ release</span>'
-                cells.append(f'<td>{does}<span class="cb">{b}</span></td>')
+                under = f'<span class="cb">{b}</span>' if shows else ''
+                cells.append(f'<td>{does}{under}</td>')
             out.append('<tr>' + ''.join(cells) + '</tr>')
         title = esc(self.devices.get(role, role))
         # The axes first: they are the flight controls, and the buttons
@@ -304,7 +393,7 @@ class Sheet:
                 for c in (named or ['']):
                     v = self._cell(a, c)
                     cells.append(f'<td{"" if v else " class=\"none\""}>'
-                                 f'{esc(v) or "—"}</td>')
+                                 f'{esc(v)}{_mark(a) if v else "—"}</td>')
                 arows += '<tr>' + ''.join(cells) + '</tr>'
             tables += f'<table><tr>{ahead}</tr>{arows}</table>'
         if out:
@@ -330,6 +419,29 @@ class Sheet:
                         f'{frows}</table>')
         free = (f'<div class="panel"><h2>Left free</h2>{ftables}</div>'
                 if ftables else '')
+        #: Eighteen and then a count. DCS's list is every essential the
+        #: results file has nothing for -- forty-odd on a fresh module --
+        #: and a panel that long stops being a panel. The markdown prints
+        #: all of them, because a page you scroll can afford it.
+        left = ''
+        if self.unplaced:
+            shown = self.unplaced[:18]
+            # Two columns, like `Left free`: a panel is one of two or
+            # three across the page, and a third column squeezed `6
+            # factory profiles` into one word per line. The reason goes
+            # under the name, where the page already puts its small
+            # print.
+            urows = ''.join(
+                f'<tr><td class="c">{esc(w)}</td>'
+                f'<td class="n">{esc(s) or "—"}</td></tr>' for w, s in shown)
+            more = len(self.unplaced) - len(shown)
+            if more:
+                urows += (f'<tr><td colspan="2">and {more} more — '
+                          f'see the markdown</td></tr>')
+            left = ('<div class="panel"><h2>Not placed'
+                    f'<small>{esc(self.unplaced_note)}</small></h2>'
+                    f'<table><tr><th>Wanted</th><th>Shape</th></tr>'
+                    f'{urows}</table></div>')
         notes = ''
         for heading, body in self.notes:
             if isinstance(body, (list, tuple)):
@@ -342,9 +454,14 @@ class Sheet:
                       f'<div class="note">{inner}</div></div>')
         out = (tpl.replace('__TITLE__', esc(self.title))
                   .replace('__HEADING__', esc(self.heading))
-                  .replace('__SUBTITLE__', self.subtitle)
+                  # The legend only. Desk and overlay are on the
+                  # stamp at the foot of the page, and printing them in
+                  # both places says one fact twice.
+                  .replace('__SUBTITLE__', self.subtitle
+                           + (f'. {self.LEGEND}' if self.marked() else ''))
                   .replace('__PANELS__', ''.join(self._panel(r)
                                                  for r in self._roles()))
+                  .replace('__UNPLACED__', left)
                   .replace('__FREE__', free)
                   .replace('__NOTES__', notes)
                   .replace('__STAMP__', esc(self._stamp())))

@@ -74,7 +74,12 @@
          font-variant-numeric: tabular-nums; text-align: right;
          white-space: nowrap; width: 1%; }
   td.c { font-weight: 600; white-space: nowrap; }
-  td.c em { font-style: normal; color: var(--faint); font-weight: 400; }
+  /* Which part of the control, on a line of its own. It was inline, and
+     `travel contact (held while the lever is used)` is forty-four
+     characters that may not wrap -- so one row set the column's width
+     and every command name beside it broke over four lines. */
+  td.c em { font-style: normal; color: var(--faint); font-weight: 400;
+            display: block; white-space: normal; font-size: 11px; }
   td.h { color: var(--muted); }
   td.none { color: var(--faint); }
 
@@ -115,6 +120,7 @@
   </div>
 
   <div class="cols3">
+    __UNPLACED__
     __FREE__
     __NOTES__
   </div>

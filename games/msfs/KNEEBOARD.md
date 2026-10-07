@@ -1,6 +1,6 @@
 # Kneeboard MSFS 2024
 
-Microsoft Flight Simulator 2024 · VIRPIL. Generated — do not edit, regenerate.
+Microsoft Flight Simulator 2024 · VIRPIL · IzoDesk · By hand. Generated — do not edit, regenerate.
 
 ## R-VPC Stick WarBRD-D
 

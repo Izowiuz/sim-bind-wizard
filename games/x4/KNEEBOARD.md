@@ -80,7 +80,7 @@ X4 Foundations · VIRPIL · IzoDesk · By hand. Generated — do not edit, regen
 
 ## Not placed
 
-- Player ship info (wanted a `button`)
+- Player ship info (wanted `button`)
 
 ## Still free
 

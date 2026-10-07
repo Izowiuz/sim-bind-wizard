@@ -410,6 +410,22 @@ class TheJudgementsHaveAHome(unittest.TestCase):
                 self.assertTrue(os.path.exists(where),
                                 f'{game} names {cls.BINDS} and it is not there')
 
+    def test_every_game_builds_the_core_sheet(self):
+        # DCS wrote its own, with its own template, and that is how its
+        # kneeboard drifted: the shared one learned to put axes inside
+        # their device, to split the free controls by device and to drop
+        # two paragraphs of prose, and none of it reached DCS.
+        for game, cls in self.planners():
+            with self.subTest(game=game):
+                self.assertTrue(hasattr(cls, 'sheet'))
+                self.assertFalse('write_sheets' in vars(cls),
+                                 f'{game} writes its own kneeboard again')
+                # And a game with several sheets of its own says so with
+                # a suffix, so both filenames keep the family's spelling.
+                # Called on the class, not an instance: DCS's reads the
+                # module it was constructed for.
+                self.assertTrue(callable(cls.sheet_suffix))
+
     def test_the_description_and_the_answer_are_different_files(self):
         # They were one, so a row said what the function is AND where the
         # allocator had put it, and nothing in the file said which half

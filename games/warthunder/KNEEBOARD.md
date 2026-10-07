@@ -1,6 +1,6 @@
 # Kneeboard War Thunder
 
-War Thunder · air simulator + helicopters · VIRPIL. Generated — do not edit, regenerate.
+War Thunder · air simulator + helicopters · VIRPIL · IzoDesk · By hand. Generated — do not edit, regenerate.
 
 ## R-VPC Stick WarBRD-D  (buttons 51–82)
 

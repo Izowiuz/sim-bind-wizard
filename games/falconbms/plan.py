@@ -716,8 +716,9 @@ def _sheet(layout):
     sh.note('Picking it up',
             'falcon-bms launcher → Keyfile → "BMS - VIRPIL". '
             'Regenerate with ./plan.py --write; never hand-edit.')
-    sh.unplaced = [(n.what, n.shape if isinstance(n.shape, str)
-                    else '/'.join(n.shape)) for n in unmet]
+    for n in unmet:
+        sh.add_unplaced(n.what, n.shape if isinstance(n.shape, str)
+                        else '/'.join(n.shape))
     for role, c in free:
         sh.add_free(role, c.label,
                     ', '.join(str(off[role] + x)

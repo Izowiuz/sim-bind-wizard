@@ -1,6 +1,6 @@
 # Kneeboard Elite Dangerous
 
-Elite Dangerous · VIRPIL. Generated — do not edit, regenerate.
+Elite Dangerous · VIRPIL · IzoDesk · By hand. Generated — do not edit, regenerate.
 
 ## R-VPC Stick WarBRD-D
 
@@ -20,8 +20,6 @@ Elite Dangerous · VIRPIL. Generated — do not edit, regenerate.
 |---|---|---|---|
 | Joy_18 | Bottom thumb hat — right | Cycle next target | — |
 | Joy_16 | Bottom thumb hat — left | Cycle previous target | — |
-| Joy_14 | Bottom thumb hat — push | Galaxy map open | Galaxy map open buggy |
-| Joy_15 | Bottom thumb hat — up | System map open | System map open buggy |
 | Joy_31 | Grip pinky button — press | Select highest threat | — |
 | Joy_24 | Grip thumb hat — up | Increase systems power | Increase systems power buggy |
 | Joy_27 | Grip thumb hat — right | Increase weapons power | Increase weapons power buggy |
@@ -67,6 +65,8 @@ Elite Dangerous · VIRPIL. Generated — do not edit, regenerate.
 | Joy_35 | T3 rocker — down | Cycle previous page | — |
 | Joy_36 | T4 rocker — up | Cycle next panel | — |
 | Joy_37 | T4 rocker — down | Cycle previous panel | — |
+| Joy_38 | T5 rocker — up | Galaxy map open | Galaxy map open buggy |
+| Joy_39 | T5 rocker — down | System map open | System map open buggy |
 | Joy_16 | Thumb button — press | Use boost juice | — |
 | Joy_19 | Thumb hat — up | Radar increase range | — |
 | Joy_21 | Thumb hat — down | Radar decrease range | — |
@@ -91,7 +91,6 @@ Elite Dangerous · VIRPIL. Generated — do not edit, regenerate.
 - Middle finger hat — no buttons
 - T1 rocker — no buttons
 - T2 rocker — no buttons
-- T5 rocker — no buttons
 - E1 encoder — no buttons
 - E2 encoder — no buttons
 - Mode selector — no buttons

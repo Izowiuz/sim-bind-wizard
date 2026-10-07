@@ -60,14 +60,25 @@
                               own classes
       tests/test_*.py
 
-`games/dcs` is on the core for the matching but keeps its own
-`sheet-template.html`, whose placeholders are per-device (`__STICK__`,
-`__THROTTLE__`) rather than the core's `__PANELS__`: the core sheet has no `?`
-for a proposal and no vote-ordered "still unbound" panel, and both are
-load-bearing for its confirm-rather-than-invent workflow. It also passes its
-own `reach` table to `allocate()`. `games/dcs/dcs-bind-wizard.py` is a curses
-capture TUI, not a planner: it writes the vocabulary `propose.py` reads, and of
-the core it uses only `capture`, `game`, `tui` and `backup`.
+`games/dcs` builds its kneeboard from the RESULTS file rather than from a
+layout, which is the one real difference in its sheet: half of what is bound by
+the time you read a page was confirmed at the stick and half is still the
+planner's proposal, so its rows carry `Row.mark` — `?` — and its "not placed"
+list is ordered by how many factory profiles bind each thing. Both of those
+live in `core/sheet.py` now and any confirm-rather-than-invent game gets them.
+
+It used to own a writer and a 121-line template of its own, and that is how the
+page drifted: the shared sheet learned to put axes inside their device, to split
+the free controls per device and to drop two paragraphs of prose, and none of it
+reached DCS. The reason recorded here for the split — per-device placeholders —
+was not true: both templates used `__PANELS__`, and the `--air`/`--heli`
+palettes coloured two static header cells rather than any row. `tests/
+test_contract.py` now refuses a game that writes its own kneeboard.
+
+DCS does still pass its own `reach` table to `allocate()`, and
+`games/dcs/dcs-bind-wizard.py` is a curses capture TUI rather than a planner:
+it writes the vocabulary `propose.py` reads, and of the core it uses only
+`capture`, `game`, `tui` and `backup`.
 
 `games/elite` has two tools on one writer: `plan.py` lays out from `NEEDS` like
 the rest of the family, and hands the result to `ed-bind-wizard.py`'s own

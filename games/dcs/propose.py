@@ -10,7 +10,7 @@ DESCRIPTION
 FILES
     dcs-bind-wizard.py             the capture TUI and the writer
     dcs-bind-wizard-results.json   the bindings, and where the game is
-    sheet-template.html            the kneeboard template
+    jobs.toml                      what each command is for, by name
     <device>.diff.lua              written by --write, per aircraft
 
 ENVIRONMENT
@@ -681,19 +681,10 @@ def _inverted(name):
 #: byte for byte what core/sheet.py has; this sheet still renders itself,
 #: because the core template has no `?` for a proposal and no vote-ordered
 #: "still unbound" panel.
-_esc = csheet.esc
-
-
 #: Panel order on the sheet. Anything the map has that is not named here
 #: follows, alphabetically -- so a captured third device appears rather than
 #: raising KeyError, and the stick still comes first.
 ROLE_ORDER = ('stick', 'throttle')
-
-
-def panel_roles(rows):
-    known = [r for r in ROLE_ORDER if r in rows]
-    return known + sorted(r for r in rows
-                          if r != 'axes' and r not in ROLE_ORDER)
 
 
 def bound_rows(module, key, cmds, guide):
@@ -713,7 +704,6 @@ def bound_rows(module, key, cmds, guide):
         if not isinstance(r, dict) or 'role' not in r:
             continue
         d = devs.get(r['role'])
-        theme = (guide.get(h) or {}).get('theme', '')
         mark = '?' if r.get('proposed') else ''
         if r['type'] == 'axis':
             a = d.axis(r['index']) if d else None
@@ -726,7 +716,7 @@ def bound_rows(module, key, cmds, guide):
         part = g.direction(r['index']) if g else ''
         label = g.label if g else f'button {r["index"]}'
         rows.setdefault(r['role'], []).append(
-            (r['index'], label, part, r['name'], theme, mark))
+            (r['index'], label, part, r['name'], mark))
     for k in rows:
         rows[k].sort()
     return rows, devs
@@ -741,116 +731,6 @@ def unbound(module, cmds, guide, key):
                 out.append((name, kind, cmds[h]['votes']))
     out.sort(key=lambda x: -x[2])
     return out
-
-
-def laid_out_for(devs):
-    """`desk, overlay` -- what the proposal was made against.
-
-    The desk is a fact about this whole sheet: every reach on it is
-    measured from one rig. The overlay is a fact about the PROPOSED rows
-    only -- this sheet is built from the results file, so anything without
-    a `?` was confirmed at the stick and no template put it there.
-    """
-    desk = ''
-    for dev in devs.values():
-        got = getattr(dev, 'profile', None)
-        if got is not None:
-            desk = got.name
-            break
-    over = corneeds.OVERLAY
-    return desk, (over.name if over is not None else '')
-
-
-def write_sheet(module, key, cmds, guide, path):
-    rows, devs = bound_rows(module, key, cmds, guide)
-    desk, over = laid_out_for(devs)
-    L = [f'# Kneeboard — {key}', '',
-         'What sits under which finger. Button numbers are the ones DCS shows,',
-         'one higher than the OS number the device map uses.', '',
-         '**Generated** by `./propose.py -a %s --sheet` from the results file'
-         % key,
-         'and `sim-device-map`. A `?` is proposed and not yet confirmed.', '',
-         f'Desk: **{desk or "not said"}**'
-         + (f' · proposals laid out to **{over}**' if over else ''), '']
-    for role in panel_roles(rows):
-        d = devs.get(role)
-        if not rows[role]:
-            continue
-        L += [f'## {d.product if d else role}', '',
-              '| Control | DCS | Command |', '|---|---|---|']
-        for idx, label, part, name, theme, mark in rows[role]:
-            what = label + (f' — {part}' if part else '')
-            L.append(f'| {what} | `BTN{idx + 1}` | {name}'
-                     f'{" ?" if mark else ""} |')
-        L.append('')
-    if rows['axes']:
-        L += ['## Axes', '', '| Control | Axis | Command |', '|---|---|---|']
-        for role, idx, label, name, inv, mark in rows['axes']:
-            L.append(f'| {label} | `{role} {idx}` | {name}{inv}'
-                     f'{" ?" if mark else ""} |')
-        L.append('')
-    left = unbound(module, cmds, guide, key)
-    if left:
-        L += ['## Still unbound', '',
-              'Essentials with no control yet, most-wanted first.', '']
-        for name, kind, votes in left:
-            L.append(f'- {name} — {kind}, {votes} factory profiles')
-        L.append('')
-    open(path, 'w', encoding='utf-8').write('\n'.join(L))
-    return path, sum(len(rows[k]) for k in rows)
-
-
-def write_html(module, key, cmds, guide, path):
-    import datetime
-    rows, devs = bound_rows(module, key, cmds, guide)
-
-    def panel(role):
-        d = devs.get(role)
-        body = []
-        for idx, label, part, name, theme, mark in rows[role]:
-            what = _esc(label) + (f' <em>{_esc(part)}</em>' if part else '')
-            unsure = ' <em>?</em>' if mark else ''
-            body.append(f'<tr><td class="c">{what}</td>'
-                        f'<td class="n">{idx + 1}</td>'
-                        f'<td>{_esc(name)}{unsure}</td></tr>')
-        return (f'<div class="panel"><h2>{_esc(d.product if d else role)}'
-                f'<small>DCS button numbers</small></h2><table>'
-                f'<tr><th>Control</th><th>BTN</th><th class="a">Command</th>'
-                f'</tr>' + ''.join(body) + '</table></div>')
-
-    arows = ''.join(
-        f'<tr><td class="c">{_esc(label)}</td>'
-        f'<td class="n">{_esc(role[:3])} {idx}</td>'
-        f'<td>{_esc(name)}{_esc(inv)}{" <em>?</em>" if mark else ""}</td></tr>'
-        for role, idx, label, name, inv, mark in rows['axes'])
-    axes_panel = ('<div class="panel"><h2>Axes</h2><table><tr><th>Control</th>'
-                  '<th>#</th><th class="a">Command</th></tr>'
-                  + arows + '</table></div>')
-
-    left = unbound(module, cmds, guide, key)
-    urows = ''.join(
-        f'<tr><td class="c">{_esc(n)}</td><td class="n">{v}</td>'
-        f'<td class="h">{_esc(k)}</td></tr>' for n, k, v in left[:18])
-    unbound_panel = ('<div class="panel"><h2>Still unbound<small>most-wanted'
-                     ' first</small></h2><table><tr><th>Command</th>'
-                     '<th>Profiles</th><th>Kind</th></tr>'
-                     + (urows or '<tr><td colspan="3">nothing</td></tr>')
-                     + '</table></div>')
-
-    tpl = open(os.path.join(HERE, 'sheet-template.html'), encoding='utf-8').read()
-    n = sum(len(rows[k]) for k in rows)
-    out = (tpl.replace('__MODULE__', _esc(key))
-              .replace('__PANELS__', ''.join(
-                  panel(r) for r in panel_roles(rows)))
-              .replace('__AXES__', axes_panel)
-              .replace('__UNBOUND__', unbound_panel)
-              .replace('__STAMP__', f'generated {datetime.date.today()} '
-                                    f'· {n} bindings'
-                                    + ''.join(f' · {part}' for part
-                                              in laid_out_for(devs)
-                                              if part)))
-    open(path, 'w', encoding='utf-8').write(out)
-    return path, n
 
 
 def reseed(module, key, cmds, guide, backup_dir=None, when=None):
@@ -1072,29 +952,69 @@ class Dcs(adapter.Proposer):
         return files
 
     @typing.override
-    def write_sheets(self, layout, markdown=None, html=None):
-        """DCS renders from its own template, not the core's.
+    def sheet_suffix(self):
+        """A kneeboard per module, not per game: the Hornet and the Viper
+        are two aircraft and two sheets."""
+        return f'-{self.aircraft}'
 
-        Its placeholders are per-device (`__STICK__`, `__THROTTLE__`) where
-        the core's are `__PANELS__`, and the core sheet has no `?` for a
-        proposal -- see ARCHITECTURE.md.
+    @typing.override
+    def sheet(self, layout):
+        """The kneeboard, in the core's shape, out of the RESULTS file.
+
+        `layout` is ignored on purpose, and it is the one real difference
+        between this sheet and the other five: half of what is bound by
+        the time you read a page is yours, confirmed at the stick, and the
+        proposal is only the other half. That is what `mark` is for.
+
+        It used to be a writer and a template of its own, which is how it
+        drifted: the shared sheet learned to put axes inside their device,
+        to split the free controls by device and to drop two paragraphs of
+        prose, and none of it reached here.
         """
-        out = []
-        if markdown is not None:
-            path = markdown or os.path.join(
-                HERE, f'KNEEBOARD-{self.aircraft}.md')
-            pth, n = write_sheet(self.module, self.aircraft, self.cmds,
-                                 self.guide, path)
-            out.append(f'wrote {pth}: {n} bindings')
-        if html is not None:
-            path = html or os.path.join(
-                HERE, f'kneeboard-{self.aircraft}.html')
-            pth, n = write_html(self.module, self.aircraft, self.cmds,
-                                self.guide, path)
-            out.append(f'wrote {pth}: {n} bindings')
-        for line in out:
-            print(line)
-        return out
+        rows, devs = bound_rows(self.module, self.aircraft, self.cmds,
+                                self.guide)
+        sh = csheet.Sheet(
+            f'Kneeboard — {self.aircraft}',
+            # `#` because the column serves axes as well as buttons;
+            # the rows say `BTN12` themselves, which is the number DCS
+            # shows you.
+            f'DCS {self.aircraft}', ident='#',
+            devices={r: d.product for r, d in devs.items()})
+        sh.note('Button numbers',
+                'The ones DCS shows, one higher than the OS number the '
+                'device map uses.')
+        for role in devs:
+            for idx, label, part, name, mark in rows.get(role, []):
+                sh.add(csheet.Row(role, label, part=part,
+                                  ident=f'BTN{idx + 1}', does=name,
+                                  bindings={'': name}, mark=mark))
+        for role, idx, label, name, inv, mark in rows['axes']:
+            sh.add_axis(role, label, f'axis {idx}', f'{name}{inv}')
+            if mark:
+                sh.axes[-1].mark = mark
+        # Which controls nothing has taken. The other five get this from
+        # the allocator's own leftovers; here it is the results file read
+        # the other way round, because that is where the truth is.
+        with open(results_path(), encoding='utf-8') as f:
+            binds = json.load(f)['aircraft'].get(self.aircraft, {})
+        taken = {(r['role'], r['index']) for r in binds.values()
+                 if isinstance(r, dict) and r.get('type') != 'axis'
+                 and 'role' in r}
+        for role, dev in devs.items():
+            for ctrl in dev.groups(bindable=True):
+                if not any((role, b) in taken
+                           for b in ctrl.bindable_buttons):
+                    sh.add_free(role, ctrl.label)
+        # Ordered by how many of the shipped profiles bind each one, so
+        # the top of the list is the part worth reading. The count itself
+        # stays off the page: `5 factory profiles` beside a command name
+        # is a number you can do nothing with, and the order says what it
+        # was for.
+        sh.unplaced_note = 'most-wanted first, and nothing here fits'
+        for name, kind, _votes in unbound(self.module, self.cmds,
+                                          self.guide, self.aircraft):
+            sh.add_unplaced(name, kind)
+        return sh
 
     @typing.override
     def arguments(self, parser):

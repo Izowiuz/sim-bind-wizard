@@ -383,8 +383,9 @@ def _sheet(layout):
                     # unnamed context, which is what no context is.
                     CTX.get(ctx, ctx) or '')
 
-    sh.unplaced = [(n.what, n.shape if isinstance(n.shape, str)
-                    else '/'.join(n.shape)) for n in unmet]
+    for n in unmet:
+        sh.add_unplaced(n.what, n.shape if isinstance(n.shape, str)
+                        else '/'.join(n.shape))
     return sh
 
 

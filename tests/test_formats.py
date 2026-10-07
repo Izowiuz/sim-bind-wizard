@@ -496,6 +496,123 @@ class TheKneeboardPanels(unittest.TestCase):
             with open(path, encoding='utf-8') as f:
                 return f.read()
 
+    def marked(self):
+        """A sheet with something nobody has confirmed, as DCS's is."""
+        from core import sheet as csheet
+        sh = csheet.Sheet('Test', 'fake hardware', ident='#',
+                          devices={'stick': 'A Stick'})
+        sh.add(csheet.Row('stick', 'Thumb hat', 'up', 'BTN23', 'CMS',
+                          {'': 'CMS'}, mark='?'))
+        sh.add_axis('stick', 'Main stick', 'axis 0', 'Roll')
+        sh.axes[-1].mark = '?'
+        return sh
+
+    def wrote(self, sheet, how):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, 'out')
+            getattr(sheet, how)(path)
+            with open(path, encoding='utf-8') as f:
+                return f.read()
+
+    def test_a_mark_reaches_both_formats(self):
+        # DCS's sheet is built from the results file, so half of it is
+        # what you confirmed at the stick and half is still a proposal.
+        for how in ('markdown', 'html'):
+            with self.subTest(how=how):
+                got = self.wrote(self.marked(), how)
+                self.assertIn('CMS ?' if how == 'markdown'
+                              else 'CMS<em>?</em>',
+                              got.replace(' <em>', '<em>'))
+
+    def test_an_axis_carries_one_too(self):
+        for how in ('markdown', 'html'):
+            with self.subTest(how=how):
+                got = self.wrote(self.marked(), how)
+                self.assertIn('Roll', got)
+                self.assertIn('?', got)
+
+    def test_the_legend_appears_only_where_a_mark_is_used(self):
+        # A mark nobody has explained is some of the rows being slightly
+        # different; a legend over a page with no marks is a line you
+        # learn to skip.
+        for how in ('markdown', 'html'):
+            with self.subTest(how=how):
+                self.assertIn('proposed', self.wrote(self.marked(), how))
+                self.assertNotIn('proposed', self.wrote(self.sheet(), how))
+
+    def test_a_pipe_in_a_name_does_not_end_the_cell(self):
+        # DCS calls one `Radar | Display Zoom Out`, and that row came out
+        # with four columns under a three-column header.
+        from core import sheet as csheet
+        sh = csheet.Sheet('Test', 'fake', devices={'stick': 'A Stick'})
+        sh.add(csheet.Row('stick', 'Pinky', '', '1', 'Radar | Zoom Out',
+                          {'': 'Radar | Zoom Out'}))
+        got = self.wrote(sh, 'markdown')
+        row = next(ln for ln in got.splitlines() if 'Radar' in ln)
+        self.assertEqual(3, row.count('|') - row.count('\\|') - 1, row)
+
+    def test_what_has_no_control_is_listed(self):
+        from core import sheet as csheet
+        sh = csheet.Sheet('Test', 'fake', devices={'stick': 'A Stick'})
+        sh.add(csheet.Row('stick', 'Pinky', '', '1', 'Guns', {'': 'G'}))
+        sh.add_unplaced('Radar Elevation', 'axis')
+        sh.add_unplaced('Canopy', 'button')
+        for how in ('markdown', 'html'):
+            with self.subTest(how=how):
+                got = self.wrote(sh, how)
+                self.assertIn('Radar Elevation', got)
+                self.assertIn('Canopy', got)
+
+    def test_the_order_of_that_list_is_said_where_it_means_something(self):
+        # DCS sorts it by how many shipped profiles bind each thing, and
+        # the count itself was on the page as `5 factory profiles` --
+        # a number a reader can do nothing with. The order carries it.
+        from core import sheet as csheet
+        sh = csheet.Sheet('Test', 'fake', devices={'stick': 'A Stick'})
+        sh.add(csheet.Row('stick', 'Pinky', '', '1', 'Guns', {'': 'G'}))
+        sh.add_unplaced('Radar Elevation', 'axis')
+        sh.unplaced_note = 'most-wanted first'
+        for how in ('markdown', 'html'):
+            with self.subTest(how=how):
+                got = self.wrote(sh, how)
+                self.assertIn('ost-wanted first', got)
+                self.assertNotIn('factory profiles', got)
+
+    def test_a_long_unplaced_list_is_cut_in_the_html_only(self):
+        from core import sheet as csheet
+        sh = csheet.Sheet('Test', 'fake', devices={'stick': 'A Stick'})
+        sh.add(csheet.Row('stick', 'Pinky', '', '1', 'Guns', {'': 'G'}))
+        for n in range(25):
+            sh.add_unplaced(f'Thing {n}', 'button')
+        self.assertIn('Thing 24', self.wrote(sh, 'markdown'))
+        got = self.wrote(sh, 'html')
+        self.assertNotIn('Thing 24', got)
+        self.assertIn('and 7 more', got)
+
+    def test_the_binding_goes_when_it_repeats_its_neighbour(self):
+        # DCS binds a command BY its name, so the column said the same as
+        # `Does` down the whole page -- a column in the markdown, and in
+        # the HTML a second line of small print under every heading.
+        from core import sheet as csheet
+        sh = csheet.Sheet('Test', 'fake', devices={'stick': 'A Stick'})
+        sh.add(csheet.Row('stick', 'Pinky', '', '1', 'Guns', {'': 'Guns'}))
+        self.assertNotIn('Binding', self.wrote(sh, 'markdown'))
+        self.assertIn('Binding', self.wrote(self.sheet(), 'markdown'))
+        self.assertNotIn('class="cb"', self.wrote(sh, 'html'))
+        self.assertIn('class="cb"', self.wrote(self.sheet(), 'html'))
+
+    def test_the_unplaced_panel_is_two_columns_like_the_free_one(self):
+        # It is one panel of two or three across the page, and a third
+        # column squeezed `6 factory profiles` to one word per line.
+        from core import sheet as csheet
+        sh = csheet.Sheet('Test', 'fake', devices={'stick': 'A Stick'})
+        sh.add(csheet.Row('stick', 'Pinky', '', '1', 'Guns', {'': 'G'}))
+        sh.add_unplaced('Radar Elevation', 'axis')
+        got = self.wrote(sh, 'html')
+        panel = got.split('<h2>Not placed')[1].split('</table>')[0]
+        self.assertEqual(2, panel.count('<th'))
+
     def test_the_free_panel_names_the_control_and_its_number(self):
         for how in ('markdown', 'html'):
             with self.subTest(format=how):

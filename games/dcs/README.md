@@ -8,8 +8,9 @@ Two tools, on the core for the matching:
                          them to core.needs.allocate, lays a layout over the
                          wizard's results
 
-`propose.py` renders its kneeboard from a local `sheet-template.html` rather
-than the core's — see `ARCHITECTURE.md`.
+`propose.py` builds its kneeboard from the results file rather than from a
+layout, so its rows carry `?` where nobody has confirmed them at the stick.
+The page itself is the core's — see `ARCHITECTURE.md`.
 
 ## Where it lives
 

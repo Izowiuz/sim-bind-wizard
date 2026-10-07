@@ -751,11 +751,52 @@ class Adapter(abc.ABC):
             print(line)
         return 0
 
-    # ---- what the two kinds of adapter each answer differently ----------
+    # ---- the kneeboard, for both kinds of adapter ----------------------
 
     @abc.abstractmethod
+    def sheet(self, layout) -> csheet.Sheet:
+        """The kneeboard, in the core's shape."""
+
+    def sheet_suffix(self) -> str:
+        """What tells this game's kneeboard from another of its own, if
+        anything. DCS writes one per aircraft module: `-FA-18C`.
+
+        The suffix rather than the whole stem, because the two files do
+        not share a spelling -- `KNEEBOARD.md` shouts and
+        `kneeboard.html` does not -- and a game overriding the stem would
+        have to repeat that convention to keep it. DCS is the reason
+        there is a hook at all: overriding the whole of `write_sheets` to
+        change a filename is how its sheet drifted away from everybody
+        else's, keeping its own writer and its own template while three
+        fixes to the shared one never reached it.
+        """
+        return ''
+
+    @typing.final
     def write_sheets(self, layout, markdown=None, html=None) -> list[str]:
-        """Write the kneeboard, in whichever forms were asked for."""
+        """Each argument is None for "not asked", '' for the default path,
+        or a path."""
+        sh = self.sheet(layout)
+        # One place for six games: a kneeboard printed on a desk it was
+        # not drawn for, or under an overlay you have since changed, reads
+        # as the only layout there could be. Set here rather than asked of
+        # every `sheet()` -- this method is final, so nothing can skip it.
+        sh.desk = corneeds.desk_of(layout)
+        if corneeds.OVERLAY is not None:
+            sh.overlay = corneeds.OVERLAY.name
+        tail = self.sheet_suffix()
+        out = []
+        if markdown is not None:
+            out.append('wrote %s (%d rows, %d axes)' % sh.markdown(
+                markdown or os.path.join(self.here, f'KNEEBOARD{tail}.md')))
+        if html is not None:
+            out.append('wrote %s (%d rows, %d axes)' % sh.html(
+                html or os.path.join(self.here, f'kneeboard{tail}.html')))
+        for line in out:
+            print(line)
+        return out
+
+    # ---- what the two kinds of adapter each answer differently ----------
 
     @abc.abstractmethod
     def write_all(self, layout) -> list[str]:
@@ -831,10 +872,6 @@ class Planner(Adapter):
     """An adapter whose writer takes the placements it is handed."""
 
     @abc.abstractmethod
-    def sheet(self, layout) -> csheet.Sheet:
-        """The kneeboard, in the core's shape."""
-
-    @abc.abstractmethod
     def write_layout(self, layout) -> dict:
         """What the game's files should now contain, for these placements.
 
@@ -865,29 +902,6 @@ class Planner(Adapter):
     def write_all(self, layout) -> list[str]:
         since = time.time()
         return self.lay_down(self.write_layout(layout), since=since)
-
-    @typing.final
-    def write_sheets(self, layout, markdown=None, html=None) -> list[str]:
-        """Each argument is None for "not asked", '' for the default path,
-        or a path."""
-        sh = self.sheet(layout)
-        # One place for six games: a kneeboard printed on a desk it was
-        # not drawn for, or under an overlay you have since changed, reads
-        # as the only layout there could be. Set here rather than asked of
-        # every `sheet()` -- this method is final, so nothing can skip it.
-        sh.desk = corneeds.desk_of(layout)
-        if corneeds.OVERLAY is not None:
-            sh.overlay = corneeds.OVERLAY.name
-        out = []
-        if markdown is not None:
-            out.append('wrote %s (%d rows, %d axes)' % sh.markdown(
-                markdown or os.path.join(self.here, 'KNEEBOARD.md')))
-        if html is not None:
-            out.append('wrote %s (%d rows, %d axes)' % sh.html(
-                html or os.path.join(self.here, 'kneeboard.html')))
-        for line in out:
-            print(line)
-        return out
 
     @typing.final
     def review(self, args) -> None:

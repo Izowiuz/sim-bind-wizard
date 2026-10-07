@@ -1,6 +1,6 @@
 # Kneeboard Falcon BMS
 
-Falcon BMS · F-16C · VIRPIL. Generated — do not edit, regenerate.
+Falcon BMS · F-16C · VIRPIL · IzoDesk · By hand. Generated — do not edit, regenerate.
 
 ## R-VPC Stick WarBRD-D  (DX 0–31)
 
@@ -22,7 +22,6 @@ Falcon BMS · F-16C · VIRPIL. Generated — do not edit, regenerate.
 | 2 | Main trigger — first | Trigger | `SimTriggerFirstDetent` |
 | 3 | Main trigger — second | Trigger | `SimTriggerSecondDetent` |
 | 6 | Thumb top button — press | NWS / AR DISC / MSL STEP | `SimMissileStep` |
-| 7 | Top thumb hat — push | AVTR | `SimAVTRToggle` |
 | 8 | Top thumb hat — up | DMS — display management | `SimDMSUp` |
 | 9 | Top thumb hat — left | DMS — display management | `SimDMSLeft` |
 | 10 | Top thumb hat — down | DMS — display management | `SimDMSDown` |
@@ -110,10 +109,11 @@ falcon-bms launcher → Keyfile → "BMS - VIRPIL". Regenerate with ./plan.py --
 
 ## Not placed
 
-- JFS — engine start (wanted a `hat2`)
-- Throttle idle detent (wanted a `hat2`)
-- IFF MASTER knob (wanted a `selector`)
-- Radar gain (wanted a `encoder`)
+- AVTR (wanted `button`)
+- JFS — engine start (wanted `hat2`)
+- Throttle idle detent (wanted `hat2`)
+- IFF MASTER knob (wanted `selector`)
+- Radar gain (wanted `encoder`)
 
 ## Still free
 
