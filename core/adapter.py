@@ -583,7 +583,7 @@ class Adapter(abc.ABC):
         p.add_argument('--html', nargs='?', const='', metavar='PATH',
                        help='write kneeboard.html, or to PATH')
         p.add_argument('--tui', action='store_true',
-                       help='review the layout, write what you keep')
+                       help='review the layout, save what you keep')
         p.add_argument('--write', action='store_true',
                        help='write the whole layout into the game')
         p.add_argument('--overlay', metavar='NAME',

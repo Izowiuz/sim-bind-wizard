@@ -24,7 +24,7 @@ VERBS
     why       the same, plus the evidence for each control
     free      controls left unbound
     sheet     write KNEEBOARD.md and kneeboard.html
-    tui       review the layout, write what you keep
+    tui       review the layout, save what you keep
     write     the whole layout, into the game
     capture   the curses capture wizard
 

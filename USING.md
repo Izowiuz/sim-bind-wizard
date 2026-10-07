@@ -55,7 +55,8 @@ found it a home or not, and each row is in one of three states:
     x / X   clear this one / drop every proposal, leaving yours
     m       the device map, and where the game was found
     y       why a control is chosen: the weights, and what they are for
-    s       write everything that has a control
+    s       save what you decided
+    w       write everything that has a control into the game
 
 `P` only fills gaps and `X` only drops proposals, so neither can undo a choice
 of yours: both are safe to press at any point.
@@ -65,11 +66,17 @@ still written; clearing it is how you say no.
 
 ### What outlasts the session
 
-What you decide is written to `games/<game>/<game>-binds.json` as you decide
-it — there is no save key for it, and `s` writes the game's own files, not
-these. That file holds only where things sit. What each function IS lives
-beside it in `<game>-needs.json`, and what you want of the layout lives in
-`overlays/`, picked with `--overlay`. Two strengths, because pressing RETURN and pressing `c` are not the
+`s` writes what you decided to `games/<game>/<game>-binds.json` — which
+control each entry sits on and who decided — and the list itself to
+`<game>-needs.json`. Until you press it the frame says `unsaved`, and `q`
+offers the same box on the way out. This is the capture wizard's `s`, the same
+key for the same act in both halves of the pair.
+
+`w` is the other thing: it writes the layout into the game's own config, with
+a backup. Nothing reaches the game until you press it.
+
+What you want of the LAYOUT is in neither file — that is `overlays/`, picked
+with `--overlay`. Two strengths, because pressing RETURN and pressing `c` are not the
 same claim:
 
     RETURN / l   you put it there. The control is taken before anything is

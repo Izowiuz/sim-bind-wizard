@@ -136,6 +136,10 @@ class Review:
         #: it cannot help, and taking the review down over it would be
         #: worse than saying so.
         self.save = save
+        #: Something has changed and the files do not have it yet. The
+        #: frame says `unsaved` while this is true and `s` clears it, the
+        #: way the capture wizard in sim-device-map does.
+        self.unsaved = False
         #: Reading the game again, and forgetting what was read. Both are
         #: `bind`'s own verbs run as subprocesses; neither can touch the
         #: judgements, because `drop` walks `CACHE` and the judgements are
@@ -504,7 +508,7 @@ class Review:
         if self.mark[need] == MINE:
             return f'{need.what}: already yours'
         self._accept(need, at)
-        self._kept()
+        self.touched()
         return f'{need.what}: confirmed — {self.where(need)}'
 
     def _accept(self, need, at):
@@ -519,14 +523,14 @@ class Review:
                       'how': corneeds.ACCEPTED}
 
     def confirm_all(self):
-        # One `_kept` for the lot: it writes the whole list every time, so
-        # forty-five of them is forty-five writes of the same file.
+        # One mark for the lot rather than one per need: nothing is
+        # written here, and `unsaved` does not get truer forty-five times.
         todo = [(n, self.at[n]) for n in self.needs
                 if self.mark[n] == PROPOSED and self.at[n] is not None]
         for need, at in todo:
             self._accept(need, at)
         if todo:
-            self._kept()
+            self.touched()
         n = len(todo)
         return (f'confirmed {n} proposal{"" if n == 1 else "s"}' if n
                 else 'nothing left to confirm')
@@ -540,7 +544,7 @@ class Review:
         # next open puts it straight back.
         was, need.assignment = need.assignment, None
         if was:
-            self._kept()
+            self.touched()
         return f'{need.what}: cleared — its control is free again'
 
     def clear_all(self):
@@ -576,14 +580,11 @@ class Review:
         placed = corneeds.put(need, role, ctrl, why, button=button)
         self.at[need] = placed
         self.mark[need] = MINE
-        # Written down at the moment it is decided. The alternative was a
-        # save key, and a save key you can forget is how an evening of
-        # choices comes back purple.
         need.assignment = {'role': role, 'control': ctrl.id,
                       'how': corneeds.CHOSE}
         if button is not None and corneeds.honours_press(need, ctrl, button):
             need.assignment['button'] = button
-        self._kept()
+        self.touched()
         return placed
 
     def categories(self):
@@ -593,15 +594,37 @@ class Review:
         make the fallback a place you can leave but not return to."""
         return sorted({self.group_of(n) for n in self.needs})
 
-    def _kept(self):
-        """Write the judgements down, and say what happened either way."""
-        if self.save is None:
-            return ' (nowhere to write it, so it lasts until you quit)'
-        try:
-            self.save(self.needs)
-        except (OSError, RuntimeError) as e:
-            return f' -- but it could not be written: {e}'
+    def touched(self):
+        """Say that something changed and the files no longer match.
+
+        It used to WRITE, here, on every decision -- eight call sites, a
+        whole-file rewrite each. The capture wizard in sim-device-map does
+        not: it marks the screen `unsaved` and `s` writes. One keystroke
+        means one thing in both tools now, which is worth more than the
+        saved keystroke.
+        """
+        self.unsaved = True
         return ''
+
+    def keep(self):
+        """Write both files down. (what happened, is it still unsaved).
+
+        The whole list every time, because that is what the files hold --
+        a description per function and a row per placement, and a partial
+        write of either is a file that disagrees with the screen.
+        """
+        if self.save is None:
+            # Still unsaved, and it will stay that way: there is nowhere
+            # to put it, so the frame goes on saying so rather than
+            # claiming a file has something no file does.
+            return 'this game derives its needs, so there is nothing to ' \
+                   'write them to', True
+        try:
+            said = self.save(self.needs)
+        except (OSError, RuntimeError) as e:
+            return f'could not write it: {e}', True
+        self.unsaved = False
+        return said or 'written', False
 
     def refile(self, need, category):
         """Move a need to another group. Returns a line.
@@ -613,7 +636,8 @@ class Review:
         """
         need.category = (None if category ==
                          corneeds.URGENCY_NAME[need.urgency] else category)
-        return f'{need.what} filed under {category}{self._kept()}'
+        self.touched()
+        return f'{need.what} filed under {category}'
 
     def rename(self, old, new):
         """Call a group something else, without emptying it first.
@@ -628,7 +652,8 @@ class Review:
         moved = [n for n in self.needs if n.category == old]
         for n in moved:
             n.category = new
-        return f'{len(moved)} moved from {old} to {new}{self._kept()}'
+        self.touched()
+        return f'{len(moved)} moved from {old} to {new}'
 
     def promote(self, action, category):
         """Put an action from the vocabulary on the list. Returns a line.
@@ -642,8 +667,9 @@ class Review:
                                for slot in n.bindings for b in slot)), None)
         if already is not None:
             already.category = category
+            self.touched()
             return (f'{action.name} was already on the list, moved to '
-                    f'{category}{self._kept()}')
+                    f'{category}')
         if action.kind == 'axis':
             # Axes never went through the allocator in any game in the
             # family, so there is nothing for a promoted one to land on.
@@ -655,7 +681,8 @@ class Review:
         self.needs.append(need)
         self.at[need] = None
         self.mark[need] = UNSET
-        return f'{action.name} added to {category}{self._kept()}'
+        self.touched()
+        return f'{action.name} added to {category}'
 
     def rules_lines(self, width=60):
         """How a control is chosen, read out of the tables that choose it.
@@ -889,7 +916,8 @@ KEYS = (
     ('head', 'DESCRIPTION'),
     ('plain', "  A row is an entry: one or more of the game's actions,"),
     ('plain', '  and the control they landed on. Entries are grouped by'),
-    ('plain', '  category, and nothing reaches the game until s.'),
+    ('plain', '  category. s keeps what you decided; nothing reaches the'),
+    ('plain', '  game until w.'),
     ('plain', ''),
     ('head', 'MARKS'),
     ('mine', f'  {MARK[MINE]}           {MARK_SAID[MINE]}'),
@@ -918,7 +946,8 @@ KEYS = (
     ('head', 'OTHER'),
     ('plain', '  y           why a control is chosen'),
     ('plain', '  m           device map and install paths'),
-    ('plain', '  s           write the plan to the game'),
+    ('plain', '  s           save what you decided'),
+    ('plain', '  w           write the plan to the game'),
     ('plain', '  q           quit'),
 )
 
@@ -1024,7 +1053,7 @@ def _layout(width, height, wants=None):
 #: dropped from the end, and nothing else is reachable without moving.
 HINTS = ('↑↓ move', '↵ assign', 'l from free', 'c accept', 'x unassign',
          'a add', 'r category', 'f filter', 'h binds', 'y why', 'm map',
-         's write')
+         's save', 'w write')
 
 
 def _fit(width, text, lead=''):
@@ -1301,6 +1330,26 @@ def _panel(scr, theme, rect, title, right='', keys=(), tail='', note=''):
     return y + 1, x + 2, h - 2, w - 4
 
 
+def _tally(rv):
+    """What sits beside the title: the filter, or what is on the list.
+
+    The filter when there is one and the tally otherwise -- both answer
+    "what am I looking at", and only one of them can be true at a time.
+    Only what is there: the long form was dropped whole by `lid` for not
+    fitting beside the title, so the counts vanished from a screen that
+    had always carried them.
+    """
+    mine, prop, unset = rv.counts()
+    counts = [f'{MARK[MINE]}{mine}' if mine else '',
+              f'{MARK[PROPOSED]}{prop}' if prop else '',
+              f'{unset} {MARK_SAID[UNSET]}' if unset else '',
+              # Last, and here rather than in the status line: a status
+              # line says what just happened and goes on the next
+              # keypress, and this is a state of the files.
+              'unsaved' if rv.unsaved else '']
+    return rv.narrowed() or ctui.SEP.join(c for c in counts if c)
+
+
 def _draw(scr, rv, sel, state, theme):
     h, w = scr.getmaxyx()
     rows = rv.rows()
@@ -1318,16 +1367,7 @@ def _draw(scr, rv, sel, state, theme):
     state['top'] = top
 
     scr.erase()
-    mine, prop, unset = rv.counts()
-    # The filter when there is one, the tally otherwise: both answer "what
-    # am I looking at", and only one of them can be true at a time.
-    # Only what is there. The long form was dropped whole by `lid` for
-    # not fitting beside the title, so the counts vanished from a screen
-    # that had always carried them.
-    counts = [f'{MARK[MINE]}{mine}' if mine else '',
-              f'{MARK[PROPOSED]}{prop}' if prop else '',
-              f'{unset} {MARK_SAID[UNSET]}' if unset else '']
-    right = rv.narrowed() or ctui.SEP.join(c for c in counts if c)
+    right = _tally(rv)
     # Needs, not every selectable row: this says which of the things you
     # are placing you are on, and a heading is not one of them.
     pick = [i for i, r in enumerate(rows) if r.kind == 'need']
@@ -1683,6 +1723,11 @@ def _loop(scr, rv, write, sticks):
         group = here.group if here.kind == 'head' else None
 
         if k in ('q', 'Q', 'esc'):
+            if rv.unsaved and rv.save is not None:
+                # The same box `s` puts up, so leaving is not a second way
+                # of saving with its own idea of what it is about to
+                # write. This is what sim-device-map does on the way out.
+                _save(scr, tui, rv)
             return written
         if k in ('up', 'k'):
             move(-1)
@@ -1756,6 +1801,8 @@ def _loop(scr, rv, write, sticks):
             tui.popup('device map', rv.map_lines(),
                    full=True)
         elif k in ('s', 'S'):
+            _save(scr, tui, rv)
+        elif k in ('w', 'W'):
             written = _write(scr, tui, rv, write) or written
         elif k == ' ' and need is not None:
             # SPACE was keep/drop before the table grew a third state. It is
@@ -1855,6 +1902,47 @@ def _write_plan(rv, width):
         say(PROPOSED, f'  {MARK[PROPOSED]}{prop} {MARK_SAID[PROPOSED]}'
                       f' — written too')
     return out
+
+
+def _save_plan(rv, width):
+    """What `s` is about to keep, before it keeps it.
+
+    The counts, because that is what changed: a save writes the whole
+    list, and the question a reader has is how much of it is theirs now.
+    """
+    out = []
+
+    def say(tone, text='', lead=''):
+        out.extend((tone, piece) for piece in _fit(width, text, lead))
+
+    mine, prop, unset = rv.counts()
+    say('head', 'KEEPING')
+    say('plain', f'  {ctui.plural(len(rv.needs), "entry", "entries")}')
+    if mine:
+        say(MINE, f'  {MARK[MINE]}{mine} {MARK_SAID[MINE]}')
+    if prop:
+        # They go in the file either way, which is a thing to learn while
+        # you can still say no.
+        say(PROPOSED, f'  {MARK[PROPOSED]}{prop} {MARK_SAID[PROPOSED]}'
+                      f' — kept too')
+    if unset:
+        say('unset', f'  {unset} {MARK_SAID[UNSET]}')
+    return out
+
+
+def _save(scr, tui, rv):
+    """Keep what was decided. Asked, because these are the only copies."""
+    if rv.save is None:
+        rv.status = ('this game derives its needs, so there is nothing to '
+                     'write them to')
+        return
+    if not rv.unsaved:
+        rv.status = 'nothing has changed since the last save'
+        return
+    if not tui.confirm('save', _save_plan(rv, tui.inner())):
+        rv.status = 'not saved'
+        return
+    rv.status, _still = rv.keep()
 
 
 def _write(scr, tui, rv, write):

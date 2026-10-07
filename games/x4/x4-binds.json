@@ -51,13 +51,13 @@
 {
 "what": "Travel mode",
 "role": "throttle",
-"control": "thumb-button",
+"control": "keyboard-b3-button",
 "how": "accepted"
 },
 {
 "what": "Flight assist",
 "role": "throttle",
-"control": "left-side-dial",
+"control": "keyboard-b2-button",
 "how": "accepted"
 },
 {
@@ -86,8 +86,8 @@
 },
 {
 "what": "Deselect target",
-"role": "stick",
-"control": "bottom-thumb-hat",
+"role": "throttle",
+"control": "left-side-dial",
 "how": "accepted"
 },
 {
@@ -111,13 +111,13 @@
 {
 "what": "SETA",
 "role": "throttle",
-"control": "right-side-dial",
+"control": "apu-button",
 "how": "accepted"
 },
 {
 "what": "Map",
 "role": "throttle",
-"control": "keyboard-b3-button",
+"control": "keyboard-b6-button",
 "how": "accepted"
 },
 {
@@ -134,14 +134,14 @@
 },
 {
 "what": "Cockpit menu",
-"role": "throttle",
-"control": "keyboard-b2-button",
+"role": "stick",
+"control": "top-thumb-hat",
 "how": "accepted"
 },
 {
 "what": "Quicksave",
-"role": "throttle",
-"control": "apu-button",
+"role": "stick",
+"control": "grip-thumb-hat",
 "how": "accepted"
 },
 {
@@ -159,13 +159,13 @@
 {
 "what": "Player ship info",
 "role": "stick",
-"control": "grip-thumb-hat",
+"control": "bottom-thumb-hat",
 "how": "accepted"
 },
 {
 "what": "Target under cursor",
-"role": "stick",
-"control": "top-thumb-hat",
+"role": "throttle",
+"control": "thumb-button",
 "how": "accepted"
 },
 {
@@ -183,7 +183,7 @@
 {
 "what": "Zoom goggles",
 "role": "throttle",
-"control": "keyboard-b6-button",
+"control": "right-side-dial",
 "how": "accepted"
 },
 {

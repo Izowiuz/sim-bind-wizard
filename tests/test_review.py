@@ -1032,15 +1032,19 @@ class Promoting(unittest.TestCase):
         self.assertIn('axis', said.lower())
         self.assertNotIn('Pitch', [n.what for n in rv.needs])
 
-    def test_promoting_writes_it_down(self):
-        # A judgement is derived from nothing. One that lasts until `q` is
-        # a judgement you have to make again.
+    def test_promoting_says_the_file_is_behind(self):
+        # A judgement is derived from nothing, so it has to be keepable --
+        # but not written on the keystroke: `s` writes, the way the
+        # capture wizard does, and the screen says `unsaved` until it has.
         kept = []
         rv = made(catalogue=self.CAT,
                   save=lambda needs: kept.append(list(needs)) or 'saved')
         rv.promote(self.CAT[0], 'Combat')
-        self.assertTrue(kept, 'nothing was written')
+        self.assertEqual([], kept, 'wrote without being asked')
+        self.assertTrue(rv.unsaved)
+        rv.keep()
         self.assertIn('Landing gear', [n.what for n in kept[-1]])
+        self.assertFalse(rv.unsaved)
 
     def test_a_screen_with_nowhere_to_write_still_works(self):
         # DCS derives its needs, so there is no list to keep -- and a
@@ -1075,10 +1079,12 @@ class Refiling(unittest.TestCase):
         self.assertIn('COMBAT', heads)
         self.assertNotIn('IN A TURN', heads)
 
-    def test_it_is_written_down(self):
+    def test_it_is_written_down_when_you_save(self):
         kept = []
         rv = made(save=lambda needs: kept.append(list(needs)) or 'ok')
         rv.refile(by(rv, 'Trim'), 'Combat')
+        self.assertTrue(rv.unsaved)
+        rv.keep()
         self.assertEqual(['Combat'], [n.category for n in kept[-1]
                                       if n.what == 'Trim'])
 
@@ -1257,9 +1263,11 @@ class WhatYouDecidedOutLastsTheSession(unittest.TestCase):
         rv.confirm_all()
         self.assertEqual(review.MINE, self.open().mark[self.only(rv)])
 
-    def test_accepting_writes_it_down_once_for_the_whole_list(self):
+    def test_accepting_the_whole_list_is_one_write(self):
         rv = self.open()
         rv.confirm_all()
+        self.assertEqual([], self.saved, 'wrote without being asked')
+        rv.keep()
         self.assertEqual(1, len(self.saved), 'one write, not one per need')
 
     def test_accepting_does_not_freeze_the_allocator(self):
@@ -1291,16 +1299,18 @@ class WhatYouDecidedOutLastsTheSession(unittest.TestCase):
         self.assertEqual(review.MINE, again.mark[self.only(again)])
         self.assertEqual('Thumb B', at(again, self.only(again)).ctrl.label)
 
-    def test_choosing_by_hand_is_written_down_at_once(self):
-        # At the moment it is decided, not on a save key: a save key you
-        # can forget is how an evening of choices comes back purple. The
-        # test asserts the WRITE, because the objects live on in memory
-        # either way and a reopen in one process proves nothing.
+    def test_choosing_by_hand_is_kept_when_you_save(self):
+        # The test asserts the WRITE, because the objects live on in
+        # memory either way and a reopen in one process proves nothing.
         rv = self.open()
         other = next(c for c in self.devs['stick'].groups()
                      if c.label == 'Thumb B')
         rv.assign(self.only(rv), 'stick', other)
+        self.assertEqual([], self.saved, 'wrote without being asked')
+        self.assertTrue(rv.unsaved)
+        rv.keep()
         self.assertEqual(1, len(self.saved))
+        self.assertFalse(rv.unsaved)
 
     def test_what_you_chose_is_taken_before_anything_is_scored(self):
         rv = self.open()
@@ -1459,11 +1469,93 @@ class EveryKeyTheScreenNamesIsOneItAnswers(unittest.TestCase):
         self.assertEqual(set(), self.named(review.HINTS)
                          - self.named(review.KEYS))
 
-    def test_write_is_where_the_capture_wizard_puts_it(self):
-        # The pair of tools is used in one sitting, and `s` saved in the
-        # capture wizard from the first commit.
-        self.assertIn('s write', review.HINTS)
+    def test_save_is_where_the_capture_wizard_puts_it(self):
+        # The pair of tools is used in one sitting, and `s` SAVED in the
+        # capture wizard from the first commit. Here it used to write the
+        # game's own files, so one key meant two things across two tools
+        # used in one evening.
+        self.assertIn('s save', review.HINTS)
         self.assertIn('s', self.answered())
+
+    def test_writing_the_game_has_its_own_key(self):
+        self.assertIn('w write', review.HINTS)
+        self.assertIn('w', self.answered())
+
+
+class SavingIsAKeystroke(unittest.TestCase):
+    """Nothing reaches disk until `s`, the way the capture wizard works.
+
+    It used to write on every decision -- eight call sites, a whole-file
+    rewrite each. The argument was that a save key you can forget is how
+    an evening of choices comes back purple; the answer is that `s` means
+    save in the other half of the pair, used in the same sitting, and one
+    key meaning two things is worse than the keystroke it saved. The way
+    out is the capture wizard's: say `unsaved` on the frame, and offer the
+    save on the way out.
+    """
+
+    def setUp(self):
+        self.saved = []
+        self.devs = {'stick': fake.device('stick', [
+            fake.button('Thumb A', 0, reach=fake.THUMB),
+            fake.button('Thumb B', 1, reach=fake.THUMB)])}
+        self.needs = [Need('Boost', 'button', [[Bind('BOOST')]])]
+
+    def rv(self, save=True):
+        return made(self.needs, devs=self.devs,
+                    save=((lambda needs: self.saved.append(list(needs))
+                           or 'wrote 1') if save else None))
+
+    def test_a_fresh_screen_has_nothing_to_save(self):
+        self.assertFalse(self.rv().unsaved)
+
+    def test_a_decision_makes_it_unsaved(self):
+        rv = self.rv()
+        rv.confirm_all()
+        self.assertTrue(rv.unsaved)
+
+    def test_saving_clears_it_and_says_what_was_written(self):
+        rv = self.rv()
+        rv.confirm_all()
+        said, still = rv.keep()
+        self.assertEqual('wrote 1', said)
+        self.assertFalse(still)
+        self.assertFalse(rv.unsaved)
+
+    def test_the_frame_says_unsaved_while_it_is(self):
+        # On the tally, not in the status line: a status line says what
+        # just happened and goes on the next keypress, and this is a state
+        # of the file.
+        rv = self.rv()
+        rv.confirm_all()
+        self.assertIn('unsaved', review._tally(rv))
+
+    def test_the_frame_stops_saying_it(self):
+        rv = self.rv()
+        rv.confirm_all()
+        rv.keep()
+        self.assertNotIn('unsaved', review._tally(rv))
+
+    def test_a_screen_with_nowhere_to_write_says_so_rather_than_raising(self):
+        # DCS derives its needs. A screen that raised would take the whole
+        # review down over a thing it cannot help.
+        rv = self.rv(save=False)
+        rv.confirm_all()
+        said, still = rv.keep()
+        self.assertIn('derives its needs', said)
+        self.assertTrue(still)
+
+    def test_a_save_that_fails_leaves_it_unsaved(self):
+        # Otherwise the frame says the files have it and they do not.
+        def refuse(_needs):
+            raise OSError('read-only file system')
+
+        rv = made(self.needs, devs=self.devs, save=refuse)
+        rv.confirm_all()
+        said, still = rv.keep()
+        self.assertIn('read-only', said)
+        self.assertTrue(still)
+        self.assertTrue(rv.unsaved)
 
 
 class TheRulesScreen(unittest.TestCase):
