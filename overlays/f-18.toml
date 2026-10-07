@@ -1,0 +1,86 @@
+name = "F/A-18C"
+says = "the Hornet's HOTAS: trigger shoots, castle picks the sensor, the left hand runs the jet"
+
+# A cockpit template, not a game file. It names no game and no control: the
+# Hornet's castle switch is said here as "the stick hand's thumb, without
+# moving the hand", which is a sentence that survives leaving the Hornet's
+# grip and lands on whatever your desk has in that place.
+#
+# So this works on anything whose needs file names the job. X4 laid out like
+# a Hornet is `./bind x4 plan --overlay f-18`.
+#
+# It is a LEAN, not a law. `place_right` is +15 against `device_right`'s +40,
+# so a wish here tips a close call and loses to reach and to what is already
+# taken. A template that refused everything it did not name would place half
+# an aircraft on a desk that is not the one it was drawn for, and the count
+# under the layout says how much of it got through.
+#
+# As fine-grained as the map's words, and no finer: device, finger, level.
+# The Hornet has two four-ways under the right thumb -- castle and trim --
+# and nothing here can tell them apart, so both jobs ask for the same place
+# and the allocator sorts them by shape and by what is free.
+#
+# `systems` and `nav` are deliberately absent. On the real jet they are
+# cockpit panels, not HOTAS, so nothing here claims a place for them and
+# they land on reach alone.
+
+# ---- the right hand: fighting -----------------------------------------
+
+# The trigger. Index finger, on the grip, where it has been on every
+# fighter since the war.
+[[want]]
+suits  = "fire"
+device = "stick"
+finger = "index"
+
+# Undesignate and target step sit under the right thumb, beside the castle.
+[[want]]
+suits  = "lock"
+device = "stick"
+finger = "thumb"
+level  = "HOME"
+
+# The trim hat, right thumb. On the Hornet trim is a hat of its own rather
+# than something you reach for.
+[[want]]
+suits  = "trim"
+device = "stick"
+finger = "thumb"
+level  = "HOME"
+
+# ---- the left hand: running the jet ------------------------------------
+
+# The throttle designator controller -- the slew that drives the radar and
+# the targeting pod. Left thumb, and the reason sensor work is a left-hand
+# job in this jet at all.
+[[want]]
+suits  = "sensor"
+device = "throttle"
+finger = "thumb"
+level  = "HOME"
+
+# Countermeasures dispense, left index. Under the finger that is already
+# there, because the moment you want it you want it now.
+[[want]]
+suits  = "defence"
+device = "throttle"
+finger = "index"
+
+# The comm switches, left thumb.
+[[want]]
+suits  = "comms"
+device = "throttle"
+finger = "thumb"
+
+# Speedbrake, boards, everything about how the jet is flying: left hand.
+[[want]]
+suits  = "flight"
+device = "throttle"
+finger = "thumb"
+
+# Looking around is the left hand's too -- on the Hornet the view controls
+# live on the throttle, not on the stick.
+[[want]]
+suits  = "view"
+device = "throttle"
+finger = "thumb"

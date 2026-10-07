@@ -134,8 +134,8 @@
 },
 {
 "what": "Cockpit menu",
-"role": "stick",
-"control": "top-thumb-hat",
+"role": "throttle",
+"control": "e1-encoder",
 "how": "accepted"
 },
 {
@@ -188,8 +188,8 @@
 },
 {
 "what": "Missions",
-"role": "stick",
-"control": "bottom-thumb-hat",
+"role": "throttle",
+"control": "e2-encoder",
 "how": "accepted"
 }
 ]

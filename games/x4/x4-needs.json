@@ -44,7 +44,7 @@
 ]
 ],
 "urgency": 0,
-"suits": "reflex",
+"suits": "flight",
 "held": true,
 "by_feel": true
 },
@@ -89,6 +89,7 @@
 ]
 ],
 "urgency": 0,
+"suits": "flight",
 "held": true,
 "by_feel": true,
 "on": [
@@ -114,6 +115,7 @@
 ]
 ],
 "urgency": 0,
+"suits": "fire",
 "rapid": true,
 "by_feel": true,
 "on": [
@@ -137,6 +139,7 @@
 ]
 ],
 "urgency": 0,
+"suits": "fire",
 "rapid": true,
 "by_feel": true,
 "on": [
@@ -155,6 +158,7 @@
 ]
 ],
 "urgency": 0,
+"suits": "flight",
 "by_feel": true
 },
 {
@@ -168,6 +172,7 @@
 ]
 ],
 "urgency": 1,
+"suits": "flight",
 "by_feel": true
 },
 {
@@ -181,6 +186,7 @@
 ]
 ],
 "urgency": 1,
+"suits": "flight",
 "by_feel": true
 },
 {
@@ -199,6 +205,7 @@
 ]
 ],
 "urgency": 1,
+"suits": "nav",
 "on": [
 "forward",
 "back"
@@ -214,7 +221,8 @@
 }
 ]
 ],
-"urgency": 1
+"urgency": 1,
+"suits": "nav"
 },
 {
 "what": "Target action",
@@ -232,6 +240,7 @@
 ]
 ],
 "urgency": 1,
+"suits": "lock",
 "on": [
 "forward",
 "back"
@@ -253,6 +262,7 @@
 ]
 ],
 "urgency": 1,
+"suits": "lock",
 "rapid": true,
 "on": [
 "right",
@@ -273,6 +283,7 @@
 ]
 ],
 "urgency": 1,
+"suits": "lock",
 "by_feel": true
 },
 {
@@ -284,7 +295,8 @@
 "action": "INPUT_ACTION_TOGGLE_SCAN_MODE"
 }
 ]
-]
+],
+"suits": "sensor"
 },
 {
 "what": "Long-range scan",
@@ -295,7 +307,8 @@
 "action": "INPUT_ACTION_TOGGLE_LONGRANGE_SCAN_MODE"
 }
 ]
-]
+],
+"suits": "sensor"
 },
 {
 "what": "Scan action",
@@ -306,7 +319,8 @@
 "action": "INPUT_ACTION_SCAN_ACTION"
 }
 ]
-]
+],
+"suits": "sensor"
 },
 {
 "what": "SETA",
@@ -317,7 +331,8 @@
 "action": "INPUT_ACTION_TOGGLE_SETA_MODE"
 }
 ]
-]
+],
+"suits": "systems"
 },
 {
 "what": "Map",
@@ -328,7 +343,8 @@
 "action": "INPUT_ACTION_OPEN_MAP"
 }
 ]
-]
+],
+"suits": "nav"
 },
 {
 "what": "View",
@@ -377,7 +393,8 @@
 [],
 [],
 []
-]
+],
+"suits": "view"
 },
 {
 "what": "Cockpit menu",
@@ -389,7 +406,8 @@
 }
 ]
 ],
-"urgency": 3
+"urgency": 3,
+"suits": "comms"
 },
 {
 "what": "Quicksave",
@@ -401,7 +419,8 @@
 }
 ]
 ],
-"urgency": 3
+"urgency": 3,
+"suits": "systems"
 },
 {
 "what": "Pause",
@@ -413,7 +432,8 @@
 }
 ]
 ],
-"urgency": 3
+"urgency": 3,
+"suits": "systems"
 },
 {
 "what": "Jump / crouch",
@@ -431,6 +451,7 @@
 ]
 ],
 "urgency": 3,
+"suits": "flight",
 "on": [
 "forward",
 "back"
@@ -446,7 +467,8 @@
 }
 ]
 ],
-"urgency": 3
+"urgency": 3,
+"suits": "comms"
 },
 {
 "what": "Target under cursor",
@@ -476,6 +498,7 @@
 ]
 ],
 "urgency": 0,
+"suits": "defence",
 "by_feel": true
 },
 {
@@ -487,7 +510,8 @@
 "action": "INPUT_ACTION_COMM_ACTION"
 }
 ]
-]
+],
+"suits": "comms"
 },
 {
 "what": "Zoom goggles",
@@ -511,7 +535,8 @@
 }
 ]
 ],
-"urgency": 3
+"urgency": 3,
+"suits": "comms"
 }
 ]
 }

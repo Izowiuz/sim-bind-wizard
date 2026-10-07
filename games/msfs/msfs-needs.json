@@ -35,7 +35,8 @@
 }
 ]
 ],
-"urgency": 0
+"urgency": 0,
+"suits": "flight"
 },
 {
 "what": "Power axis",
@@ -52,7 +53,8 @@
 }
 ]
 ],
-"urgency": 0
+"urgency": 0,
+"suits": "flight"
 },
 {
 "what": "Brakes",
@@ -69,7 +71,8 @@
 }
 ]
 ],
-"urgency": 1
+"urgency": 1,
+"suits": "flight"
 },
 {
 "what": "Trim",
@@ -186,7 +189,7 @@
 ]
 ],
 "urgency": 1,
-"suits": "stepped-pair",
+"suits": "flight",
 "rapid": true,
 "by_feel": true
 },
@@ -219,7 +222,7 @@
 ]
 ],
 "urgency": 1,
-"suits": "toggle",
+"suits": "systems",
 "by_feel": true
 },
 {
@@ -240,7 +243,7 @@
 ]
 ],
 "urgency": 1,
-"suits": "stepped-pair",
+"suits": "flight",
 "rapid": true,
 "by_feel": true
 },
@@ -260,7 +263,7 @@
 ]
 ],
 "urgency": 3,
-"suits": "toggle"
+"suits": "systems"
 },
 {
 "what": "Radio reply",
@@ -274,7 +277,7 @@
 ]
 ],
 "urgency": 0,
-"suits": "occasional",
+"suits": "comms",
 "by_feel": true
 },
 {
@@ -289,7 +292,7 @@
 ]
 ],
 "urgency": 1,
-"suits": "occasional"
+"suits": "comms"
 },
 {
 "what": "Cockpit cycle",
@@ -372,7 +375,7 @@
 ]
 ],
 "urgency": 3,
-"suits": "toggle"
+"suits": "systems"
 },
 {
 "what": "Engine start",
@@ -390,7 +393,7 @@
 ]
 ],
 "urgency": 3,
-"suits": "occasional"
+"suits": "systems"
 },
 {
 "what": "Prop pitch",
@@ -403,7 +406,8 @@
 }
 ]
 ],
-"urgency": 3
+"urgency": 3,
+"suits": "flight"
 },
 {
 "what": "Vertical speed",
@@ -416,7 +420,8 @@
 }
 ]
 ],
-"urgency": 3
+"urgency": 3,
+"suits": "flight"
 }
 ]
 }

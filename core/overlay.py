@@ -55,6 +55,14 @@ WHERE = os.path.join(os.path.dirname(HERE), 'overlays')
 #: it is which half of the words are the answer.
 SETS = corneeds.WISHES
 
+#: Which of them name a word the device map owns, and which constant says
+#: what that word may be. Checked when the file loads, so `finger = "thump"`
+#: is an error rather than a wish that silently never matches anything.
+#: Nothing is invented here: the map has held these since long before an
+#: overlay existed, and a desk's capture already answers in them.
+FROM_THE_MAP = {'device': 'ROLES_ON_A_DESK', 'finger': 'FINGERS',
+                'level': 'LEVELS'}
+
 #: What a `[[want]]` may ask ABOUT a need -- its description, and nothing
 #: derived from a run. `bindings`, `push` and `on` are left out on purpose:
 #: they are lists, and a condition on a list is the expression language this
@@ -160,6 +168,35 @@ class Overlay:
                         out.append((a, b, rule['rule']))
         return out
 
+    def kept(self, layout):
+        """(kept, broken, [what broke]) -- how much of this got honoured.
+
+        The answer to "is this overlay doing anything". A template is a
+        lean rather than a law, so some of it loses to reach and to what
+        is already taken -- and without a count the only way to know how
+        much was to read the whole layout and remember the file.
+
+        Counted per WORD, not per need: a want asking for a thumb at HOME
+        is two claims about where a thing goes, and honouring one of them
+        is half an answer rather than a whole one.
+        """
+        kept, broken, lost = 0, 0, []
+        for placed in layout.placed:
+            need = placed.need
+            for word in corneeds.PLACED_BY:
+                want = getattr(need, word, None)
+                if not want:
+                    continue
+                got = corneeds.PLACE[word](placed.ctrl)
+                if not got:
+                    continue
+                if got == want:
+                    kept += 1
+                else:
+                    broken += 1
+                    lost.append((need.what, word, want, got))
+        return kept, broken, lost
+
     def bound(self, needs):
         """`partners`, with each rule as the test itself.
 
@@ -179,6 +216,28 @@ class Overlay:
 def _mine(rows, game):
     """The rows that are for this game: the unscoped ones, and its own."""
     return [r for r in rows if SCOPE not in r or r[SCOPE] == game]
+
+
+def _in_the_map(rule, where):
+    """Every map word this rule uses, against the map's own list.
+
+    Not at import, and not a list of our own: `core.devmap` finds the map,
+    and the words have been constants in it since before there were
+    overlays. A desk's capture already answers in them, so an overlay that
+    agrees with the map needs nothing added to either.
+    """
+    from core import devmap
+    devicemap = devmap.load()
+    for word, says in FROM_THE_MAP.items():
+        want = rule.get(word)
+        known = getattr(devicemap, says)
+        if want is not None and want not in known:
+            # The map spells "the whole hand" as the empty string, and an
+            # empty wish here means no wish at all -- so that one is not
+            # askable, and listing it as `''` would read as a typo.
+            said = ', '.join(repr(k) for k in known if k)
+            raise Bad(f'{where}: {word} = {want!r} is not one the map says. '
+                      f'There are: {said}')
 
 
 def read(path, game=None):
@@ -201,6 +260,7 @@ def read(path, game=None):
         if not any(key in rule for key in SETS):
             raise Bad(f'{os.path.basename(path)}: a want asks for nothing -- '
                       f'it names only {", ".join(sorted(rule))}')
+        _in_the_map(rule, os.path.basename(path))
     pairs = _mine(got.get('pair', []), game)
     for rule in pairs:
         if rule.get('rule') not in PAIRS:

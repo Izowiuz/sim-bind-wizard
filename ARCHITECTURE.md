@@ -49,9 +49,10 @@
                               Written by the review screen
       games/<game>/<game>-actions.json the harvest's cache. NOT in the repo
       games/<game>/README.md
-      overlays/*.toml         how you like a desk laid out. Not per game:
-                              `weapons on the stick` is the same wish in
-                              all six
+      overlays/*.toml         how you like a cockpit laid out, as places on
+                              the hand. Not per game and not per desk:
+                              f-18.toml works in X4, on hardware that is
+                              not a Hornet grip
       tests/run.py            every test; stdlib unittest, nothing to install
       tests/test_contract.py  the adapter contract, on a clone with no data
       tests/test_types.py     pyright, when it is installed
@@ -119,7 +120,8 @@ in scope in those two files.
 | the action vocabulary and its readable names | `games/<g>/harvest` |
 | device slots, button codes, global numbering | `games/<g>/harvest` |
 | what a pilot must be able to do | `games/<g>/<g>-needs.json` |
-| where you want it, and which two things your hand must work at once | `overlays/*.toml` |
+| what a function is FOR, as one closed word | `core/scoring.toml` `[jobs]` |
+| where on the hand you want it, and which two things your hand must work at once | `overlays/*.toml` |
 | what sits where now, and who decided | `games/<g>/<g>-binds.json` |
 | reading and writing the game's config | `games/<g>/plan` |
 | what goes on the kneeboard | `games/<g>/plan._sheet()` |

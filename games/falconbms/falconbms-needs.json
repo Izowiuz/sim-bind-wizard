@@ -60,7 +60,7 @@
 ]
 ],
 "urgency": 0,
-"suits": "sensor",
+"suits": "lock",
 "by_feel": true
 },
 {
@@ -89,7 +89,7 @@
 ]
 ],
 "urgency": 0,
-"suits": "sensor",
+"suits": "view",
 "by_feel": true
 },
 {
@@ -118,7 +118,7 @@
 ]
 ],
 "urgency": 0,
-"suits": "reflex",
+"suits": "defence",
 "rapid": true,
 "by_feel": true
 },
@@ -133,7 +133,7 @@
 ]
 ],
 "urgency": 0,
-"suits": "reflex",
+"suits": "flight",
 "held": true,
 "by_feel": true
 },
@@ -148,7 +148,7 @@
 ]
 ],
 "urgency": 0,
-"suits": "reflex",
+"suits": "flight",
 "rapid": true,
 "by_feel": true
 },
@@ -192,7 +192,7 @@
 }
 ]
 ],
-"suits": "state",
+"suits": "fire",
 "by_feel": true,
 "costly": true
 },
@@ -206,7 +206,7 @@
 }
 ],
 "urgency": 0,
-"suits": "view",
+"suits": "sensor",
 "by_feel": true
 },
 {
@@ -235,7 +235,7 @@
 ]
 ],
 "urgency": 0,
-"suits": "reflex",
+"suits": "comms",
 "by_feel": true
 },
 {
@@ -254,7 +254,7 @@
 ]
 ],
 "urgency": 0,
-"suits": "reflex",
+"suits": "flight",
 "held": true,
 "by_feel": true,
 "on": [
@@ -286,7 +286,7 @@
 ]
 ],
 "urgency": 0,
-"suits": "reflex",
+"suits": "fire",
 "held": true,
 "by_feel": true,
 "on": [
@@ -305,7 +305,7 @@
 ]
 ],
 "urgency": 0,
-"suits": "reflex",
+"suits": "sensor",
 "held": true,
 "by_feel": true
 },
@@ -320,6 +320,7 @@
 ]
 ],
 "urgency": 0,
+"suits": "sensor",
 "by_feel": true
 },
 {
@@ -337,7 +338,7 @@
 }
 ]
 ],
-"suits": "trim",
+"suits": "sensor",
 "rapid": true
 },
 {
@@ -355,7 +356,7 @@
 }
 ]
 ],
-"suits": "trim",
+"suits": "sensor",
 "rapid": true
 },
 {
@@ -373,6 +374,7 @@
 }
 ]
 ],
+"suits": "fire",
 "by_feel": true
 },
 {
@@ -384,7 +386,8 @@
 "action": "SimICPNav"
 }
 ]
-]
+],
+"suits": "nav"
 },
 {
 "what": "IFF MASTER knob",
@@ -416,7 +419,7 @@
 }
 ]
 ],
-"suits": "state"
+"suits": "comms"
 },
 {
 "what": "DX shift (pinky)",
@@ -428,7 +431,7 @@
 }
 ]
 ],
-"suits": "occasional",
+"suits": "systems",
 "held": true
 },
 {
@@ -440,7 +443,8 @@
 "action": "RecenterTrackIR"
 }
 ]
-]
+],
+"suits": "view"
 },
 {
 "what": "Look closer",
@@ -452,6 +456,7 @@
 }
 ]
 ],
+"suits": "view",
 "rapid": true
 },
 {
@@ -464,6 +469,7 @@
 }
 ]
 ],
+"suits": "defence",
 "by_feel": true
 },
 {
@@ -475,7 +481,8 @@
 "action": "SimLaserArmToggle"
 }
 ]
-]
+],
+"suits": "fire"
 },
 {
 "what": "Landing gear",
@@ -493,7 +500,7 @@
 ]
 ],
 "urgency": 1,
-"suits": "stepped-pair",
+"suits": "systems",
 "by_feel": true,
 "on": [
 "up",
@@ -516,7 +523,7 @@
 ]
 ],
 "urgency": 1,
-"suits": "stepped-pair",
+"suits": "systems",
 "on": [
 "up",
 "down"
@@ -532,7 +539,8 @@
 }
 ]
 ],
-"urgency": 1
+"urgency": 1,
+"suits": "systems"
 },
 {
 "what": "JFS — engine start",
@@ -550,7 +558,7 @@
 ]
 ],
 "urgency": 3,
-"suits": "stepped-pair",
+"suits": "systems",
 "rapid": true,
 "on": [
 "up",
@@ -573,7 +581,7 @@
 ]
 ],
 "urgency": 3,
-"suits": "stepped-pair",
+"suits": "flight",
 "rapid": true,
 "on": [
 "up",
@@ -590,7 +598,8 @@
 }
 ]
 ],
-"urgency": 3
+"urgency": 3,
+"suits": "systems"
 },
 {
 "what": "Air refuelling door",
@@ -602,7 +611,8 @@
 }
 ]
 ],
-"urgency": 3
+"urgency": 3,
+"suits": "systems"
 },
 {
 "what": "Canopy",
@@ -615,6 +625,7 @@
 ]
 ],
 "urgency": 3,
+"suits": "systems",
 "costly": true
 },
 {
@@ -627,7 +638,8 @@
 }
 ]
 ],
-"urgency": 3
+"urgency": 3,
+"suits": "systems"
 },
 {
 "what": "Night vision",
@@ -639,7 +651,8 @@
 }
 ]
 ],
-"urgency": 3
+"urgency": 3,
+"suits": "view"
 },
 {
 "what": "Visor",
@@ -651,7 +664,8 @@
 }
 ]
 ],
-"urgency": 3
+"urgency": 3,
+"suits": "view"
 }
 ]
 }

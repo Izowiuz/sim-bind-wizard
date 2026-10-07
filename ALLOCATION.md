@@ -155,6 +155,16 @@ penalised, so four idle two-way rockers do not sit there while a cold-start
 switch goes homeless — but neither is one broken open while a real spare
 exists.
 
+It honours the band's **floor** as well as its ceiling, which it used not to.
+Only `on the ramp` has a floor above 0 — `takes = [2, 3]` — and the band's own
+note says what for: *without it, something you do once with the canopy open
+grabs a thumb position the moment one is free*. Every other pass obeyed that;
+this one checked the ceiling only, and then paid the flipped tier bonus for
+being **close**. So X4's `Pause` and `Cockpit menu` sat on the hat that cycles
+weapon groups, and Elite's galaxy and system maps on a thumb hat. The trade is
+explicit: two of the 147 — X4's `Player ship info` and Falcon's `AVTR`, both
+ramp switches — now go unplaced rather than under a thumb.
+
 Controls in `ONE_MECHANISM` — `latch`, `trigger`, `selector`, `encoder` — lend
 their **click only**. Their buttons are one physical thing rather than
 independent positions: a trigger's stages are the gun, a selector's positions
@@ -269,13 +279,33 @@ Three layers, and two of them are global:
   turned out to be the brake lever's travel contact; one correction there and
   three games stopped binding it, with no game code touched.
 - **`games/*/<game>-needs.json`** — `urgency`, `on`, `suits` and the ergonomic
-  flags. These are claims about *a game's functions*. "Airbrake is used in a
+  flags. `suits` is the **job**: the one word a game and an overlay can both
+  say, from the closed `[jobs]` table in `core/scoring.toml`, and the thing
+  that lets one template lay out six games. It was free text with eleven words
+  on two different axes — `fire` and `view` saying what the job is, `toggle`
+  and `reflex` saying how the control behaves — and 65 of the 147 functions
+  said nothing at all, so a template had nothing to match for nearly half the
+  list. These are claims about *a game's functions*. "Airbrake is used in a
   turn" is a statement about War Thunder and cannot be hoisted.
-- **`overlays/*.toml`** — `device`, `prefer`, `shift`, `modifier`, and the
-  `[[pair]]` rules. These are claims about *your desk habits*, not about any
-  game: "weapons on the stick" is the same wish in all six. One rule over a
-  family replaces a field repeated per function — there were 86 such fields,
-  which is one opinion written 86 times.
+- **`overlays/*.toml`** — `device`, `finger`, `level`, `prefer`, `shift`,
+  `modifier`, and the `[[pair]]` rules. These are claims about *how you like a
+  cockpit laid out*, not about any game: "weapons on the stick" is the same
+  wish in all six. One rule over a family replaces a field repeated per
+  function — there were 86 such fields, which is one opinion written 86 times.
+
+  `finger` and `level` are what make an overlay a **template** rather than a
+  device preference. The Hornet's castle switch said as `finger = "thumb"`,
+  `level = "HOME"` lands on whatever the desk in front of you has in that
+  place, so `overlays/f-18.toml` works on hardware that is not a Hornet grip
+  and in games that are not DCS. Both words are checked against the map's own
+  `devicemap.FINGERS` and `devicemap.LEVELS` when the file loads.
+
+  Scored, not pinned: `place_right` is +15 and `place_wrong` −20, per word, so
+  a template tips a close call and loses to reach and to what is already
+  taken. One that refused every control it had not named would place half an
+  aircraft on a desk it was not drawn for. The layout prints how much got
+  through — `Generic spaceship: 33 of 46 place wishes kept` — which is the
+  number two overlays are compared on, and `--why` lists what broke.
 
 `games/*/<game>-binds.json` is in neither list: it is the answer, not a
 policy. It holds what sits where and who decided.

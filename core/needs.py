@@ -140,7 +140,19 @@ FLAGS = tuple(f['asked'] for f in FACTS if f.get('asked'))
 #:
 #: Defined here rather than in `core.overlay` because `Need` is here and
 #: this says which of its attributes are wishes; the overlay reads it.
-WISHES = ('device', 'prefer', 'shift', 'modifier')
+WISHES = ('device', 'prefer', 'shift', 'modifier', 'finger', 'level')
+
+#: The wishes that describe a PLACE on the hand rather than a decision of
+#: their own, and so the ones a control is judged against by counting.
+#: `device` is not here: it has its own measured pair of terms (+40/-50),
+#: tuned against five games, and folding it into a generic count would
+#: reweigh every layout for nothing. `prefer` is a pin, `shift` is a layer
+#: and `modifier` is a fact flag; none of the three is a place.
+#:
+#: These are what makes an overlay a cockpit template rather than a device
+#: preference: `finger = "thumb"`, `level = "HOME"` is the castle switch
+#: said in words that survive leaving the Hornet's grip.
+PLACED_BY = ('finger', 'level')
 
 #: The flags that ARE about the function, which is what gets written down.
 TOLD = tuple(f for f in FLAGS if f not in WISHES)
@@ -148,6 +160,11 @@ TOLD = tuple(f for f in FLAGS if f not in WISHES)
 #: What `how` says when it was the allocator rather than you. Read back as
 #: nothing: see `dump_assignments`.
 SOLVED = 'solver'
+
+#: What a function is for, as a closed list. The one word a game's needs
+#: file and an overlay can both say, which is what lets one overlay lay out
+#: six games. See the table's own header in scoring.toml.
+JOBS = tuple(RULES['jobs'])
 
 #: What may stand in for what when the exact shape is not on the hardware.
 #: Order matters: the first entry is the shape actually asked for and
@@ -245,6 +262,43 @@ def reach_finger(ctrl):
     return spots[0].finger if spots else ''
 
 
+def reach_level(ctrl):
+    """Where the hand is when it reaches this, or '' if nobody measured.
+
+    The level of the nearest spot, the same way `reach_finger` takes its
+    finger: a control is as close as its best way in, and the rest are
+    other ways to the same place.
+    """
+    spots = [a for a in ctrl.access if a.tier == ctrl.tier]
+    return spots[0].level if spots else ''
+
+
+#: How to ask a control what an overlay's place words are asking about.
+PLACE = {'finger': reach_finger, 'level': reach_level}
+
+
+def place_wishes(ctrl, need):
+    """(kept, broken) -- this control against the overlay's place words.
+
+    Neither, where nobody has measured: a control with no spots has no
+    finger and no level, and counting that as broken would charge it for
+    a desk nobody has walked rather than for being the wrong place.
+    """
+    kept = broken = 0
+    for word in PLACED_BY:
+        want = getattr(need, word, None)
+        if not want:
+            continue
+        got = PLACE[word](ctrl)
+        if not got:
+            continue
+        if got == want:
+            kept += 1
+        else:
+            broken += 1
+    return kept, broken
+
+
 def reach_said(ctrl):
     """How it is reached, in words, or '' when nobody has measured it.
 
@@ -292,6 +346,18 @@ class Need:
         #: an opinion about -- but when you DO have one it should win rather
         #: than be argued with at every regeneration.
         self.prefer = prefer
+        #: Where on the hand an overlay wants this, as the map's own words:
+        #: `finger = "thumb"`, `level = "HOME"` is the Hornet's castle
+        #: switch said so that it survives leaving the Hornet's grip.
+        #:
+        #: Written here rather than left to `setattr`, unlike the fact
+        #: flags: those exist because scoring.toml says so, and a sixth
+        #: fact must not need an edit here. These two are named in
+        #: `WISHES` in this file, so this IS where they are declared.
+        #: Not constructor parameters -- no needs file carries them, and
+        #: an overlay is the only thing that may set one.
+        self.finger = None
+        self.level = None
         #: the directions this control physically moves in, when it matters. A
         #: speedbrake switch is fore/aft whatever hat it lands on, and putting
         #: it on "up" and "right" because those came first would be a lie about
@@ -451,6 +517,13 @@ def read_needs(rows, make=None):
         if not isinstance(shape, str):
             shape = tuple(shape)
         push = cactions.read_binds(r['push']) if r.get('push') else None
+        if r.get('suits') and r['suits'] not in JOBS:
+            # Loudly, the way the overlay reader refuses a rule nobody
+            # wrote. A job nobody knows is a word no overlay can match, so
+            # a typo would quietly cost that need every wish in the file.
+            raise ValueError(
+                f'{r["what"]!r} is filed under {r["suits"]!r}, which is not '
+                f'a job. There are: {", ".join(JOBS)}')
         need = (make or Need)(
             r['what'], shape,
             bindings=[cactions.read_binds(slot) for slot in r['bindings']],
@@ -654,6 +727,8 @@ WHEN = {
 PER = {
     'tier': lambda c, n, r, t: t,
     'spare': lambda c, n, r, t: len(c.bindable_buttons) - n.wanted,
+    'place kept': lambda c, n, r, t: place_wishes(c, n)[0],
+    'place broken': lambda c, n, r, t: place_wishes(c, n)[1],
 }
 
 def _adder(parts):
@@ -1278,7 +1353,11 @@ SOLVER = None
 #: argument as `SOLVER`: one decision per run, not a property of any one
 #: allocation, and `allocate` still takes it explicitly so a test can ask
 #: for one without touching anything else.
-OVERLAY = None
+#:
+#: Typed loosely because `core.overlay` imports THIS module, so naming
+#: `Overlay` here would be a cycle -- and a bare `= None` narrows to
+#: `Never` for every caller past the `is None` guard.
+OVERLAY: typing.Any = None
 
 
 def allocate(needs, devices, usable=None, rules=None, solver=None,
@@ -1556,7 +1635,17 @@ def allocate(needs, devices, usable=None, rules=None, solver=None,
         for j, (role, c) in enumerate(pool):
             if usable is not None and not usable(role, c):
                 continue
-            if reach_tier(c) > top[need.urgency]:
+            if not low[need.urgency] <= reach_tier(c) <= top[need.urgency]:
+                # The floor as well as the ceiling, which this pass alone
+                # used to skip. `on the ramp` takes [2, 3], and the band's
+                # own note in scoring.toml says what the floor is for --
+                # "without it, something you do once with the canopy open
+                # grabs a thumb position the moment one is free". Every
+                # other pass honoured that; borrowing handed it a thumb
+                # anyway, and then paid it `+12` per tier for being CLOSE.
+                # X4's Pause and Cockpit menu sat on the hat that cycles
+                # weapon groups. No other band has a floor above 0, so
+                # nothing else can notice this.
                 continue
             if _fact_refuses(rules, c, need):
                 continue

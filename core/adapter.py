@@ -631,6 +631,32 @@ class Adapter(abc.ABC):
         return who()
 
     @typing.final
+    def overlay_note(self, layout, why=False):
+        """How much of the overlay the layout actually honours.
+
+        The overlay is named on the way in; this is what came of it. A
+        template is a lean rather than a law, so some of it loses to reach
+        and to what is already taken, and without a count the only way to
+        know how much was to read the whole layout with the file open
+        beside it. This is the number two overlays are compared on.
+        """
+        got = corneeds.OVERLAY
+        if got is None:
+            return []
+        kept, broken, lost = got.kept(layout)
+        if not kept and not broken:
+            return []
+        out = [f'\n  {got.name}: {kept} of {kept + broken} place wishes kept']
+        if why:
+            # Only under --why. The count is the answer; the list is the
+            # evidence, and printing evidence nobody asked for is how a
+            # summary stops being read.
+            for what, word, want, instead in lost:
+                out.append(f'    {what:28} wanted {word} {want}, '
+                           f'got {instead or "nothing measured"}')
+        return out
+
+    @typing.final
     def overlay(self, name):
         """The overlay this run uses, and one line saying which.
 
@@ -716,6 +742,8 @@ class Adapter(abc.ABC):
         note = layout.reach_note()
         if note:
             print(f'\n  {note}')
+        for line in self.overlay_note(layout, why=args.why):
+            print(line)
         return 0
 
     # ---- what the two kinds of adapter each answer differently ----------

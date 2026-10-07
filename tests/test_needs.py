@@ -226,11 +226,30 @@ class NeedsOnDisk(unittest.TestCase):
 
     def test_every_judgement_survives(self):
         one = Need('Airbrake', 'hat2', [[Bind('OUT')], [Bind('IN')]],
-                   urgency=IN_A_TURN, suits='reflex',
+                   urgency=IN_A_TURN, suits='flight',
                    on=('forward', 'back'), rank=17)
         got = self.back(one)
         for f in ('what', 'shape', 'urgency', 'suits', 'on', 'rank'):
             self.assertEqual(getattr(one, f), getattr(got, f), f)
+
+    def test_a_job_nobody_wrote_is_a_mistake_in_the_file(self):
+        # The one word a game and an overlay can both say, so a typo costs
+        # that need every wish in the overlay -- silently, because an
+        # unmatched rule looks exactly like a rule that did not apply.
+        with self.assertRaises(ValueError) as caught:
+            read_needs([{'what': 'Guns', 'shape': 'button',
+                         'bindings': [[{'action': 'GUNS'}]],
+                         'suits': 'reflex'}])
+        self.assertIn('reflex', str(caught.exception))
+        self.assertIn('fire', str(caught.exception))
+
+    def test_every_job_the_games_name_is_one_the_rules_define(self):
+        # The five needs files against the table, so a word removed from
+        # `[jobs]` cannot leave a game naming it.
+        for job in corneeds.JOBS:
+            self.assertIsInstance(job, str)
+        self.assertIn('fire', corneeds.JOBS)
+        self.assertNotIn('reflex', corneeds.JOBS)
 
     def test_a_wish_is_not_a_judgement_about_the_function(self):
         # `stick` is not a property of firing a gun, and `this one carries
@@ -293,7 +312,7 @@ class NeedsOnDisk(unittest.TestCase):
         # Through real files, because the two of them are the point: the
         # description in one, where it sits in the other, and a reader of
         # either can tell which it is holding.
-        one = Need('Boost', 'button', [[Bind('BOOST')]], suits='reflex')
+        one = Need('Boost', 'button', [[Bind('BOOST')]], suits='flight')
         one.assignment = {'role': 'stick', 'control': 'thumb-b',
                           'how': corneeds.CHOSE}
         with tempfile.TemporaryDirectory() as where:
@@ -351,6 +370,53 @@ class Borrowing(unittest.TestCase):
         placed, unplaced, _free = allocate(needs, devs)
         self.assertEqual([], unplaced)
         self.assertEqual([(4, 'FIRE')], one(placed, 'Fire').slots)
+
+    def test_it_honours_the_band_floor_like_every_other_pass(self):
+        # `on the ramp` takes [2, 3], and the band's own note in
+        # scoring.toml says what the floor is for: "without it, something
+        # you do once with the canopy open grabs a thumb position the
+        # moment one is free". Every other pass honoured that. This one
+        # checked only the ceiling, and then paid +12 a tier for being
+        # CLOSE -- so X4's Pause and Cockpit menu sat on the hat that
+        # cycles weapon groups, and Elite's two maps on a thumb hat.
+        devs = {'stick': fake.device('stick', [
+            fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4),
+            fake.hat4('Panel hat', 5, reach=fake.PANEL, push=9),
+        ])}
+        needs = [Need('Trim', 'hat4', ['U', 'R', 'D', 'L'],
+                      urgency=IN_A_TURN),
+                 Need('Canopy', 'button', ['CANOPY'],
+                      urgency=corneeds.ON_THE_RAMP)]
+        placed, _unplaced, _free = allocate(needs, devs)
+        self.assertEqual('Panel hat', one(placed, 'Canopy').ctrl.label)
+
+    def test_a_turn_need_still_borrows_a_thumb(self):
+        # The floor for every band but `on the ramp` is 0, so nothing else
+        # can notice -- and War Thunder's airbrake, bombs and radar ACM
+        # are served by this pass on purpose.
+        devs = {'stick': fake.device('stick', [
+            fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4),
+        ])}
+        needs = [Need('Trim', 'hat4', ['U', 'R', 'D', 'L'],
+                      urgency=IN_A_TURN),
+                 Need('Airbrake', 'button', ['BRAKE'], urgency=IN_A_TURN)]
+        placed, unplaced, _free = allocate(needs, devs)
+        self.assertEqual([], unplaced)
+        self.assertEqual('Thumb hat', one(placed, 'Airbrake').ctrl.label)
+
+    def test_a_ramp_need_with_nowhere_far_enough_goes_unplaced(self):
+        # The trade, said out loud: better nowhere than under the thumb.
+        # Two of the hundred and forty-seven lost their homes this way --
+        # X4's `Player ship info` and Falcon's AVTR, both ramp switches.
+        devs = {'stick': fake.device('stick', [
+            fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4),
+        ])}
+        needs = [Need('Trim', 'hat4', ['U', 'R', 'D', 'L'],
+                      urgency=IN_A_TURN),
+                 Need('Canopy', 'button', ['CANOPY'],
+                      urgency=corneeds.ON_THE_RAMP)]
+        _placed, unplaced, _free = allocate(needs, devs)
+        self.assertEqual(['Canopy'], [n.what for n in unplaced])
 
     def test_a_refusing_fact_refuses_here_too(self):
         # The borrow pass has its own formula and its own loop, so a gate

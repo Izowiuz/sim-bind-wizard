@@ -1,0 +1,106 @@
+name = "Generic spaceship"
+says = "right hand fights, left hand runs the ship and reads the world"
+
+# A cockpit template for a ship rather than an aircraft, and the split it
+# makes is the whole idea: the right hand never leaves the fight, and
+# everything you do BETWEEN fights is on the left.
+#
+# A space sim asks for things an aeroplane never does -- a map you fly by,
+# docking, scanning, time acceleration -- and they do not belong where a
+# jet puts its airframe switches. Hence `nav` and `sensor` getting real
+# places here, where `f-18.toml` leaves them to reach.
+#
+# Like every template this is a lean, not a law: `place_right` is +15 and
+# loses to reach and to what is already taken. The count under the layout
+# says how much of it got through.
+
+# ---- the right hand: never leaves the fight ----------------------------
+
+[[want]]
+suits  = "fire"
+device = "stick"
+finger = "index"
+
+# Targeting under the thumb, beside the trigger finger: in a ship you pick
+# a target and shoot it in the same second.
+[[want]]
+suits  = "lock"
+device = "stick"
+finger = "thumb"
+level  = "HOME"
+
+# Flares and armour go on the stick hand too, one finger out: they answer
+# the same moment the shooting does, and the left hand may be busy.
+[[want]]
+suits  = "defence"
+device = "stick"
+finger = "thumb"
+level  = "EXTENDED"
+
+# ---- the left hand: the ship, and the world ----------------------------
+
+# Flight assist, boost, travel mode, matching speed -- how the ship moves.
+[[want]]
+suits  = "flight"
+device = "throttle"
+finger = "thumb"
+level  = "HOME"
+
+# Looking around, cameras, the external view.
+[[want]]
+suits  = "view"
+device = "throttle"
+finger = "thumb"
+level  = "HOME"
+
+# Scanning is a trade in these games, not a combat act: index finger,
+# off the thumb's crowded patch.
+[[want]]
+suits  = "sensor"
+device = "throttle"
+finger = "index"
+
+# The map, jumps, docking. Things you do with the fight over, so they may
+# cost a reach -- but they are still the left hand's.
+[[want]]
+suits  = "nav"
+device = "throttle"
+finger = "index"
+level  = "EXTENDED"
+
+# Radio, missions, menus: left hand, and nothing says which finger -- they
+# are what the keyboard block on a throttle base is for.
+[[want]]
+suits  = "comms"
+device = "throttle"
+
+# Gear, lights, power, quicksave. Left hand, off the grip.
+[[want]]
+suits  = "systems"
+device = "throttle"
+level  = "BASE"
+
+# ---- and the exceptions, which is why order matters -------------------
+#
+# Later rules win, so the broad wish goes above and the exception here --
+# the order anybody would say them in.
+#
+# `flight` holds two different animals. Flight assist and travel mode are
+# modes you set, and they belong on the left. Strafing is flying, in a
+# turn, with the right hand already on the stick -- and the needs file
+# already tells them apart by band, so this does too. Without this,
+# X4's strafe hat went to the throttle's middle finger.
+[[want]]
+suits   = "flight"
+urgency = 0
+device  = "stick"
+finger  = "thumb"
+level   = "HOME"
+
+# Same for looking around: cycling an external view is a left-hand job,
+# but a head-look you use while fighting is not.
+[[want]]
+suits   = "view"
+urgency = 0
+device  = "stick"
+finger  = "thumb"

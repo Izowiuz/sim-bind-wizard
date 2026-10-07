@@ -626,6 +626,21 @@ class Review:
         self.unsaved = False
         return said or 'written', False
 
+    def refile_job(self, need, job):
+        """Say what a function is FOR. Returns a line.
+
+        Separate from `refile`, which is your own filing of the list.
+        This is the word an overlay matches on, so it comes from the
+        closed table rather than from a prompt -- a job nobody wrote
+        would cost this function every wish in every template, and look
+        exactly like a template that did not apply.
+        """
+        if job not in corneeds.JOBS:
+            return f'{job!r} is not a job'
+        need.suits = job
+        self.touched()
+        return f'{need.what} is {job} work'
+
     def refile(self, need, category):
         """Move a need to another group. Returns a line.
 
@@ -940,6 +955,7 @@ KEYS = (
     ('plain', ''),
     ('head', 'THE LIST'),
     ('plain', '  a           browse the game\'s vocabulary and add entries'),
+    ('plain', '  j           say what this function is FOR'),
     ('plain', '  r           move this entry to another category'),
     ('plain', '  R           rename the category it is in; all of it moves'),
     ('plain', ''),
@@ -1052,8 +1068,8 @@ def _layout(width, height, wants=None):
 #: In the sill, most-needed first: what is dropped on a narrow panel is
 #: dropped from the end, and nothing else is reachable without moving.
 HINTS = ('↑↓ move', '↵ assign', 'l from free', 'c accept', 'x unassign',
-         'a add', 'r category', 'f filter', 'h binds', 'y why', 'm map',
-         's save', 'w write')
+         'a add', 'j job', 'r category', 'f filter', 'h binds', 'y why',
+         'm map', 's save', 'w write')
 
 
 def _fit(width, text, lead=''):
@@ -1203,6 +1219,11 @@ def _asked_for(need, say):
     """
     say('head', 'WHAT IT ASKED FOR')
     said = [('shape', need.first_shape)]
+    # The job, because it is the one word an overlay takes hold of: a
+    # function filed under the wrong one quietly misses every wish in the
+    # template, and until this line there was nowhere on screen to see it.
+    if need.suits:
+        said.append(('job', need.suits))
     if need.device:
         said.append(('device', need.device))
     said.append(('when', corneeds.URGENCY_NAME[need.urgency]))
@@ -1571,6 +1592,22 @@ def _pick_category(scr, tui, rv):
     return name.strip() or None if name is not None else None
 
 
+def _pick_job(tui, need):
+    """Which job this function does. None if you changed your mind.
+
+    The ten from `[jobs]`, with what each covers beside it, because the
+    difference between `flight` and `systems` is a judgement and the
+    table is where it is written down.
+    """
+    known = list(corneeds.JOBS)
+    says = corneeds.RULES['jobs']
+    got = tui.choose(
+        f'{need.what} is...',
+        [(MINE if k == need.suits else 'plain', f'{k:8} {says[k]}')
+         for k in known])
+    return None if got is None else known[got]
+
+
 def _ran(tui, title, lines):
     """Show what a subprocess said, and wait. The transcript model, which
     is what `core/tui.py` keeps it for."""
@@ -1794,6 +1831,10 @@ def _loop(scr, rv, write, sticks):
                 # at means nothing now. Every other shape change here
                 # resets to the top; that would lose what you were doing.
                 sel = _row_of(rv, need, sel)
+        elif k == 'j' and need is not None:
+            job = _pick_job(tui, need)
+            if job:
+                rv.status = rv.refile_job(need, job)
         elif k in ('y', 'Y'):
             tui.popup('why a control is chosen',
                    rv.rules_lines(tui.inner()), full=True)

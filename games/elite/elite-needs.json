@@ -49,6 +49,7 @@
 ]
 ],
 "urgency": 0,
+"suits": "flight",
 "by_feel": true,
 "rank": 13
 },
@@ -139,6 +140,7 @@
 ]
 ],
 "urgency": 0,
+"suits": "systems",
 "rapid": true,
 "by_feel": true,
 "on": [
@@ -165,6 +167,7 @@
 ]
 ],
 "urgency": 0,
+"suits": "fire",
 "rapid": true,
 "by_feel": true,
 "on": [
@@ -184,6 +187,7 @@
 ]
 ],
 "urgency": 0,
+"suits": "fire",
 "by_feel": true,
 "rank": 12
 },
@@ -198,6 +202,7 @@
 ]
 ],
 "urgency": 0,
+"suits": "defence",
 "by_feel": true,
 "rank": 3
 },
@@ -212,6 +217,7 @@
 ]
 ],
 "urgency": 0,
+"suits": "defence",
 "by_feel": true,
 "rank": 6
 },
@@ -226,6 +232,7 @@
 ]
 ],
 "urgency": 0,
+"suits": "defence",
 "by_feel": true,
 "rank": 3
 },
@@ -240,7 +247,7 @@
 ]
 ],
 "urgency": 1,
-"suits": "toggle",
+"suits": "systems",
 "by_feel": true,
 "rank": 9
 },
@@ -258,6 +265,7 @@
 ]
 ],
 "urgency": 1,
+"suits": "systems",
 "rank": 9
 },
 {
@@ -274,6 +282,7 @@
 ]
 ],
 "urgency": 1,
+"suits": "flight",
 "by_feel": true,
 "rank": 12
 },
@@ -288,6 +297,7 @@
 ]
 ],
 "urgency": 1,
+"suits": "flight",
 "by_feel": true
 },
 {
@@ -304,6 +314,7 @@
 ]
 ],
 "urgency": 1,
+"suits": "flight",
 "by_feel": true,
 "rank": 8
 },
@@ -318,6 +329,7 @@
 ]
 ],
 "urgency": 1,
+"suits": "nav",
 "by_feel": true,
 "rank": 4
 },
@@ -336,7 +348,7 @@
 }
 ]
 ],
-"suits": "sensor",
+"suits": "lock",
 "rapid": true,
 "by_feel": true,
 "on": [
@@ -420,6 +432,7 @@
 }
 ]
 ],
+"suits": "sensor",
 "rank": 13
 },
 {
@@ -431,7 +444,8 @@
 "action": "NightVisionToggle"
 }
 ]
-]
+],
+"suits": "view"
 },
 {
 "what": "Spotlight",
@@ -446,6 +460,7 @@
 }
 ]
 ],
+"suits": "systems",
 "rank": 7
 },
 {
@@ -463,6 +478,7 @@
 }
 ]
 ],
+"suits": "comms",
 "on": [
 "forward",
 "back"
@@ -484,6 +500,7 @@
 }
 ]
 ],
+"suits": "comms",
 "on": [
 "right",
 "left"
@@ -504,6 +521,7 @@
 ]
 ],
 "urgency": 3,
+"suits": "nav",
 "rank": 4
 },
 {
@@ -520,6 +538,7 @@
 ]
 ],
 "urgency": 3,
+"suits": "nav",
 "rank": 4
 },
 {
@@ -536,6 +555,7 @@
 ]
 ],
 "urgency": 3,
+"suits": "systems",
 "costly": true
 }
 ]

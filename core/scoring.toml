@@ -157,6 +157,31 @@ says   = "wrong device; wanted the {device}"
 general = "on a different device"
 
 [[term]]
+name   = "place_right"
+weight = 15
+when   = "always"
+per    = "place kept"
+says   = "where the overlay wants it"
+general = "for each of the overlay's place words it answers"
+plural = "{n} of the overlay's place words"
+note   = """What makes an overlay a cockpit template rather than a device \
+preference. `finger = "thumb"`, `level = "HOME"` is the Hornet's castle \
+switch said in words that survive leaving the Hornet's grip, and this is \
+what makes the allocator lean that way. Deliberately smaller than \
+`device_right`: a template is a lean, not a law, and a layout that refused \
+every control the template did not name would place half an aircraft on a \
+desk that is not the one it was drawn for."""
+
+[[term]]
+name   = "place_wrong"
+weight = -20
+when   = "always"
+per    = "place broken"
+says   = "not where the overlay wants it"
+general = "for each of the overlay's place words it contradicts"
+plural = "against {n} of the overlay's place words"
+
+[[term]]
 name   = "exact_shape"
 weight = 20
 when   = "exact_shape"
@@ -320,6 +345,30 @@ encoder   = ["encoder", "dial"]
 dial      = ["dial", "encoder"]
 latch     = ["latch"]
 selector  = ["selector"]
+
+[jobs]
+# What a function is FOR. The one word a game and an overlay can both say:
+# a game's needs file names the job, an overlay's `[[want]]` matches on it,
+# and neither has to know anything about the other. `f-18.toml` says "sensor
+# work goes under the thumb" and it means the same thing in DCS and in X4.
+#
+# A closed list, checked when a needs file loads. It used to be free text
+# called `suits`, with eleven words on two different axes -- `fire`, `lock`
+# and `view` said what the job IS, while `toggle`, `reflex` and
+# `stepped-pair` said how the control BEHAVES. The second kind is gone:
+# `shape`, `held` and `rapid` already say it, and they say it precisely.
+# Sixty-five of the hundred and forty-seven needs said nothing at all, so an
+# overlay had nothing to take hold of for nearly half the list.
+fire    = "trigger, cannon, missiles, what is armed"
+lock    = "picking a target and holding it"
+sensor  = "radar, scan, sensor modes and cursors"
+view    = "looking around: cameras, head, sights"
+trim    = "trim and fine correction"
+flight  = "how the aircraft flies: modes, brakes, flaps, thrust"
+systems = "gear, lights, power, the aircraft's own machinery"
+defence = "flares, chaff, jammer, armour"
+comms   = "radio, missions, menus, panels"
+nav     = "maps, jumps, docking, course"
 
 [mechanisms]
 # Controls whose buttons are one physical mechanism rather than independent

@@ -15,8 +15,11 @@ DESCRIPTION
     SIM_DEVICE_PROFILE.
 
     `--overlay NAME` picks which of `overlays/` a layout is laid out
-    to -- which device a family belongs on, which control carries the
-    shift. `--overlay none` asks for nothing.
+    to: which place on the hand each family of functions belongs in,
+    which control carries the shift. A template rather than a game
+    file -- `--overlay f-18` lays X4 out like a Hornet. The layout
+    says how much of it got through; `--overlay none` asks for
+    nothing.
 
 VERBS
     harvest   read the game's files, write the vocabulary cache

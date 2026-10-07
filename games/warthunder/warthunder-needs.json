@@ -30,6 +30,7 @@
 ]
 ],
 "urgency": 0,
+"suits": "fire",
 "held": true,
 "by_feel": true
 },
@@ -50,7 +51,7 @@
 ]
 ],
 "urgency": 0,
-"suits": "reflex",
+"suits": "defence",
 "rapid": true,
 "by_feel": true
 },
@@ -301,7 +302,7 @@
 ]
 ],
 "urgency": 0,
-"suits": "reflex",
+"suits": "flight",
 "held": true,
 "by_feel": true
 },
@@ -330,7 +331,7 @@
 ]
 ],
 "urgency": 0,
-"suits": "lock",
+"suits": "sensor",
 "held": true,
 "by_feel": true
 },
@@ -348,7 +349,7 @@
 ]
 ],
 "urgency": 0,
-"suits": "release",
+"suits": "fire",
 "by_feel": true
 },
 {
@@ -382,7 +383,7 @@
 ]
 ],
 "urgency": 1,
-"suits": "toggle",
+"suits": "systems",
 "by_feel": true
 },
 {
@@ -401,7 +402,7 @@
 ]
 ],
 "urgency": 1,
-"suits": "stepped-pair",
+"suits": "flight",
 "rapid": true,
 "by_feel": true
 },
@@ -416,7 +417,7 @@
 ]
 ],
 "urgency": 0,
-"suits": "toggle",
+"suits": "flight",
 "by_feel": true
 },
 {
@@ -429,7 +430,7 @@
 }
 ]
 ],
-"suits": "toggle"
+"suits": "flight"
 },
 {
 "what": "SAS",
@@ -441,7 +442,7 @@
 }
 ]
 ],
-"suits": "toggle"
+"suits": "flight"
 },
 {
 "what": "Cockpit / external view",
@@ -493,7 +494,7 @@
 ]
 ],
 "urgency": 3,
-"suits": "occasional"
+"suits": "systems"
 },
 {
 "what": "Tactical map",
@@ -506,7 +507,7 @@
 ]
 ],
 "urgency": 3,
-"suits": "occasional"
+"suits": "nav"
 },
 {
 "what": "Bomb bay",
@@ -519,7 +520,7 @@
 ]
 ],
 "urgency": 3,
-"suits": "occasional"
+"suits": "fire"
 },
 {
 "what": "Drag chute",
@@ -532,7 +533,7 @@
 ]
 ],
 "urgency": 3,
-"suits": "occasional",
+"suits": "systems",
 "costly": true
 },
 {
@@ -545,7 +546,7 @@
 }
 ]
 ],
-"suits": "occasional"
+"suits": "sensor"
 },
 {
 "what": "Weapon select",
@@ -562,7 +563,7 @@
 }
 ]
 ],
-"suits": "stepped-pair",
+"suits": "fire",
 "rapid": true,
 "by_feel": true
 }

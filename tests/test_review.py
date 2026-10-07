@@ -1482,6 +1482,54 @@ class EveryKeyTheScreenNamesIsOneItAnswers(unittest.TestCase):
         self.assertIn('w', self.answered())
 
 
+class WhatAFunctionIsFor(unittest.TestCase):
+    """The job: the one word an overlay takes hold of.
+
+    It was free text, invisible on screen, and absent from 65 of the 147
+    functions -- so a template had nothing to match for nearly half the
+    list, and no way to tell. Now it is on the panel and `j` sets it from
+    the closed table, because a function filed under the wrong job misses
+    every wish in every template and looks exactly like a template that
+    did not apply.
+    """
+
+    def rv(self):
+        return made([Need('Boost', 'button', [[Bind('BOOST')]],
+                          suits='flight')],
+                    save=lambda needs: 'wrote 1')
+
+    def side(self, rv):
+        row = next(r for r in rv.rows() if r.kind == 'need')
+        return '\n'.join(t for _tone, t in review._side(rv, row, 40))
+
+    def test_the_panel_says_it(self):
+        self.assertIn('job', self.side(self.rv()))
+        self.assertIn('flight', self.side(self.rv()))
+
+    def test_setting_it_changes_the_word(self):
+        rv = self.rv()
+        need = rv.needs[0]
+        said = rv.refile_job(need, 'systems')
+        self.assertEqual('systems', need.suits)
+        self.assertIn('systems', said)
+
+    def test_setting_it_makes_the_file_behind(self):
+        rv = self.rv()
+        rv.refile_job(rv.needs[0], 'systems')
+        self.assertTrue(rv.unsaved)
+
+    def test_a_word_outside_the_table_is_refused(self):
+        rv = self.rv()
+        need = rv.needs[0]
+        said = rv.refile_job(need, 'reflex')
+        self.assertEqual('flight', need.suits, 'took a word nobody wrote')
+        self.assertIn('not a job', said)
+
+    def test_the_key_is_in_the_sill_and_the_help(self):
+        self.assertIn('j job', review.HINTS)
+        self.assertIn('  j ', '\n'.join(t for _tone, t in review.KEYS))
+
+
 class SavingIsAKeystroke(unittest.TestCase):
     """Nothing reaches disk until `s`, the way the capture wizard works.
 

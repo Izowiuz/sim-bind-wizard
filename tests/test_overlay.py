@@ -46,7 +46,7 @@ class WhatARuleAsksFor(unittest.TestCase):
     def needs(self):
         return [Need('Fire primary', 'trigger', [[Bind('FIRE')]],
                      suits='fire', urgency=IN_A_TURN),
-                Need('Gear', 'button', [[Bind('GEAR')]], suits='state')]
+                Need('Gear', 'button', [[Bind('GEAR')]], suits='systems')]
 
     def test_it_sets_what_it_asks_for(self):
         got = self.needs()
@@ -239,14 +239,14 @@ class APairRuleReachesTheAllocator(unittest.TestCase):
 
     def needs(self):
         return [Need('Shift', 'button', [[Bind('SHIFT')]],
-                     urgency=IN_A_TURN, suits='modifier'),
+                     urgency=IN_A_TURN, suits='systems'),
                 Need('Shifted', 'button', [[Bind('OTHER')]],
-                     urgency=IN_A_TURN, suits='layer')]
+                     urgency=IN_A_TURN, suits='fire')]
 
     def rule(self):
         return written('[[pair]]\nrule = "reachable together"\n'
-                       'one = { suits = "modifier" }\n'
-                       'other = { suits = "layer" }\n')
+                       'one = { suits = "systems" }\n'
+                       'other = { suits = "fire" }\n')
 
     def test_the_pair_does_not_land_on_one_finger(self):
         got = self.needs()
@@ -265,17 +265,172 @@ class APairRuleReachesTheAllocator(unittest.TestCase):
 
     def test_a_rule_binds_every_pair_its_sides_match(self):
         got = self.needs() + [Need('Also shifted', 'button',
-                                   [[Bind('THIRD')]], suits='layer')]
+                                   [[Bind('THIRD')]], suits='fire')]
         pairs = self.rule().partners(got)
         self.assertEqual(2, len(pairs))
 
     def test_a_need_is_never_its_own_partner(self):
-        got = [Need('Both', 'button', [[Bind('B')]], suits='modifier')]
-        got[0].suits = 'modifier'
+        got = [Need('Both', 'button', [[Bind('B')]], suits='systems')]
         rule = written('[[pair]]\nrule = "reachable together"\n'
-                       'one = { suits = "modifier" }\n'
-                       'other = { suits = "modifier" }\n')
+                       'one = { suits = "systems" }\n'
+                       'other = { suits = "systems" }\n')
         self.assertEqual([], rule.partners(got))
+
+
+class APlaceOnTheHand(unittest.TestCase):
+    """What makes an overlay a cockpit template, not a device preference.
+
+    `prefer = "Top thumb hat"` is a label off one desk. The Hornet's castle
+    switch said as "the stick hand's thumb, without moving the hand" lands
+    on whatever the desk in front of you has in that place, which is what
+    lets one file lay out six games on anybody's hardware.
+    """
+
+    def rig(self):
+        return {'stick': fake.device('stick', [
+            fake.button('Thumb', 0, reach=fake.THUMB),
+            fake.button('Index', 1, reach=fake.INDEX),
+            fake.button('Pinky', 2, reach=fake.PINKY),
+            fake.button('Panel', 3, reach=fake.PANEL),
+            fake.button('Unmeasured', 4),
+        ], hand='right')}
+
+    def at(self, label, devs):
+        return next(c for c in devs['stick'].groups() if c.label == label)
+
+    def need(self, **kw):
+        got = Need('Guns', 'button', [[Bind('GUNS')]], suits='fire',
+                   urgency=IN_A_TURN)
+        for key, value in kw.items():
+            setattr(got, key, value)
+        return got
+
+    def test_a_finger_is_a_wish_the_reader_takes(self):
+        got = [self.need()]
+        written('[[want]]\nsuits = "fire"\nfinger = "thumb"\n').apply(got)
+        self.assertEqual('thumb', got[0].finger)
+
+    def test_a_level_is_too(self):
+        got = [self.need()]
+        written('[[want]]\nsuits = "fire"\nlevel = "HOME"\n').apply(got)
+        self.assertEqual('HOME', got[0].level)
+
+    def test_a_word_the_map_does_not_say_is_a_mistake(self):
+        # Against the MAP's own constants, not a list of ours: these have
+        # been in devicemap.py since before overlays existed.
+        for line, bad in (('finger = "thump"', 'thump'),
+                          ('level = "home"', 'home'),
+                          ('device = "yoke"', 'yoke')):
+            with self.subTest(line=line):
+                with self.assertRaises(coverlay.Bad) as caught:
+                    written(f'[[want]]\nsuits = "fire"\n{line}\n')
+                self.assertIn(bad, str(caught.exception))
+
+    def test_a_control_in_the_right_place_counts_kept(self):
+        devs = self.rig()
+        self.assertEqual((1, 0), corneeds.place_wishes(
+            self.at('Thumb', devs), self.need(finger='thumb')))
+
+    def test_a_control_in_the_wrong_place_counts_broken(self):
+        devs = self.rig()
+        self.assertEqual((0, 1), corneeds.place_wishes(
+            self.at('Index', devs), self.need(finger='thumb')))
+
+    def test_both_words_count_separately(self):
+        # A want asking for a thumb at HOME is two claims about where a
+        # thing goes, and answering one of them is half an answer.
+        devs = self.rig()
+        self.assertEqual((1, 1), corneeds.place_wishes(
+            self.at('Pinky', devs), self.need(finger='pinky', level='HOME')))
+
+    def test_a_control_nobody_has_measured_counts_neither(self):
+        # Charging it would be charging for a desk nobody has walked
+        # rather than for being in the wrong place.
+        devs = self.rig()
+        self.assertEqual((0, 0), corneeds.place_wishes(
+            self.at('Unmeasured', devs), self.need(finger='thumb')))
+
+    def test_a_need_with_no_wish_counts_neither(self):
+        devs = self.rig()
+        self.assertEqual((0, 0), corneeds.place_wishes(
+            self.at('Thumb', devs), self.need()))
+
+    def test_the_wish_moves_a_placement(self):
+        devs = self.rig()
+        rule = written('[[want]]\nsuits = "fire"\nfinger = "index"\n')
+        got = [self.need()]
+        placed, _un, _free = allocate(got, devs, overlay=rule)
+        self.assertEqual('Index', placed[0].ctrl.label)
+
+    def test_without_the_wish_it_goes_by_reach(self):
+        # And reach rewards the LEAST precious control that still does the
+        # job, so the lone need gets the pinky and leaves the thumb for
+        # whatever might still be coming. The wish above is what overrules
+        # that, which is the whole of what a template does.
+        placed, _un, _free = allocate([self.need()], self.rig())
+        self.assertEqual('Pinky', placed[0].ctrl.label)
+
+    def test_a_wish_is_a_lean_and_not_a_law(self):
+        # +15 against a tier's worth of reach: a template that refused
+        # everything it did not name would place half an aircraft on a
+        # desk that is not the one it was drawn for.
+        devs = {'stick': fake.device('stick', [
+            fake.button('Thumb', 0, reach=fake.THUMB),
+            fake.button('Far', 1, reach=fake.PANEL),
+        ], hand='right')}
+        rule = written('[[want]]\nsuits = "fire"\nfinger = "ring"\n')
+        placed, unplaced, _free = allocate([self.need()], devs, overlay=rule)
+        self.assertEqual([], unplaced, 'a lean refused the only homes there were')
+        self.assertEqual(1, len(placed))
+
+
+class HowMuchOfTheTemplateGotThrough(unittest.TestCase):
+    """The count under a layout, which is what two overlays are compared on.
+
+    Without it the only way to know whether an overlay did anything was to
+    read the whole layout with the file open beside it.
+    """
+
+    def rig(self):
+        return {'stick': fake.device('stick', [
+            fake.button('Thumb', 0, reach=fake.THUMB),
+            fake.button('Index', 1, reach=fake.INDEX),
+        ], hand='right')}
+
+    def needs(self):
+        return [Need('Guns', 'button', [[Bind('GUNS')]], suits='fire',
+                     urgency=IN_A_TURN),
+                Need('Scan', 'button', [[Bind('SCAN')]], suits='sensor',
+                     urgency=IN_A_TURN)]
+
+    def layout(self, body):
+        rule = written(body)
+        got = self.needs()
+        placed, unplaced, free = allocate(got, self.rig(), overlay=rule)
+        return rule, corneeds.Layout(self.rig(), placed, unplaced, free)
+
+    def test_it_counts_what_was_honoured(self):
+        rule, layout = self.layout('[[want]]\nsuits = "fire"\n'
+                                   'finger = "thumb"\n')
+        kept, broken, lost = rule.kept(layout)
+        self.assertEqual((1, 0), (kept, broken))
+        self.assertEqual([], lost)
+
+    def test_it_says_what_broke_and_what_it_got_instead(self):
+        rule, layout = self.layout('[[want]]\nsuits = "fire"\n'
+                                   'finger = "ring"\n')
+        _kept, broken, lost = rule.kept(layout)
+        self.assertEqual(1, broken)
+        (what, word, want, instead), = lost
+        self.assertEqual(('Guns', 'finger', 'ring', 'thumb'),
+                         (what, word, want, instead))
+
+    def test_an_overlay_asking_for_no_place_counts_nothing(self):
+        # Which is how the transitional `by-hand.toml` draws no line at
+        # all: it asks for devices, and a device has its own terms.
+        rule, layout = self.layout('[[want]]\nsuits = "fire"\n'
+                                   'device = "stick"\n')
+        self.assertEqual((0, 0, []), rule.kept(layout))
 
 
 class TheOverlaysOnFile(unittest.TestCase):
@@ -309,6 +464,20 @@ class TheOverlaysOnFile(unittest.TestCase):
                 for row in rows:
                     for wish in corneeds.WISHES:
                         self.assertNotIn(wish, row, row['what'])
+
+    def test_every_function_names_a_job_and_it_is_one_of_the_ten(self):
+        # The word an overlay takes hold of. Sixty-five of the hundred and
+        # forty-seven said nothing at all, so a template had nothing to
+        # match for nearly half the list.
+        import glob
+        import json
+        for path in glob.glob('games/*/*-needs.json'):
+            with self.subTest(file=path):
+                with open(path, encoding='utf-8') as f:
+                    rows = json.load(f)['needs']
+                for row in rows:
+                    self.assertIn(row.get('suits'), corneeds.JOBS,
+                                  row['what'])
 
 
 if __name__ == '__main__':
