@@ -187,15 +187,15 @@ def wait_input(devices, want_axis, tui):
 
 
 def detect_device(devices, label, tui):
-    tui.log(f"--> press any button on your {label}:")
+    tui.log(f"--> Press any button on your {label}.")
     while True:
         got = wait_input(devices, want_axis=False, tui=tui)
         if got == "skip":
             continue                       # ESC is meaningless here
         d = got[0]
         if d.role is not None:
-            tui.log(f"    that came from the {d.role} — try again on "
-                    f"the {label}")
+            tui.log(f"    That came from the {d.role}. Try again on "
+                    f"the {label}.")
             drain(devices, tui)
             continue
         tui.log(f"    OK: {d.name}")

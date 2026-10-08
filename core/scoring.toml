@@ -21,11 +21,11 @@
 # how far the nearest way of reaching a control is from flying. These are
 # the map's own levels, so there is nothing here to keep in step by hand.
 means = [
-  [0, "your hand where it lives, nothing moved"],
-  [1, "one finger stretching, the hand still on the grip"],
+  [0, "your hand where it lives"],
+  [1, "one finger, the hand still on the grip"],
   [2, "the hand off the grip, still on the device"],
-  [3, "the hand off the device altogether"],
-  [4, "nobody has measured it, so it sorts below all of them"],
+  [3, "the hand off the device"],
+  [4, "nobody measured it"],
 ]
 # What a control nobody has measured counts as where a tier is needed at
 # all. The reach term does not fire for one -- rewarding it for distance
@@ -65,34 +65,49 @@ reduced to."""
 # The passes, in the order they run.
 [[pass]]
 name = "yours"
-does = "where you put it yourself; nothing is asked and nothing argues"
+does = "you put it here, and nothing asks or argues"
 
 [[pass]]
 name = "pinned"
-does = "a control you named, before anything else is placed"
+does = "a control you named, taken before anything else"
 
 [[pass]]
 name = "floored"
-does = "the ordinary one; the limits above both hold"
+does = "the ordinary try, with both limits above holding"
 
 [[pass]]
 name = "relaxed"
-does = "nothing was left inside them, so the far end opens up"
+does = "nothing was left inside them, so the far end opens"
 
 [[pass]]
 name = "borrowed"
 does = "a spare button on a control something else owns"
 
 # What makes one control beat another. `when` names a predicate defined in
-# core/needs.py; `per` names a count to multiply the weight by.
+# core/needs.py; `per` names a count to multiply the weight by; `takes`
+# ("button" or "axis") narrows a term to one kind of input, and silence
+# means both -- three of these are about buttons and nothing else, and
+# left unsaid they leaked into an axis: `reach` paid a lever for being
+# far from a hand it does not compete for, and `spare` paid for a
+# control with MINUS one spare button, because a lever has none.
+#
+# `pass` narrows a row to one of the passes above, and silence again means
+# both. The last pass lends a need one spare button of a control something
+# else owns, and it is scored differently on purpose: nothing better is
+# coming after it, so the reward for distance turns around, and the
+# control's shape is not the question because the control is not what the
+# need is getting. That used to be four numbers written into `allocate` --
+# and then written again, by hand, so the screen had words to show. Both
+# copies are these rows now.
 [[term]]
 name   = "pinned"
+pass   = "placed"
 weight = 1000
 when   = "pinned"
 says   = "pinned to {label}"
 general = "pinned to a control you named"
 stops  = true
-note   = """A pin outranks the reach tables, not just the ranking. It was a \
+note   = """A pin outranks the reach tables, not just the ordering. It was a \
 +500 bonus applied AFTER the ceiling, so a pinned control the ceiling \
 excluded scored nothing and the bonus never ran: BMS's pinky shift scored \
 721 with a loose ceiling and nothing with a tight one, and moved silently to \
@@ -101,6 +116,7 @@ the thumb hats the shifted layer sits on."""
 
 [[term]]
 name   = "stayed"
+pass   = "placed"
 weight = 20
 when   = "stayed"
 says   = "where you left it"
@@ -127,16 +143,19 @@ the true cascade, the one you moved plus what it displaces."""
 
 [[term]]
 name   = "fits"
+pass   = "placed"
 weight = 100
 when   = "always"
-says   = "shape and count fit"
+says   = "the shape and the count fit"
 
 [[term]]
 name   = "reach"
+pass   = "placed"
+takes  = "button"
 weight = 12
 when   = "measured"
 per    = "tier"
-says   = "leaves closer controls free"
+says   = "leaves the closer controls free"
 general = "for each tier further from your hand"
 note   = """Rewards the LEAST precious control that still does the job. Needs \
 are placed most-urgent-first, so the thumb positions are already spoken for \
@@ -151,13 +170,15 @@ general = "on the device it asked for"
 
 [[term]]
 name   = "device_wrong"
+pass   = "placed"
 weight = -50
 when   = "device_differs"
-says   = "wrong device; wanted the {device}"
+says   = "the wrong device, not the {device}"
 general = "on a different device"
 
 [[term]]
 name   = "place_right"
+pass   = "placed"
 weight = 15
 when   = "always"
 per    = "place kept"
@@ -174,6 +195,7 @@ desk that is not the one it was drawn for."""
 
 [[term]]
 name   = "place_wrong"
+pass   = "placed"
 weight = -20
 when   = "always"
 per    = "place broken"
@@ -183,27 +205,34 @@ plural = "against {n} of the overlay's place words"
 
 [[term]]
 name   = "exact_shape"
+pass   = "placed"
 weight = 20
 when   = "exact_shape"
-says   = "exact shape ({kind})"
+says   = "the exact shape, {kind}"
 general = "exactly the shape it asked for"
 
 [[term]]
 name   = "click"
+pass   = "placed"
+takes  = "button"
 weight = 15
 when   = "has_click"
 says   = "has a click"
 
 [[term]]
 name   = "directions_differ"
+pass   = "placed"
+takes  = "button"
 weight = -8
 when   = "directions_differ"
-says   = "directions differ"
+says   = "the directions differ"
 note   = """A control whose directions merely differ is still a home -- a \
 rocker is up/down and a need asking for left/right is happy enough on it."""
 
 [[term]]
 name   = "no_directions"
+pass   = "placed"
+takes  = "button"
 weight = -60
 when   = "no_directions"
 says   = "no directions"
@@ -211,16 +240,61 @@ note   = """A different matter, and the test has to be against the direction \
 vocabulary rather than "has any label": a selector answers '1'..'5' and an \
 encoder 'ccw'/'cw', which are positions. Reading those as directions let \
 Elite's four panel-focus actions onto a five-position switch that HOLDS \
-whichever position it is in."""
+whichever position it is in.
+
+Buttons only, like its milder half. `on` means two different things: which
+DIRECTIONS a switch moves in, and which AXIS of a control a lever need wants
+-- `on = ["y"]` is the stick's pitch axis. Both of these read it the first
+way, so every axis need that named its axis was charged -60 for a control
+whose buttons do not point that way. The ask itself is checked against the
+axis's own role, where it belongs."""
 
 [[term]]
 name   = "spare"
+pass   = "placed"
+takes  = "button"
 weight = -4
 when   = "always"
 per    = "spare"
 says   = "{n} spare button"
 general = "for each spare button it does not need"
 plural = "{n} spare buttons"
+
+[[term]]
+name   = "lent"
+pass   = "borrowed"
+weight = 60
+when   = "always"
+says   = "still free in the last try"
+note   = """What a borrowed button is worth before anything is said about \
+which one. Below `fits` on purpose: these are not compared against the \
+ordinary passes -- by the time this one runs they have finished -- so what \
+the number has to do is sit above what the facts can take off it."""
+
+[[term]]
+name   = "left_over"
+pass   = "borrowed"
+weight = 12
+when   = "always"
+per    = "closeness"
+says   = "the best of what was left"
+note   = """`reach` upside down, and that is the whole difference between \
+this pass and the others. They reward the furthest control that still does \
+the job, because something more urgent may still be coming; nothing is \
+coming after this one, so a leftover need should get the best of what is \
+left. Rewarding distance here sent War Thunder's airbrake, bombs and sight \
+stabilisation off the thumb onto the middle-finger hat for nobody's gain."""
+
+[[term]]
+name   = "opens"
+pass   = "borrowed"
+weight = -15
+when   = "untouched"
+says   = "opens a control that nothing has touched"
+note   = """Prefer a spare position on a control already in use. Four idle \
+two-way rockers should not sit there while a cold-start switch goes \
+homeless, so this is small -- but neither should one be broken open while a \
+real spare exists."""
 
 # Why a control is refused outright, before any of the above runs.
 [[gate]]
@@ -229,11 +303,20 @@ says = "the game cannot address it"
 
 [[gate]]
 when = "wrong_shape"
+pass = "placed"
 says = "it is the wrong shape"
+note = """Not when borrowing. What a borrowed button is taken off is a \
+control something else owns -- a hat's fourth direction, a rocker's spare \
+half -- and refusing those for their shape would leave the pass with the \
+one thing it cannot offer: a whole control."""
 
 [[gate]]
 when = "too_few"
 says = "it has too few bindable buttons"
+
+[[gate]]
+when = "stepped"
+says = "it reports its two extremes and nothing in between"
 
 [[gate]]
 when = "out_of_reach"
@@ -255,10 +338,19 @@ says = "its reach is outside the limits above"
 # here. A fact about a PAIR of controls -- "can you work these two at once"
 # -- does not fit and will cost code, which is the honest limit.
 #
-#   reads    the control's field in devicemap.Group
+#   on       `axis` to read what the map measured about the LEVER rather
+#            than about the control carrying it: three of the stick's
+#            axes are one control and only one of them is pitch
+#   reads    the control's field in devicemap.Group, or the axis's in
+#            devicemap.Axis where `on = "axis"` -- a property counts,
+#            because half of what the map answers about an axis is
+#            derived from `rest` and `moves_with`
 #   asked    the flag this puts on every Need; the fact only counts for a
 #            need that sets it
 #   yes/no   weights for a bool the map answered either way
+#   same/other  weights for a closed field the need names a value of:
+#            `rest` is where an axis sits when you let go, and a need
+#            says which it has to be
 #   scale    weight per step of a 0/1/2 answer
 #   below    charge the SHORTFALL from this answer instead of the answer
 #   refuses  a gate rather than a term: the control is not offered at all
@@ -284,7 +376,7 @@ asked = "rapid"
 yes   = 25
 no    = -45
 says  = "you can tap it quickly"
-not   = "awkward to tap repeatedly"
+not   = "awkward to tap again and again"
 
 [[fact]]
 reads  = "blind_distinct"
@@ -332,9 +424,55 @@ refuses only on a measured "no" -- on a map nobody has answered, a gate that \
 refused out of ignorance would leave the shift nowhere at all, which is the \
 same argument `out_of_reach` makes."""
 
+# ---- and about a LEVER, for a need that takes an axis ------------------
+#
+# The same table, reading the axis instead of the control. There is no
+# reach term among these: the reach limits are about competing for the
+# homes near your hand, and nothing competes for levers -- there is one
+# pitch axis and it is where it is.
+
+[[fact]]
+on     = "axis"
+reads  = "rest"
+asked  = "rests"
+same   = 40
+other  = -40
+says   = "rests where this row needs it"
+not    = "rests somewhere else"
+note   = """Where an axis sits when you let go, in the map's own words \
+(`centred` `min` `mid` `max`), against the word the need names. Pitch has \
+to spring back or the aircraft will not fly level; a throttle has to stay \
+or it returns to half power when you let go; a brake or a zoom has to rest \
+at the minimum or it is part-on from the moment the game starts. One \
+question, so one row -- it was going to be two flags that excluded each \
+other, which is a scale written as two booleans. Three games each wrote \
+their own search over this ("a slider or lever you can read absolutely", \
+"steadiest first: something that stays where you leave it")."""
+
+[[term]]
+name   = "coupled"
+takes  = "axis"
+weight = -25
+when   = "coupled"
+says   = "moves with another lever"
+general = "when this binding drives a second lever too"
+note   = """The map answers this per axis, AS THE HARDWARE IS SET UP NOW: \
+the VMAX's two throttle levers travel together until you release the \
+catch, so binding one binds both engines. Not a gate -- where the pair IS \
+what you want, one thrust for two engines, there may be nothing else to \
+take. Beatable by the resting match above, which is the ordering those \
+two have to keep: a lever that rests right and moves with its twin is \
+still a better throttle than one that springs back."""
+
 [shapes]
 # What may stand in for what. The first entry is the shape actually asked
 # for and scores the `exact_shape` bonus; the rest are substitutes.
+# An axis is a kind the map has, for a control that is only an axis and
+# nothing finer. `axis` as an ASK means "any lever will do" -- which is
+# what a command whose prose says `spare axis` is asking for -- and the
+# substitutions are every kind that carries one.
+axis      = ["axis", "lever", "slider", "dial", "pedal", "wheel"]
+lever     = ["lever", "slider"]
 hat2      = ["hat2", "switch2", "switch3", "hat4", "selector"]
 hat4      = ["hat4", "hat8", "selector"]
 button    = ["button", "paddle", "dial"]

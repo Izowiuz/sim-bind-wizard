@@ -70,8 +70,8 @@ DEFAULT_RESULTS = os.path.join(SCRIPT_DIR, "ed-bind-wizard-results.json")
 CORE = os.environ.get("SIM_BIND_WIZARD") or os.path.normpath(
     os.path.join(SCRIPT_DIR, "..", ".."))
 if not os.path.isdir(CORE):
-    raise SystemExit("no shared core at %s\n"
-                     "set SIM_BIND_WIZARD to the sim-bind-wizard checkout"
+    raise SystemExit("There is no shared core at %s.\n"
+                     "Set SIM_BIND_WIZARD to the sim-bind-wizard checkout."
                      % CORE)
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
@@ -264,9 +264,9 @@ def resolve_devices(results):
             os.close(dev.fd)
     missing = {"stick", "throttle"} - set(out)
     if missing:
-        raise RuntimeError(f"cannot resolve devices for: "
-                           f"{', '.join(missing)} — plug the devices in "
-                           f"or re-run the wizard")
+        raise RuntimeError(f"Nothing resolves the devices for: "
+                           f"{', '.join(missing)}. Plug the devices in, or "
+                           f"run the wizard again.")
     return out
 
 
@@ -322,8 +322,9 @@ def render(results, base, bindings_dir, preset_name):
             axmap = devs[r["role"]]["axmap"]
             if (not axmap or r["index"] >= len(axmap)
                     or axmap[r["index"]] not in ABS_TO_DINPUT):
-                raise RuntimeError(f"{func}: cannot map {r['role']} axis "
-                                   f"{r['index']} — axmap={axmap}")
+                raise RuntimeError(
+                    f"{func}: nothing maps {r['role']} axis "
+                    f"{r['index']}. The axis map is {axmap}.")
             key = ABS_TO_DINPUT[axmap[r["index"]]]
             binding = el.find("Binding")
             if binding is None:
@@ -392,14 +393,14 @@ def resolve_config(args, cfg):
             or install_dir("Elite Dangerous"))
     if not game:
         sys.exit("Pass --game-dir /path/to/steamapps/common/'Elite "
-                 "Dangerous' (remembered in the results file afterwards).")
+                 "Dangerous'. The results file remembers it afterwards.")
     game = os.path.abspath(os.path.expanduser(game))
     schemes = os.path.join(
         game, "Products", "elite-dangerous-odyssey-64", "ControlSchemes")
     if not os.path.isdir(schemes):
-        sys.exit(f"{game}\ndoes not look like an Elite Dangerous install "
-                 f"(missing Products/elite-dangerous-odyssey-64/"
-                 f"ControlSchemes).")
+        sys.exit(f"{game}\nis not an Elite Dangerous install: it has no "
+                 f"Products/elite-dangerous-odyssey-64/ControlSchemes "
+                 f"folder.")
     # <steamapps>/common/<game> -> <steamapps>/compatdata/359320/...
     steamapps = os.path.dirname(os.path.dirname(game))
     derived = os.path.join(
@@ -409,8 +410,8 @@ def resolve_config(args, cfg):
     bindings = args.bindings_dir or (cfg.get("bindings_dir")
                                      if not args.game_dir else None) or derived
     if not os.path.isdir(bindings):
-        sys.exit(f"Bindings folder not found:\n{bindings}\n"
-                 f"Run the game once so it creates it, or pass "
+        sys.exit(f"There is no Bindings folder at:\n{bindings}\n"
+                 f"Run the game once, and it creates one. Or pass "
                  f"--bindings-dir.")
     cfg.update({"game_dir": game, "schemes_dir": schemes,
                 "bindings_dir": bindings})
@@ -427,7 +428,7 @@ def screen_base_preset(tui, cfg):
         entries.append((f"custom: {os.path.basename(p)}", p))
     if not entries:
         tui.page("Base preset")
-        tui.log(f"no .binds found in {cfg['schemes_dir']}")
+        tui.log(f"There is no .binds file in {cfg['schemes_dir']}.")
         tui.wait_any_key()
         return False
     index = 0
@@ -435,7 +436,7 @@ def screen_base_preset(tui, cfg):
         if p == cfg.get("base") or (not cfg.get("base")
                                     and "KeyboardMouseOnly" in p):
             index = i
-    choice = tui.menu("Base preset (its bindings stay as fallback)",
+    choice = tui.menu("Base preset. Its bindings stay as the fallback.",
                       [label for label, _ in entries], index)
     if choice is None:
         return False
@@ -447,7 +448,8 @@ def detect_devices_screen(tui):
     tui.page("Device detection")
     devices = capture.detect_roles(tui, ("stick", "throttle"))
     if devices is None:
-        tui.log("Need at least two joystick devices — check connections.")
+        tui.log("This needs two joystick devices. Check the "
+                "connections.")
         tui.wait_any_key()
         return None
     return devices
@@ -528,12 +530,12 @@ def tui_main(scr, args, results, cfg):
         # wizard is what is left: pick the preset, find the devices,
         # write the .binds.
         tui.page("Binding")
-        tui.log("  the review screen does this now:")
+        tui.log("  The review screen does this now:")
         tui.log("")
         tui.log("      ./bind elite tui")
         tui.log("")
-        tui.log("  it reads and writes elite-binds.json, and this")
-        tui.log("  wizard still writes the .binds preset from it.")
+        tui.log("  It reads and writes elite-binds.json. This wizard")
+        tui.log("  still writes the .binds preset from that file.")
         tui.wait_any_key()
 
 
@@ -544,24 +546,27 @@ def main():
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-r", "--results", default=DEFAULT_RESULTS,
-                    help="results JSON: wizard state / generator input "
-                         "(default: next to this script)")
+                    help="The results JSON: the wizard state, and the "
+                         "input the generator reads. The default is the "
+                         "file next to this script.")
     ap.add_argument("--reset", action="store_true",
-                    help="delete the results file and start from scratch")
+                    help="Delete the results file and start again.")
     ap.add_argument("-g", "--generate", action="store_true",
-                    help="generate the .binds preset from results and exit")
+                    help="Write the .binds preset from the results, then "
+                         "exit.")
     ap.add_argument("--preset-name", default="Izowiuz-VIRPIL",
-                    help="preset name shown in the game dropdown")
+                    help="The preset name the game shows in its "
+                         "dropdown.")
     ap.add_argument("--game-dir", default=None,
-                    help="Elite Dangerous game folder "
-                         "(steamapps/common/Elite Dangerous); required on "
-                         "first TUI run, remembered afterwards")
+                    help="The Elite Dangerous folder, under "
+                         "steamapps/common. The first TUI run needs it. It "
+                         "is remembered afterwards.")
     ap.add_argument("--base", default=None,
-                    help="base .binds preset to build on "
-                         "(default: the one picked in the TUI)")
+                    help="Which .binds preset to build on. The default "
+                         "is the one the TUI picked.")
     ap.add_argument("--bindings-dir", default=None,
-                    help="where to write the generated .binds "
-                         "(default: the folder picked in the TUI)")
+                    help="Where to write the new .binds file. The "
+                         "default is the folder the TUI picked.")
     backup.add_argument(ap, "elite")
     args = ap.parse_args()
 
@@ -584,8 +589,9 @@ def main():
         return
 
     if not sys.stdin.isatty() or not sys.stdout.isatty():
-        sys.exit("Run this in a regular terminal (the wizard is a TUI), "
-                 "or use --generate for headless generation.")
+        sys.exit("Run this in a terminal: the wizard is a full-screen "
+                 "program. Or pass --generate, which needs no "
+                 "terminal.")
 
     results = {}
     if os.path.exists(args.results):

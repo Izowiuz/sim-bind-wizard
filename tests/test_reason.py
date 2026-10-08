@@ -17,15 +17,12 @@ stop adding up to the score the explanation is describing a run that did
 not happen.
 """
 
-import os
 import unittest
 
 import fake
-from core import adapter
 from core import actions as cactions
 from core.actions import Bind
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 from core import needs as corneeds
 from core import review
 from core.needs import (Layout, Need, allocate,
@@ -69,10 +66,11 @@ class TheArithmetic(unittest.TestCase):
                              f'{p.need.what}: {said(p.why)}')
 
     def test_a_borrowed_button_adds_up_too(self):
-        # The borrow pass scores by its own formula -- the polarity of the
-        # reach term is flipped -- so it is a second sum to get wrong. The
-        # facts are the part most likely to drift, because the sum is
-        # computed in the loop and the words are rebuilt afterwards.
+        # The borrow pass is scored by its own rows -- the polarity of the
+        # reach term is flipped there -- so it is a second sum to get
+        # wrong. It used to be a second sum in the literal sense: four
+        # numbers added in `allocate` to compare, and the same four
+        # rebuilt by hand afterwards so the screen had words.
         devs = {'stick': fake.device('stick', [
             fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4,
                       hold_ok=True, blind_distinct=0),
@@ -299,20 +297,15 @@ class TheAccount(unittest.TestCase):
         got = self.bits(Need('Fire', 'button', ['F'], urgency=IN_A_TURN))
         self.assertIn('in a turn', got)
 
-    def test_the_denominator_is_the_games_to_give(self):
-        # Elite counts out of 13 presets, BMS out of 22 vendor profiles,
-        # War Thunder out of 29. The count is a shared field; what it is a
-        # count OF is not, and six games saying it their own way was six
-        # ways to say the same number.
-        got = self.bits(Need('Fire', 'button', ['F'], urgency=IN_A_TURN,
-                             rank=9))
-        self.assertTrue(any('9 factory' in b for b in got), got)
-        devs = {'stick': fake.device('stick', [
-            fake.button('Thumb button', 0, reach=fake.THUMB)])}
-        placed, _u, _f = allocate(
-            [Need('Fire', 'button', ['F'], urgency=IN_A_TURN, rank=9)], devs)
-        self.assertTrue(any('9/13' in b
-                            for b in corneeds.why_bits(placed[0], out_of=13)))
+    def test_nobody_elses_profiles_are_in_the_account(self):
+        # It used to open with "9 of 13 factory profiles bind it", and
+        # every game gave its own denominator -- Elite 13 presets, BMS 22
+        # vendor profiles, War Thunder 29. What those profiles rank is
+        # somebody else's hardware, so the count is gone and so is the
+        # sentence.
+        got = self.bits(Need('Fire', 'button', ['F'], urgency=IN_A_TURN))
+        self.assertFalse(any('factory' in b or 'profile' in b for b in got),
+                         got)
 
     def test_it_says_when_the_floor_came_off(self):
         got = self.bits(
@@ -346,46 +339,6 @@ class TheAccount(unittest.TestCase):
             fake.button('Trigger', 0)]).groups(bindable=True)[0]
         p = corneeds.Placement(need, 'stick', ctrl, [(0, ['F'])], 0)
         self.assertIn('in a turn', corneeds.why_bits(p))
-
-
-class TheClaimMarker(unittest.TestCase):
-    """The sentinel this record exists to retire.
-
-    DCS builds some placements itself -- a trigger it claims outright,
-    past the allocator -- and marked them by scoring them exactly 200 so it
-    could find them again. `rows()` says so: "the claim marker `place()`
-    sets, and it was the same magic number before". A number chosen to
-    carry a meaning is a number nobody can change, and it is wrong the
-    moment the allocator happens to score 200 honestly.
-    """
-
-    def rows_for(self, claimed_points):
-        propose = adapter.from_file(
-            'dcs_propose_under_test',
-            os.path.join(REPO, 'games', 'dcs', 'propose.py'))
-        devs = {'stick': fake.device('stick', [
-            fake.trigger('Trigger', 0, reach=fake.INDEX),
-            fake.button('Pinky button', 2, reach=fake.PINKY)])}
-        ctrls = {c.label: c for c in devs['stick'].groups(bindable=True)}
-        claim = corneeds.Placement(
-            Need('Gun', 'trigger', ['FIRE']), 'stick', ctrls['Trigger'],
-            [(0, ['FIRE'])], claimed_points,
-            corneeds.Reason('claimed', points=claimed_points))
-        ordinary = corneeds.Placement(
-            Need('Gear', 'button', ['GEAR']), 'stick',
-            ctrls['Pinky button'], [(2, ['GEAR'])], 137,
-            corneeds.Reason('floored', points=137))
-        layout = Layout(devs, [ordinary, claim], [], [])
-        return [n.what for n, _spot, _s in propose.rows(layout)]
-
-    def test_a_claim_is_found_by_what_it_says_not_by_its_score(self):
-        # 201 rather than 200: the placement is the same claim, and a
-        # listing that reorders because the number moved is reading the
-        # wrong field.
-        self.assertEqual(['Gun', 'Gear'], self.rows_for(201))
-
-    def test_the_old_number_still_sorts_the_same_way(self):
-        self.assertEqual(['Gun', 'Gear'], self.rows_for(200))
 
 
 if __name__ == '__main__':

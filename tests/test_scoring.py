@@ -52,6 +52,24 @@ class TheDescriptor(unittest.TestCase):
                 self.assertIn('general', term, term['name'])
                 self.assertNotIn('{', term['general'], term['name'])
 
+    def test_every_pass_a_row_names_is_one_of_the_two(self):
+        # A term narrowed to a pass nobody runs fires in neither, and a
+        # weight that never applies looks exactly like one that does.
+        for row in list(corneeds.TERMS) + list(corneeds.GATES):
+            if 'pass' in row:
+                self.assertIn(row['pass'],
+                              (corneeds.PLACED, corneeds.BORROWED),
+                              row.get('name') or row['when'])
+
+    def test_both_passes_have_rows_of_their_own(self):
+        # The column exists because the last pass is scored differently.
+        # If every row said the same thing it would be a column for
+        # nothing.
+        said = {row.get('pass') for row in corneeds.TERMS}
+        self.assertIn(corneeds.PLACED, said)
+        self.assertIn(corneeds.BORROWED, said)
+        self.assertIn(None, said, 'nothing applies to both any more')
+
     def test_every_multiplier_named_has_one_written(self):
         for term in corneeds.TERMS:
             if 'per' in term:
@@ -142,7 +160,7 @@ class TheFactTable(unittest.TestCase):
         # Generic over the table: both the shapes in it are here, one
         # charging the answer and one charging the shortfall from it.
         for fact in corneeds.FACTS:
-            if 'scale' not in fact:
+            if 'scale' not in fact or fact.get('on') == 'axis':
                 continue
             asked = self.need(**{fact['asked']: True})
             got = [self.points(self.ctrl(**{fact['reads']: n}), asked)
@@ -182,6 +200,8 @@ class TheFactTable(unittest.TestCase):
         # the table, so a sixth fact is covered the day it is written.
         plain = self.points(self.ctrl(), self.need())
         for fact in corneeds.FACTS:
+            if fact.get('on') == 'axis':
+                continue            # reads the axis; see TheLeverFacts
             self.assertEqual(
                 plain, self.points(self.ctrl(),
                                    self.need(**{fact['asked']: True})),
@@ -192,6 +212,8 @@ class TheFactTable(unittest.TestCase):
         # handful of needs somebody judged, and nothing else.
         plain = self.points(self.ctrl(), self.need())
         for fact in corneeds.FACTS:
+            if fact.get('on') == 'axis':
+                continue            # reads the axis; see TheLeverFacts
             for answer in (True, False):
                 self.assertEqual(
                     plain, self.points(self.ctrl(**{fact['reads']: answer}),

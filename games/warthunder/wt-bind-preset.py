@@ -51,8 +51,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CORE = os.environ.get('SIM_BIND_WIZARD') or os.path.normpath(
     os.path.join(HERE, '..', '..'))
 if not os.path.isdir(CORE):
-    raise SystemExit(f'no shared core at {CORE}\n'
-                     'set SIM_BIND_WIZARD to the sim-bind-wizard checkout')
+    raise SystemExit(f'There is no shared core at {CORE}.\n'
+                     'Set SIM_BIND_WIZARD to the sim-bind-wizard '
+                     'checkout.')
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
@@ -113,7 +114,7 @@ def parse_block(lines, i, indent):
             sub, i = parse_block(lines, i + 1, indent + 1)
             items.append(('blk', s[:-1], sub))
             continue
-        raise ValueError(f'blk parse error at line {i + 1}: {lines[i]!r}')
+        raise ValueError(f'The .blk file does not parse at line {i + 1}: {lines[i]!r}')
     return items, i
 
 
@@ -176,7 +177,7 @@ def extract_controls(text):
     """Locate the `  controls{` block and return (start, end, parsed items)."""
     m = re.search(r'^  controls\{$', text, re.M)
     if not m:
-        sys.exit('error: no controls{} block in machine.blk')
+        sys.exit('error: machine.blk has no controls{} block.')
     lines = text.split('\n')
     start = text[:m.start()].count('\n')
     items, end = parse_block(lines, start + 1, 2)
@@ -186,8 +187,9 @@ def extract_controls(text):
 def device_offsets(controls):
     dm = find_sub(controls, 'deviceMapping')
     if dm is None:
-        sys.exit('error: no deviceMapping in machine.blk -- start War Thunder '
-                 'once with both devices plugged in, then re-run')
+        sys.exit('error: machine.blk has no deviceMapping. Start War '
+                 'Thunder once with both devices plugged in, then run this '
+                 'again.')
     devs = []
     for kind, name, sub in [i for i in dm if i[0] == 'blk']:
         if name != 'joystick':
@@ -227,7 +229,7 @@ def targets_under(saves):
           for d in sorted(os.listdir(saves)) if d.isdigit()],
     ) if os.path.isfile(p)]
     if not found:
-        raise SystemExit(f'error: no machine.blk under {saves}')
+        raise SystemExit(f'error: there is no machine.blk under {saves}.')
     return found
 
 
@@ -258,8 +260,8 @@ def compose(layout, targets, say=print):
     """
     global AXES, BUTTONS
     import plan
-    AXES[:] = layout.axes
-    BUTTONS[:] = plan.button_table(layout.placed)
+    AXES[:] = plan.axis_rows(layout.devices, layout.on_axes)
+    BUTTONS[:] = plan.button_table(layout.on_buttons)
 
     lang = json.load(open(ACTIONS_JSON, encoding='utf-8'))
     # The `actions` section is the shared record now, so membership has to
@@ -302,7 +304,7 @@ def compose(layout, targets, say=print):
     if problems:
         for p in sorted(set(problems)):
             say(f'  !! {p}')
-        sys.exit('refusing to write: the plan does not match this install')
+        sys.exit('refused: the plan does not match this install.')
 
     # ---- conflicts: one physical button, two actions in one context ------
     def contexts(action):
@@ -327,7 +329,7 @@ def compose(layout, targets, say=print):
     # ---- build the new hotkeys block -------------------------------------
     hotkeys = find_sub(controls, 'hotkeys')
     if hotkeys is None:
-        sys.exit('error: no hotkeys block')
+        sys.exit('error: there is no hotkeys block.')
 
     by_action = {}
     order = []
@@ -365,7 +367,8 @@ def compose(layout, targets, say=print):
         if action not in order:
             order.append(action)
     if dropped:
-        say('  -- joystick bindings cleared (nothing in the plan wants them):')
+        say('  -- These joystick bindings are cleared. Nothing in the '
+            'plan wants them:')
         for a in sorted(dropped):
             say(f'       {a}   {labels.get(a, [a])[0]}')
 
@@ -393,9 +396,7 @@ def compose(layout, targets, say=print):
     existing = {name: sub for k, name, sub in
                 [i for i in axes if i[0] == 'blk']}
 
-    for plan in AXES:
-        name, role, idx, inverse, props = (
-            plan.does, plan.role, plan.axis.index, plan.invert, plan.carries)
+    for name, role, idx, inverse, props in AXES:
         wt = dev[role]['axes_off'] + idx
         old = {k: (t, v) for _, k, t, v in
                [x for x in existing.get(name, []) if x[0] == 'val']}
@@ -451,8 +452,8 @@ def compose(layout, targets, say=print):
                           if not (x[0] == 'val' and x[1] == 'axisId')]
         freed.append(name)
     if freed:
-        say('  -- axes released (the plan no longer wants them): '
-              + ', '.join(sorted(freed)))
+        say('  -- These axes are released. The plan no longer wants '
+            'them: ' + ', '.join(sorted(freed)) + '.')
 
     new_axes = [('blk', n, existing[n]) for n in sorted(existing)]
 
@@ -483,16 +484,19 @@ def main(argv=None, layout=None):
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--dry-run', action='store_true',
-                    help='print the plan and the resolved ids, write nothing')
+                    help='Print the plan and the resolved ids. Write '
+                         'nothing.')
     ap.add_argument('--restore', action='store_true',
-                    help='put the files of a backup back')
+                    help='Put the files of a backup back.')
     ap.add_argument('--restore-from', metavar='STAMP',
-                    help='which backup --restore uses (default the newest)')
+                    help='Which backup --restore uses. The default is the '
+                         'newest one.')
     ap.add_argument('--why', action='store_true',
-                    help='print why each control was chosen, then exit')
+                    help='Print why each control was chosen, then '
+                         'exit.')
     ap.add_argument('--render', metavar='PATH',
-                    help='write the resulting machine.blk to PATH for review '
-                         'instead of touching the real one')
+                    help='Write the new machine.blk to PATH for review. '
+                         'This does not touch the real one.')
     backup.add_argument(ap, 'warthunder')
     args = ap.parse_args(argv)
 
@@ -504,8 +508,8 @@ def main(argv=None, layout=None):
     # that needed a plan. Constructing the planner loads a second, inert copy
     # of this file as its writer, which is what owning the format costs.
     lay = plan.WarThunder().build() if layout is None else layout
-    AXES[:] = lay.axes
-    BUTTONS[:] = plan.button_table(lay.placed)
+    AXES[:] = plan.axis_rows(lay.devices, lay.on_axes)
+    BUTTONS[:] = plan.button_table(lay.on_buttons)
     if args.why:
         os.execv(sys.executable, [sys.executable,
                                   os.path.join(os.path.dirname(
@@ -520,8 +524,8 @@ def main(argv=None, layout=None):
     except FileNotFoundError:
         running = ''
     if running and not (args.dry_run or args.render):
-        sys.exit('error: War Thunder is running -- quit the game first, it '
-                 'overwrites machine.blk on exit')
+        sys.exit('error: War Thunder is running. Quit the game first: it '
+                 'overwrites machine.blk when it exits.')
 
     targets = targets_under(SAVES)
 
@@ -562,7 +566,7 @@ def main(argv=None, layout=None):
     if args.render:
         with open(args.render, 'w', encoding='utf-8', newline='') as f:
             f.write(blk_with(targets[0], block))
-        print(f'  rendered {args.render} (nothing else was touched)')
+        print(f'  {args.render} is written. Nothing else was touched.')
         return
 
     dest, _ = backup.save('warthunder', *targets, into=args.backup_dir)

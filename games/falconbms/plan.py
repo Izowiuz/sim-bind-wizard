@@ -6,7 +6,7 @@ DESCRIPTION
     map, then write BMS's key file. --write-axes writes the axis defaults too.
 
 FILES
-    harvest.py                  the callback vocabulary and the vendor ranking
+    harvest.py                  the callback vocabulary
     BMS - Full.key              the shipped key file --write builds on
     BMS - VIRPIL.key            written by --write
     DeviceDefaults.txt          written by --write-axes
@@ -34,9 +34,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CORE = os.environ.get('SIM_BIND_WIZARD') or os.path.normpath(
     os.path.join(HERE, '..', '..'))
 if not os.path.isdir(CORE):
-    raise SystemExit(f'no shared core at {CORE}\n'
-                     'clone sim-bind-wizard next to this repo, '
-                     'or set SIM_BIND_WIZARD')
+    raise SystemExit(f'There is no shared core at {CORE}.\n'
+                     'Clone sim-bind-wizard next to this repo, or set '
+                     'SIM_BIND_WIZARD.')
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
@@ -52,14 +52,13 @@ from core.needs import (IN_A_TURN, ON_APPROACH, IN_THE_AIR,  # noqa: E402,F401
                         ON_THE_RAMP)
 import harvest                                              # noqa: E402
 
-#: Filled by `FalconBms.__init__`, never at import. Importing this module
-#: has to define classes and read nothing, so that a clone with no harvested
-#: cache is told apart from an adapter that is broken. `Need.votes` is a
-#: property and `dx_offsets()` a function, so both read these only after an
-#: adapter exists to fill them.
-#: The catalogue as the harvest wrote it, keyed by callback. Filled when
-#: an adapter is constructed, never at import.
-CAT, ACTIONS, DEVICES, VOTES = [], {}, [], {}
+#: The catalogue as the harvest wrote it, keyed by callback. Filled by
+#: `FalconBms.__init__`, never at import: importing this module has to
+#: define classes and read nothing, so that a clone with no harvested cache
+#: is told apart from an adapter that is broken. `dx_offsets()` is a
+#: function for the same reason -- it reads these only after an adapter
+#: exists to fill them.
+CAT, ACTIONS, DEVICES = [], {}, []
 
 DX_PER_DEVICE = 32
 #: g_nHotasPinkyShiftMagnitude. We do not use the shifted layer -- see README --
@@ -116,13 +115,6 @@ class Need(corneeds.Need):
             out.extend(b.action for b in self.push)
         return out
 
-    @property
-    def votes(self):
-        """How many of the 22 vendor profiles bind any part of this control."""
-        got = [VOTES.get(c, 0) for c in self.callbacks()]
-        return max(got) if got else 0
-
-
 # The jet's own controls, most-urgent first. Urgency is the DCS wizard's scale:
 # 0 you touch with a MiG on your tail, 1 on approach, 2 somewhere in the air,
 # 3 on the ramp with the canopy open.
@@ -139,7 +131,6 @@ def needs(described, placed):
     """[Need] -- the hand-written list, read rather than executed."""
     out = corneeds.read_needs(vocab.load(HERE, described, key='needs'),
                               make=Need)
-    corneeds.load_assignments(HERE, placed, out)
     return out
 
 
@@ -203,8 +194,8 @@ def assign(needs):
         holder = next((p.ctrl for p in placed
                        if 'SimHotasPinkyShift' in p.need.callbacks()), None)
         if holder is None:
-            sys.exit('needs want the shifted layer but nothing carries '
-                     'SimHotasPinkyShift -- add it to NEEDS')
+            sys.exit('Some rows want the shifted layer. Nothing carries '
+                     'SimHotasPinkyShift. Add it to the list.')
         more, unmet2, spare = corneeds.allocate(
             shifted, devs,
             usable=lambda r, c: usable(r, c) and c is not holder)
@@ -241,8 +232,9 @@ def dx_offsets():
         entry = next((by_usb[i['usb'].lower()] for i in dev.identities
                       if i.get('usb', '').lower() in by_usb), None)
         if entry is None:
-            sys.exit(f'{dev.product} is not in the game\'s DeviceSorting.txt — '
-                     'plug it in and start BMS once, then re-run ./harvest.py')
+            sys.exit(f'{dev.product} is not in the game\'s '
+                     'DeviceSorting.txt. Plug it in and start BMS once. '
+                     'Then run ./harvest.py again.')
         out[role] = entry['dx_offset']
     return out
 
@@ -269,15 +261,26 @@ def dinput_axis(dev, axis):
     return None
 
 
-def axis_plan(devs, rows):
-    """[corneeds.Axis] -- the axes BMS will be told about.
+def axis_lines(devs, axes):
+    """[(name, role, axis, DX name)] -- the axes BMS can be told about.
 
-    `rows` is the `axes` section of the needs file. It was a literal here,
-    so changing which lever the throttle is on meant editing code.
+    An axis DirectInput has no name for cannot be written, so it is
+    dropped with a word. That used to be a filter inside the plan, which
+    meant the review screen could not show a row the writer would
+    silently leave out.
     """
-    return [p for p in corneeds.read_axes(
-        rows, devs, carries=lambda row, a: dinput_axis(devs[row['role']], a))
-        if p.carries]
+    out = []
+    for p in axes:
+        a = devs[p.role].axis(p.slots[0][0].index)
+        di = dinput_axis(devs[p.role], a)
+        for name in (b.action for b in p.slots[0][1]):
+            if di is None:
+                print(f'!! {name}: DirectInput has no name for '
+                      f'{p.role} {a.hid!r}. Nothing can tell BMS about it.',
+                      file=sys.stderr)
+                continue
+            out.append((name, p.role, a, di))
+    return out
 
 
 def dx_binds(placed):
@@ -300,8 +303,8 @@ def dx_binds(placed):
                             if b.edge == cactions.RELEASE), None)
             where = f'{p.ctrl.label} — {p.ctrl.direction(local) or "press"}'
             if dx in seen:
-                print(f'!! DX {dx} wanted by {seen[dx]} and {p.need.what}',
-                      file=sys.stderr)
+                print(f'!! {seen[dx]} and {p.need.what} both want '
+                      f'DX {dx}.', file=sys.stderr)
             seen[dx] = p.need.what
             binds.append({'need': p.need, 'role': p.role, 'ctrl': p.ctrl,
                           'local': local, 'dx': dx, 'press': press,
@@ -447,8 +450,7 @@ def axis_files(bms, axes):
     said = []
 
     per = {}
-    for plan in axes:
-        name, role, a, di = plan.does, plan.role, plan.axis, plan.carries
+    for name, role, a, di in axis_lines(devs, axes):
         per.setdefault(role, []).append((name, di, a))
 
     block = ['', AXIS_HEADER]
@@ -522,15 +524,15 @@ def wrap(text, width, indent):
 
 
 def show(layout, why=False):
-    _devs, placed, unmet, free, axes = layout
+    devs, placed, unmet, free = (layout.devices, layout.on_buttons,
+                                 layout.unplaced, layout.free)
+    axes = layout.on_axes
     out = []
     binds = dx_binds(placed)
     off = dx_offsets()
 
     out.append('AXES')
-    for plan in axes:
-        name, role, a, di = (plan.does, plan.role, plan.axis,
-                             plan.carries)
+    for name, role, a, di in axis_lines(devs, axes):
         out.append(f'  {name:<16} {role:<9} {di:<8} {a.label}')
         note = AXIS_NOTE.get(name)
         if why and note:
@@ -561,7 +563,7 @@ def show(layout, why=False):
             out.append(f'      DX{b["dx"]:<4} {d:<8} {b["press"]}{extra}')
         if why:
             out.append('      why    '
-                       + '; '.join(corneeds.why_bits(p_, out_of=22)))
+                       + '; '.join(corneeds.why_bits(p_)))
             if need.device and need.device != role:
                 # BMS's own: the only game that calls a wrong device a
                 # compromise rather than a minus fifty.
@@ -585,9 +587,14 @@ def show(layout, why=False):
 
 
 def audit(layout):
-    """Which callbacks the vendors put on hardware and we did not."""
+    """Which bindings BMS would read, and which it would ignore.
+
+    It used to also list the callbacks the 22 vendor profiles put on
+    hardware and this plan did not -- a list of what Thrustmaster thought
+    of a Warthog. Gone, with the rest of the vendor ranking.
+    """
     out = []
-    binds = dx_binds(layout.placed)
+    binds = dx_binds(layout.on_buttons)
     mine = set()
     for b in binds:
         mine.add(b['press'])
@@ -601,18 +608,7 @@ def audit(layout):
             out.append(f'  {c}')
         out.append("")
 
-    missed = [(cb, n) for cb, n in sorted(VOTES.items(), key=lambda x: -x[1])
-              if cb not in mine and n >= 8]
-    mfd = [c for c, _ in missed if 'OSB' in c or 'BRT' in c]
     out.append(f'placed {len(mine)} callbacks')
-    out.append(f'ranked but not placed: {len(missed)}'
-          f'  ({len(mfd)} of them MFD buttons, which need an MFD panel)')
-    for cb, n in missed:
-        if cb in mfd:
-            continue
-        a = ACTIONS.get(cb)
-        desc = a.name if a is not None else '(gone from the key file)'
-        out.append(f'  {n:>3}  {cb:<28} {desc[:52]}')
     return out
 
 
@@ -620,41 +616,46 @@ def audit(layout):
 #: Kept here rather than in the template so it sits next to the thing it
 #: describes and cannot quietly go stale.
 RAMP_CHECKS = [
-    ('Master arm', 'it is on the trigger lever, so the guard position IS the '
-                   'switch position. Which of the two contacts is the closed '
-                   'lever was never measured — if the jet arms with the lever '
-                   'down, swap the two names in NEEDS and regenerate.'),
-    ('Trim', 'BMS names trim after the wheel, not the nose: '
+    ('Master arm', 'It is on the trigger lever, so the guard position is '
+                   'the switch position. Nobody measured which of the two '
+                   'contacts is the closed lever. If the jet arms with the '
+                   'lever down, swap the two names in the list and write '
+                   'the files again.'),
+    ('Trim', 'BMS names trim after the wheel, not after the nose. '
              '<code>AFElevatorTrimUp</code> is nose DOWN.'),
-    ('DOGFIGHT switch', 'hold it forward for MRM, back for dogfight, let go '
-                        'and it should cancel. The cancel is the release edge '
-                        '— no other sim of the four can express it.'),
+    ('DOGFIGHT switch', 'Hold it forward for MRM. Hold it back for '
+                        'dogfight. Let it go, and it cancels. The cancel is '
+                        'the release edge. No other sim of the four can say '
+                        'that.'),
 ]
 
 #: Where our hardware and the jet disagree. The interesting half of the layout.
 COMPROMISES = [
-    ('Roll trim', 'the F-16 grip has four hats and the WarBRD has three, so '
-                  'TMS, DMS and CMS take them and trim gets the encoder: '
-                  'pitch only. Roll trim stays on the keyboard.'),
-    ('Eject', 'not bound. Twenty of the twenty-two vendor profiles hide it on '
-              'the pinky-shifted layer; we do not use that layer, and no button '
-              'here is awkward enough to be safe.'),
-    ('Zoom', 'on the dial, which rests centred rather than at zero — so the '
-             'view may start part-zoomed. The price of the same dial carrying '
-             'zoom in DCS and War Thunder too.'),
-    ('Axis direction', 'not ours to set. <code>DeviceDefaults.txt</code> says '
-                       '<i>which</i> physical axis, never <i>which way</i> — so '
-                       'walk the four Advanced Options tabs, move each control, '
-                       'watch its value bar and hit <b>Reverse</b> where it runs '
-                       'backwards. Pitch almost certainly needs it.'),
-    ('SET AB', 'on the Controllers page: left-click sets the afterburner '
-               'detent, right-click the idle detent. Without the first there is '
-               'no afterburner. <b>CENTER</b>, stick released, zeroes pitch and '
-               'roll.'),
-    ('A missing axis', 'is usually assigned already — BMS allows one physical '
-                       'axis per in-game axis, so an axis in use vanishes from '
-                       'every other dropdown. Check all four tabs before '
-                       'concluding a device is dead.'),
+    ('Roll trim', 'The F-16 grip has four hats. The WarBRD has three. TMS, '
+                  'DMS and CMS take them, and trim gets the encoder: pitch '
+                  'only. Roll trim stays on the keyboard.'),
+    ('Eject', 'It is not bound. No button here is awkward enough to be '
+              'safe. The shifted layer is where it belongs, and this layout '
+              'does not use that layer.'),
+    ('Zoom', 'It is on the dial. That dial rests in the centre rather than '
+             'at zero, so the view can start part-zoomed. This is the price '
+             'of one dial that carries zoom in DCS and War Thunder too.'),
+    ('Axis direction', 'This is not ours to set. '
+                       '<code>DeviceDefaults.txt</code> says <i>which</i> '
+                       'physical axis. It never says <i>which way</i>. Open '
+                       'the four Advanced Options tabs, move each control '
+                       'and watch its value bar. Press <b>Reverse</b> where '
+                       'the bar runs backwards. Pitch almost always needs '
+                       'it.'),
+    ('SET AB', 'This is on the Controllers page. Left-click sets the '
+               'afterburner detent. Right-click sets the idle detent. '
+               'Without the first one there is no afterburner. '
+               '<b>CENTER</b> zeroes pitch and roll: release the stick '
+               'first.'),
+    ('A missing axis', 'It is usually assigned already. BMS allows one '
+                       'physical axis per in-game axis, so an axis in use '
+                       'disappears from every other dropdown. Look at all '
+                       'four tabs before you call a device dead.'),
 ]
 def _sheet(layout):
     """Everything a kneeboard needs, in the core's shape.
@@ -663,7 +664,8 @@ def _sheet(layout):
     reads as a second line under the plain-English name. War Thunder passes
     ('Air', 'Helicopter') to the same builder and gets a column each.
     """
-    _devs, placed, unmet, free, axes = layout
+    placed, unmet, free = layout.on_buttons, layout.unplaced, layout.free
+    axes = layout.on_axes
     binds = dx_binds(placed)
     devs = devices()
     off = dx_offsets()
@@ -674,11 +676,9 @@ def _sheet(layout):
         devices={r: f'{d.product}  (DX {off[r]}–{off[r] + 31})'
                  for r, d in devs.items()})
 
-    for plan in axes:
-        a_ = plan.axis
-        g = devs[plan.role].axis_group(a_.index)
-        sh.add_axis(plan.role, g.label if g else a_.label, plan.carries,
-                    plan.does)
+    for name, role, a_, di in axis_lines(devs, axes):
+        g = devs[role].axis_group(a_.index)
+        sh.add_axis(role, g.label if g else a_.label, di, name)
 
     for b in sorted(binds, key=lambda x: x['dx']):
         sh.add(csheet.Row(
@@ -690,8 +690,9 @@ def _sheet(layout):
     sh.note('Check on the ramp', RAMP_CHECKS)
     sh.note('Where the hardware and the jet disagree', COMPROMISES)
     sh.note('Picking it up',
-            'falcon-bms launcher → Keyfile → "BMS - VIRPIL". '
-            'Regenerate with ./plan.py --write; never hand-edit.')
+            'In the falcon-bms launcher, open Keyfile and select '
+            '"BMS - VIRPIL". Write it again with ./plan.py --write. Do not '
+            'edit it by hand.')
     for n in unmet:
         sh.add_unplaced(n.what, n.shape if isinstance(n.shape, str)
                         else '/'.join(n.shape))
@@ -714,8 +715,8 @@ class FalconBms(adapter.Planner):
     NEEDS_FILE = 'falconbms-needs.json'
     BINDS = 'falconbms-binds.json'
     CATALOGUE = 'bms-actions.json'
-    CACHE = {'bms-actions.json': ('actions', 'devices'),
-             'bms-rank.json': 'votes'}
+    SAYS = {'game_dir': 'the BMS install, if it is not where the cache says'}
+    CACHE = {'bms-actions.json': ('actions', 'devices')}
     #: BMS's own word for the install predates the family's. Both spellings
     #: reach the same constructor parameter rather than one of them being
     #: laundered through os.environ, which is what used to happen.
@@ -734,17 +735,6 @@ class FalconBms(adapter.Planner):
         """
         return self._needs
 
-    @property
-    def AXES(self) -> list:
-        """The `axes` section of the needs file.
-
-        Axes never go through the allocator -- an aircraft's pitch axis is
-        the stick's pitch axis on every desk there is -- but which lever
-        is the throttle is a judgement like any other, and it used to be
-        a literal in this file.
-        """
-        return self._axes
-
     def __init__(self, game_dir=None, backup_dir=None):
         if game_dir:
             os.environ['BMS_DIR'] = game_dir
@@ -755,18 +745,14 @@ class FalconBms(adapter.Planner):
                                           key='actions'))
         ACTIONS.update(cactions.by_id(CAT))
         DEVICES[:] = self.cache('bms-actions.json', key='devices')
-        VOTES.update(self.cache('bms-rank.json'))
         self._needs = needs(self.NEEDS_FILE, self.BINDS)
-        # `list()` because `vocab.load` answers with whatever the
-        # file holds and `AXES` promises a list.
-        self._axes = list(vocab.load(HERE, self.NEEDS_FILE,
-                                     key='axes'))
+
 
     @typing.override
     def build(self):
         devs, placed, unmet, free = assign(self.NEEDS)
-        return corneeds.Layout(devs, placed, unmet, free,
-                               axes=axis_plan(devs, self.AXES))
+        self.answers(self.NEEDS)
+        return corneeds.Layout(devs, placed, unmet, free)
 
     @typing.override
     def catalogue(self):
@@ -802,8 +788,8 @@ class FalconBms(adapter.Planner):
         it. One layout is one write now, and `--write-axes` remains for the
         axis half on its own.
         """
-        dst, text, said = key_file(self.bms, layout.placed)
-        files, more = axis_files(self.bms, layout.axes)
+        dst, text, said = key_file(self.bms, layout.on_buttons)
+        files, more = axis_files(self.bms, layout.on_axes)
         files[dst] = adapter.Text(text, encoding='latin-1')
         for line in said + more:
             print(line)
@@ -814,16 +800,18 @@ class FalconBms(adapter.Planner):
         if args.audit:
             return audit(layout)
         if args.write_axes:
-            files, said = axis_files(self.bms, layout.axes)
+            files, said = axis_files(self.bms, layout.on_axes)
             return said + self.lay_down(files)
         return None
 
     @typing.override
     def arguments(self, parser):
         parser.add_argument('--audit', action='store_true',
-                            help='list ranked callbacks left unplaced')
+                            help='List the bindings that the key file '
+                                 'would ignore.')
         parser.add_argument('--write-axes', action='store_true',
-                            help='write only the axis defaults')
+                            help='Write the axis defaults and nothing '
+                                 'else.')
 
     @typing.override
     def paths(self, args):

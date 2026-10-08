@@ -139,9 +139,15 @@ def ministick(label, first_axis, push=None, **kw):
                    axes=[first_axis, first_axis + 1], push=push, **kw)
 
 
-def axis(index, kind, label, hid='X', rest='centred', **kw):
-    a = {'index': index, 'kind': kind, 'label': label, 'hid': hid,
-         'rest': rest, 'source': 'measured'}
+def axis(index, hid='X', rest='centred', role='', **kw):
+    """One axis, in the map's own fields.
+
+    `kind` and `label` are NOT among them: what an axis is and what it is
+    called belong to the control that carries it, and `Device.__init__`
+    fills them in from there. This helper took both and the map had
+    stopped accepting either.
+    """
+    a = {'index': index, 'hid': hid, 'rest': rest, 'role': role}
     a.update(kw)
     return a
 

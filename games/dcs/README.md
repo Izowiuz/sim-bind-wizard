@@ -21,7 +21,8 @@ Steam app 223750, Proton. The install can sit in any library:
     <steamapps>/common/DCSWorld/
       Mods/aircraft/<module>/
         entry.lua                   module name, and the folder DCS saves to
-        Input/<unit>/joystick/default.lua   vocabulary and factory profiles
+        Input/<unit>/joystick/default.lua   the vocabulary
+        Input/<unit>/joystick/*.diff.lua    the sim's own command hashes
 
     <steamapps>/compatdata/223750/pfx/drive_c/users/steamuser/Saved Games/DCS/
       Config/Input/<unit>/joystick/<Device> {GUID}.diff.lua   written
@@ -108,11 +109,16 @@ that touches the game.
 thrust, views, pitch. Their hashes cannot be computed, so they are read out of
 a factory profile that binds them, matched back by normalised name.
 
-**Importance is counted, not guessed.** A command's rank is how many of the
-module's factory HOTAS profiles bind it, and which device they put it on —
-castle switch on the stick 8/8, TDC and cage/uncage on the throttle. That is
-what opens the Hornet on trigger, trim, sensor control, TDC and gear rather
-than on 849 cockpit switches.
+**What belongs on a HOTAS is written down, not counted.** `HINTS` in
+`dcs-bind-wizard.py` says, per command, which device it lives on in the real
+aircraft and when you touch it; a command it puts nowhere is a cockpit switch
+the keyboard can have. That is what opens the Hornet on trigger, trim, sensor
+control, TDC and gear rather than on 849 cockpit switches.
+
+It used to be a vote: how many of the module's factory HOTAS profiles bound
+each command, and which device they put it on. Those profiles are Eagle
+Dynamics' layouts for a Warthog and an X56 — they say `throttle` because a
+Warthog has buttons there, not because the F/A-18 does.
 
 **The save folder is not the module folder.** DCS saves under the name in the
 module's `entry.lua`: the Hornet ships `Input/FA-18C` and saves to
@@ -138,10 +144,20 @@ it to `allocate()`. On this hardware it moved the Hornet's five COMM switches
 and the Su-25T's chaff and flares from the middle-finger hat to the thumb hats.
 Only DCS may do this — `ALLOCATION.md` has the reason.
 
-**`lay_out()` assigns the buttons, not the core.** It matches a switch's
-direction per member, out of the module's own prose. Where a need has one
-command the core's choice wins: that is the control's click, or a borrowed
-spare.
+**Which way each command points is read out of the module's prose**, in
+`MOVE_TO_DIR`, and carried on `Need.on` -- one word per command, and nothing
+for a command whose prose does not say. The core puts the named ones where
+they belong and fills the rest in press order, so there is one answer to
+which button a command lands on. `lay_out()` used to be that answer for the
+writer while the core was it for the review screen, and a trim hat could be
+shown one way round and written another.
+
+**A stage named in a command is the stage it gets.** "Gun Trigger - SECOND
+DETENT" was landing on the first detent -- the one that only runs the gun
+camera -- because press order was all the core had to go on. Where two
+commands want the trigger, as the Su-25T's cannon and selected weapon do,
+they take a stage each: the need names the control and the stage, and the
+allocator honours both rather than DCS placing them itself.
 
 ## Still a guess
 

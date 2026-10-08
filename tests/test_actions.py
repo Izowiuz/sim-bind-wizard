@@ -69,12 +69,11 @@ class TheRecord(unittest.TestCase):
         self.assertEqual('KEY_GEAR', Action('KEY_GEAR').name)
 
     def test_nothing_optional_is_invented(self):
-        # Four of the six ship no categories and X4 counts nothing. A
-        # derived stand-in would be read as a fact by the next person.
+        # Four of the six ship no categories. A derived stand-in would be
+        # read as a fact by the next person.
         a = Action('KEY_GEAR')
         self.assertIsNone(a.category)
         self.assertIsNone(a.mode)
-        self.assertEqual(0, a.rank)
 
     def test_identity_is_the_id(self):
         # Two records for one id must not become two rows.
@@ -93,13 +92,10 @@ class Grouping(unittest.TestCase):
         got = grouped([Action('A'), Action('B', category='Panel')])
         self.assertEqual(['Panel', None], [c for c, _a in got])
 
-    def test_inside_a_group_the_most_bound_come_first(self):
-        got = grouped([Action('rare', rank=1), Action('common', rank=90)])
-        self.assertEqual(['common', 'rare'], [a.id for a in got[0][1]])
-
-    def test_with_no_ranking_the_order_is_at_least_stable(self):
-        # X4 counts nothing, so every rank is 0 and the id decides. A screen
-        # whose rows move between runs is one you cannot learn.
+    def test_inside_a_group_the_id_decides(self):
+        # It used to be how many factory profiles bound each one. A screen
+        # whose rows move between runs is one you cannot learn, and the id
+        # is the only thing here that cannot move.
         ids = ['INPUT_ACTION_B', 'INPUT_ACTION_A', 'INPUT_STATE_C']
         got = grouped([Action(i) for i in ids])
         self.assertEqual(sorted(ids), [a.id for a in got[0][1]])
@@ -166,9 +162,9 @@ class OnDisk(unittest.TestCase):
 
     def test_everything_a_game_does_know_survives_the_trip(self):
         one = Action('SimGear', 'Landing gear', kind='button',
-                     category='2.01 GEAR', mode='cockpit', rank=17)
+                     category='2.01 GEAR', mode='cockpit')
         (back,) = read(dump([one]))
-        for field in ('id', 'name', 'kind', 'category', 'mode', 'rank'):
+        for field in ('id', 'name', 'kind', 'category', 'mode'):
             self.assertEqual(getattr(one, field), getattr(back, field))
 
     def test_a_row_from_an_older_harvest_still_reads(self):
@@ -178,7 +174,7 @@ class OnDisk(unittest.TestCase):
         (back,) = read([{'id': 'KEY_GEAR'}])
         self.assertEqual('KEY_GEAR', back.id)
         self.assertEqual('button', back.kind)
-        self.assertEqual(0, back.rank)
+        self.assertIsNone(back.category)
 
     def test_the_order_written_is_the_order_read(self):
         # A screen whose rows move between harvests is one you cannot learn.

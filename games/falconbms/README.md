@@ -12,7 +12,7 @@ BMS installs *inside* Falcon 4.0's Proton prefix, not as a Steam app:
         User/Config/DeviceSorting.txt     device order, fixes DX numbering
         User/Config/Viper.pop             holds the selected keyfile's name
         User/Config/axismapping.dat       binary; rebuilt from DeviceDefaults
-        Hotas/Archive/*.key               22 vendor profiles, the ranking
+        Hotas/Archive/*.key               22 vendor profiles, not read
         Launcher/FalconBMS_Alternative_Launcher.exe   axes and keymapping UI
         Launcher.exe                      Play / Config only, no bindings
 
@@ -23,10 +23,10 @@ Launch with `~/.local/bin/falcon-bms` (`game`, `launcher`, `mainlauncher`,
 
 ## How to run it
 
-    ./harvest.py             vocabulary, ranking, device DX offsets
+    ./harvest.py             the callback vocabulary and the DX offsets
     ./plan.py                the layout
     ./plan.py --why          and the evidence for each choice
-    ./plan.py --audit        ranked callbacks not placed
+    ./plan.py --audit        bindings the key file would ignore
     ./plan.py --free         what is unbound
     ./plan.py --sheet --html the kneeboard
     ./plan.py --tui          walk the layout and write what you keep
@@ -132,8 +132,7 @@ one physical axis per in-game axis.
 has three; TMS, DMS and CMS take them and trim gets the stick encoder, pitch
 only.
 
-**Eject is not bound.** Twenty of the twenty-two vendor profiles put it on the
-shifted layer; no button here is awkward enough to be safe.
+**Eject is not bound.** No button here is awkward enough to be safe.
 
 **Files are CRLF.** Writing LF rewrites the whole file and makes the backup
 useless for seeing what changed. `read_keeping`/`write_keeping` preserve it.

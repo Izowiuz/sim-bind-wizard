@@ -51,7 +51,7 @@ class WarThunderUnmet(unittest.TestCase):
     """
 
     def listing(self, need):
-        layout = corneeds.Layout({}, [], [need], [], [])
+        layout = corneeds.Layout({}, [], [need], [])
         return '\n'.join(WT.show(layout))
 
     def test_a_need_that_found_nothing_can_be_listed_at_all(self):
@@ -123,6 +123,23 @@ class DcsSeed(unittest.TestCase):
                                              'propose.py'))
         return mod.seed(DCS.module, DCS.cmds, DCS.guide, layout=layout)
 
+    def test_the_screen_and_the_writer_agree_on_every_button(self):
+        # There were two answers to which button a command lands on: the
+        # core's `slots_for`, which is what the review screen draws, and
+        # DCS's own `lay_out`, which is what the writer wrote. They agreed
+        # for a need with one command and could differ for a hat -- so a
+        # trim hat could be shown one way round and written another.
+        full = DCS.build()
+        got = self.recs(full)
+        for p in full.on_buttons:
+            for button, payload in p.slots:
+                for b in payload:
+                    self.assertIn(b.action, got, p.need.what)
+                    self.assertEqual((p.role, button),
+                                     (got[b.action]['role'],
+                                      got[b.action]['index']),
+                                     f'{p.need.what}: {b.action}')
+
     def test_clearing_every_binding_leaves_only_the_axes(self):
         # The starkest form: accept nothing at all. Axes never went through
         # the allocator, so they stay -- but not one button should.
@@ -134,8 +151,7 @@ class DcsSeed(unittest.TestCase):
 
     def test_one_binding_cleared_stays_cleared(self):
         full = DCS.build()
-        dropped = next(p for p in full.placed
-                       if p.why is None or p.why.how != 'claimed')
+        dropped = next(iter(full.placed))
         kept = full.but([p for p in full.placed if p is not dropped])
         got = self.recs(kept)
         for h in dropped.need.members:

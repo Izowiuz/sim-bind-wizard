@@ -28,6 +28,7 @@ fails even on a machine that has never seen the game.
 """
 
 import inspect
+import json
 import os
 import re
 import subprocess
@@ -293,6 +294,111 @@ class NothingIsLeftBehind(unittest.TestCase):
         self.assertIn('core.backup', str(caught.exception))
 
 
+class WhatYouClearedStaysCleared(unittest.TestCase):
+    """The answers file is read once, not on every replan.
+
+    `build` runs again every time the screen replans -- a key, an
+    overlay, another aircraft -- and every game read its answers file
+    there. So a row you cleared came back carrying the `chose` you had
+    just taken off it: the `chose` pass put it back on the control, the
+    mark went green again, and the next save wrote the resurrected row
+    to the file. Clearing a hand-placed binding was not possible at all.
+
+    Measured on this desk when it was found: 32 of DCS's 32 rows and 32
+    of X4's 32 came back from one replan. The other four had no answers
+    file yet, so they had nothing to resurrect and read the same way.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.file = os.path.join(self.tmp, 'toy-binds.json')
+        with open(self.file, 'w') as f:
+            json.dump({'binds': [{'what': 'Gear', 'role': 'stick',
+                                  'control': 'a-button', 'how': 'chose'}]}, f)
+
+    def toy(self, *needs):
+        binds = self.file
+        kept = list(needs) or [corneeds.Need('Gear', 'button', [[]])]
+
+        class Toy(adapter.Planner):
+            game = 'toy'
+            title = 'Toy'
+            # Absolute, so `here` -- which is this test file's directory
+            # -- joins to the temporary copy rather than to the repo.
+            BINDS = binds
+
+            def __init__(self):
+                self.kept = list(kept)
+
+            @property
+            def NEEDS(self): return self.kept
+            def build(self):
+                self.answers(self.NEEDS)
+                return corneeds.Layout({}, [], [], [])
+            def catalogue(self): return []
+            def describe(self, placement): return []
+            def show(self, layout, why=False): return []
+            def sheet(self, layout):
+                return csheet.Sheet('Toy', '', devices={})
+            def write_layout(self, layout): return {}
+
+        return Toy()
+
+    def test_the_first_build_reads_the_file(self):
+        obj = self.toy()
+        obj.build()
+        self.assertEqual('chose', (obj.NEEDS[0].assignment or {}).get('how'))
+
+    def test_a_replan_does_not_read_it_again(self):
+        obj = self.toy()
+        obj.build()
+        obj.NEEDS[0].assignment = None
+        obj.build()
+        self.assertIsNone(obj.NEEDS[0].assignment)
+
+    def test_another_adapter_reads_its_own(self):
+        # Switching aircraft builds a second one, and that one has
+        # decided nothing yet -- the file is all it knows.
+        was = self.toy()
+        was.build()
+        was.NEEDS[0].assignment = None
+        now = self.toy()
+        now.build()
+        self.assertEqual('chose', (now.NEEDS[0].assignment or {}).get('how'))
+
+    def test_an_axis_answer_comes_back_on_its_need(self):
+        # An axis plan used to be built fresh from the devices on every
+        # build, so its answers had to be read again every time and
+        # anything the session had decided was overwritten. An axis is a
+        # need now: the same object all session, answered once, and a
+        # replan cannot blank it.
+        with open(self.file, 'w') as f:
+            json.dump({'binds': [{'what': 'Pitch', 'role': 'stick',
+                                  'control': 'main-stick', 'axis': 1,
+                                  'invert': True, 'how': 'accepted'}]}, f)
+        obj = self.toy(corneeds.Need('Pitch', 'stick', [[]],
+                                     takes=corneeds.AXIS, device='stick',
+                                     on=('y',)))
+        obj.build()
+        (need,) = obj.NEEDS
+        self.assertEqual('accepted', (need.assignment or {}).get('how'))
+        self.assertEqual(1, (need.assignment or {}).get('axis'))
+        self.assertTrue(need.invert, 'which way round you left it')
+        obj.build()
+        self.assertTrue(need.invert)
+
+    def test_no_game_reads_its_answers_twice(self):
+        for game in adapter.games():
+            with self.subTest(game=game):
+                obj = built(live(game))
+                obj.build()
+                for need in obj.NEEDS:
+                    need.assignment = None
+                obj.build()
+                back = [n.what for n in obj.NEEDS if n.assignment]
+                self.assertEqual([], back, 'came back from a replan')
+
+
 class TheCacheBothSidesName(unittest.TestCase):
     """A harvest and a planner have to mean the same sections.
 
@@ -410,7 +516,7 @@ class TheJudgementsHaveAHome(unittest.TestCase):
                 self.assertTrue(os.path.exists(where),
                                 f'{game} names {cls.BINDS} and it is not there')
 
-    def test_every_axis_a_game_plans_is_the_shared_shape(self):
+    def test_every_axis_a_game_plans_is_a_need_like_any_other(self):
         # Five games each handed over a tuple of its own -- `(ident, role,
         # axis)`, `(name, role, index, inverse, props)`, four more -- so
         # nothing could draw them on a screen or hold them to a rule.
@@ -420,13 +526,16 @@ class TheJudgementsHaveAHome(unittest.TestCase):
                     layout = cls().build()
                 except SystemExit:
                     continue        # nothing harvested on this machine
-                for plan in layout.axes:
-                    self.assertIsInstance(plan, corneeds.Axis)
-                    # `does` and nothing else: DCS keeps a row for its
-                    # combined Thrust with no role and no axis, because
-                    # the two engines are bound separately and the sheet
-                    # says so rather than leaving a silent gap.
-                    self.assertTrue(plan.does)
+                # And it is a Placement on a Need, in the one list, with
+                # an `OnAxis` slot saying which axis of the control it
+                # took. There is no second kind of thing to check.
+                self.assertTrue(layout.on_axes, f'{game} plans no axis')
+                for p in layout.on_axes:
+                    self.assertEqual(corneeds.AXIS, p.need.takes)
+                    self.assertIsInstance(p, corneeds.Placement)
+                    (slot,) = p.slots
+                    self.assertIsInstance(slot[0], corneeds.OnAxis)
+                    self.assertTrue(p.need.what)
 
     def test_a_kind_the_map_has_no_word_for_is_an_error(self):
         # The guard the rename never got. There used to be a kind per

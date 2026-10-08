@@ -22,7 +22,7 @@ is left byte-identical.
 `plan.py` owns the verbs, `wt-bind-preset.py` owns `machine.blk` and the
 verbs only a writer has use for.
 
-    ./harvest.py                    vocabulary and factory ranking
+    ./harvest.py                    the action vocabulary
     ./plan.py                       the layout
     ./plan.py --why                 and the evidence for each choice
     ./plan.py --unused              what is unbound

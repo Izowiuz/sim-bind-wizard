@@ -460,7 +460,7 @@ class Tui:
 
     def wait_any_key(self):
         self.log("")
-        self.log("-- press RETURN or ESC to continue --")
+        self.log("-- Press RETURN or ESC to continue. --")
         while self.key(0.5) not in ("enter", "esc"):
             pass
 

@@ -1,9 +1,9 @@
 """One shape for a game action, whatever the game calls it.
 
 Six harvests write six shapes and only the envelope is shared: X4 keeps
-`{kind: [id]}`, Elite a list plus a separate `{fn: {votes, where}}`, BMS a
-full record per callback, MSFS `{action: [contexts]}`, War Thunder
-`{ID: [en, pl]}`, DCS a tree per aircraft. Nothing outside a game's own
+`{kind: [id]}`, Elite a list of functions, BMS a full record per callback,
+MSFS `{action: [contexts]}`, War Thunder `{ID: [en, pl]}`, DCS a tree per
+aircraft. Nothing outside a game's own
 `plan.py` can read any of them, which is why every screen in the family is
 fed by a hand-written list instead of by the vocabulary.
 
@@ -15,12 +15,11 @@ already know and nothing they would have to invent:
     kind      'button' | 'axis'
     category  the game's own grouping        optional
     mode      which context it answers in    optional
-    rank      how many factory profiles bind it, 0 where nobody counts
 
-`category`, `mode` and `rank` are optional on purpose. Four of the six ship
-no categories and X4 counts nothing, so a reader has to cope with their
-absence anyway -- and deriving one to fill the gap puts a guess where the
-next reader will find a fact.
+`category` and `mode` are optional on purpose. Four of the six ship no
+categories, so a reader has to cope with their absence anyway -- and
+deriving one to fill the gap puts a guess where the next reader will find
+a fact.
 
 The translating stays in each game's `catalogue()`, because how a cache is
 laid out is a fact about that game. `core` owns the shape, the game owns the
@@ -62,7 +61,8 @@ class Bind:
         if edge not in EDGES:
             # Refused here rather than discovered in the air: a typo would
             # otherwise be written into a game's config unremarked.
-            raise ValueError(f'{edge!r} is not one of {EDGES}')
+            raise ValueError(f'{edge!r} is not an edge. These are: '
+                             + ', '.join(EDGES) + '.')
         #: the id of an `Action`, not the Action itself -- a layout outlives
         #: the catalogue it was planned against, and a harvest after a game
         #: patch may no longer have the record.
@@ -114,10 +114,10 @@ class Bind:
 class Action:
     """One thing a game can be told to do."""
 
-    __slots__ = ('id', 'name', 'kind', 'category', 'mode', 'rank')
+    __slots__ = ('id', 'name', 'kind', 'category', 'mode')
 
     def __init__(self, id, name=None, kind='button',
-                 category=None, mode=None, rank=0):
+                 category=None, mode=None):
         self.id = id
         #: falls back to the id, which is what X4 and Elite compute anyway
         #: and what War Thunder already degrades to on a thin cache.
@@ -125,7 +125,6 @@ class Action:
         self.kind = kind
         self.category = category
         self.mode = mode
-        self.rank = rank
 
     def __repr__(self):
         return f'<Action {self.id} {self.kind}>'
@@ -188,8 +187,6 @@ def dump(actions):
             row['category'] = a.category
         if a.mode is not None:
             row['mode'] = a.mode
-        if a.rank:
-            row['rank'] = a.rank
         out.append(row)
     return out
 
@@ -204,23 +201,24 @@ def read(rows):
     should still be able to say so.
     """
     return [Action(r['id'], r.get('name'), r.get('kind', 'button'),
-                   r.get('category'), r.get('mode'), r.get('rank', 0))
+                   r.get('category'), r.get('mode'))
             for r in rows]
 
 
 def grouped(actions):
     """[(category, [Action])] -- a catalogue in the order a screen wants it.
 
-    Sorted by category with the unnamed one last, and by rank inside each,
-    so the most-bound come first where a game counts and the order is at
-    least stable where it does not. A game with no categories yields one
-    unnamed group, which a screen draws without a heading rather than
-    inventing one.
+    Sorted by category with the unnamed one last, and by id inside each.
+    It used to put the most-bound first, by how many of the game's own
+    factory profiles bound each action -- a count of what other people
+    did with other hardware, which is why it is gone. A game with no
+    categories yields one unnamed group, which a screen draws without a
+    heading rather than inventing one.
     """
     groups = {}
     for a in actions:
         groups.setdefault(a.category, []).append(a)
-    return [(c, sorted(groups[c], key=lambda a: (-a.rank, a.id)))
+    return [(c, sorted(groups[c], key=lambda a: a.id))
             for c in sorted(groups, key=lambda c: (c is None, c or ''))]
 
 

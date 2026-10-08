@@ -19,8 +19,9 @@ def load():
     """The devicemap module, or exit saying where it should have been."""
     path = os.environ.get('SIM_DEVICE_MAP') or DEFAULT
     if not os.path.isdir(path):
-        sys.exit(f'no device map at {path}\n'
-                 'clone sim-device-map next to this repo, or set SIM_DEVICE_MAP')
+        sys.exit(f'There is no device map at {path}.\n'
+                 'Clone sim-device-map next to this repo, or set '
+                 'SIM_DEVICE_MAP.')
     if path not in sys.path:
         sys.path.insert(0, path)
     import devicemap
@@ -59,11 +60,10 @@ def by_role(*required, desk=None):
         # The map's own message names the desks and the environment
         # variable. This adds the flag, which is the spelling anybody
         # running a planner has in front of them.
-        raise SystemExit(f'{e}\n  or: --desk <name>') from None
+        raise SystemExit(f'{e}\n  Or name one: --desk <name>') from None
     if rig is None:
-        sys.exit('no desk on file, so where your hardware sits is not'
-                 ' written down anywhere.\n  make one with'
-                 ' sim-device-map/capture.py')
+        sys.exit('No desk is on file. Nothing says where your hardware '
+                 'sits.\n  Make a desk with sim-device-map/capture.py')
     out = {}
     for dev in dm.load_all(rig=rig):
         if rig.entry(dev.slug) is not None:

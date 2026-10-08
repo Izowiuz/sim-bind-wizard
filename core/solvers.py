@@ -175,8 +175,8 @@ class CpSat(Solver):
         if got not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             return None
         if got != cp_model.OPTIMAL:
-            print('!! the solver ran out of time and answered with the best'
-                  ' it had; the layout is good rather than best',
+            print('!! the solver ran out of time. It answered with the '
+                  'best layout it had. That layout is good, not best.',
                   file=sys.stderr)
         return [(want, where)
                 for n, (want, may) in enumerate(wants)
@@ -202,8 +202,8 @@ def named(name):
     for one in SOLVERS:
         if one.name == name:
             return one
-    raise ValueError(f'no solver called {name!r}; there is '
-                     + ', '.join(one.name for one in SOLVERS))
+    raise ValueError(f'No solver is called {name!r}. These are: '
+                     + ', '.join(one.name for one in SOLVERS) + '.')
 
 
 def best():

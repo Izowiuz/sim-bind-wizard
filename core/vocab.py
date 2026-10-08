@@ -4,8 +4,8 @@ cached on disk or reparsed on the spot.
 Three adapters had a near-identical `_built()` that opened a JSON file and
 exited if it was missing. X4 has no such file at all, because reparsing four
 46 KB XML files costs nothing where War Thunder has to unpack zstd archives and
-BMS a 100 KB key file plus twenty-two vendor profiles. Both are right; the
-difference should not reach `plan.py`.
+BMS a 100 KB key file. Both are right; the difference should not reach
+`plan.py`.
 
     ACTIONS = vocab.load(HERE, 'wt-actions.json', key='actions')
     ACTIONS = vocab.load(HERE, None, build=harvest.vocabulary)
@@ -72,8 +72,8 @@ def load(directory, filename, key=None, build=None):
         except json.JSONDecodeError as e:
             # A harvest interrupted part-way leaves a truncated file behind,
             # and the next run reads it rather than the game.
-            raise Stale(f'{filename} will not parse: {e}\n'
-                        f'Run ./bind {game} harvest') from e
+            raise Stale(f'{filename} does not parse: {e}\n'
+                        f'Run ./bind {game} harvest.') from e
         if key is None:
             return data
         if not isinstance(data, dict) or key not in data:
@@ -87,9 +87,9 @@ def load(directory, filename, key=None, build=None):
                         + f', and {len(data) - 6} more')
             else:
                 held = ', '.join(sorted(data))
-            raise Stale(f'{filename} has no "{key}" section -- it holds '
-                        f'{held}.\nThe cache and the planner disagree about '
-                        f'its shape.\nRun ./bind {game} harvest')
+            raise Stale(f'{filename} has no "{key}" section. It holds '
+                        f'{held}.\nThe cache and the planner do not agree '
+                        f'about its shape.\nRun ./bind {game} harvest.')
         return data[key]
     if build is not None:
         # `key` is applied only if the built data happens to carry it: a cache
@@ -98,8 +98,9 @@ def load(directory, filename, key=None, build=None):
         data = build()
         return data[key] if key and isinstance(data, dict) and key in data \
             else data
-    raise Missing(f'{filename} is missing -- it is built from the installed '
-                  f'game, not kept in the repo.\nRun ./bind {game} harvest')
+    raise Missing(f'{filename} is missing. It is built from the installed '
+                  f'game. The repo does not keep it.\nRun ./bind {game} '
+                  'harvest.')
 
 
 def save(directory, filename, **sections):

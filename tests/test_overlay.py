@@ -460,6 +460,45 @@ class LayingOneOnReplacesTheLast(unittest.TestCase):
         self.assertEqual(2, corneeds.forget_wishes(got))
         self.assertEqual(0, corneeds.forget_wishes(got))
 
+    def test_the_game_s_own_ask_comes_back_rather_than_going_with_them(self):
+        # `device` and `prefer` are a wish when an overlay sets them and
+        # the game's ASK when the file does. Told apart by `takes`, an
+        # overlay rule that matched an axis need overwrote the ask and
+        # survived the overlay coming off: `f-18.toml` put the Hornet's
+        # pitch on the throttle, and the next save would have written
+        # that into the needs file as the game's own ask.
+        (pitch,) = corneeds.read_needs([
+            {'what': 'Pitch', 'shape': 'stick', 'takes': corneeds.AXIS,
+             'device': 'stick', 'on': ['y'], 'bindings': [[]]}])
+        written('[[want]]\nwhat = "Pitch"\ndevice = "throttle"\n').apply(
+            [pitch])
+        self.assertEqual('throttle', pitch.device, 'an overlay may ask')
+        corneeds.forget_wishes([pitch])
+        self.assertEqual('stick', pitch.device, 'and the ask comes back')
+        self.assertEqual('stick',
+                         corneeds.dump_needs([pitch])[0].get('device'),
+                         'a save writes the ask, never the wish')
+
+    def test_a_button_need_keeps_a_device_its_file_named_too(self):
+        # One rule for either kind, which is the point: it read `takes`.
+        (fire,) = corneeds.read_needs([
+            {'what': 'Fire', 'shape': 'trigger', 'device': 'stick',
+             'bindings': [[]]}])
+        written('[[want]]\nwhat = "Fire"\ndevice = "throttle"\n').apply(
+            [fire])
+        corneeds.forget_wishes([fire])
+        self.assertEqual('stick', fire.device)
+
+    def test_forgetting_twice_finds_nothing_the_second_time(self):
+        # A flag nobody set is False while the file says nothing, so a
+        # counter comparing the two answered 4 where it should answer 2.
+        (fire,) = corneeds.read_needs([
+            {'what': 'Fire', 'shape': 'trigger', 'device': 'stick',
+             'bindings': [[]]}])
+        written('[[want]]\nwhat = "Fire"\nfinger = "thumb"\n').apply([fire])
+        self.assertEqual(1, corneeds.forget_wishes([fire]))
+        self.assertEqual(0, corneeds.forget_wishes([fire]))
+
     def test_it_walks_the_wish_list_rather_than_one_of_its_own(self):
         # So a seventh wish is cleared by the fact of being in `WISHES`.
         got = self.needs()
@@ -540,10 +579,16 @@ class DcsWorksOutItsOwnJobs(unittest.TestCase):
         for want, role in (('stick', 'x'), ('stick', 'y'), ('stick', 'z')):
             with self.subTest(axis=role):
                 self.assertIsNotNone(stick.axis_of(want, role))
-        for name in ('Pitch', 'Roll', 'Rudder'):
+        # The table answers with an ASK now rather than with a resolved
+        # axis: which command IS pitch is the module's own vocabulary,
+        # and which lever it goes on is a comparison the scoring makes.
+        for name, on in (('Pitch', 'y'), ('Roll', 'x'), ('Rudder', 'z')):
             with self.subTest(name=name):
-                self.assertIn(m.AXIS_FOR[name][0], ('stick', 'lever'))
-                self.assertIn(m.AXIS_FOR[name][1], ('x', 'y', 'z', ''))
+                shape, got, rests, _pin = m.axis_ask(name, 'axis')
+                self.assertEqual('stick', shape)
+                self.assertEqual(on, got)
+                self.assertEqual('centred', rests,
+                                 'it has to spring back or you cannot fly')
 
     def test_a_name_nothing_matches_keeps_no_job(self):
         # Not a failure: a module nobody has been through lays out on
@@ -589,7 +634,17 @@ class TheOverlaysOnFile(unittest.TestCase):
                 with open(path, encoding='utf-8') as f:
                     rows = json.load(f)['needs']
                 for row in rows:
+                    # Except on an axis need, where `device` and `prefer`
+                    # are not wishes but the game's own ask: pitch IS the
+                    # stick's fore-aft axis, in every sim there is, and
+                    # nobody has an opinion to express about it. A button
+                    # need's device is a preference -- fire on the stick
+                    # is a choice -- and that is the difference.
+                    skip = (('device', 'prefer')
+                            if row.get('takes') == corneeds.AXIS else ())
                     for wish in corneeds.WISHES:
+                        if wish in skip:
+                            continue
                         self.assertNotIn(wish, row, row['what'])
 
     def test_every_function_names_a_job_and_it_is_one_of_the_ten(self):

@@ -6,7 +6,7 @@ DESCRIPTION
     map, then fill in the profiles MSFS keeps in Steam Cloud.
 
 FILES
-    harvest.py          the action vocabulary and the factory ranking
+    harvest.py          the action vocabulary
     inputprofile_*      written by --write, two per device:
                           with <AircraftInfo/>   flight controls
                           without                camera, ATC, global
@@ -32,9 +32,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CORE = os.environ.get('SIM_BIND_WIZARD') or os.path.normpath(
     os.path.join(HERE, '..', '..'))
 if not os.path.isdir(CORE):
-    raise SystemExit(f'no shared core at {CORE}\n'
-                     'clone sim-bind-wizard next to this repo, '
-                     'or set SIM_BIND_WIZARD')
+    raise SystemExit(f'There is no shared core at {CORE}.\n'
+                     'Clone sim-bind-wizard next to this repo, or set '
+                     'SIM_BIND_WIZARD.')
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
@@ -100,81 +100,17 @@ def needs(described, placed):
     """[Need] -- the hand-written list, read rather than executed."""
     out = corneeds.read_needs(vocab.load(HERE, described, key='needs'),
                               make=Need)
-    corneeds.load_assignments(HERE, placed, out)
     return out
 
 
-def rank_of(rank, action):
-    for cat in ('Airplane', 'Helicopter', 'Transversal'):
-        n = dict(rank['rank'].get(cat, [])).get(action)
-        if n:
-            return cat, n
-    return '', 0
-
-
-def axis_plan(devs, known):
-    """[(context, action, role, axis)] for the axis-shaped needs.
-
-    `known` is every action id there is -- membership is all this asks of
-    it, so a set or the catalogue's `by_id` both do.
-    """
-    stick, thr = devs['stick'], devs['throttle']
+def axis_rows(devs, axes):
+    """[(context, action, role, axis)] -- the four fields every reader of
+    an axis placement here wants, in one place rather than three."""
     out = []
-
-    # `('stick', 'x')` and not `stick-x`. One word for both said the
-    # control's kind and which axis of it at once, and so said the kind
-    # twice -- the map stopped spelling it that way and nothing here
-    # followed, so `axes(kind='stick-x')` matched a kind no control has.
-    # Roll, pitch and yaw came back None and `if ax:` dropped them: MSFS
-    # planned eight axes and not one of them was a flight control.
-    roll, pitch, yaw = (stick.axis_of('stick', 'x'),
-                        stick.axis_of('stick', 'y'),
-                        stick.axis_of('stick', 'z'))
-    for what, got in (('roll', roll), ('pitch', pitch), ('yaw', yaw)):
-        if got is None:
-            print(f'!! no {what} axis on the stick', file=sys.stderr)
-    lever = next((a for a in thr.axes(kind='lever')
-                  if 'left' in thr.axis_label(a.index).lower()),
-                 next(iter(thr.axes(kind='lever')), None))
-    brake = next((a for a in stick.axes()
-                  if stick.axis_kind(a.index) in ('slider', 'lever')
-                  and a.safe_for_absolute), None)
-    # a dial is for dialling a value, not for a lever's job: keep it out of
-    # the prop-pitch search and give it the vertical speed selector instead
-    prop = next((a for a in thr.axes()
-                 if a.kind in ('slider', 'lever')
-                 and a is not lever and a.safe_for_absolute), None)
-    dial = next(iter(thr.axes(kind='dial')), None)
-    for ctx, trio in (('plane', ('KEY_AXIS_AILERONS_SET', 'KEY_AXIS_ELEVATOR_SET',
-                                 'KEY_AXIS_RUDDER_SET')),
-                      ('heli', ('KEY_AXIS_CYCLIC_LATERAL_SET',
-                                'KEY_AXIS_CYCLIC_LONGITUDINAL_SET',
-                                'KEY_AXIS_TAIL_ROTOR_SET'))):
-        for action, ax in zip(trio, (roll, pitch, yaw)):
-            if ax:
-                out.append(corneeds.Axis('stick', ax, action, carries=ctx))
-    if lever:
-        out.append(corneeds.Axis('throttle', lever,
-                                 'KEY_THROTTLE_AXIS_SET_EX1', carries='plane'))
-        out.append(corneeds.Axis('throttle', lever,
-                                 'KEY_AXIS_COLLECTIVE_SET', carries='heli'))
-    if brake:
-        out.append(corneeds.Axis('stick', brake, 'KEY_BRAKES', carries='plane'))
-        out.append(corneeds.Axis('stick', brake, 'KEY_BRAKES', carries='heli'))
-    if prop:
-        out.append(corneeds.Axis('throttle', prop,
-                                 'KEY_PROP_PITCH_AXIS_SET_EX1',
-                                 carries='plane'))
-    if dial:
-        out.append(corneeds.Axis('throttle', dial,
-                                 'KEY_AXIS_VERTICAL_SPEED_SET',
-                                 carries='plane'))
-    ms = next(iter(thr.groups('ministick')), None)
-    if ms and len(ms.axes) == 2:
-        for action, i in (('KEY_AXIS_PAN_HEADING', 0), ('KEY_AXIS_PAN_PITCH', 1)):
-            if action in known:
-                out.append(corneeds.Axis('throttle', thr.axis(ms.axes[i]),
-                                         action, carries='glob'))
+    for p in axes:
+        a = devs[p.role].axis(p.slots[0][0].index)
+        for b in p.slots[0][1]:
+            out.append((b.mode or 'plane', b.action, p.role, a))
     return out
 
 
@@ -288,9 +224,7 @@ def bindings_for(devs, placed, axes):
                 add(p.role, 'global' if b.mode == 'glob' else 'flight',
                     b.action, info, code)
 
-    for plan in axes:
-        ctx, action, role, ax = (plan.carries, plan.does, plan.role,
-                                 plan.axis)
+    for ctx, action, role, ax in axis_rows(devs, axes):
         pair = AXIS_CODE.get(ax.hid)
         if not pair:
             continue
@@ -306,13 +240,13 @@ def contents(devs, placed, axes):
     old ones back over anything written here.
     """
     if os.popen('pgrep -x steam').read().strip():
-        raise SystemExit('Steam is running -- it syncs these files from the '
-                         'cloud and would overwrite the write. Quit Steam '
-                         'first.')
+        raise SystemExit('Steam is running. It syncs these files from the '
+                         'cloud, and that would overwrite this write. Quit '
+                         'Steam first.')
     profiles = find_profiles(devs)
     if not profiles:
-        raise SystemExit('found no MSFS input profiles -- has the sim seen '
-                         'the devices?')
+        raise SystemExit('There are no MSFS input profiles. Start the sim '
+                         'once with the devices plugged in.')
 
     # Named once, because four profiles under one 70-character Steam userdata
     # path would be four lines of the same directory.
@@ -365,7 +299,9 @@ def _sheet(layout):
     diff cost a second reader of the game's files that could disagree with the
     planner about what is bound.
     """
-    devs, placed, unmet, free, axes = layout
+    devs, placed, unmet, free = (layout.devices, layout.on_buttons,
+                                 layout.unplaced, layout.free)
+    axes = layout.on_axes
     CTX = {'plane': 'Aeroplane', 'heli': 'Helicopter', 'glob': 'Global'}
 
     sh = csheet.Sheet('Kneeboard MSFS 2024',
@@ -389,9 +325,7 @@ def _sheet(layout):
                               ident=info.replace('Joystick Button ', '#'),
                               does=p.need.what, bindings=by_ctx))
 
-    for plan in axes:
-        ctx, action, role, ax = (plan.carries, plan.does, plan.role,
-                                 plan.axis)
+    for ctx, action, role, ax in axis_rows(devs, axes):
         pair = AXIS_CODE.get(ax.hid)
         g = devs[role].axis_group(ax.index)
         sh.add_axis(role, g.label if g else ax.label,
@@ -426,7 +360,7 @@ class Msfs(adapter.Planner):
     NEEDS_FILE = 'msfs-needs.json'
     BINDS = 'msfs-binds.json'
     CATALOGUE = 'msfs-actions.json'
-    CACHE = {'msfs-actions.json': 'actions', 'msfs-rank.json': None}
+    CACHE = {'msfs-actions.json': 'actions'}
 
 
     @property
@@ -447,15 +381,13 @@ class Msfs(adapter.Planner):
         # defines classes and reads nothing.
         self.cat = cactions.read(self.cache('msfs-actions.json'))
         self.by_id = cactions.by_id(self.cat)
-        self.rank = self.cache('msfs-rank.json')
         self._needs = needs(self.NEEDS_FILE, self.BINDS)
 
     @typing.override
     def build(self):
         devs = devmap.by_role('stick', 'throttle')
-        flat = [n for n in self.NEEDS if n.first_shape != 'axis']
-        return corneeds.Layout(devs, *corneeds.allocate(flat, devs),
-                               axes=axis_plan(devs, self.by_id))
+        self.answers(self.NEEDS)
+        return corneeds.Layout(devs, *corneeds.allocate(self.NEEDS, devs))
 
     @typing.override
     def catalogue(self):
@@ -475,7 +407,8 @@ class Msfs(adapter.Planner):
 
     @typing.override
     def write_layout(self, layout):
-        files, said = contents(layout.devices, layout.placed, layout.axes)
+        files, said = contents(layout.devices, layout.on_buttons,
+                               layout.on_axes)
         for line in said:
             print(line)
         return files
@@ -491,7 +424,9 @@ class Msfs(adapter.Planner):
 
     @typing.override
     def show(self, layout, why=False):
-        _devs, placed, unmet, _free, axes = layout
+        devs, placed, unmet = (layout.devices, layout.on_buttons,
+                               layout.unplaced)
+        axes = layout.on_axes
         out = [f'{len(placed)} controls, {len(axes)} axis bindings', '']
         for p in placed:
             need, role, c = p.need, p.role, p.ctrl
@@ -504,20 +439,9 @@ class Msfs(adapter.Planner):
                                f'{"  " + d if d else ""}')
             if why:
                 out.append('      ' + ' · '.join(corneeds.why_bits(p)))
-                # MSFS ranks per aircraft category, so its denominator is
-                # a name rather than a number.
-                first = next((b.action for m in ('plane', 'heli', 'glob')
-                              for slot in need.bindings for b in slot
-                              if b.mode == m), '')
-                cat, n = rank_of(self.rank, first)
-                if n:
-                    out.append(f'      {n} of the factory {cat} profiles '
-                               'bind this')
             out.append('')
         out.append('AXES')
-        for plan in axes:
-            ctx, action, role, ax = (plan.carries, plan.does, plan.role,
-                                     plan.axis)
+        for ctx, action, role, ax in axis_rows(devs, axes):
             out.append(f'  {ctx:5s} {action:44s} {role:8s} '
                        f'{AXIS_CODE.get(ax.hid, ("?",))[0]}  ({ax.label})')
         if unmet:

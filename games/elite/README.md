@@ -35,7 +35,7 @@ into the prefix:
 
 ## How to run it
 
-    ./harvest.py              vocabulary and the factory ranking
+    ./harvest.py              the function vocabulary
     ./harvest.py --grep word  functions matching a word
     ./harvest.py --json       cache it
 
@@ -106,13 +106,11 @@ it, so keyboard control still works alongside.
 the game accepts a binding for is an element in it. There is no separate
 action list to harvest.
 
-**The ranking names the device too.** Of the thirty shipped presets, thirteen
-are HOTAS rather than pad or keyboard, and five — X55, X56, Warthog, T16000M,
-G940 — name the stick and the throttle as separate devices:
-
-    13/13 on the throttle   boost, panel cycle, vertical thrusters
-    13/13 on the stick      fire, target, the four power pips
-    13/13 either            roll, pitch and throttle axes
+**The other shipped presets are not read.** Thirteen of the thirty are
+HOTAS rather than pad or keyboard, and counting what they bind used to pick
+which functions mattered and which device they belonged on. They are
+Frontier's layouts for an X56 and a Warthog; what each function IS lives in
+`elite-needs.json` instead, by hand.
 
 **Several functions share one axis on purpose.** All four split HOTAS presets
 bind `RollAxisRaw`, `BuggyRollAxisRaw` and `SteeringAxis` to the same stick
@@ -133,9 +131,9 @@ SRV-only and name nothing. The context is declared in `AXIS_NEEDS` and in each
 ## Still a guess
 
 **Whether the plan flies better than what was captured by hand.** The two
-presets sit side by side in the game and have not been compared in flight. The
-plan follows the factory ranking; the captured one differs — secondary fire on
-the throttle rather than the stick, the panels left on the keyboard.
+presets sit side by side in the game and have not been compared in flight.
+They differ — secondary fire on the throttle rather than the stick, the panels
+left on the keyboard.
 
 ## Gotchas
 

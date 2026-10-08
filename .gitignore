@@ -6,11 +6,9 @@ __pycache__/
 *.bak.*
 
 # Harvested from the installed game by each game's harvest.py: the publisher's
-# own action names and the ranking derived from the profiles they ship. Not
-# ours to redistribute. Run harvest.py after cloning, or after a patch adds
-# actions.
+# own action names. Not ours to redistribute. Run harvest.py after cloning,
+# or after a patch adds actions.
 games/*/*-actions.json
-games/*/*-rank.json
 
 # NOT ignored, and the distinction matters. Two files per game hold what
 # nobody can derive, and a blanket rule over games/*/*.json would take them

@@ -13,6 +13,7 @@ a War Thunder action id, a BMS callback, or a pair of X4 source/code strings
 without the allocator knowing the difference.
 """
 
+import collections
 import dataclasses
 import json
 import os
@@ -56,7 +57,8 @@ def merge_rules(base, extra):
         for k, v in base.items()}
     for section, given in (extra or {}).items():
         if section not in out:
-            raise ValueError(f'{section!r} is not a section of the rules')
+            raise ValueError(
+                f'{section!r} is not a section of the rules.')
         if section not in KEYED_BY:
             out[section] = {**out[section], **given}
             continue
@@ -65,7 +67,8 @@ def merge_rules(base, extra):
         for row in given:
             if row[key] not in at:
                 raise ValueError(
-                    f'{section} {row[key]!r} is not one the rules define')
+                    f'{section} {row[key]!r} is not one that the rules '
+                    'define.')
             out[section][at[row[key]]] = {**out[section][at[row[key]]], **row}
     return out
 
@@ -100,6 +103,23 @@ REACH_MEANS = {tier: says for tier, says in RULES['reach']['means']}
 IN_A_TURN, ON_APPROACH, IN_THE_AIR, ON_THE_RAMP = 0, 1, 2, 3
 URGENCY_NAME = tuple(b['name'] for b in RULES['band'])
 
+#: Where an axis sits when you let go of it, in the map's own words. A
+#: need names the one its function needs: pitch has to spring back or the
+#: aircraft will not fly level, a throttle has to stay or it returns to
+#: half power, a brake has to rest at the minimum or it is part-on from
+#: the moment the game starts. `check_rules` holds this to
+#: `devicemap.RESTS`, so the day the map renames one of them the load
+#: fails instead of the match quietly never firing.
+RESTS = ('centred', 'min', 'max', 'mid')
+
+#: The two kinds of input a control offers. Not two kinds of NEED: a
+#: function that wants an axis is a function like any other, wanting a
+#: part of a control, and the axes were a second model of everything --
+#: their own object, their own resolver, their own file section, their
+#: own rows on the screen and in the sheet, their own branch of every
+#: key -- for no reason but that they grew separately.
+BUTTON, AXIS = 'button', 'axis'
+
 #: The best reach a band may take, and the worst it may live with. Without
 #: the floor, something you do once on the ramp grabs a thumb position the
 #: moment one is free; without the ceiling, nothing is kept close.
@@ -130,7 +150,15 @@ FACTS = tuple(RULES['fact'])
 #: The flags the facts put on every Need, taken from the table rather than
 #: written out -- which is what makes a sixth fact a block in a file and
 #: nothing else. A need that sets none of them scores exactly as before.
-FLAGS = tuple(f['asked'] for f in FACTS if f.get('asked'))
+FLAGS = tuple(f['asked'] for f in FACTS
+              if f.get('asked') and 'same' not in f)
+
+#: What a fact of the fourth shape asks for: a WORD out of a closed
+#: vocabulary, not a flag. `rests` names which resting position the
+#: function needs, against what the map measured about the lever -- so
+#: the field holds one of `RESTS` or None, where every `FLAGS` field
+#: holds True or False.
+VALUES = tuple(f['asked'] for f in FACTS if 'same' in f)
 
 #: What an overlay may ask for, and so what the needs file does NOT carry.
 #: These are not facts about a function -- `stick` is not a property of
@@ -204,6 +232,9 @@ def check_rules(rules, devicemap):
     for one in rules['mechanisms']['one']:
         if one not in kinds:
             bad.append(f'mechanisms: {one!r} is not a kind')
+    if set(RESTS) != set(devicemap.RESTS):
+        bad.append(f'rests: this file says {sorted(RESTS)} and the map '
+                   f'says {sorted(devicemap.RESTS)}')
     ways = set(devicemap.DIRECTIONS) | {'push'}
     for want, names in rules['directions'].items():
         for one in names:
@@ -214,10 +245,17 @@ def check_rules(rules, devicemap):
     # module, which is the whole point of the table -- so this is the only
     # thing standing between a typo and a fact that silently never fires.
     told = {f.name for f in dataclasses.fields(devicemap.Group)}
+    told |= {n for n in vars(devicemap.Group) if not n.startswith('_')}
+    # A row says which thing it reads. What the map measured about a
+    # LEVER is on the axis, and half of those answers are properties
+    # derived from `rest` and `moves_with` rather than fields.
+    on_axis = {f.name for f in dataclasses.fields(devicemap.Axis)}
+    on_axis |= {n for n in vars(devicemap.Axis) if not n.startswith('_')}
     for fact in rules['fact']:
-        if fact['reads'] not in told:
+        where = on_axis if fact.get('on') == 'axis' else told
+        if fact['reads'] not in where:
             bad.append(f'fact: {fact["reads"]!r} is not something the map'
-                       ' measures about a control')
+                       f' measures about {fact.get("on", "a control")}')
         if 'asked' not in fact:
             bad.append(f'fact: {fact["reads"]} has no `asked`, so nothing'
                        ' turns it on; a fact is what a NEED asks of a'
@@ -225,15 +263,18 @@ def check_rules(rules, devicemap):
         if 'below' in fact and 'scale' not in fact:
             bad.append(f'fact: {fact["reads"]} charges below'
                        f' {fact["below"]} but has no `scale` to charge')
-        kinds = [k for k in ('yes', 'scale', 'refuses') if k in fact]
+        kinds = [k for k in ('yes', 'scale', 'same', 'refuses') if k in fact]
         if len(kinds) != 1:
             bad.append(f'fact: {fact["reads"]} is {" and ".join(kinds)}'
                        ' at once; it has to be exactly one of yes/no,'
-                       ' scale, refuses' if kinds else
+                       ' scale, same/other, refuses' if kinds else
                        f'fact: {fact["reads"]} weighs nothing')
         if ('yes' in fact) != ('no' in fact):
             bad.append(f'fact: {fact["reads"]} answers yes and no, so it'
                        ' needs a weight for both')
+        if ('same' in fact) != ('other' in fact):
+            bad.append(f'fact: {fact["reads"]} matches a value, so it'
+                       ' needs a weight for both answers')
     if bad:
         raise ValueError('scoring.toml:\n  ' + '\n  '.join(sorted(set(bad))))
     return rules
@@ -326,11 +367,44 @@ class Need:
 
     def __init__(self, what, shape, bindings=(), push=None,
                  urgency=IN_THE_AIR, suits=None, device=None,
-                 prefer=None, on=None, rank=0, category=None,
-                 assignment=None):
+                 prefer=None, on=None, category=None,
+                 assignment=None, takes=BUTTON, invert=False, find=None,
+                 rests=None):
         self.what = what
         self.shape = shape
         self.bindings = list(bindings)
+        #: BUTTON or AXIS: which of a control's two kinds of input this
+        #: takes. A control can have both -- the throttle's mini-stick is
+        #: two axes and a click -- so the need says which it wants, and
+        #: `shape`, `device` and `on` name the rest the same way for
+        #: either: `shape stick, device stick, on ('y',)` is the stick's
+        #: pitch axis, and `shape hat4, on ('up','down')` is two
+        #: directions of a hat.
+        self.takes = takes
+        #: which way round an axis runs. An attribute of an axis binding
+        #: like `on` is an attribute of a hat binding, and the one thing
+        #: about an axis you change from the screen.
+        self.invert = invert
+        #: What the game's own FILE asked for, by field -- as opposed to
+        #: what an overlay wished. `device` and `prefer` are a wish when
+        #: an overlay sets them and the game's ASK when the file does:
+        #: `device throttle, prefer left throttle lever` is the file
+        #: saying which lever the throttle is.
+        #:
+        #: Kept as the VALUES, because taking an overlay off has to put
+        #: the ask BACK, not merely leave it alone. Told apart by `takes`
+        #: instead, an overlay rule that matched an axis need overwrote
+        #: the ask and survived `--overlay none`: `f-18.toml` put the
+        #: Hornet's pitch on the throttle, and the next save would have
+        #: written that into the needs file as the game's own ask.
+        self.from_file = {}
+        #: A search only the game can answer, carried and not read: War
+        #: Thunder's brake is "a slider or lever on the stick you can
+        #: read absolutely", and no vocabulary of kinds and labels says
+        #: that. `allocate(finds=...)` is asked when this is set -- the
+        #: one place a game still answers for itself, and it is two rows
+        #: of nineteen in one of the six.
+        self.find = find
         #: for a control that also clicks
         self.push = push
         self.urgency = urgency
@@ -341,10 +415,10 @@ class Need:
         #: overlay sets it, which is what lets one line say it for a
         #: whole family instead of 76 lines saying it one at a time.
         self.device = device
-        #: pin to a control by its label in the map. The allocator ranks by
-        #: shape, reach and urgency, which is right for everything nobody has
-        #: an opinion about -- but when you DO have one it should win rather
-        #: than be argued with at every regeneration.
+        #: pin to a control by its label in the map. The allocator scores
+        #: by shape, reach and urgency, which is right for everything nobody
+        #: has an opinion about -- but when you DO have one it should win
+        #: rather than be argued with at every regeneration.
         self.prefer = prefer
         #: Where on the hand an overlay wants this, as the map's own words:
         #: `finger = "thumb"`, `level = "HOME"` is the Hornet's castle
@@ -363,13 +437,6 @@ class Need:
         #: it on "up" and "right" because those came first would be a lie about
         #: the hardware.
         self.on = tuple(on) if on else None
-        #: how much the game itself asks for this, counted rather than judged
-        #: -- how many factory profiles bind it. Breaks ties WITHIN an urgency
-        #: band and never across one: a cockpit switch a hundred profiles bind
-        #: still does not outrank something you reach for in a turn. Games that
-        #: ship no profiles to count (X4, Elite) leave it at 0, which orders
-        #: them by urgency alone exactly as before.
-        self.rank = rank
         #: Yours: what you filed this under. Separate from `urgency` on
         #: purpose -- "Combat" can hold something you reach for in a turn
         #: and something you set on the ramp, and the allocator still has
@@ -413,6 +480,12 @@ class Need:
         #: you", and a score needs "must you", which is what these say.
         for flag in FLAGS:
             setattr(self, flag, False)
+        # A fact that matches a word, not a bool: the field exists on
+        # every need the moment somebody writes the block, same as the
+        # flags above.
+        for named in VALUES:
+            setattr(self, named, None)
+        self.rests = rests
         #: set by the allocator when it had to reach past the floor
         self.relaxed = False
 
@@ -445,81 +518,137 @@ class Need:
         return f'<Need {self.what!r} {self.shape} u{self.urgency}>'
 
 
-@dataclasses.dataclass
-class Axis:
-    """One axis of the hardware, and what the game does with it.
+@dataclasses.dataclass(frozen=True)
+class OnAxis:
+    """Which axis of a control a binding went on: a slot index that says
+    it is an axis and not a button.
 
-    Axes never go through `allocate`: there is nothing to choose, because
-    an aircraft's pitch axis is the stick's pitch axis on every desk
-    there is. So a game resolves them itself and hands the list over --
-    and for a long time each handed over a tuple of its own, five of them
-    shaped differently, which is why nothing could draw them on a screen
-    or hold them to a common rule.
-
-    `carries` is the game's own payload, opaque here exactly as
-    `Need.bindings` is: War Thunder's deadzone table, Falcon's DirectInput
-    index, MSFS's context. The core moves it and never opens it.
+    A control's buttons and its axes are numbered in different
+    namespaces -- the throttle's mini-stick is button 23 and axes 0 and
+    1 -- so a slot index has to say which one it means. A plain integer
+    cannot: `(throttle, 2)` would be a lever and a hat direction at
+    once, and `occupied` would have them collide silently. Frozen, so it
+    is a dict key like the integers it sits beside.
     """
-    #: which device: 'stick', 'throttle'. None where a game keeps a row
-    #: for something it deliberately binds nowhere -- DCS's combined
-    #: Thrust, because the two engines are bound separately and the sheet
-    #: says so rather than leaving a silent gap.
-    role: str | None
-    axis: typing.Any            # devicemap's Axis, or None if nothing fits
-    does: str                   # the game's own id or name for the job
-    invert: bool = False
-    carries: typing.Any = None
+    index: int
+
+    def __str__(self):
+        return f'axis {self.index}'
 
 
-def axis_at(dev, on):
-    """The axis a line of an axes file names, or None.
 
-    Two ways, because there are two kinds of answer. `{"kind": "stick",
-    "axis": "y"}` is the map's own vocabulary -- the control, and which
-    of its axes -- and survives relabelling. `{"label": "left throttle
-    lever"}` is for a lever the map has no finer word for, matched
-    case-insensitively anywhere in the label.
+def answers_need(dev, axis, need):
+    """Would this axis answer what this need asked for?
 
-    Three games had a copy of this, two of them identical to the
-    character.
+    The ask is a GATE and the points choose among what passes it: on a
+    throttle with three levers, "a lever that rests at zero" is answered
+    by all three and only the scoring can say which. A search the game
+    answers is not asked -- the core does not know what it was looking
+    for.
     """
-    if 'kind' in on:
-        return dev.axis_of(on['kind'], on.get('axis', ''))
-    want = on['label'].lower()
-    return next((a for a in dev.axes()
-                 if want in dev.axis_label(a.index).lower()), None)
+    if need.find:
+        return False
+    ctrl = dev.axis_group(axis.index)
+    if ctrl is None:
+        return False
+    if need.prefer:
+        if ctrl.label.lower() != need.prefer.lower():
+            return False
+    elif ctrl.kind not in need.shapes:
+        return False
+    return not need.on or axis.role == need.on[0]
 
 
-def read_axes(rows, devs, carries=None, finds=None):
-    """[Axis] from a game's axes file. Says what it could not find.
+def axes_of(dev, ctrl):
+    """[axis] of this control, in the device's own order."""
+    return [a for a in sorted(dev.axes(), key=lambda x: x.index)
+            if dev.axis_group(a.index) is ctrl]
 
-    `carries` is called with the row and the resolved axis for whatever
-    the game alone needs -- War Thunder's deadzone, Falcon's DirectInput
-    index -- and the core never opens what it returns.
 
-    `finds` is the escape hatch, for an axis that is a SEARCH rather than
-    a name: War Thunder's brake is "a slider or lever on the stick that is
-    safe to read absolutely", and no amount of vocabulary makes that a
-    label. A row says `{"find": "brake"}` and the game answers.
+def axis_for(need, dev, ctrl):
+    """The axis of this control this need asks for, or None.
 
-    Loudly, where nothing fits: four of the six dropped a missing axis
-    with `continue`, and two of them planned a layout with no aileron,
-    elevator or rudder in it without saying a word.
+    `on` names which one the way it names a hat's directions: `('y',)`
+    is the stick's pitch, and the map calls that the axis's own role.
+    Nothing named takes the control's first, which is what a lever has
+    anyway.
+    """
+    got = axes_of(dev, ctrl)
+    if not need.on:
+        return got[0] if got else None
+    want = need.on[0]
+    return next((a for a in got if a.role == want), None)
+
+
+def group_of(dev, axis):
+    """Which input this axis IS, as a key -- itself and whatever travels
+    with it.
+
+    Two axes that move together are one input: the VMAX's throttle levers
+    travel as a pair until you release the catch, so a function on the
+    second one moves with whatever is on the first. `moves_with` is the
+    map's answer, AS THE HARDWARE IS SET UP NOW.
+    """
+    return frozenset({axis.index} | set(axis.moves_with or ()))
+
+
+def context_of(need):
+    """Which context this binding answers in, or '' where a game has one.
+
+    The game says it, on the binding: MSFS writes `plane`/`heli`/`glob`
+    because it chooses a file by it. It is what tells a shared axis from
+    a clash -- you are never flying the aeroplane and the helicopter at
+    the same time.
+    """
+    for slot in need.bindings:
+        for b in slot:
+            got = getattr(b, 'mode', None)
+            if got:
+                return got
+    return ''
+
+
+def axes_for(need, devices, usable=None, rules=None):
+    """[(points, role, control, axis)] -- every lever that could take this
+    need, best first. What the allocator compares, for an axis.
+
+    The ask is a GATE and the measurement decides among what passes it:
+    `device` says which stick, `shape` which kind of control, `on` which
+    axis of it, `prefer` names one outright. Where the ask leaves one
+    candidate -- `on ('y',)` is the stick's pitch and there is one of it
+    -- the points change nothing. Where it leaves three levers, the
+    points are what chooses, instead of whichever the device happened to
+    report first.
+
+    That `first` was the last place in the tool where a binding was
+    decided without comparing anything, and three games had written
+    their own comparisons around it as chains of `if`: "a dial first,
+    else a slider that rests at its minimum", "a slider or lever you can
+    read absolutely", "steadiest first: something that stays where you
+    leave it". All three are over what the map measures, which is what
+    the scoring table is for.
     """
     out = []
-    for row in rows:
-        dev = devs.get(row['role'])
-        if 'find' in row['on']:
-            got = finds(row['on']['find'], devs) if finds else None
-        else:
-            got = axis_at(dev, row['on']) if dev else None
-        if got is None:
-            print(f'!! no axis on the {row["role"]} for {row["does"]}',
-                  file=sys.stderr)
+    for role, dev in sorted(devices.items()):
+        if need.device and need.device != role:
             continue
-        out.append(Axis(row['role'], got, row['does'],
-                        invert=row.get('invert', False),
-                        carries=carries(row, got) if carries else None))
+        for ctrl in dev.groups(bindable=True):
+            if need.prefer:
+                if ctrl.label.lower() != need.prefer.lower():
+                    continue
+            elif ctrl.kind not in need.shapes:
+                continue
+            for axis in axes_of(dev, ctrl):
+                if need.on and axis.role != need.on[0]:
+                    continue
+                got = score(ctrl, need, role, usable=usable, rules=rules,
+                            axis=axis)
+                if got is not None:
+                    out.append((got, role, ctrl, axis))
+    # Lowest index first among equals, so the same desk always answers the
+    # same way: a tie settled by report order is a layout that moves when
+    # the firmware renumbers something.
+    out.sort(key=lambda x: (-x[0], x[3].index))
     return out
 
 
@@ -549,13 +678,28 @@ def forget_wishes(needs):
 
     It walks `WISHES` rather than a list of its own, so a seventh wish is
     cleared by the fact of being in that tuple.
+
+    What the game's own file asked for comes BACK rather than going with
+    them: `device throttle, prefer left throttle lever` is the file
+    saying which lever the throttle is, and a need cleared of it asks for
+    nothing. `from_file` holds those values, so this reads the same for
+    either kind of need -- and a button need whose file names a device
+    keeps it too, which it did not before.
     """
     found = 0
     for need in needs:
         for wish in WISHES:
-            if getattr(need, wish, None):
+            was = need.from_file.get(wish)
+            got = getattr(need, wish, None)
+            # Truthy AND not what the file said. A flag nobody set is
+            # False while the file says nothing (None), and counting that
+            # as a wish found makes `forget_wishes` answer 4 where it
+            # should answer 2.
+            if got and got != was:
                 found += 1
-            setattr(need, wish, None if wish not in FLAGS else False)
+            setattr(need, wish,
+                    was if was is not None
+                    else (None if wish not in FLAGS else False))
     return found
 
 
@@ -591,33 +735,35 @@ def dump_needs(needs):
                 row[field] = getattr(n, field)
         if n.on:
             row['on'] = list(n.on)
-        # Derived, and written down anyway. It counts how many of the
-        # game's own profiles bind the thing, so it COULD be read from the
-        # harvest's `*-rank.json` -- and then a refreshed cache would
-        # silently reorder a plan you had already walked. Elite froze it
-        # here on purpose, and that freeze is the judgement.
-        if n.rank:
-            row['rank'] = n.rank
+        if n.takes != BUTTON:
+            row['takes'] = n.takes
+            if n.invert:
+                row['invert'] = True
+            if n.rests:
+                row['rests'] = n.rests
+        # What the FILE asked for, which is not what the need is wearing:
+        # an overlay sets `device` and `prefer` too, and saving those
+        # would write a wish into the file as the game's own ask.
+        for field in ('device', 'prefer', 'find'):
+            if n.from_file.get(field):
+                row[field] = n.from_file[field]
         out.append(row)
     return out
 
 
-def save_needs(directory, filename, needs, axes=()):
+def save_needs(directory, filename, needs):
     """Write the description down. One place, because five games had none.
 
     It is derived from nothing: delete it and it is gone. So a screen that
     lets somebody make one has to be able to keep it, and until this
     existed, promoting an action lasted until `q`.
 
-    `axes` is the file's second section. An axis never goes through the
-    allocator, but which lever is the throttle is a judgement like any
-    other -- and it was a literal in five games' source, where a change
-    meant editing code and an axis turned round on the screen had nowhere
-    to go.
+    One section. The axes were a second one, with rows of their own
+    shape, which is what made every reader of this file need two code
+    paths: an axis row is a need row that takes an axis.
     """
     from core import vocab
-    path, _said = vocab.save(directory, filename, needs=dump_needs(needs),
-                             axes=list(axes))
+    path, _said = vocab.save(directory, filename, needs=dump_needs(needs))
     return path
 
 
@@ -638,19 +784,35 @@ def read_needs(rows, make=None):
         if not isinstance(shape, str):
             shape = tuple(shape)
         push = cactions.read_binds(r['push']) if r.get('push') else None
+        if r.get('rests') and r['rests'] not in RESTS:
+            # Loudly, like a job nobody wrote: a resting word the map
+            # does not use is a match that can never fire, and the only
+            # sign would be an axis quietly on the wrong lever.
+            raise ValueError(
+                f'{r["what"]!r} wants an axis that rests {r["rests"]!r}. '
+                f'The map does not use that word. It uses these: '
+                f'{", ".join(RESTS)}.')
         if r.get('suits') and r['suits'] not in JOBS:
             # Loudly, the way the overlay reader refuses a rule nobody
             # wrote. A job nobody knows is a word no overlay can match, so
             # a typo would quietly cost that need every wish in the file.
             raise ValueError(
-                f'{r["what"]!r} is filed under {r["suits"]!r}, which is not '
-                f'a job. There are: {", ".join(JOBS)}')
+                f'{r["what"]!r} is filed under {r["suits"]!r}. That is '
+                f'not a job. These are: {", ".join(JOBS)}.')
         need = (make or Need)(
             r['what'], shape,
             bindings=[cactions.read_binds(slot) for slot in r['bindings']],
             push=push, urgency=r.get('urgency', IN_THE_AIR),
             suits=r.get('suits'), on=r.get('on'),
-            rank=r.get('rank', 0), category=r.get('category'))
+            category=r.get('category'),
+            takes=r.get('takes', BUTTON), invert=r.get('invert', False),
+            find=r.get('find'), rests=r.get('rests'),
+            # An overlay sets these too, so which of the two this is gets
+            # written down: `forget_wishes` has to tell them apart and
+            # `takes` is not the difference.
+            device=r.get('device'), prefer=r.get('prefer'))
+        need.from_file = {f: r[f] for f in ('device', 'prefer', 'find')
+                          if r.get(f)}
         for flag in TOLD:
             setattr(need, flag, r.get(flag, False))
         out.append(need)
@@ -676,15 +838,25 @@ def dump_assignments(needs):
         if not n.assignment:
             continue
         row = {'what': n.what}
-        for field in ('role', 'control', 'button', 'buttons', 'how'):
+        # `axis` where a button row says `button`: which part of the
+        # control it landed on, in the namespace that control uses.
+        for field in ('role', 'control', 'button', 'buttons', 'axis', 'how'):
             if n.assignment.get(field) is not None:
                 row[field] = n.assignment[field]
+        # Which way round you left it. Also in the needs file, as the
+        # game's own default, and this one wins: it is your decision
+        # about your wrist, and the other is what the game shipped.
+        if n.takes == AXIS and n.invert:
+            row['invert'] = True
         out.append(row)
     return out
 
 
-def load_assignments(directory, filename, needs):
-    """Put back what sits where, if anything has been written yet.
+
+
+
+def _answers_file(directory, filename):
+    """What the answers file holds, or None if nothing is written yet.
 
     A missing file is not a fault: a game somebody has planned but never
     saved has no answers on disk, and the allocator is about to produce
@@ -694,9 +866,18 @@ def load_assignments(directory, filename, needs):
     """
     path = os.path.join(directory, filename)
     if not filename or not os.path.exists(path):
-        return 0
+        return None
     with open(path, encoding='utf-8') as f:
-        return read_assignments(json.load(f).get('binds', []), needs)
+        return json.load(f)
+
+
+
+def load_assignments(directory, filename, needs):
+    """Put back what sits where, if anything has been written yet."""
+    got = _answers_file(directory, filename)
+    if got is None:
+        return 0
+    return read_assignments(got.get('binds', []), needs)
 
 
 def save_assignments(directory, filename, needs):
@@ -714,18 +895,34 @@ def read_assignments(rows, needs):
     `dump_assignments`. A row
     naming a function the game no longer has is dropped with a word -- the
     quiet alternative is a file that keeps growing graves.
+
+    Paired by name AND by order within a name, because a name is not
+    unique: MSFS asks for `KEY_BRAKES` twice, once for the aeroplane and
+    once for the helicopter, and keying on the name alone gave the second
+    one the first one's answer.
     """
-    at = {n.what: n for n in needs}
+    at = {}
+    for n in needs:
+        at.setdefault(n.what, []).append(n)
+    taken = collections.Counter()
     kept = 0
     for row in rows:
         if row.get('how') == SOLVED:
             continue
-        need = at.get(row['what'])
-        if need is None:
-            print(f'!! {row["what"]!r} is not a function this game has any '
-                  'more; dropping where it used to sit', file=sys.stderr)
+        same = at.get(row['what']) or []
+        i = taken[row['what']]
+        taken[row['what']] += 1
+        if i >= len(same):
+            if not i:
+                print(f'!! {row["what"]!r} is not a function of this game '
+                      'any more. This drops the control it sat on.',
+                      file=sys.stderr)
             continue
-        need.assignment = {k: v for k, v in row.items() if k != 'what'}
+        need = same[i]
+        need.assignment = {k: v for k, v in row.items()
+                           if k not in ('what', 'invert')}
+        if need.takes == AXIS and 'invert' in row:
+            need.invert = bool(row['invert'])
         kept += 1
     return kept
 
@@ -740,6 +937,38 @@ def directional(ctrl):
                for b in ctrl.bindable_buttons)
 
 
+def on_buttons(need, ctrl):
+    """[button] for a need that names its directions, or None if this
+    control has not got one of the ones it named.
+
+    `need.on` may name some and leave others None: a DCS hat family often
+    has two members whose direction the module's prose makes legible and
+    two it does not. The named ones are found first, so a nameless one
+    cannot take the button a named one wanted, and the gaps are then
+    filled from what is left in press order.
+    """
+    order = list(ctrl.buttons)
+    if ctrl.push is not None and need.push is None:
+        order.append(ctrl.push)
+    got: list = [None] * len(need.on)
+    for i, want in enumerate(need.on):
+        if want is None:
+            continue
+        names = SAME_WAY.get(want, (want,))
+        hit = next((b for b in order
+                    if ctrl.direction(b) in names and b not in got), None)
+        if hit is None:
+            return None
+        got[i] = hit
+    spare = [b for b in order if b not in got]
+    for i, b in enumerate(got):
+        if b is None:
+            if not spare:
+                return None
+            got[i] = spare.pop(0)
+    return got
+
+
 def satisfies_on(need, ctrl):
     """Can this control put each binding on the direction the need names?
 
@@ -749,20 +978,7 @@ def satisfies_on(need, ctrl):
     position selector, whose positions are '1'..'5' and are not directions at
     all, and Elite's panel focus went onto a switch that HOLDS its position.
     """
-    if not need.on:
-        return True
-    order = list(ctrl.buttons)
-    if ctrl.push is not None and need.push is None:
-        order.append(ctrl.push)
-    picked = []
-    for want in need.on:
-        names = SAME_WAY.get(want, (want,))
-        hit = next((b for b in order
-                    if ctrl.direction(b) in names and b not in picked), None)
-        if hit is None:
-            return False
-        picked.append(hit)
-    return True
+    return not need.on or on_buttons(need, ctrl) is not None
 
 
 def slots_for(need, ctrl):
@@ -780,7 +996,13 @@ def slots_for(need, ctrl):
     control agrees about, and `asked for back; this control calls it
     aft` where the two words mean one direction and the table above says
     so. Naming the rule that ran is not an answer to which button.
+
+    An axis need has no buttons to pick from: which axis of the control
+    it goes on is resolved against the device, which this cannot see, so
+    `put` is told the answer and never asks.
     """
+    if need.takes == AXIS:
+        return []
     order = list(ctrl.buttons)
     if ctrl.push is not None and need.push is None:
         order.append(ctrl.push)
@@ -793,15 +1015,8 @@ def slots_for(need, ctrl):
             and ctrl.push is not None and len(ctrl.bindable_buttons) > 1):
         return [ctrl.push]
     if need.on:
-        picked = []
-        for want in need.on:
-            names = SAME_WAY.get(want, (want,))
-            hit = next((b for b in order
-                        if ctrl.direction(b) in names and b not in picked), None)
-            if hit is None:
-                break
-            picked.append(hit)
-        if len(picked) == len(need.on):
+        picked = on_buttons(need, ctrl)
+        if picked is not None:
             return picked
     return order[:need.slots]
 
@@ -816,40 +1031,62 @@ def slots_for(need, ctrl):
 #: Every one is held to the file by `tests/test_scoring.py`, both ways: a
 #: name with no predicate is a weight nobody applies, and a predicate no
 #: name reaches is a rule left behind in the code.
+#: Every one takes the `_Run` and nothing else, which is the same
+#: signature `REFUSE` has: what a term may read and what a gate may read
+#: are the same list, and two spellings of one argument list is one
+#: spelling too many. `run.axis` is the candidate lever where the need
+#: takes one and None where it takes buttons -- a condition about a lever
+#: cannot be written against the control, because three of the stick's
+#: axes belong to one control and only one of them is pitch.
 WHEN = {
-    'always': lambda c, n, r, t: True,
+    'always': lambda x: True,
     # The reach term rewards the FURTHEST control that still does the job,
     # because that leaves the near ones for something more urgent. An
     # unmeasured control must not collect that: nobody knows it is far,
     # and paying it for distance nobody measured is how it beat a thumb
     # button somebody had measured.
-    'measured': lambda c, n, r, t: c.tier is not None,
-    'pinned': lambda c, n, r, t: bool(n.prefer) and n.prefer == c.label,
+    'measured': lambda x: x.measured,
+    'pinned': lambda x: bool(x.need.prefer) and x.need.prefer == x.ctrl.label,
     # Where you last accepted it. The layout is a thing you learn with
     # your hands, so it is worth points for its own sake: without this,
     # anything better that came free took it, and moving ONE binding by
     # hand re-let 21 of X4's 32 because every other decision was made
     # afresh against a board that had shifted.
-    'stayed': lambda c, n, r, t: (bool(n.assignment)
-                                  and n.assignment.get('role') == r
-                                  and n.assignment.get('control') == c.id),
-    'device_matches': lambda c, n, r, t: n.device == r,
-    'device_differs': lambda c, n, r, t: (bool(n.device)
-                                         and n.device != r),
-    'exact_shape': lambda c, n, r, t: c.kind == n.first_shape,
-    'has_click': lambda c, n, r, t: n.push is not None and c.push is not None,
-    'directions_differ': lambda c, n, r, t: (not satisfies_on(n, c)
-                                             and directional(c)),
-    'no_directions': lambda c, n, r, t: (not satisfies_on(n, c)
-                                         and not directional(c)),
+    'stayed': lambda x: (bool(x.need.assignment)
+                         and x.need.assignment.get('role') == x.role
+                         and x.need.assignment.get('control') == x.ctrl.id),
+    # Per axis: the map answers it about the lever, not about the control
+    # carrying it, so there is nothing to ask of a button need.
+    'coupled': lambda x: x.axis is not None and not x.axis.independent,
+    'device_matches': lambda x: x.need.device == x.role,
+    'device_differs': lambda x: (bool(x.need.device)
+                                 and x.need.device != x.role),
+    'exact_shape': lambda x: x.ctrl.kind == x.need.first_shape,
+    'has_click': lambda x: (x.need.push is not None
+                            and x.ctrl.push is not None),
+    'directions_differ': lambda x: (not satisfies_on(x.need, x.ctrl)
+                                    and directional(x.ctrl)),
+    'no_directions': lambda x: (not satisfies_on(x.need, x.ctrl)
+                                and not directional(x.ctrl)),
+    # Nothing is on this control yet, so taking a button of it breaks it
+    # open. Only the borrow pass can tell: every other pass takes whole
+    # controls, so for them the answer is always yes and says nothing.
+    'untouched': lambda x: x.opening,
 }
 
 #: What a weight is multiplied by, where it is multiplied by anything.
 PER = {
-    'tier': lambda c, n, r, t: t,
-    'spare': lambda c, n, r, t: len(c.bindable_buttons) - n.wanted,
-    'place kept': lambda c, n, r, t: place_wishes(c, n)[0],
-    'place broken': lambda c, n, r, t: place_wishes(c, n)[1],
+    'tier': lambda x: x.tier,
+    'spare': lambda x: len(x.ctrl.bindable_buttons) - x.need.wanted,
+    'place kept': lambda x: place_wishes(x.ctrl, x.need)[0],
+    'place broken': lambda x: place_wishes(x.ctrl, x.need)[1],
+    # The reach term's polarity, upside down. The ordinary passes reward
+    # the furthest control that still does the job, because something more
+    # urgent may still be coming; nothing is coming after the borrow pass,
+    # so there the best of what is left should win. A control nobody
+    # measured sits past the furthest band and so comes out negative,
+    # which is the answer: it is not known to be good.
+    'closeness': lambda x: x.furthest - x.tier,
 }
 
 def _adder(parts):
@@ -871,7 +1108,7 @@ def _adder(parts):
     return part
 
 
-def _facts(rules, ctrl, need, role, part, named=None):
+def _facts(rules, ctrl, need, role, part, named=None, axis=None):
     """What the map measured about this control, weighed against the need.
 
     Not in `WHEN`, because none of these is a predicate somebody wrote: a
@@ -900,10 +1137,29 @@ def _facts(rules, ctrl, need, role, part, named=None):
     for fact in rules['fact']:
         if fact.get('refuses'):
             continue
-        told = getattr(ctrl, fact['reads'])
+        # A row says which thing it reads. What the map measured about a
+        # LEVER is on the axis, not on the control carrying it: three of
+        # the stick's axes are one control and they rest differently.
+        where = axis if fact.get('on') == 'axis' else ctrl
+        if where is None:
+            continue
+        told = getattr(where, fact['reads'], None)
         if told is None:
             continue
-        if not getattr(need, fact['asked']):
+        want = getattr(need, fact['asked'])
+        if not want:
+            continue
+        if 'same' in fact:
+            # The fourth shape: a closed field the need names a value of.
+            # `rest` is the map's own word for where an axis sits when you
+            # let go, and the need says which it has to be -- pitch has to
+            # spring back, a throttle has to stay.
+            hit = told == want
+            delta = fact['same'] if hit else fact['other']
+            words = fact['says'] if hit else fact['not']
+            if named is not None and delta:
+                named.append((fact['reads'], delta, words))
+            s += part(delta, words)
             continue
         if 'scale' in fact:
             # A 0/1/2 answer pays per step. `below` charges the SHORTFALL
@@ -951,7 +1207,16 @@ REFUSE = {
     'unusable': lambda x: x.usable is not None and not x.usable(x.role,
                                                                 x.ctrl),
     'wrong_shape': lambda x: x.ctrl.kind not in x.need.shapes,
-    'too_few': lambda x: len(x.ctrl.bindable_buttons) < x.need.wanted,
+    # Buttons, for a need that takes buttons. An axis need takes one axis
+    # and the candidate IS an axis, so there is nothing to count here: a
+    # lever has no buttons at all and would be refused for every one.
+    'too_few': lambda x: (x.axis is None
+                          and len(x.ctrl.bindable_buttons) < x.need.wanted),
+    # A mini-hat wired to an axis reports its extremes and nothing in
+    # between, so it is a two-way switch pretending to be an axis:
+    # binding pitch to it gives full nose-up, full nose-down and no
+    # flying. Measured, like every other gate: `None` is an unswept axis.
+    'stepped': lambda x: x.axis is not None and x.axis.stepped is True,
     # Only where somebody has measured. How far a control is is what this
     # gate is about, and on a desk nobody has walked the fingers on there
     # is no answer to refuse it with -- refusing anyway places nothing at
@@ -964,21 +1229,52 @@ REFUSE = {
 
 
 class _Run:
-    """What a gate reads besides the control and the need."""
+    """What a gate or a term reads besides the control and the need."""
 
     __slots__ = ('ctrl', 'need', 'role', 'tier', 'measured', 'floor',
-                 'ceiling', 'lowest', 'usable')
+                 'ceiling', 'lowest', 'usable', 'axis', 'furthest',
+                 'borrowed', 'opening')
 
     def __init__(self, ctrl, need, role, tier, floor, ceiling, lowest,
-                 usable):
-        self.ctrl, self.need, self.role = ctrl, need, role
+                 usable, axis=None, furthest=0, borrowed=False,
+                 opening=False):
+        self.ctrl, self.need, self.role, self.axis = ctrl, need, role, axis
         self.tier, self.floor = tier, floor
         self.measured = ctrl.tier is not None
         self.ceiling, self.lowest, self.usable = ceiling, lowest, usable
+        #: the furthest tier any band will take, which is what the borrow
+        #: pass measures closeness against
+        self.furthest = furthest
+        #: which pass is asking, and -- for the one that lends a button --
+        #: whether this control has anything on it yet
+        self.borrowed, self.opening = borrowed, opening
+
+
+#: The two ways a control can be had, which is what a row of the table may
+#: narrow itself to. Four of the five passes hand over a whole control and
+#: score it the same way; the fifth lends one button of a control
+#: something else owns, and scores that its own way.
+PLACED, BORROWED = 'placed', 'borrowed'
+
+
+def in_pass(row, borrowed):
+    """Does this row of the table apply to the pass now running?
+
+    `pass` is `placed`, `borrowed`, or absent for both. Borrowing is
+    scored on its own terms and always was -- it is the last pass, so
+    nothing better is coming and the polarity of reach flips, and the
+    control already belongs to something else, so its shape is not the
+    question. All of that used to be eleven lines of arithmetic in
+    `allocate` with its own hand-rebuilt copy of the words. It is the
+    same table now, with a column saying which pass each row is for.
+    """
+    want = row.get('pass')
+    return want is None or want == (BORROWED if borrowed else PLACED)
 
 
 def score(ctrl, need, role, floor=True, usable=None, parts=None,
-          rules=None, named=None):
+          rules=None, named=None, axis=None, borrowed=False,
+          opening=False):
     """How well a control plays this part. None means it cannot.
 
     The weights and their words come from `scoring.toml`; what each
@@ -996,6 +1292,14 @@ def score(ctrl, need, role, floor=True, usable=None, parts=None,
     A term worth nothing is left out rather than listed as zero: a screen
     saying `0  suits gunnery` reads as a fact about the control, and it is
     the absence of one.
+
+    `borrowed` says the last pass is asking -- it lends a need one spare
+    button of a control something else owns -- and the table's `pass`
+    column says which rows that pass uses. `opening` is whether this
+    control has anything on it yet, which only that pass can answer and
+    only it charges for. The whole of it used to be arithmetic in
+    `allocate`, written twice: once to compare and once, by hand, to
+    explain.
     """
     rules = rules or RULES
     part = _adder(parts)
@@ -1027,18 +1331,21 @@ def score(ctrl, need, role, floor=True, usable=None, parts=None,
     if not floor and need.wanted > 1:
         ceiling = max(table.values())
     run = _Run(ctrl, need, role, tier, floor, ceiling,
-               rules['band'][need.urgency]['takes'][0], usable)
+               rules['band'][need.urgency]['takes'][0], usable, axis,
+               furthest=max(table.values()), borrowed=borrowed,
+               opening=opening)
 
     # The order is here rather than in the file because it is load-bearing
     # and has a story. A pin outranks the reach tables, not just the
-    # ranking, so it is taken BETWEEN the gates that are about the control
+    # ordering, so it is taken BETWEEN the gates that are about the control
     # and the one that is about the pass: `prefer` used to be a bonus
     # applied after the ceiling, so a pinned control the ceiling excluded
     # scored nothing and the bonus never ran -- BMS's pinky shift scored
     # 721 with a loose ceiling and nothing with a tight one, and moved
     # silently to a control you cannot hold as a modifier.
-    for name in ('unusable', 'wrong_shape', 'too_few'):
-        if REFUSE[name](run):
+    gates = {g['when']: g for g in rules['gate']}
+    for name in ('unusable', 'wrong_shape', 'too_few', 'stepped'):
+        if in_pass(gates[name], borrowed) and REFUSE[name](run):
             return None
     # With the shape gates rather than the pass gate, and so BEFORE the pin,
     # which stops. A pin is an opinion about which control is right and this
@@ -1048,23 +1355,46 @@ def score(ctrl, need, role, floor=True, usable=None, parts=None,
     if _fact_refuses(rules, ctrl, need):
         return None
     for term in rules['term']:
-        if term.get('stops') and WHEN[term['when']](ctrl, need, role, tier):
+        if (term.get('stops') and for_this(term, need)
+                and in_pass(term, borrowed) and WHEN[term['when']](run)):
             said = _says(term, ctrl, need, role, 1)
             mark(term['name'], term['weight'], said)
             return part(term['weight'], said)
-    if REFUSE['out_of_reach'](run):
+    # Not for an axis. The reach limits are about competing for the homes
+    # near your hand -- a band's ceiling keeps a cold-start switch off the
+    # thumb, its floor keeps it off a thumb position something urgent may
+    # still need. Nothing competes for levers: there is one pitch axis and
+    # it is where it is, so a ceiling would refuse the only candidate.
+    if axis is None and REFUSE['out_of_reach'](run):
         return None
 
     s = 0
     for term in rules['term']:
-        if term.get('stops') or not WHEN[term['when']](ctrl, need, role,
-                                                       tier):
+        if (term.get('stops') or not for_this(term, need)
+                or not in_pass(term, borrowed)):
             continue
-        n = PER[term['per']](ctrl, need, role, tier) if 'per' in term else 1
+        if not WHEN[term['when']](run):
+            continue
+        n = PER[term['per']](run) if 'per' in term else 1
         said = _says(term, ctrl, need, role, n)
         mark(term['name'], term['weight'] * n, said)
         s += part(term['weight'] * n, said)
-    return s + _facts(rules, ctrl, need, role, part, named=named)
+    return s + _facts(rules, ctrl, need, role, part, named=named,
+                      axis=axis)
+
+
+def for_this(term, need):
+    """Does this term apply to a need that takes what this one takes?
+
+    Three terms are about buttons and nothing else, and they leaked into
+    an axis: `reach` paid a lever +12 for being far from the hand, which
+    is a competition no lever is in, and `spare` paid +4 for a control
+    with MINUS one spare button, because a lever has none and the need
+    wanted one. Said in the file rather than in the condition, so a term
+    nobody has thought about applies to both and says so by being silent.
+    """
+    want = term.get('takes')
+    return want is None or want == need.takes
 
 
 def _says(term, ctrl, need, role, n):
@@ -1092,8 +1422,12 @@ class Reason:
         floored   the ordinary pass, reach floor and ceiling both honoured
         relaxed   nothing legal was left, so the ceiling came off
         borrowed  a spare button on a control something else owns
-        claimed   a planner put it here outright, past the allocator
         yours     a hand, on the review screen
+
+    There was a sixth, `claimed`: a planner putting a placement here
+    itself, past the allocator. DCS did it for a trigger two commands
+    both wanted, because naming one BUTTON of a control was something no
+    need could ask for. It can: `prefer` and `on` together.
 
     `parts` is `score()`'s own arithmetic: every term that fired, with what
     it was for. They add up to `points`, and a test holds them to it --
@@ -1140,10 +1474,12 @@ class Reason:
 #: absent on purpose: it is the ordinary case, and a line announcing that
 #: nothing unusual happened is a line you learn to skip past.
 CAME_BY = {
-    'relaxed': 'reached past the floor',
-    'borrowed': 'borrowed a spare button',
-    'claimed': 'claimed, not allocated',
-    'yours': 'assigned by you',
+    'relaxed': 'it reached past the floor',
+    'borrowed': 'it borrowed a spare button',
+    'yours': 'you assigned it',
+    # Not scored and not compared: the need named the input and the map
+    # had exactly one of it.
+    'named': 'it asked for this one by name',
 }
 
 
@@ -1203,7 +1539,7 @@ def what_differs(need, mine, theirs, rules=None):
     return sorted(out)
 
 
-def why_bits(p, out_of=None):
+def why_bits(p):
     """[str] -- the account of one placement, in the order a reader reads it.
 
     Five planners and one proposer had each grown their own copy of this --
@@ -1211,26 +1547,18 @@ def why_bits(p, out_of=None):
     reads the same fields: which band, whether the floor held, what was
     pinned, what a human wrote down. One paragraph written six times.
 
-    What stays a game's own is what only it knows: War Thunder's factory
-    count, BMS's DX number, X4's slot. Those are appended by the game
-    rather than reassembled here, which is the whole difference between a
-    shared skeleton and a sixth copy.
+    What stays a game's own is what only it knows: BMS's DX number, X4's
+    slot. Those are appended by the game rather than reassembled here,
+    which is the whole difference between a shared skeleton and a sixth
+    copy.
 
-    `out_of` is what the factory count is a count OF, which is the game's
-    to say: Elite ships 13 presets, BMS 22 vendor profiles, War Thunder 29.
-    The number is a shared field; its denominator is not, and six games
-    spelling it their own way was six spellings of one sentence.
-
-    Degrades rather than raises when there is no `Reason`. A planner may
-    build a `Placement` itself -- DCS does -- and the band is a fact about
-    the need rather than about the run that placed it.
+    Degrades rather than raises when there is no `Reason`: the band is a
+    fact about the need rather than about the run that placed it, so
+    there is something to say either way. DCS used to build a
+    `Placement` itself and this is what let that read.
     """
     n, r = p.need, p.why
     out = [URGENCY_NAME[n.urgency]]
-    if n.rank:
-        out.append(f'{n.rank}/{out_of} factory profiles bind it' if out_of
-                   else f'{n.rank} factory profile'
-                        + ('' if n.rank == 1 else 's') + ' bind it')
     if reach_said(p.ctrl):
         # Printed every time, not only for the reflex ones: it is what the
         # floor acts on, so it is what a disputed placement turns on.
@@ -1276,6 +1604,14 @@ def hand_out(slots, role, why):
 #: all and only tells the screen you have looked. See `Need.assignment`.
 CHOSE, ACCEPTED = 'chose', 'accepted'
 
+#: And the third thing you can decide, which is that this is to stay
+#: empty. It carries no control, which is the whole point: the file could
+#: say where a row sits and that you agreed, and had no way at all to say
+#: "I took this off". So `x` cleared the screen, `s` answered that nothing
+#: had changed -- truthfully, about the file -- and the next open proposed
+#: the row straight back.
+CLEARED = 'cleared'
+
 
 def assigned_at(pool, want):
     """Where in the pool the control you chose is, or None if it is gone.
@@ -1311,7 +1647,7 @@ def honours_press(need, ctrl, button):
 
 
 def put(need, role, ctrl, why, button=None, points: int | None = 0,
-        pinned=()):
+        pinned=(), axis=None):
     """The placement: which button takes which binding, and everyone told.
 
     Two callers had a copy -- the allocator's passes and the review
@@ -1331,6 +1667,16 @@ def put(need, role, ctrl, why, button=None, points: int | None = 0,
     captures a direction at a time and had its own file to keep them in;
     this is that, where every game can reach it.
     """
+    if need.takes == AXIS:
+        # `axis` is the resolved index: a lever is not chosen, it is
+        # named, and whoever named it looked at the device. One slot,
+        # because an axis need binds one thing -- `OnAxis` so that the
+        # index can never be mistaken for a button number.
+        slots = []
+        if need.bindings and axis is not None:
+            slots = [(OnAxis(axis), need.bindings[0])]
+        hand_out(slots, role, why)
+        return Placement(need, role, ctrl, slots, points, why)
     buttons = slots_for(need, ctrl)
     if button is not None and honours_press(need, ctrl, button):
         buttons = [button]
@@ -1358,10 +1704,10 @@ class Placement:
         #: [(button index, binding)], plus (push, need.push) when there is one
         self.slots = slots
         self.points = points
-        #: a `Reason`. Defaulted rather than required because a planner may
-        #: build a Placement itself -- DCS does, for its trigger claims --
-        #: and a missing reason should read as "nobody said", not crash a
-        #: screen.
+        #: a `Reason`. Defaulted rather than required: a missing one
+        #: should read as "nobody said" rather than crash a screen. DCS
+        #: used to build a Placement itself, for a trigger two commands
+        #: both wanted, and that is what it left out.
         self.why = why
 
     def __iter__(self):
@@ -1389,35 +1735,44 @@ class Layout:
 
         def build():
             devs = devmap.by_role('stick', 'throttle')
-            return Layout(devs, *allocate(NEEDS, devs), axes=axis_plan(devs))
+            return Layout(devs, *allocate(NEEDS, devs))
     """
 
-    def __init__(self, devices, placed, unplaced, free, axes=()):
+    def __init__(self, devices, placed, unplaced, free):
         #: {role: Device}, from devmap.by_role
         self.devices = devices
-        #: [Placement], most urgent first
+        #: [Placement], most urgent first -- buttons and axes alike. One
+        #: list: an axis placement is a placement. There used to be two,
+        #: and the second was the reason everything downstream had two
+        #: code paths.
         self.placed = list(placed)
+        #: The two views a FORMAT needs, where it spells the two kinds of
+        #: input differently -- DCS has `axisDiffs` and `keyDiffs`, X4 has
+        #: `INPUT_SOURCE_JOYAXES` and `INPUT_SOURCE_JOYBUTTONS`. That is a
+        #: fact about the file being written, so the split belongs to the
+        #: writer; what the split IS belongs here, once.
+        self.on_axes = [p for p in self.placed if p.need.takes == AXIS]
+        self.on_buttons = [p for p in self.placed
+                           if p.need.takes != AXIS]
         #: [Need] that found no home
         self.unplaced = list(unplaced)
         #: [(role, control)] with every button still spare
         self.free = list(free)
-        #: game-shaped; the core counts it and passes it on, nothing more
-        self.axes = list(axes)
 
     def __iter__(self) -> typing.Iterator[typing.Any]:
-        """(devices, placed, unplaced, free, axes), so a caller may still
-        unpack it into five names.
+        """(devices, placed, unplaced, free), so a caller may still
+        unpack it into four names.
 
-        `Any` because an iterator has one element type and these five are
+        `Any` because an iterator has one element type and these four are
         not one type; a checker otherwise joins them and then objects to
         whichever name is used for what it actually is.
         """
-        return iter((self.devices, self.placed, self.unplaced,
-                     self.free, self.axes))
+        return iter((self.devices, self.placed, self.unplaced, self.free))
 
     def __repr__(self):
-        return (f'<Layout {len(self.placed)} placed, {len(self.unplaced)} '
-                f'unplaced, {len(self.free)} free, {len(self.axes)} axes>')
+        return (f'<Layout {len(self.placed)} placed '
+                f'({len(self.on_axes)} on axes), {len(self.unplaced)} '
+                f'unplaced, {len(self.free)} free>')
 
     def unmeasured(self):
         """(controls with no measured reach, controls) on this desk.
@@ -1449,8 +1804,7 @@ class Layout:
         What a reviewer hands a writer: everything else about the plan is
         unchanged, and only the bindings that were accepted go in.
         """
-        return Layout(self.devices, placed, self.unplaced, self.free,
-                      self.axes)
+        return Layout(self.devices, placed, self.unplaced, self.free)
 
     def by_device(self):
         """[(role, [Placement])] -- placements grouped for display, in the
@@ -1468,13 +1822,16 @@ class Layout:
 #: allocator had this as a paragraph and a paragraph does not move when
 #: the key does: it still said a pin went first long after what you chose
 #: by hand started outranking one, and stopped at the factory count after
-#: a fourth step was added under it.
+#: a fourth step was added under it. That count is gone -- it was how many
+#: of the game's own HOTAS profiles bound the thing, which is a fact about
+#: other people's hardware -- and the name now breaks every tie a band
+#: leaves.
 ORDERED_BY = (
-    ('what you put there yourself', 'the control leaves the pool'),
-    ('a control you pinned by name', 'offered its pin and nothing else'),
-    ('how soon you reach for it', 'the bands above'),
-    ('how many of the game\'s own profiles bind it', 'within a band only'),
-    ('its name', 'so the file\'s line order decides nothing'),
+    ('what you put there yourself', 'The control leaves the pool.'),
+    ('a control you pinned by name', 'It is offered the pin and nothing '
+                                     'else.'),
+    ('how soon you reach for it', 'The bands above decide.'),
+    ('its name', 'The line order of the file decides nothing.'),
 )
 
 #: The solver this run uses, which `--solver` sets once at startup. A
@@ -1496,7 +1853,7 @@ OVERLAY: typing.Any = None
 
 
 def allocate(needs, devices, usable=None, rules=None, solver=None,
-             overlay=None):
+             overlay=None, finds=None):
     """(placements, unplaced, free), most urgent first.
 
     Two passes. The first keeps the reach floor: something you do on the ramp
@@ -1533,7 +1890,6 @@ def allocate(needs, devices, usable=None, rules=None, solver=None,
     pairs = overlay.bound(needs) if overlay is not None else []
     who = solver or SOLVER or csolvers.best()
     top = {n: b['takes'][1] for n, b in enumerate(rules['band'])}
-    low = {n: b['takes'][0] for n, b in enumerate(rules['band'])}
     pool = [(role, c) for role, d in sorted(devices.items())
             for c in d.groups(bindable=True)]
     taken, placed = set(), []
@@ -1555,32 +1911,167 @@ def allocate(needs, devices, usable=None, rules=None, solver=None,
     # hand-placed binding was rebuilt from the planner on the next open,
     # so an evening of walking the list came back purple and in the
     # planner's order.
-    #: pool index -> the buttons of it that hand-placed needs have taken.
-    #: A control is only `taken` once every button of it is spoken for.
+    # Before that: the ones that are NAMED rather than chosen. An
+    # aircraft's pitch axis is the stick's pitch axis on every desk there
+    # is, so there is nothing to compare and nothing to score -- the need
+    # says `device stick, shape stick, on ('y',)` and the map has exactly
+    # one of those. This is the whole of what used to be a second model
+    # of the program: its own object, its own resolver, its own file
+    # section, its own rows and its own branch of every key.
+    #
+    # It takes no control out of play. Two functions on one axis is the
+    # normal case, not a conflict -- X4 steers with the stick's y and
+    # walks with it, Elite flies and drives with the same lever, War
+    # Thunder has an aeroplane and a helicopter on every one of them --
+    # and a control's axes do not stop its buttons being free.
+    # What you took off, which no pass may hand back. `x` on the review
+    # screen writes `how: cleared` and nothing else, so this is the one
+    # decision of yours that names no control -- and it has to be read
+    # before any pass, because every one of them would otherwise fill the
+    # gap it made. The row comes out unplaced, which is what it is.
+    empty = {i for i, n in enumerate(needs)
+             if (n.assignment or {}).get('how') == CLEARED}
+    named, nowhere = [], []
+    for i, need in enumerate(needs):
+        if need.takes == AXIS and i not in empty:
+            named.append(i)
+    #: (role, coupling group, context) -> the need sitting there. An axis
+    #: is exclusive, and the thing it is exclusive WITHIN is a context:
+    #: X4 steers with the stick's y axis and walks with it, Elite flies
+    #: and drives with the same lever, War Thunder has an aeroplane and a
+    #: helicopter on every one. You are never doing both at once, so
+    #: sharing there is the point rather than a clash.
+    #:
+    #: The group, not the axis, because two axes that travel together are
+    #: ONE input: the VMAX's throttle levers move as a pair until you
+    #: release the catch, so a function on the second one moves with
+    #: whatever is on the first. Counting them separately put MSFS's prop
+    #: pitch on the twin of its own throttle.
+    held = {}
+    # Best fit first, so the need a lever suits most gets it and the next
+    # one takes what is left: zoom wants a dial that rests at zero and
+    # the antenna only wants one that stays put, so zoom has the better
+    # claim on the one dial that rests at zero. Ties keep the file's
+    # order, which is the only thing here that is not a measurement.
+    #
+    # Worked out before anything is placed, and the RESULT is put back
+    # into the file's order below: the order a pass happens to visit
+    # things in has no business reaching the layout, and letting it
+    # rewrote every game's profile with the same bindings shuffled.
+    def fits_best(i):
+        got = axes_for(needs[i], devices, usable=usable, rules=rules)
+        return -(got[0][0] or 0) if got else 1
+    first = len(placed)
+    for i in sorted(named, key=fits_best):
+        need = needs[i]
+        # A game may NAME the control, and then the points pick the axis
+        # within it. It is asked first and may answer None: which command
+        # is pitch is the module's own vocabulary, which the core cannot
+        # read -- but which LEVER pitch goes on is a comparison, and that
+        # is not the game's business.
+        said = finds(need, devices) if need.find and finds else None
+        ran = axes_for(need, devices, usable=usable, rules=rules)
+        if said is not None:
+            _role, ctrl, axis = said
+            if axis is not None:
+                ran = [(None, _role, ctrl, axis)]
+            else:
+                ran = [x for x in ran if x[2] is ctrl]
+        if not ran:
+            nowhere.append(i)
+            # Quiet when the GAME answered. A search that comes back
+            # empty is the game's own decision, and it says so in its own
+            # words. Where the ask was the core's own and the desk answers
+            # none of it, nobody else is going to say so.
+            if not need.find:
+                print(f'!! nothing on this desk answers {need.what!r}. '
+                      'It asks for '
+                      f'{need.prefer or need.first_shape}'
+                      + (f' {need.on[0]}' if need.on else '') + '.',
+                      file=sys.stderr)
+            continue
+        where = context_of(need)
+        free = [x for x in ran
+                if (x[1], group_of(devices[x[1]], x[3]), where) not in held]
+        # Nothing free in this context: share rather than go homeless.
+        # War Thunder brakes both wheels off one lever because the desk
+        # has one brake lever, and splitting them across two would be a
+        # worse answer than the one it has.
+        points, role, ctrl, axis = (free or ran)[0]
+        held[(role, group_of(devices[role], axis), where)] = need
+        terms = []
+        if points is not None:
+            score(ctrl, need, role, parts=terms, usable=usable, rules=rules,
+                  axis=axis)
+        placed.append(put(need, role, ctrl,
+                          Reason('named' if points is None else 'floored',
+                                 points=points, parts=terms,
+                                 tier=reach_tier(ctrl)),
+                          axis=axis.index, points=points))
+        sat[id(need)] = ctrl
+    mine = {id(n): i for i, n in enumerate(needs)}
+    placed[first:] = sorted(placed[first:], key=lambda p: mine[id(p.need)])
+    named = set(named)
+
+    #: pool index -> the buttons of it that needs naming both a control
+    #: and a button have taken. A control is only `taken` once every
+    #: button of it is spoken for, which is what lets two of them share
+    #: one: a four-way hat carrying four separate commands is how DCS's
+    #: own vocabulary names a hat, and a trigger's two stages are two
+    #: commands on one control by construction.
     spoken = {}
     chose, orphan = set(), []
     for i, need in enumerate(needs):
-        if not need.assignment \
-                or need.assignment.get('how') != CHOSE:
+        if i in named or i in empty:
             continue
-        j = assigned_at(pool, need.assignment)
+        # Two claims, one shape: a control named AND which of its buttons.
+        # Yours is an assignment; a game's is `prefer` with `on`, which is
+        # the only way to ask for ONE BUTTON of a control -- the scored
+        # passes hand over whole controls, so two needs could never share
+        # a trigger there. DCS built the placement by hand for exactly
+        # that, with a Reason of its own and 200 points chosen to look
+        # like a score.
+        yours = (need.assignment or {}).get('how') == CHOSE
+        said = bool(need.prefer) and bool(need.on)
+        if not (yours or said):
+            continue
+        j = (assigned_at(pool, need.assignment) if yours else
+             next((k for k, (_r, c) in enumerate(pool)
+                   if c.label == need.prefer), None))
+        if said and (j is None or not satisfies_on(need, pool[j][1])):
+            # Not an error here: the pin is read again by the scored
+            # passes, which say so in their own words and offer the need
+            # nothing else. The directions have to be THERE as well as the
+            # control -- without that `slots_for` falls back to press
+            # order, and a need that asked for the second stage of a
+            # trigger would take the first and say nothing.
+            continue
         if j is None:
             # Say it and leave the need empty. Quietly allocating it
             # somewhere else is the one thing this must not do: the whole
             # reason it is written down is that it does not move.
-            print(f'!! {need.what!r} is where you put it, on '
-                  f'{need.assignment.get("control")!r}, and this desk has '
-                  'no such control; leaving it unplaced rather than '
-                  'moving it',
+            print(f'!! you put {need.what!r} on '
+                  f'{need.assignment.get("control")!r}. This desk does not '
+                  'have that control. The row stays empty: nothing moves '
+                  'what you put down.',
                   file=sys.stderr)
             chose.add(i)
             orphan.append(i)
             continue
         role, ctrl = pool[j]
-        here = put(need, role, ctrl, Reason('yours'),
-                   button=need.assignment.get('button'),
-                   pinned=need.assignment.get('buttons') or ())
+        mine = need.assignment or {}
+        here = put(need, role, ctrl,
+                   Reason('yours' if yours else 'pinned'),
+                   button=mine.get('button') if yours else None,
+                   pinned=(mine.get('buttons') or ()) if yours else (),
+                   axis=mine.get('axis') if yours else None)
         clash = {b for b, _v in here.slots} & spoken.get(j, set())
+        if clash and said:
+            # Somebody else's already. Nothing is said and nothing is
+            # left empty: this is the game's opinion about where the
+            # thing goes, not yours, so it goes back in the queue and
+            # takes what the points give it.
+            continue
         if clash:
             # The BUTTONS, not the control. Two things you put by hand on
             # one hat -- a four-way carrying four separate commands, which
@@ -1590,7 +2081,7 @@ def allocate(needs, devices, usable=None, rules=None, solver=None,
             # time came back with one direction on it and three orphans.
             print(f'!! {need.what!r} and something else are both on '
                   f'{need.assignment.get("control")!r} button '
-                  f'{sorted(clash)[0]}; the first keeps it',
+                  f'{sorted(clash)[0]}. The first one keeps it.',
                   file=sys.stderr)
             chose.add(i)
             orphan.append(i)
@@ -1615,7 +2106,7 @@ def allocate(needs, devices, usable=None, rules=None, solver=None,
     #: already taken the control: BMS's pinky shift was pinned to the grip
     #: pinky button and still lost it to the landing lights, because they are
     #: touched on approach and it is not. An explicit choice has to outrank the
-    #: ordering as well as the ranking, or it is not a choice.
+    #: ordering, or it is not a choice.
     # `what` last, and it is load-bearing. Without it this is not a total
     # order, `sorted` is stable, and every tie falls back to the order the
     # needs happen to sit in the file -- so the layout was a function of
@@ -1625,9 +2116,11 @@ def allocate(needs, devices, usable=None, rules=None, solver=None,
     # open placed them differently. X4 came back with four rows purple
     # after a save that changed nothing but the order they were written
     # in. Nothing in a layout should turn on that.
-    order = sorted((i for i in range(len(needs)) if i not in chose),
+    order = sorted((i for i in range(len(needs))
+                    if i not in chose and i not in named
+                    and i not in empty),
                    key=lambda i: (needs[i].prefer is None, needs[i].urgency,
-                                  -needs[i].rank, needs[i].what))
+                                  needs[i].what))
 
     def offers(i, floor):
         """{pool index: points} -- where this need may go, and what each
@@ -1735,8 +2228,9 @@ def allocate(needs, devices, usable=None, rules=None, solver=None,
             if best is None and need.prefer and floor:
                 # it is pinned and the pin is not free: say so rather than
                 # quietly put it somewhere else and look like it worked
-                print(f'!! {need.what!r} is pinned to {need.prefer!r}, which is '
-                      f'not free; leaving it for the relaxed pass',
+                print(f'!! {need.what!r} is pinned to {need.prefer!r}. '
+                      'That control is not free. The relaxed try gets '
+                      'this row.',
                       file=sys.stderr)
                 left.append(i)
                 continue
@@ -1783,22 +2277,6 @@ def allocate(needs, devices, usable=None, rules=None, solver=None,
             continue
         best = None
         for j, (role, c) in enumerate(pool):
-            if usable is not None and not usable(role, c):
-                continue
-            if not low[need.urgency] <= reach_tier(c) <= top[need.urgency]:
-                # The floor as well as the ceiling, which this pass alone
-                # used to skip. `on the ramp` takes [2, 3], and the band's
-                # own note in scoring.toml says what the floor is for --
-                # "without it, something you do once with the canopy open
-                # grabs a thumb position the moment one is free". Every
-                # other pass honoured that; borrowing handed it a thumb
-                # anyway, and then paid it `+12` per tier for being CLOSE.
-                # X4's Pause and Cockpit menu sat on the hat that cycles
-                # weapon groups. No other band has a floor above 0, so
-                # nothing else can notice this.
-                continue
-            if _fact_refuses(rules, c, need):
-                continue
             if not allowed(need, c):
                 continue
             spare = [b for b in c.bindable_buttons
@@ -1819,29 +2297,18 @@ def allocate(needs, devices, usable=None, rules=None, solver=None,
             else:
                 button = (c.push if c.push is not None
                           and (role, c.push) not in occupied else spare[0])
-            # The main passes reward a HIGHER tier -- take the least precious
-            # control that still does the job, because something more urgent
-            # may still be coming. Nothing is coming here: borrowing is the
-            # last pass, so the polarity flips and a leftover need gets the
-            # BEST leftover. Rewarding tier here instead sent War Thunder's
-            # airbrake, bombs and sight stabilisation off the thumb onto the
-            # middle-finger hat for no gain to anybody. (DCS's own borrow pass,
-            # which this is lifted from, still has the old sign.)
-            s = 60 + 12 * (top[ON_THE_RAMP] - reach_tier(c))
-            s += 30 if need.device == role else 0
-            if j not in taken:
-                # Prefer borrowing a spare position over opening a control
-                # nothing has touched: four idle two-way rockers should not sit
-                # there while a cold-start switch goes homeless, but neither
-                # should one be broken open while a real spare exists.
-                s -= 15
-            # The whole table, not a subset. A fact is a property of the
-            # CONTROL, and a borrowed button sits on a control: whether you
-            # can hold it down does not become irrelevant because something
-            # else owns the rest of it. Called rather than copied, because
-            # the terms below are rebuilt by hand and a hand-kept copy of
-            # this would have to grow with every fact anybody adds.
-            s += _facts(rules, c, need, role, _adder(None))
+            # The same scorer as every other pass, told which pass it is.
+            # `scoring.toml` says what that changes -- the shape gate comes
+            # off, the reward for distance turns around -- and before this
+            # the answer was computed here instead: four numbers in source,
+            # with the reach floor and the ceiling checked by hand beside
+            # them, and the facts called for a sum nobody could see the
+            # parts of. The parts had to be rebuilt by hand for the screen
+            # and the two copies had to agree.
+            s = score(c, need, role, usable=usable, rules=rules,
+                      borrowed=True, opening=j not in taken)
+            if s is None:
+                continue
             if best is None or s > best[0]:
                 best = (s, role, c, button, j)
         if best is None:
@@ -1850,18 +2317,9 @@ def allocate(needs, devices, usable=None, rules=None, solver=None,
         _s, role, ctrl, button, j = best
         occupied.add((role, button))
         need.relaxed = True
-        # The same two-step as the main passes, except the sum is inline up
-        # there rather than in `score()`, so the terms are rebuilt here from
-        # what decided them. They still have to add up to `_s`.
-        terms = [(60, 'last pass; still free')]
-        lent = 12 * (top[ON_THE_RAMP] - reach_tier(ctrl))
-        if lent:
-            terms.append((lent, 'best of what was left'))
-        if need.device == role:
-            terms.append((30, f'on the {role}, as asked'))
-        if j not in taken:
-            terms.append((-15, 'opens an untouched control'))
-        _facts(rules, ctrl, need, role, _adder(terms))
+        terms = []
+        score(ctrl, need, role, usable=usable, rules=rules, parts=terms,
+              borrowed=True, opening=j not in taken)
         why = Reason('borrowed', points=_s, parts=terms,
                      tier=reach_tier(ctrl),
                      ceiling=top[need.urgency])
@@ -1874,10 +2332,19 @@ def allocate(needs, devices, usable=None, rules=None, solver=None,
     # the borrow pass above: borrowing it a spare button somewhere else is
     # moving it, which is the one thing writing the choice down was for.
     # It waits, empty, for you to say where it goes now.
-    still += orphan
+    still += orphan + nowhere + sorted(empty)
 
-    # Free means every button of it is free, not merely that no need chose it.
+    # Free means every INPUT of it is free, not merely that no need chose
+    # it -- and an axis is an input. The main stick has no buttons at all,
+    # so all zero of them were spare and it was offered as a free control
+    # with pitch, roll and rudder on it. Same for both throttle levers and
+    # both mini-sticks: five controls on this desk, every one of them a
+    # flight control, offered to a cold-start switch.
+    on_axes = {(p.role, b) for p in placed for b, _v in p.slots
+               if isinstance(b, OnAxis)}
     free = [(r, c) for j, (r, c) in enumerate(pool)
             if j not in taken
-            and not any((r, b) in occupied for b in c.bindable_buttons)]
+            and not any((r, b) in occupied for b in c.bindable_buttons)
+            and not any((r, OnAxis(a.index)) in on_axes
+                        for a in axes_of(devices[r], c))]
     return placed, [needs[i] for i in still], free

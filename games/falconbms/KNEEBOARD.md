@@ -4,19 +4,12 @@ Falcon BMS · F-16C · VIRPIL · IzoDesk · By hand. Generated — do not edit, 
 
 ## R-VPC Stick WarBRD-D  (DX 0–31)
 
-### Axes
-
-| Axis | DX | Does |
-|---|---|---|
-| Main stick | `X` | AXIS_ROLL |
-| Main stick | `Y` | AXIS_PITCH |
-| Main stick | `Z` | AXIS_YAW |
-| Analogue brake lever on the grip | `SLIDER0` | AXIS_BRAKE_LEFT |
-
-### Buttons
-
 | DX | Control | Does | Binding |
 |---|---|---|---|
+| X | Main stick | AXIS_ROLL |  |
+| Y | Main stick | AXIS_PITCH |  |
+| Z | Main stick | AXIS_YAW |  |
+| SLIDER0 | Analogue brake lever on the grip | AXIS_BRAKE_LEFT |  |
 | 0 | Trigger initial lever — press | Master arm | `SimArmMasterArm` |
 | 1 | Trigger initial lever — press | Master arm | `SimSafeMasterArm` |
 | 2 | Main trigger — first | Trigger | `SimTriggerFirstDetent` |
@@ -44,20 +37,13 @@ Falcon BMS · F-16C · VIRPIL · IzoDesk · By hand. Generated — do not edit, 
 
 ## L-VPC VMAX Prime Throttle  (DX 32–63)
 
-### Axes
-
-| Axis | DX | Does |
-|---|---|---|
-| Left throttle lever | `RX` | AXIS_THROTTLE |
-| Side lever | `RZ` | AXIS_ANT_ELEV |
-| Thumb mini-stick | `X` | AXIS_CURSOR_X |
-| Thumb mini-stick | `Y` | AXIS_CURSOR_Y |
-| Left side dial | `SLIDER0` | AXIS_FOV |
-
-### Buttons
-
 | DX | Control | Does | Binding |
 |---|---|---|---|
+| RX | Left throttle lever | AXIS_THROTTLE |  |
+| RZ | Side lever | AXIS_ANT_ELEV |  |
+| X | Thumb mini-stick | AXIS_CURSOR_X |  |
+| Y | Thumb mini-stick | AXIS_CURSOR_Y |  |
+| SLIDER0 | Left side dial | AXIS_FOV |  |
 | 32 | Pinky button — press | ICP — NAV mode | `SimICPNav` |
 | 33 | Left side dial — push | Slap switch (ECM) | `SimSlapSwitch` |
 | 34 | Middle finger button — press | Look closer | `FOVToggle` |
@@ -97,7 +83,7 @@ Falcon BMS · F-16C · VIRPIL · IzoDesk · By hand. Generated — do not edit, 
 ## Where the hardware and the jet disagree
 
 - **Roll trim** — the F-16 grip has four hats and the WarBRD has three, so TMS, DMS and CMS take them and trim gets the encoder: pitch only. Roll trim stays on the keyboard.
-- **Eject** — not bound. Twenty of the twenty-two vendor profiles hide it on the pinky-shifted layer; we do not use that layer, and no button here is awkward enough to be safe.
+- **Eject** — not bound. No button here is awkward enough to be safe, and the shifted layer, which is where it would belong, is not one this layout uses.
 - **Zoom** — on the dial, which rests centred rather than at zero — so the view may start part-zoomed. The price of the same dial carrying zoom in DCS and War Thunder too.
 - **Axis direction** — not ours to set. <code>DeviceDefaults.txt</code> says <i>which</i> physical axis, never <i>which way</i> — so walk the four Advanced Options tabs, move each control, watch its value bar and hit <b>Reverse</b> where it runs backwards. Pitch almost certainly needs it.
 - **SET AB** — on the Controllers page: left-click sets the afterburner detent, right-click the idle detent. Without the first there is no afterburner. <b>CENTER</b>, stick released, zeroes pitch and roll.
@@ -121,15 +107,11 @@ Nothing on the desk for these.
 
 ### R-VPC Stick WarBRD-D  (DX 0–31)
 
-- Main stick — no buttons
 - Mini-stick — 5
-- Analogue brake lever on the grip — no buttons
 
 ### L-VPC VMAX Prime Throttle  (DX 32–63)
 
-- Left throttle lever — no buttons
 - Right throttle lever — no buttons
-- Side lever — no buttons
 - T2 rocker — 63, 64
 - T3 rocker — 65, 66
 - T4 rocker — 67, 68

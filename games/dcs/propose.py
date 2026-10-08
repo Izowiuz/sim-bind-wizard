@@ -2,8 +2,8 @@
 """propose.py - lay out one DCS module on the HOTAS
 
 DESCRIPTION
-    Propose a binding for every command the module ships, from the shape of
-    the controls in the device map and the factory profiles' ranking.
+    Propose a binding for every command the module puts on a HOTAS, from
+    the shape of the controls in the device map.
     Proposals land in the wizard's results file marked `?` until confirmed.
     --write hands the result to dcs-bind-wizard.py, which owns diff.lua.
 
@@ -36,8 +36,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CORE = os.environ.get('SIM_BIND_WIZARD') or os.path.normpath(
     os.path.join(HERE, '..', '..'))
 if not os.path.isdir(CORE):
-    raise SystemExit(f'no shared core at {CORE}\n'
-                     'set SIM_BIND_WIZARD to the sim-bind-wizard checkout')
+    raise SystemExit(f'There is no shared core at {CORE}.\n'
+                     'Set SIM_BIND_WIZARD to the sim-bind-wizard '
+                     'checkout.')
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
@@ -47,8 +48,7 @@ from core import backup                                     # noqa: E402
 from core import devmap                                     # noqa: E402
 from core import needs as corneeds                          # noqa: E402
 from core import sheet as csheet                            # noqa: E402
-from core.needs import (IN_A_TURN, ON_APPROACH,             # noqa: E402
-                        IN_THE_AIR, ON_THE_RAMP)
+from core.needs import IN_A_TURN, IN_THE_AIR                # noqa: E402
 
 
 def wizard():
@@ -62,7 +62,6 @@ def wizard():
 #: What the module's own prose is asking for. Ordered: first match wins, so
 #: the specific phrases sit above the general ones.
 SHAPES = [
-    (r'keyboard is fine',                       None),
     (r"\btrigger\b",                            'trigger'),
     (r'\bpaddle\b',                             'paddle'),
     (r'slew|mini-?stick|thumb slew',            'ministick'),
@@ -75,110 +74,160 @@ SHAPES = [
 
 
 def wants(cmd, g):
-    """(shape, device or None, must be reachable in flight)."""
+    """(shape, device or None, when you touch it, what it takes).
+
+    The SHAPE is read out of the module's own prose, because that
+    sentence is the thing that tells a dial from a hat. Which device it
+    belongs on and when you touch it are data in the same table -- a
+    sentence about the real jet is not something a scorer can read, and
+    asking the factory profiles instead is what this used to do.
+    """
     place = (g.get('place') or '').lower()
     ways = cmd.get('ways') or 0
     if LATCH_COMMANDS.search(cmd['name']):
         # the lever is on the grip, so nothing about reach can disqualify it
-        return 'latch', 'stick', 0
-    shape = None
+        return 'latch', 'stick', IN_A_TURN, corneeds.BUTTON
+    shape = 'button'
     for pattern, s in SHAPES:
         if re.search(pattern, place):
             shape = s
             break
-    else:
-        shape = 'button'
     # The command's own kind wins over the prose, both ways. "toe brakes. A
     # brake lever on the stick base" is the place for BOTH `Wheel Brake` (an
     # axis) and `Wheel Brake - ON/OFF` (a button), and each wants its own kind
     # of home.
-    if shape is not None:
-        if cmd['kind'] == 'axis':
+    if cmd['kind'] == 'axis':
+        # Keep what the prose said where it named a kind that CARRIES
+        # an axis: "the antenna wheel on the throttle. A rotary or an
+        # axis" is asking for a dial, and flattening every axis
+        # command to a bare `axis` threw that away -- then the points
+        # had nothing to go on but "any lever will do".
+        if shape not in ('ministick', 'dial', 'lever', 'stick'):
             shape = 'axis'
-        elif shape == 'axis':
-            shape = 'hat2' if (cmd.get('ways') or 0) > 1 else 'button'
+    elif shape == 'axis':
+        shape = 'hat2' if ways > 1 else 'button'
     if shape == 'hat4' and 1 < ways <= 2:
         shape = 'hat2'                  # its siblings say it is a 2-way switch
-    if shape is None:
-        return None, None, False
-
-    where = g.get('where') or ''
-    dev = ('stick' if 'STICK' in where else
-           'throttle' if 'THROTTLE' in where else None)
-    urgency = URGENCY.get(g.get('theme'), 3)
-    if GRIP_PROSE.search(place):
-        urgency = 0
-    # "on the throttle" is where it lives on the real jet, not a claim that you
-    # must reach it mid-manoeuvre; only fingers and the grip mean that
-    # The prose says where a control sits on the real jet; the theme says
-    # whether you touch it with a MiG on your tail. Lights are a fingertip
-    # switch on the throttle and still have no business on a thumb hat.
-    return shape, dev, urgency
+    return shape, g.get('device'), g.get('band'), (
+        corneeds.AXIS if cmd['kind'] == 'axis' else corneeds.BUTTON)
 
 
 class Need(corneeds.Need):
     """A core need built from a module's own commands rather than by hand.
 
     `bindings` is the list of DCS command hashes the family covers, which the
-    core treats as opaque -- it only ever indexes it. `rank` is how many of the
-    factory HOTAS profiles bind the family, so a module bought tomorrow ranks
-    itself.
+    core treats as opaque -- it only ever indexes it.
 
-    `on` is deliberately NOT set. The core's `slots_for` wants every direction
-    to match or it falls back to press order, while `lay_out` below matches per
-    member -- and a four-member family often has only two members whose
-    direction the module's prose makes legible. So the core picks the control
-    and `lay_out` still decides which button each command lands on.
+    `on` is set by `families`, one word per member, read out of the
+    module's own prose -- and None for a member whose prose does not say
+    which way it points, which a four-member family often has two of.
+    It used to be left unset on purpose, because `slots_for` wanted every
+    direction to match or fell back to press order for the lot; it fills
+    the gaps now, so the core can place a hat's directions itself.
     """
 
     def __init__(self, what, shape, members, device=None, urgency=IN_THE_AIR,
-                 rank=0):
+                 takes=corneeds.BUTTON):
         # A slot is a list of Binds now. DCS has no contexts and no
         # release half, so every slot is exactly one -- `members` is the
         # list of command hashes the family covers.
+        #
+        # An axis command asks the way every other game's needs file
+        # asks: a shape, which axis of it, and where it has to rest.
+        # `wants()` reads the first out of the module's prose and
+        # `axis_ask` the rest out of the command's own name -- which is
+        # the one thing about an axis the core cannot know.
+        #
+        # `takes` comes from the COMMAND's own kind, passed in: read off
+        # the shape word instead, a command whose prose names a dial or a
+        # mini-stick stopped being an axis need at all and the Hornet
+        # lost its designator, its zoom and its antenna.
+        on = rests = prefer = None
+        if takes == corneeds.AXIS:
+            shape, on, rests, prefer = axis_ask(what, shape)
         super().__init__(what, shape,
                          bindings=[[cactions.Bind(h)] for h in members],
-                         device=device, urgency=urgency, rank=rank)
-        #: the hashes, in order, for the places that still think in them:
-        #: `lay_out` matches each command against the module's own prose.
+                         device=device, urgency=urgency,
+                         takes=takes, rests=rests, prefer=prefer,
+                         on=(on,) if on else None,
+                         invert=takes == corneeds.AXIS and _inverted(what))
+        #: the hashes, in order. The core only ever indexes `bindings`;
+        #: this is for the places that still think in DCS's own hashes,
+        #: and the order is the order of the slots.
         self.members = list(members)
-        #: a button assigned outside the allocator: a trigger stage or a
-        #: borrowed spare position
-        self.borrowed = None
 
 
-def _drop_combined(members, cmds):
-    """A switch family often ships its positions AND a command that does both:
-    `- UP`, `- DOWN` and `- UP/DOWN`. Binding the pair makes the combined one
-    redundant, and it would eat a third slot on a two-position switch.
+#: How DCS spells "step the switch along" where the switch has positions
+#: of its own. `Cycle` is always that; `Up` and `Down` are it only when
+#: some other position is named, because on a two-position switch they ARE
+#: the positions (`Landing Gear Control Handle - UP`).
+STEPPING = ('up', 'down', 'cycle')
+
+
+def _tail(name, family):
+    """The part of a command name that says WHICH position this is.
+
+    Two spellings, and one module uses both: the Hornet separates the
+    position with ` - ` ("FLAP Switch - FULL"), the Su-25T appends it
+    ("Landing Gear Up/Down"). Taking the family's own name off the front
+    covers either, and `switch_family` has already worked out what the
+    family is called -- which is why this needs telling.
     """
-    tails = {}
-    for h in members:
-        name = cmds[h]['name']
-        tail = name.rsplit(' - ', 1)[-1] if ' - ' in name else name
-        tails[tail.strip().lower()] = h
+    low = name.strip().lower()
+    head = (family or '').strip().lower()
+    if head and low.startswith(head):
+        low = low[len(head):]
+    return low.lstrip(' -').strip()
+
+
+def one_per_switch(chosen, cmds):
+    """The same list, with one command per physical switch.
+
+    A three-position switch ships its positions, a command for each
+    adjacent PAIR of them (`- RETRACT/OFF`), and a `Cycle` that steps
+    through -- four names for one switch. Binding more than one of them
+    spends buttons on the same thing, and on a six-position rotary it put
+    the flap positions on three and "step the flaps" on the other three.
+
+    Done over the whole list rather than inside `families`, where it used
+    to be: `ways` counts a family's DIRECTIONS, so a switch whose
+    positions are called EXTEND and RETRACT is not a family at all, and
+    its combined form survived every time.
+    """
+    by_family = {}
+    for h in chosen:
+        by_family.setdefault(cmds[h].get('family') or h, []).append(h)
     drop = set()
-    for tail, h in tails.items():
-        if '/' in tail:
-            parts = [p.strip() for p in tail.split('/')]
-            if all(p in tails for p in parts):
-                drop.add(h)
-    return [h for h in members if h not in drop] or members
+    for fam, members in by_family.items():
+        tails = {_tail(cmds[h]['name'], fam): h for h in members}
+        named = [t for t in tails if t not in STEPPING and '/' not in t]
+        for tail, h in tails.items():
+            if '/' in tail and all(p.strip() in tails
+                                   for p in tail.split('/')):
+                drop.add(h)            # the pair, where both parts are here
+            elif tail == 'cycle' and len(tails) > 1:
+                drop.add(h)            # the same thing with another word
+            elif tail in STEPPING and named:
+                drop.add(h)            # a position is named, so this steps
+    return [h for h in chosen if h not in drop]
 
 
-def families(cmds, guide, chosen):
+def families(module, cmds, guide, chosen):
     """Group a hat's four commands into one thing to place.
 
     A four-way hat reaches the wizard as four separate commands; placing them
     one at a time would scatter them across four unrelated buttons.
+
+    `module` is here for the direction words: which way each command of a
+    family points is in the module's own prose, and the need carries the
+    answer in `on` so that the core puts them in that order.
     """
+    check_guide(cmds, guide)
     groups, singles = collections.OrderedDict(), []
     for h in chosen:
         c = cmds[h]
         fam = c.get('family')
-        shape, dev, urgency = wants(c, guide[h])
-        if shape is None:
-            continue
+        shape, dev, urgency, takes = wants(c, guide[h])
         # Siblings of one physical switch belong together whatever shape they
         # were classified as. Left and right engine cutoff are a pair: split
         # across two devices they are worse than anywhere together, because
@@ -192,17 +241,15 @@ def families(cmds, guide, chosen):
         if fam and together and shape in ('hat4', 'hat2', 'button', 'latch'):
             key = (fam, shape)
             groups.setdefault(key, {'shape': shape, 'device': dev,
-                                    'urgency': urgency, 'members': [],
-                                    'votes': 0})
-            g = groups[key]
-            g['members'].append(h)
-            g['votes'] = max(g['votes'], c['votes'])
+                                    'urgency': urgency, 'members': []})
+            groups[key]['members'].append(h)
         else:
-            singles.append((h, shape, dev, urgency, c['votes']))
+            singles.append((h, shape, dev, urgency, takes))
     for g in groups.values():
         if g['shape'] == 'latch':
-            # lay_out() zips leftovers onto bindable_buttons in order, and the
-            # latch reports its contacts closed-first. Putting SAFE first lands
+            # A leftover member goes on the next bindable button in order,
+            # and the latch reports its contacts closed-first. Putting SAFE
+            # first lands
             # it on the same physical contact that carries SimSafeMasterArm in
             # Falcon BMS, so one check on the ramp settles both sims -- and if
             # it turns out backwards, both swap together.
@@ -225,20 +272,35 @@ def families(cmds, guide, chosen):
 
     out = []
     for (fam, shape), g in groups.items():
-        members = _drop_combined(g['members'], cmds)
+        members = g['members']
         fam = label_for(fam, members)
         if shape == 'button' and len(members) > 1:
             # a pair of buttons that are one switch wants one switch
             shape = 'hat2' if len(members) == 2 else 'hat4'
         out.append(Need(fam, shape, members, device=g['device'],
-                        urgency=g['urgency'], rank=g['votes']))
-    for h, shape, dev, urgency, votes in singles:
+                        urgency=g['urgency']))
+    for h, shape, dev, urgency, takes in singles:
         out.append(Need(cmds[h]['name'], shape, [h], device=dev,
-                        urgency=urgency, rank=votes))
-    # most urgent first, and only then by how many factory profiles agree
-    out.sort(key=lambda x: (x.urgency, -x.rank))
+                        urgency=urgency, takes=takes))
+    # Not sorted here. `allocate` has its own order and it is a total one
+    # -- pinned, then the band, then the name -- and a second ordering in
+    # front of it only decided the ties it could not see.
     for need in out:
         need.suits = job_of(need.what)
+        if need.takes != corneeds.AXIS:
+            # Which way each command points, in the module's words, one
+            # per binding -- and None where its prose does not say. The
+            # core puts the named ones where they belong and fills the
+            # rest in press order.
+            #
+            # `on` used to be deliberately NOT set, with `lay_out` here
+            # matching the directions itself at writing time. So the
+            # core answered which button for the screen and this
+            # answered it for the writer, and a trim hat could be shown
+            # one way round and written another.
+            said = tuple(direction_of(module, cmds[h])
+                         for h in need.members)
+            need.on = said if any(said) else None
     return out
 
 
@@ -265,8 +327,8 @@ def jobs():
         for row in got.get('job', []):
             if row['is'] not in corneeds.JOBS:
                 raise SystemExit(
-                    f'jobs.toml: {row["is"]!r} is not a job. There are: '
-                    + ', '.join(corneeds.JOBS))
+                    f'jobs.toml: {row["is"]!r} is not a job. These are: '
+                    + ', '.join(corneeds.JOBS) + '.')
             out += [(phrase.lower(), row['is']) for phrase in row['when']]
         _JOBS = out
     return _JOBS
@@ -284,6 +346,32 @@ def job_of(name):
     return next((job for phrase, job in jobs() if phrase in low), None)
 
 
+def check_guide(cmds, guide):
+    """Loud when the module's own table names a device or a band nothing
+    knows -- the way `jobs()` is loud about a job.
+
+    Both words come from somewhere else and neither is this module's to
+    invent: a device does a job the DESK names, and a band is one of the
+    four the core scores in. A role nothing on the desk answers to
+    matches no device and quietly costs that command its home; a band
+    off the scale orders it against needs it was never compared with.
+    """
+    roles = set(devmap.load().ROLES_ON_A_DESK)
+    bands = range(len(corneeds.URGENCY_NAME))
+    for h, g in guide.items():
+        if g['band'] is None:
+            continue
+        what = cmds[h]['name'] if h in cmds else h
+        if g['device'] is not None and g['device'] not in roles:
+            sys.exit(f'{what!r} is put on a {g["device"]!r}. That is not '
+                     'a job a device does. These are: '
+                     + ', '.join(sorted(roles)) + '.')
+        if g['band'] not in bands:
+            sys.exit(f'{what!r} is in band {g["band"]!r}. That is not a '
+                     'band. These are: '
+                     + ', '.join(corneeds.URGENCY_NAME) + '.')
+
+
 #: Which axis of which control a flight command belongs on, in the map's
 #: own two words: the kind of control, and which of its axes.
 #:
@@ -295,9 +383,6 @@ def job_of(name):
 #: rudder -- the three axes the aircraft flies on -- came out as `no axis
 #: on this hardware` on a desk with a full stick on it, and the only sign
 #: was that line. `games/x4/plan.py` has used `axis_of` since the rename.
-AXIS_FOR = {'Pitch': ('stick', 'y'), 'Roll': ('stick', 'x'),
-            'Rudder': ('stick', 'z'), 'Thrust': ('lever', '')}
-
 #: The module says which way a switch goes in its own words; the map says which
 #: way each button points. Joining them is what stops a trim hat coming out
 #: scrambled -- both halves were there and the first version zipped them in
@@ -313,21 +398,6 @@ MOVE_TO_DIR = [
     (r'\bup\b|climb',                           'up'),
     (r'\bdown\b|descend',                       'down'),
 ]
-
-#: Starting a cold aircraft needs controls no factory profile bothers to bind,
-#: because a profile is written for a jet that is already running. They sit
-#: below the vote floor and would never reach the essentials on their own.
-#: Commands worth placing that no factory profile votes for, so the ranking
-#: never surfaces them. Cold-start switches, because a profile author assumes
-#: you start hot -- and master arm, because it is a cockpit switch in every
-#: profile and a HOTAS switch on this hardware.
-COLD_START = [
-    r'throttle \((left|right)\).*off\(hold\)',
-    r'engine crank switch - (left|right)$',
-    r'apu control sw',
-    r'master arm switch - (arm|safe)$',
-]
-
 
 #: a two-stage trigger names its detents
 STAGE_WORDS = [(r'first|1st', 0), (r'second|2nd', 1), (r'third|3rd', 2)]
@@ -348,94 +418,70 @@ def stage_of(cmd):
     return None
 
 
-def lay_out(module, ctrl, members, cmds, press_only=False, borrowed=None):
-    """hash -> button, respecting which way each one points."""
-    if borrowed is not None and len(members) == 1:
-        return {members[0]: borrowed}
-    if press_only and ctrl.push is not None and len(members) == 1:
-        return {members[0]: ctrl.push}
-    out, left = {}, []
-    used = set()
-    dirs = list(ctrl.dirs or ctrl.stages or ctrl.positions or [])
-    for h in members:
-        c = cmds[h]
-        want = None
-        if ctrl.kind == 'trigger':
-            i = stage_of(c)
-            if i is not None and i < len(ctrl.buttons):
-                want = ctrl.buttons[i]
-        else:
-            d = direction_of(module, c)
-            if d == 'push' and ctrl.push is not None:
-                want = ctrl.push
-            elif d and d in dirs:
-                want = ctrl.buttons[dirs.index(d)]
-        if want is not None and want not in used:
-            out[h] = want
-            used.add(want)
-        else:
-            left.append(h)
-    spare = [b for b in ctrl.bindable_buttons if b not in used]
-    for h, b in zip(left, spare):
-        out[h] = b
-    return out
+#: What an axis command ASKS FOR, read out of its own name. Ordered:
+#: first match wins, so the specific phrases sit above the general ones.
+#:
+#: It used to answer with a resolved axis -- `resolve_axis`, which went
+#: looking through the devices itself and carried its own preferences
+#: ("steadiest first: something that stays where you leave it"). Those
+#: are comparisons over what the map measured, and the scoring table is
+#: where comparisons live. What is left here is the only thing the core
+#: cannot know: which command IS pitch, in this module's words.
+#:
+#:   pattern -> (shape, which axis of it, where it must rest)
+AXIS_ASK = [
+    (r'^pitch',                   ('stick', 'y', 'centred')),
+    (r'^roll',                    ('stick', 'x', 'centred')),
+    (r'^rudder',                  ('stick', 'z', 'centred')),
+    (r'designator|slew',          ('ministick', None, 'centred')),
+    (r'^thrust|^throttle$',       ('lever', None, 'mid')),
+    (r'brake',                    ('lever', None, 'min')),
+    (r'zoom',                     ('dial', None, 'min')),
+    (r'\brpm\b|prop(eller)? pitch|mixture|supercharger',
+                                  ('lever', None, 'mid')),
+]
 
 
-def resolve_axis(devs, need, cmds):
-    """Which axis on which device a flight or slew command belongs to."""
-    name = cmds[need.members[0]]['name']
-    want = AXIS_FOR.get(name.split(' - ')[0].strip())
+def axis_ask(name, shape):
+    """(shape, on, rests, prefer) for an axis command, from its name.
+
+    `shape` is what the module's prose already said, and it wins: "the
+    antenna wheel on the throttle. A rotary or an axis" is asking for a
+    dial, and this table is only here for what the prose does NOT say --
+    which axis of a stick, and where the thing has to rest.
+
+    `prefer` only for the engine pair: two levers, two engines, and a
+    cold start in the Hornet runs them up one at a time. Nothing in the
+    hardware says which lever is the left one -- the command's own name
+    does, and that is the one thing here that is not a comparison.
+    """
     low = name.lower()
-    if want is not None and not low.startswith('thrust'):
-        got = devs['stick'].axis_of(*want)
-        return ('stick', [got] if got is not None else [])
-    # Two levers, two engines. A cold start in the Hornet runs them up one at a
-    # time, so the combined Thrust axis is not enough -- and binding it as well
-    # would have both fighting for the same engines.
-    if low.startswith('thrust'):
-        thr = devs['throttle']
-        levers = thr.axes(kind='lever')
+    for pattern, (said, on, rests) in AXIS_ASK:
+        if not re.search(pattern, low):
+            continue
+        if shape == 'axis':
+            shape = said        # the prose said nothing finer
+        if re.search(r'vert', low):
+            on = 'y'
+        elif on is None and shape == 'ministick':
+            on = 'x'
         side = ('right' if 'right' in low else
                 'left' if 'left' in low else None)
-        if side:
-            match = [a for a in levers
-                     if side in thr.axis_label(a.index).lower()]
-            return ('throttle', match or levers[:1])
-        return ('throttle', [])          # combined: superseded by the pair
-    if 'designator' in low or 'slew' in low:
-        # the clue is in the name: it hangs off the throttle
-        g = next(iter(devs['throttle'].groups('ministick')), None)
-        if g and len(g.axes) == 2:
-            i = 1 if re.search(r'vert', low) else 0
-            return ('throttle', [devs['throttle'].axis(g.axes[i])])
-    if 'brake' in low:
-        return ('stick', [a for a in devs['stick'].axes()
-                          if a.safe_for_absolute])
-    if 'zoom' in low:
-        return ('throttle', [a for a in devs['throttle'].axes(kind='dial')])
-    # a warbird flies on three levers: throttle, propeller RPM, mixture
-    if re.search(r'\brpm\b|prop(eller)? pitch|mixture|supercharger', low):
-        spare = [a for a in devs['throttle'].axes()
-                 if a.kind in ('lever', 'slider', 'dial')
-                 and 'throttle lever' not in (a.label or '').lower()]
-        # steadiest first: something that stays where you leave it
-        spare.sort(key=lambda a: (a.kind != 'lever', a.index))
-        return ('throttle', spare[:1])
-    return (None, [])
+        prefer = f'{side} throttle lever' if side and shape == 'lever' else None
+        return shape, on, rests, prefer
+    # Nothing in the name, so whatever the prose said stands and the
+    # points pick among what fits. `mid` because an axis nobody named is
+    # one you set and leave: that is what gets Radar Elevation Control a
+    # home instead of nothing.
+    return shape, None, 'mid', None
 
 
-#: WHEN you touch a command, from the module's own theme. This is the thing
-#: that decides how good a home it deserves -- and the wizard already works it
-#: out. The first version read the word "finger" out of a sentence describing
-#: where a switch sits on the real jet, which is a different question, and
-#: every fix to it moved the symptom somewhere else.
-
-#: This module's six themes onto the core's four urgencies. The scale is the
-#: core's; only the mapping is DCS's.
-URGENCY = {'fight': IN_A_TURN, 'fly': IN_A_TURN,
-           'land': ON_APPROACH,
-           'sensors': IN_THE_AIR,
-           'cockpit': ON_THE_RAMP, 'other': ON_THE_RAMP}
+# WHEN you touch a command decides how good a home it deserves, and it is
+# said per row in the wizard's own hint table now -- `band`, in the core's
+# four. It was derived here twice over: a map from the module's six themes
+# onto the four, and a regex looking for "on the grip" in the sentence that
+# describes the real jet, which is a different question and moved the
+# symptom every time it was fixed. A table row says it outright.
 
 
 #: A two-position switch that HOLDS its position deserves a control that also
@@ -448,18 +494,6 @@ URGENCY = {'fight': IN_A_TURN, 'fly': IN_A_TURN,
 #: on a sprung hat, and the trigger lever is the most valuable real estate on
 #: the stick; it should not go to the first switch family that asks.
 LATCH_COMMANDS = re.compile(r'master arm switch - (arm|safe)$', re.I)
-
-
-#: When the module says a command sits ON THE GRIP, the aircraft's own
-#: designers already answered this question -- your hand is there anyway. That
-#: beats the theme, which only says when you touch it.
-#:
-#: Deliberately narrow: "a fingertip switch on the throttle" describes the
-#: throttle body, not the grip, and exterior lights have no business on a thumb
-#: hat however fingertip-operated they are.
-GRIP_PROSE = re.compile(
-    r'on the grip|under your thumb|front of the grip|top of the grip'
-    r'|behind the grip|the grip in the real jet', re.I)
 
 
 #: Reach tiers, shape substitutions and the scorer all live in the core now.
@@ -484,21 +518,33 @@ def load_cfg(module, game_dir=None):
     if game_dir:
         cfg['game_dir'] = game_dir
     if not cfg.get('game_dir'):
-        sys.exit('pass --game-dir, or run the wizard once so it remembers')
+        sys.exit('Pass --game-dir, or run the wizard once so that it '
+                 'remembers.')
     return cfg
 
 
 def candidates(module, cmds, guide):
-    """The commands worth placing: the module's own essentials, plus the few
-    a cold start needs that no factory profile bothers to bind."""
+    """The commands worth placing: the ones the module's own table puts on
+    the HOTAS.
+
+    Cold-start switches used to be listed here separately, on the
+    argument that no factory profile binds them -- a profile is written
+    for a jet that is already running. The table says it now, where the
+    rest of the judgement is.
+    """
     chosen = [h for _t, items in module.essentials(cmds, guide)
               for h, _n, _k in items]
-    for h, c in cmds.items():
-        if h in chosen:
-            continue
-        if any(re.search(p, c['name'], re.I) for p in COLD_START):
-            chosen.append(h)
-    return chosen
+    # The module's own prose says the combined thrust axis is superseded:
+    # "The throttle lever -- both levers if the jet has Thrust Left/Right".
+    # A cold start runs the engines up one at a time, so the pair is what
+    # you want and binding the combined one as well would have them
+    # fighting over the same lever. This used to be a resolver that
+    # answered "no axis" for it, which read as a gap rather than as a
+    # decision.
+    names = {cmds[h]['name'].lower() for h in chosen}
+    if {'thrust left', 'thrust right'} <= names:
+        chosen = [h for h in chosen if cmds[h]['name'].lower() != 'thrust']
+    return one_per_switch(chosen, cmds)
 
 
 _RULES = None
@@ -518,6 +564,62 @@ def _rules():
     return _RULES
 
 
+def name_the_stages(devs, needs, cmds):
+    """Which stage of the trigger each command that wants it gets.
+
+    A command can name one ("Gun Trigger - SECOND DETENT") and that is
+    the stage it gets -- the Hornet's gun was landing on the first
+    detent, which is the one that only runs the camera, because press
+    order was all the core had to go on.
+
+    And more than one command can want the trigger: on the Su-25T the
+    cannon and the selected weapon both belong there, lighter pull first,
+    and letting the first comer take the whole control put the jet's main
+    fire command on a hat direction.
+
+    What is DCS's own is the reading: a stage named in a command ("Gun
+    Trigger - SECOND DETENT"), and otherwise the name deciding who gets
+    the lighter pull. The PLACING is not: the need says which control
+    (`prefer`) and which of its buttons (`on`), and the allocator honours
+    both. This used to build a `Placement` here with 200 points written
+    into it and a `Reason` of its own, take the need out of the list, and
+    veto the control for everybody else.
+    """
+    want = [n for n in needs if n.shape == 'trigger' and len(n.members) == 1]
+    if not want:
+        return
+    spot = next(((r, c) for r, d in sorted(devs.items())
+                 for c in d.groups(bindable=True)
+                 if c.kind == 'trigger'), None)
+    if spot is None:
+        return
+    ctrl = spot[1]
+    # The map's own words for them -- `first`, `second`, `third` -- which
+    # is what `on` is matched against.
+    stages = [ctrl.direction(b) for b in ctrl.buttons]
+    mine, rest = {}, []
+    for need in want:
+        st = stage_of(cmds[need.members[0]])
+        if st is not None and st < len(stages) and stages[st] not in mine:
+            mine[stages[st]] = need
+        else:
+            rest.append(need)
+    rest.sort(key=lambda n: n.what)
+    for need in rest:
+        spare = [s for s in stages if s and s not in mine]
+        if not spare:
+            break
+        mine[spare[0]] = need
+    for stage, need in mine.items():
+        need.on = (stage,)
+        if len(want) > 1:
+            # Only where they have to SHARE. One claimant is scored like
+            # everything else and `on` is enough to put it on the stage it
+            # names; naming the control as well would take it out of the
+            # comparison for no reason.
+            need.prefer = ctrl.label
+
+
 def place(module, cmds, guide, chosen, rules=None, needs=None):
     """-> core.needs.Layout.
 
@@ -527,110 +629,76 @@ def place(module, cmds, guide, chosen, rules=None, needs=None):
 
     It used to return `[(need, spot, score)], unplaced` -- a fourth shape of
     the same five values, which is the drift `core.needs.Layout` exists to
-    stop. The axis entries go in `Layout.axes`, which is game-shaped by
-    contract; the free list, which this threw away, is kept, and that is
-    where `--free` comes from.
+    stop. The free list, which this threw away, is kept, and that is where
+    `--free` comes from.
+
+    The axes go through `allocate` with everything else and are scored
+    like everything else. Which command IS pitch is read out of its own
+    name in `axis_ask`, because that is the one thing about an axis the
+    core cannot know; which LEVER pitch goes on is a comparison, and the
+    scoring table makes it.
     """
     devs = devmap.by_role('stick', 'throttle')
     # Given, when a caller has already put what you confirmed onto them.
-    needs = families(cmds, guide, chosen) if needs is None else needs
-    claims, axes = [], []
-
-    # A trigger has stages and more than one command wants it: on the Su-25T
-    # the cannon and the selected weapon both belong there, lighter pull first.
-    # Letting the first comer take the whole control put the jet's main fire
-    # command on a hat direction. The core has no notion of a stage named in a
-    # command ("Gun Trigger - SECOND DETENT"), so this is settled first and the
-    # control is then vetoed for everybody else.
-    claimed = None
-    trigger_needs = [n for n in needs if n.shape == 'trigger'
-                     and len(n.members) == 1]
-    if len(trigger_needs) > 1:
-        spot = next(((r, c) for r, d in sorted(devs.items())
-                     for c in d.groups(bindable=True)
-                     if c.kind == 'trigger'), None)
-        if spot:
-            role, ctrl = spot
-            claimed = ctrl
-            free = list(ctrl.buttons)
-            named, rest = {}, []
-            for n in trigger_needs:
-                st = stage_of(cmds[n.members[0]])
-                if st is not None and st < len(free) and free[st] not in named:
-                    named[free[st]] = n
-                else:
-                    rest.append(n)
-            rest.sort(key=lambda n: -n.rank)
-            for n in rest:
-                spare = [b for b in free if b not in named]
-                if not spare:
-                    break
-                named[spare[0]] = n
-            for b, n in named.items():
-                n.borrowed = b
-                claims.append(corneeds.Placement(
-                    n, role, ctrl,
-                    [(b, [cactions.Bind(n.members[0])])], 200,
-                    corneeds.Reason('claimed', points=200)))
-                needs.remove(n)
-
-    # Axes never go through the allocator, in any game in the family.
-    buttons = []
-    for need in needs:
-        if need.shape == 'axis':
-            role, got = resolve_axis(devs, need, cmds)
-            name = cmds[need.members[0]]['name']
-            # The first of what fits, because `resolve_axis` answers with
-            # every axis that could serve and the writer takes one.
-            axes.append(corneeds.Axis(role, got[0] if got else None, name,
-                                      invert=_inverted(name), carries=need))
-        else:
-            buttons.append(need)
-
+    needs = (families(module, cmds, guide, chosen)
+             if needs is None else needs)
+    name_the_stages(devs, needs, cmds)
     placed, still, free = corneeds.allocate(
-        buttons, devs, rules=rules or _rules(),
-        usable=(lambda r, c: c is not claimed) if claimed else None)
+        needs, devs, rules=rules or _rules())
 
-    for pl in placed:
-        # `lay_out` still decides which button each command of a family lands
-        # on, because it reads directions out of the module's own prose. But
-        # where a need has ONE command the core already chose the button --
-        # the control's click, or a spare position it borrowed -- and that
-        # choice is the authoritative one.
-        if len(pl.need.members) == 1 and pl.slots:
-            pl.need.borrowed = pl.slots[0][0]
-    return corneeds.Layout(devs, claims + list(placed), still, free,
-                           axes=axes)
+    return corneeds.Layout(devs, list(placed), still, free)
 
 
 def rows(layout):
     """[(need, spot, score)] -- the shape the listing and --check read.
 
-    The order is the one `place()` appended in before it returned a Layout,
-    and the one the listing has always printed: the trigger claims, then the
-    axes, then whatever the allocator placed.
+    The axes first and then the buttons, which is the order the listing
+    has always printed. There used to be a third group in front of them:
+    the trigger claims, which `place()` built itself. They are ordinary
+    placements now and come through with the rest.
 
-    A claim used to be recognised by scoring exactly 200 -- a number chosen
-    to carry a meaning, which is a number nobody can change and one the
-    allocator could hit honestly. It now says what it is: `place()` writes
-    `Reason('claimed')` at the moment it claims.
+    A claim was recognised by scoring exactly 200 -- a number chosen to
+    carry a meaning, which is a number nobody can change and one the
+    allocator could hit honestly -- and then by a `Reason` of its own.
+    Both are gone with the claiming.
     """
-    def claimed(p):
-        return p.why is not None and p.why.how == 'claimed'
+    # Including the axis needs this desk cannot answer. The combined
+    # Thrust is deliberately one of them -- the two engines are bound
+    # separately -- so a listing that dropped it would be hiding a
+    # decision rather than reporting a gap.
+    at = {id(p.need): p for p in layout.on_axes}
+    axes = []
+    for need in [p.need for p in layout.on_axes] + list(layout.unplaced):
+        if need.takes != corneeds.AXIS:
+            continue
+        p = at.get(id(need))
+        axes.append((need, (p.role, [layout.devices[p.role].axis(
+            p.slots[0][0].index)]) if p else None, None))
+    return axes + [(p.need, (p.role, p.ctrl), p.points)
+                   for p in layout.on_buttons]
 
-    claims = [p for p in layout.placed if claimed(p)]
-    rest = [p for p in layout.placed if not claimed(p)]
-    return ([(p.need, (p.role, p.ctrl), p.points) for p in claims]
-            + [(p.carries, (p.role, [p.axis] if p.axis else []), None)
-               for p in layout.axes]
-            + [(p.need, (p.role, p.ctrl), p.points) for p in rest])
+
+def written(layout):
+    """command hash -> (role, button) -- the allocator's own answer.
+
+    The one place it is read off a layout. There used to be two answers
+    to which button a command lands on: `slots_for` in the core, which is
+    what the review screen draws, and `lay_out` here, which is what the
+    writer wrote and what the listing printed. They agreed by
+    construction for a need with one command and could differ for a hat.
+    """
+    return {b.action: (p.role, button)
+            for p in layout.on_buttons
+            for button, payload in p.slots
+            for b in payload}
 
 
 def propose(module, key, game_dir=None):
     cfg = load_cfg(module, game_dir)
     ac = module.discover_aircraft(cfg)
     if key not in ac:
-        sys.exit(f'no such module: {key} (have {", ".join(ac)})')
+        sys.exit(f'There is no module called {key}. These are '
+                 f'installed: {", ".join(ac)}.')
     cmds = module.harvest_commands(cfg, key, ac[key]['factory_dir'])
     guide = module.build_guide(cmds)
     layout = place(module, cmds, guide, candidates(module, cmds, guide))
@@ -653,41 +721,17 @@ def seed(module, cmds, guide, chosen=None, layout=None):
         if chosen is None:
             chosen = candidates(module, cmds, guide)
         layout = place(module, cmds, guide, chosen)
-    out = rows(layout)
     recs = {}
-    for need, pair, _s in out:
-        if not pair:
-            continue
-        role, what = pair
-        if need.shape == 'axis':
-            axes = what
-            if not axes:
-                continue
-            name = cmds[need.members[0]]['name']
-            recs[need.members[0]] = {
-                'name': name, 'role': role, 'type': 'axis',
-                'index': axes[0].index, 'invert': _inverted(name),
-                'proposed': True}
-            continue
-        ctrl = what
-        spots = lay_out(module, ctrl, need.members, cmds,
-                        press_only=len(need.members) == 1
-                        and len(ctrl.bindable_buttons) > 1,
-                        borrowed=need.borrowed)
-        # What you pinned by hand wins over what the prose works out.
-        # `lay_out` reads the module's own direction words, which is
-        # right until somebody has pressed for one direction of a hat --
-        # and then re-deriving it is the tool overruling a choice you
-        # just made. The pins are per slot and a need's members are its
-        # commands in slot order, so they line up.
-        pinned = ((need.assignment or {}).get('buttons') or ())
-        for n, want in enumerate(pinned):
-            if want is not None and n < len(need.members) \
-                    and want in ctrl.bindable_buttons:
-                spots[need.members[n]] = want
-        for h, b in spots.items():
+    for p in layout.on_axes:
+        name = cmds[p.need.members[0]]['name']
+        recs[p.need.members[0]] = {
+            'name': name, 'role': p.role, 'type': 'axis',
+            'index': p.slots[0][0].index, 'invert': _inverted(name),
+            'proposed': True}
+    for h, (role, button) in written(layout).items():
+        if h in cmds:
             recs[h] = {'name': cmds[h]['name'], 'role': role,
-                       'type': 'button', 'index': b, 'proposed': True}
+                       'type': 'button', 'index': button, 'proposed': True}
     return recs
 
 
@@ -696,24 +740,17 @@ def _inverted(name):
     return name.split(' - ')[0].strip() == 'Pitch'
 
 
-#: byte for byte what core/sheet.py has; this sheet still renders itself,
-#: because the core template has no `?` for a proposal and no vote-ordered
-#: "still unbound" panel.
-#: Panel order on the sheet. Anything the map has that is not named here
-#: follows, alphabetically -- so a captured third device appears rather than
-#: raising KeyError, and the stick still comes first.
-ROLE_ORDER = ('stick', 'throttle')
-
-
 def unbound(module, cmds, guide, key):
+    """What the module puts on the HOTAS and nothing has taken yet.
+
+    In the list's own order -- the order you learn an aircraft in, by
+    name inside each theme. It used to be sorted by how many factory
+    profiles bound each one, which is the ranking that left.
+    """
     binds = json.load(open(results_path()))['aircraft'].get(key, {})
-    out = []
-    for _t, items in module.essentials(cmds, guide):
-        for h, name, kind in items:
-            if h not in binds:
-                out.append((name, kind, cmds[h]['votes']))
-    out.sort(key=lambda x: -x[2])
-    return out
+    return [(name, kind)
+            for _t, items in module.essentials(cmds, guide)
+            for h, name, kind in items if h not in binds]
 
 
 def write(module, cfg, aircraft, backup_dir=None):
@@ -773,7 +810,7 @@ def audit(module, key, cmds, guide):
             out.append((r['name'], r,
                         f'{g.kind} — {g.label}: nothing is behind it'))
         elif h in cmds:
-            shape, _dev, _urg = wants(cmds[h], guide.get(h, {}))
+            shape, _dev, _urg, _takes = wants(cmds[h], guide.get(h, {}))
             if shape and shape != 'axis' and g.kind != shape:
                 # a hat direction is a fine home for a plain button; the other
                 # way round is what is worth saying
@@ -835,6 +872,9 @@ class Dcs(adapter.Planner):
     #: `-a` is what this has always been typed as, and `./bind dcs plan
     #: -a su-25T` is in the top-level README.
     ALIASES = {'aircraft': ('-a',)}
+    SAYS = {'aircraft': 'which module to lay out (default: FA-18C)',
+            'game_dir': 'the DCS install, if it is not where the results '
+                        'file says'}
 
     def __init__(self, aircraft='FA-18C', game_dir=None, backup_dir=None):
         self.aircraft = aircraft or 'FA-18C'
@@ -853,19 +893,25 @@ class Dcs(adapter.Planner):
         if got is None:
             ac = self.module.discover_aircraft(self.cfg)
             if self.aircraft not in ac:
-                raise SystemExit(f'no such module: {self.aircraft} '
-                                 f'(have {", ".join(sorted(ac))})')
-            cmds = self.module.harvest_commands(
-                self.cfg, self.aircraft, ac[self.aircraft]['factory_dir'])
-            got = {'commands': cmds, 'guide': self.module.build_guide(cmds)}
-        self.cmds, self.guide = got['commands'], got['guide']
+                raise SystemExit(
+                    f'There is no module called {self.aircraft}. These are '
+                    f'installed: {", ".join(sorted(ac))}.')
+            got = {'commands': self.module.harvest_commands(
+                self.cfg, self.aircraft, ac[self.aircraft]['factory_dir'])}
+        self.cmds = got['commands']
+        # Built here every time, never cached. The guide is the module's
+        # own judgement about its command names -- which device, which
+        # band, what to say about it -- and a cached copy would keep an
+        # edit to that table out of the next plan.
+        self.guide = self.module.build_guide(self.cmds)
         # Where things sit, one file per module: an adapter is built FOR
         # an aircraft, and the Hornet and the Viper are two layouts. Set
         # here rather than declared on the class, because the class does
         # not know which aircraft it is yet.
         self.BINDS = f'dcs-{self.aircraft}-binds.json'
-        self._needs = families(self.cmds, self.guide,
-                               candidates(self.module, self.cmds, self.guide))
+        self._needs = families(
+            self.module, self.cmds, self.guide,
+            candidates(self.module, self.cmds, self.guide))
         # Where things sit, onto those same needs -- so `NEEDS` is the
         # list the screen walks AND the list the plan is built from, not
         # two lists that happen to agree.
@@ -883,9 +929,15 @@ class Dcs(adapter.Planner):
         # the stick -- so the `chose` pass takes those controls first and
         # the screen opens green on them rather than rebuilding every mark
         # from the planner.
-        return place(self.module, self.cmds, self.guide,
-                     candidates(self.module, self.cmds, self.guide),
-                     needs=self._needs)
+        got = place(self.module, self.cmds, self.guide,
+                    candidates(self.module, self.cmds, self.guide),
+                    needs=self._needs)
+        # Once per adapter, and `Adapter.answers` says why. In practice
+        # `__init__` has already read them onto these same needs, which
+        # is where it has to happen: `place` above takes the control you
+        # chose before anything is scored.
+        self.answers(self._needs)
+        return got
 
 
     @typing.override
@@ -929,7 +981,7 @@ class Dcs(adapter.Planner):
         return files
 
     @typing.override
-    def save_needs(self, needs, axes=()):
+    def save_needs(self, needs):
         """Where things sit, in the family's own file.
 
         One per module, because an adapter is built for one: the Hornet
@@ -937,12 +989,34 @@ class Dcs(adapter.Planner):
         needs file beside it -- DCS derives its needs from the module's
         vocabulary on every run, so there is no judgement to keep.
         """
-        # `axes` goes nowhere: DCS resolves them from the module's own
-        # vocabulary on every run, so there is no file to keep them in --
-        # and turning one round on the screen lasts until you quit.
         corneeds.save_assignments(self.here, self.BINDS, needs)
         return (f'wrote where {sum(1 for n in needs if n.assignment)} '
                 f'things sit to {self.BINDS}')
+
+    @typing.override
+    def offers(self):
+        """`a` changes which module the screen is of.
+
+        DCS is the one game that lays out a list that depends on an
+        argument: the Hornet's commands are not the Su-25T's, so they are
+        different needs, a different store and a different kneeboard.
+        That is why the wizard had a menu of its own, and it is one key.
+        """
+        def pick(_rv, tui):
+            found = self.module.discover_aircraft(self.cfg)
+            keys = sorted(found, key=lambda k: found[k]['display'].lower())
+            got = tui.menu('Which module', [found[k]['display'] for k in keys],
+                           index=keys.index(self.aircraft)
+                           if self.aircraft in keys else 0)
+            if got is None or keys[got] == self.aircraft:
+                return 'the same module'
+            return type(self)(aircraft=keys[got],
+                              backup_dir=self.backup_dir)
+
+        # `t` for the type of aircraft: `a` and `A` are the family's,
+        # for browsing the vocabulary, and the screen refuses a key it
+        # already answers to rather than letting one shadow the other.
+        return [('t', 'type', pick)]
 
     @typing.override
     def sheet_suffix(self):
@@ -969,9 +1043,9 @@ class Dcs(adapter.Planner):
             f'DCS {self.aircraft}', ident='#',
             devices={r: d.product for r, d in devs.items()})
         sh.note('Button numbers',
-                'The ones DCS shows, one higher than the OS number the '
-                'device map uses.')
-        for p in sorted(layout.placed, key=lambda p: (p.role, p.ctrl.label)):
+                'These are the numbers DCS shows. Each one is higher by '
+                'one than the number the device map uses.')
+        for p in sorted(layout.on_buttons, key=lambda p: (p.role, p.ctrl.label)):
             mine = p.need.assignment or {}
             mark = '' if (mine.get('how') == corneeds.ACCEPTED
                           and mine.get('control') == p.ctrl.id) else '?'
@@ -983,33 +1057,34 @@ class Dcs(adapter.Planner):
                         part=p.ctrl.direction(button) or '',
                         ident=f'BTN{button + 1}', does=name,
                         bindings={'': name}, mark=mark))
-        for plan in layout.axes:
-            if plan.axis is None:
-                continue
-            g = devs[plan.role].axis_group(plan.axis.index)
-            sh.add_axis(plan.role, g.label if g else plan.axis.label,
-                        f'axis {plan.axis.index}',
-                        plan.does + (' (inverted)' if plan.invert else ''))
+        for p in layout.on_axes:
+            a = devs[p.role].axis(p.slots[0][0].index)
+            g = devs[p.role].axis_group(a.index)
+            sh.add_axis(p.role, g.label if g else a.label,
+                        f'axis {a.index}',
+                        p.need.what + (' (inverted)' if p.need.invert
+                                       else ''))
         for role, ctrl in layout.free:
             sh.add_free(role, ctrl.label)
-        # Ordered by how many of the shipped profiles bind each one, so
-        # the top of the list is the part worth reading. The count itself
-        # stays off the page: `5 factory profiles` beside a command name
-        # is a number you can do nothing with, and the order says what it
-        # was for.
-        sh.unplaced_note = 'most-wanted first, and nothing here fits'
-        for name, kind, _votes in unbound(self.module, self.cmds,
-                                          self.guide, self.aircraft):
+        # In the list's own order: fly it, take off and land, fight with
+        # it, and by name inside each. It used to be ordered by how many
+        # of the shipped profiles bound each one, with the count off the
+        # page because `5 factory profiles` beside a command name is a
+        # number you can do nothing with.
+        sh.unplaced_note = 'these are on the list, and nothing here fits'
+        for name, kind in unbound(self.module, self.cmds,
+                                  self.guide, self.aircraft):
             sh.add_unplaced(name, kind)
         return sh
 
     @typing.override
     def arguments(self, parser):
         parser.add_argument('--audit', action='store_true',
-                            help='list bindings that no longer match the '
-                                 'hardware')
+                            help='List the bindings that no longer match '
+                                 'the hardware.')
         parser.add_argument('--check', action='store_true',
-                            help='compare against the results file')
+                            help='Compare the plan with the results '
+                                 'file.')
 
     @typing.override
     def paths(self, args):
@@ -1041,15 +1116,7 @@ class Dcs(adapter.Planner):
         """The proposal against what is in the results file."""
         have = json.load(open(results_path()))['aircraft'].get(
             self.aircraft, {})
-        mine = {}
-        for need, pair, _ in rows(layout):
-            if not pair or need.shape == 'axis':
-                continue                 # (role, [axis]) has no buttons
-            role, c = pair
-            for h, b in lay_out(self.module, c, need.members, self.cmds,
-                                press_only=len(need.members) == 1
-                                and len(c.bindable_buttons) > 1).items():
-                mine[h] = (role, b)
+        mine = written(layout)
         out = ['', '--- against what you bound by hand ---']
         same = diff = 0
         for h, v in have.items():
@@ -1077,8 +1144,9 @@ class Dcs(adapter.Planner):
         # `rows()` hands back the need and where it went, not the
         # placement, and the account of WHY is on the placement.
         held = {id(p.need): p for p in layout.placed}
+        spots = written(layout)
         for need, pair, s in out:
-            if need.shape == 'axis':
+            if need.takes == corneeds.AXIS:
                 role, axs = pair if pair else (None, [])
                 a = axs[0] if axs else None
                 name0 = self.cmds[need.members[0]]['name'].lower()
@@ -1097,12 +1165,8 @@ class Dcs(adapter.Planner):
             role, c = pair
             lines.append(f'  {need.what[:38]:40s} {role:8s} {c.kind:9s} '
                          f'{c.label}')
-            spots = lay_out(self.module, c, need.members, self.cmds,
-                            press_only=len(need.members) == 1
-                            and len(c.bindable_buttons) > 1,
-                            borrowed=need.borrowed)
             for h in need.members:
-                b = spots.get(h)
+                b = spots.get(h, (None, None))[1]
                 w = c.direction(b) if b is not None else '?'
                 lines.append(f'      {self.cmds[h]["name"][:46]:48s} '
                              f'-> {str(b):>3s} {w}')

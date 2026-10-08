@@ -165,12 +165,13 @@ def profile_dir():
         return os.environ['X4_DIR']
     base = game.in_prefix(APPID, *PROFILE_PARTS)
     if base is None:
-        sys.exit(f'no X4 profile directory in the prefix for appid {APPID} — '
-                 'run the game once, or set X4_DIR')
+        sys.exit('The prefix for appid '
+                 f'{APPID} has no X4 profile directory. Run the game once, '
+                 'or set X4_DIR.')
     players = [os.path.join(base, d) for d in sorted(os.listdir(base))
                if os.path.isdir(os.path.join(base, d))]
     if not players:
-        sys.exit(f'{base} has no player directory yet — run X4 once')
+        sys.exit(f'{base} has no player directory yet. Run X4 once.')
     return players[-1]
 
 
@@ -333,9 +334,11 @@ def catalogue(voc=None):
     to anything outside this file, and the three-way kind stays recoverable
     from the id for the writer that needs it.
 
-    No `rank`: X4's four profiles each bind 314-338 of the 456, and three
-    of the four are the player's own saved layouts, so counting them
-    separates nothing. A derived stand-in would be read as a fact.
+    No count of how many of X4's own profiles bind each action: the
+    record has nowhere to put one any more. It never had one here either
+    -- X4's four profiles each bind 314-338 of the 456, and three of the
+    four are the player's own saved layouts, so counting them separated
+    nothing.
     """
     voc = vocabulary() if voc is None else voc
     return [cactions.Action(i, readable(i),
@@ -414,9 +417,9 @@ class X4Harvest(adapter.Harvest):
     @typing.override
     def arguments(self, parser):
         parser.add_argument('--vocab', action='store_true',
-                            help='what X4 will accept a binding for')
+                            help='List what X4 accepts a binding for.')
         parser.add_argument('--grep', metavar='WORD',
-                            help='vocabulary entries matching a word')
+                            help='List the entries that match a word.')
 
     @typing.override
     def read(self, args):

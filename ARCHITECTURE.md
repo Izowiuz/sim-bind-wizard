@@ -36,7 +36,7 @@
                               in the tool about two controls at once
       core/backup.py          copy what a writer is about to replace; put it back
       core/review.py          the plan on screen: keep or drop each binding
-      core/sheet.py           Sheet, Row, AxisRow -> markdown and html
+      core/sheet.py           Sheet, Row -> markdown and html
       core/sheet-template.html
       core/capture.py         the js protocol: Device, wait_input, detect_roles
       core/tui.py             the curses shell every screen draws in,
@@ -64,8 +64,9 @@
 layout, which is the one real difference in its sheet: half of what is bound by
 the time you read a page was confirmed at the stick and half is still the
 planner's proposal, so its rows carry `Row.mark` — `?` — and its "not placed"
-list is ordered by how many factory profiles bind each thing. Both of those
-live in `core/sheet.py` now and any confirm-rather-than-invent game gets them.
+list is ordered the way its own list is, by theme and then by name. Both of
+those live in `core/sheet.py` now and any confirm-rather-than-invent game
+gets them.
 
 It used to own a writer and a 121-line template of its own, and that is how the
 page drifted: the shared sheet learned to put axes inside their device, to split
@@ -112,7 +113,7 @@ in scope in those two files.
 ## Flow
 
     the game's own files ──► harvest.py ──► <game>-*.json       (gitignored)
-                                                │ vocabulary, ranking, numbering
+                                                │ vocabulary, numbering
                                                 ▼
     captures/*.toml ──► devicemap ──► by_role ──► {kind: Device}
                                                 │
@@ -157,7 +158,7 @@ in scope in those two files.
 ## core.needs
 
     Need(what, shape, bindings=(), push=None, urgency=IN_THE_AIR,
-         suits=None, dev=None, prefer=None, on=None, rank=0,
+         suits=None, dev=None, prefer=None, on=None,
          category=None, yours=None, held=False, rapid=False,
          by_feel=False, costly=False, modifier=False)
 
@@ -170,7 +171,10 @@ in scope in those two files.
 | `suits` | matched against the control's `suits` in the map |
 | `dev` | device kind it belongs on |
 | `prefer` | pin to a control by its map label |
-| `on` | direction names the switch physically moves in |
+| `on` | which parts of the control: a switch's direction names, or which axis of a multi-axis control (`['y']`) |
+| `takes` | `BUTTON` or `AXIS` — which of a control's two kinds of input |
+| `invert` | an axis binding's direction; the one thing `i` changes |
+| `find` | a search only the game can answer, carried and not read |
 
 Derived: `slots`, `wanted` (slots + push), `shapes` (after substitution),
 `first_shape`. `relaxed` is set when the allocator reached past the floor.
@@ -189,10 +193,26 @@ Derived: `slots`, `wanted` (slots + push), `shapes` (after substitution),
 game cannot address — BMS reads only a device's first 32 buttons.
 
 A `Placement` carries `need`, `role`, `ctrl`, `points`, and
-`slots = [(button index, payload)]` with the push appended.
+`slots = [(button index, payload)]` with the push appended. An axis
+placement's index is an `OnAxis(index)` rather than an integer: a
+control's buttons and its axes are numbered separately -- the throttle's
+mini-stick is button 23 and axes 0 and 1 -- so the slot has to say which
+namespace it means, and a plain integer cannot.
+
+`Layout.placed` holds both. `on_axes` and `on_buttons` are views for a
+FORMAT that spells them differently -- DCS's `axisDiffs` against its
+`keyDiffs`, X4's `INPUT_SOURCE_JOYAXES` against `INPUT_SOURCE_JOYBUTTONS`.
 
 Passes, in order:
 
+0. **yours** — `assignment.how == CHOSE`. What you put there by hand,
+   taken before anything is scored; nothing refuses it.
+0. **named** — `takes == AXIS`. Resolved rather than scored: the need says
+   `device throttle, shape lever` or names one lever in `prefer`, and the
+   map has one of it. It takes no control out of play, because two
+   functions on one axis is the normal case -- X4 steers with the stick's
+   y axis and walks with it, War Thunder has an aeroplane and a
+   helicopter on every one.
 1. **pinned** — `prefer` set, before urgency. A pin whose control is taken is
    reported and deferred.
 2. **floored** — by `urgency`, honouring `MIN_REACH`.
@@ -222,11 +242,11 @@ controls that fit, the least precious one takes the need.
 
     Sheet(title, subtitle, ident='#', contexts=('',), devices={role: name})
       .add(Row(role, control, part, ident, does, bindings={ctx: str|[str]}, edge))
-      .add_axis(AxisRow(role, control, ident, does))
+      .add_axis(role, control, ident, does, context='')   # a Row with no part
       .note(heading, [(term, text)] | text)
       .free = [(role, control, ident, reach)]
       .unplaced = [(what, shape)]
-      .markdown(path) / .html(path) -> (path, rows, axes)
+      .markdown(path) / .html(path) -> (path, rows, how many are axes)
 
 `ident` names the game's own numbering. One unnamed context renders the binding
 as a second line under the plain-English name; several render a column each.

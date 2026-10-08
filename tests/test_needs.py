@@ -114,8 +114,8 @@ class Reach(unittest.TestCase):
 
 
 class Pins(unittest.TestCase):
-    """`prefer` is a choice, and a choice has to outrank the ordering as well
-    as the ranking or it is not one."""
+    """`prefer` is a choice, and a choice has to outrank the ordering or
+    it is not one."""
 
     def test_a_pin_beats_the_ceiling(self):
         # The pin used to be a +500 bonus applied AFTER the ceiling, so a
@@ -227,9 +227,9 @@ class NeedsOnDisk(unittest.TestCase):
     def test_every_judgement_survives(self):
         one = Need('Airbrake', 'hat2', [[Bind('OUT')], [Bind('IN')]],
                    urgency=IN_A_TURN, suits='flight',
-                   on=('forward', 'back'), rank=17)
+                   on=('forward', 'back'))
         got = self.back(one)
-        for f in ('what', 'shape', 'urgency', 'suits', 'on', 'rank'):
+        for f in ('what', 'shape', 'urgency', 'suits', 'on'):
             self.assertEqual(getattr(one, f), getattr(got, f), f)
 
     def test_a_job_nobody_wrote_is_a_mistake_in_the_file(self):
@@ -369,6 +369,51 @@ class NeedsOnDisk(unittest.TestCase):
         (back,) = read_needs(corneeds.dump_needs([one]))
         corneeds.read_assignments([row], [back])
         self.assertEqual([3, None], back.assignment['buttons'])
+
+    def test_an_axis_answer_lives_with_the_other_answers(self):
+        # Which lever you confirmed and which way round you left it are
+        # ANSWERS, and they are in the answers file with every other
+        # answer -- one list, keyed the same way, read by the same
+        # reader. They had a section of their own, with rows of their own
+        # shape, which is what made every reader of that file need two
+        # code paths.
+        pitch = corneeds.Need('Pitch', 'stick', [[]],
+                              takes=corneeds.AXIS, device='stick',
+                              on=('y',), invert=True)
+        pitch.assignment = {'role': 'stick', 'control': 'main-stick',
+                            'axis': 1, 'how': corneeds.ACCEPTED}
+        (row,) = corneeds.dump_assignments([pitch])
+        self.assertEqual('Pitch', row['what'])
+        self.assertEqual(1, row['axis'])
+        self.assertTrue(row['invert'])
+        self.assertEqual(corneeds.ACCEPTED, row['how'])
+
+        back = corneeds.Need('Pitch', 'stick', [[]], takes=corneeds.AXIS,
+                             device='stick', on=('y',))
+        corneeds.read_assignments([row], [back])
+        self.assertEqual(1, (back.assignment or {}).get('axis'))
+        self.assertTrue(back.invert, 'which way round you left it')
+
+    def test_an_axis_nobody_has_touched_is_not_written(self):
+        # The file holds answers, and `the game worked it out` is not one.
+        pitch = corneeds.Need('Pitch', 'stick', [[]], takes=corneeds.AXIS)
+        self.assertEqual([], corneeds.dump_assignments([pitch]))
+
+    def test_two_answers_of_one_name_keep_their_own(self):
+        # MSFS asks for `KEY_BRAKES` twice, once for the aeroplane and
+        # once for the helicopter. Keyed on the name alone, the second
+        # took the first one's answer and one row stayed purple.
+        def one(invert):
+            n = corneeds.Need('KEY_BRAKES', 'lever', [[]],
+                              takes=corneeds.AXIS, invert=invert)
+            n.assignment = {'role': 'stick', 'control': 'brake', 'axis': 5,
+                            'how': corneeds.ACCEPTED}
+            return n
+        rows = corneeds.dump_assignments([one(False), one(True)])
+        back = [corneeds.Need('KEY_BRAKES', 'lever', [[]],
+                              takes=corneeds.AXIS) for _ in range(2)]
+        corneeds.read_assignments(rows, back)
+        self.assertEqual([False, True], [n.invert for n in back])
 
     def test_a_desk_nobody_has_saved_yet_is_not_an_error(self):
         # The binds file is written by the review screen. A game somebody
@@ -599,6 +644,281 @@ class Rejections(unittest.TestCase):
         self.assertEqual('Real button', placed[0].ctrl.label)
 
 
+class AnAxisIsPlacedLikeAnythingElse(unittest.TestCase):
+    """Scored against candidates, like a button, and exclusive within a
+    context.
+
+    An axis used to be a second model of the whole program -- its own
+    object, its own resolver, its own file section, its own rows on the
+    screen and in the sheet, its own branch of every key. The last of it
+    was the decision: the core took the first control of the right kind
+    in device order, and three games wrote their own comparisons around
+    that as chains of `if`.
+    """
+
+    def desk(self):
+        return fake.hotas(
+            stick_controls=[fake.button('Thumb', 0, reach=fake.THUMB),
+                            fake.control('stick', 'Main stick', [],
+                                         axes=[0, 1, 2]),
+                            fake.control('lever', 'Brake lever', [],
+                                         axes=[3])],
+            stick_axes=[fake.axis(0, role='x'), fake.axis(1, role='y'),
+                        fake.axis(2, role='z'),
+                        fake.axis(3, hid='Slider', rest='min')],
+            throttle_controls=[fake.control('lever', 'Left lever', [],
+                                            axes=[0]),
+                               fake.control('lever', 'Right lever', [],
+                                            axes=[1])],
+            throttle_axes=[fake.axis(0, hid='RX', rest='mid'),
+                           fake.axis(1, hid='RY', rest='mid')])
+
+    def axis(self, what, **kw):
+        kw.setdefault('bindings', [[]])
+        return Need(what, kw.pop('shape', 'stick'),
+                    takes=corneeds.AXIS, **kw)
+
+    def test_it_lands_on_the_axis_the_need_names(self):
+        devs = self.desk()
+        pitch = self.axis('Pitch', device='stick', on=('y',))
+        placed, un, _free = allocate([pitch], devs)
+        (p,) = placed
+        self.assertEqual([], un)
+        self.assertEqual('Main stick', p.ctrl.label)
+        self.assertEqual(corneeds.OnAxis(1), p.slots[0][0])
+        # Scored, like anything else. `named` is what a placement says
+        # when the GAME named the axis outright -- DCS reading pitch out
+        # of a command name -- and then there was nothing to compare.
+        self.assertEqual('floored', p.why.how)
+        self.assertTrue(p.points)
+        self.assertTrue(p.why.parts, 'and it says what the points were')
+
+    def test_a_lever_can_be_named_outright(self):
+        devs = self.desk()
+        thr = self.axis('Throttle', shape='lever', device='throttle',
+                        prefer='Right lever')
+        placed, _un, _free = allocate([thr], devs)
+        self.assertEqual('Right lever', placed[0].ctrl.label)
+
+    def test_without_a_name_it_takes_the_first_of_that_kind(self):
+        devs = self.desk()
+        thr = self.axis('Throttle', shape='lever', device='throttle')
+        placed, _un, _free = allocate([thr], devs)
+        self.assertEqual('Left lever', placed[0].ctrl.label)
+
+    def test_two_functions_on_one_axis_is_not_a_conflict(self):
+        # The normal case, not a clash: X4 steers with the stick's y axis
+        # and walks with it, Elite flies and drives with the same lever,
+        # War Thunder has an aeroplane and a helicopter on every one.
+        devs = self.desk()
+        needs = [self.axis('Pitch', device='stick', on=('y',)),
+                 self.axis('Walk', device='stick', on=('y',))]
+        placed, un, _free = allocate(needs, devs)
+        self.assertEqual([], un)
+        self.assertEqual([corneeds.OnAxis(1)] * 2,
+                         [p.slots[0][0] for p in placed])
+
+    def test_it_takes_no_button_out_of_play(self):
+        # A control's axes do not stop its buttons being free, and the
+        # named pass runs before everything: if it took the control, the
+        # thumb button would have nowhere to put a trigger.
+        devs = self.desk()
+        needs = [self.axis('Pitch', device='stick', on=('y',)),
+                 Need('Fire', 'button', ['FIRE'], urgency=IN_A_TURN)]
+        placed, un, _free = allocate(needs, devs)
+        self.assertEqual([], un)
+        self.assertEqual('Thumb',
+                         next(p.ctrl.label for p in placed
+                              if p.need.what == 'Fire'))
+
+    def test_an_axis_index_is_not_a_button_index(self):
+        # A control's buttons and its axes are numbered separately, so a
+        # slot index has to say which it means. As plain integers,
+        # `(throttle, 2)` was a lever and a hat direction at once.
+        self.assertNotEqual(corneeds.OnAxis(2), 2)
+        self.assertNotIn(corneeds.OnAxis(2), {2})
+        self.assertEqual(corneeds.OnAxis(2), corneeds.OnAxis(2))
+        self.assertEqual('axis 2', str(corneeds.OnAxis(2)))
+
+    def test_a_desk_without_it_leaves_the_need_unplaced(self):
+        devs = self.desk()
+        pedals = self.axis('Pedals', shape='pedal', device='stick')
+        placed, un, _free = allocate([pedals], devs)
+        self.assertEqual([], placed)
+        self.assertEqual(['Pedals'], [n.what for n in un])
+
+    def test_a_control_carrying_an_axis_is_not_free(self):
+        # `free` meant every BUTTON of it was free -- and the main stick
+        # has no buttons at all, so all zero of them were spare and it
+        # was offered as a free control with pitch on it.
+        devs = self.desk()
+        _placed, _un, free = allocate(
+            [self.axis('Pitch', device='stick', on=('y',))], devs)
+        self.assertNotIn('Main stick', [c.label for _r, c in free])
+        self.assertIn('Left lever', [c.label for _r, c in free])
+
+    def test_a_search_is_the_game_s_to_answer(self):
+        # War Thunder's brake is "a slider or lever on the stick you can
+        # read absolutely", and no vocabulary of kinds and labels says
+        # that. It is the one place a game still answers for itself.
+        devs = self.desk()
+        asked = []
+
+        def finds(need, got):
+            asked.append(need.what)
+            dev = got['stick']
+            a = dev.axis(3)
+            return 'stick', dev.axis_group(3), a
+
+        brake = self.axis('Brake', shape='lever', device='stick',
+                          find='brake')
+        placed, _un, _free = allocate([brake], devs, finds=finds)
+        self.assertEqual(['Brake'], asked)
+        self.assertEqual('Brake lever', placed[0].ctrl.label)
+
+    def test_the_best_fit_wins_rather_than_the_first(self):
+        # Two dials, one resting at zero. Zoom needs that one -- at rest
+        # anywhere else it is part-zoomed from the moment the game starts
+        # -- and an antenna only needs one that stays put, so zoom has
+        # the better claim and the antenna takes the other. In device
+        # order the antenna came first and took it.
+        devs = fake.hotas(
+            throttle_controls=[fake.control('dial', 'Left dial', [],
+                                            axes=[0]),
+                               fake.control('dial', 'Right dial', [],
+                                            axes=[1])],
+            throttle_axes=[fake.axis(0, rest='min'),
+                           fake.axis(1, rest='centred')])
+        antenna = self.axis('Antenna', shape='dial', device='throttle',
+                            rests='mid')
+        zoom = self.axis('Zoom', shape='dial', device='throttle',
+                         rests='min')
+        placed, un, _free = allocate([antenna, zoom], devs)
+        where = {p.need.what: p.ctrl.label for p in placed}
+        self.assertEqual([], un)
+        self.assertEqual('Left dial', where['Zoom'])
+        self.assertEqual('Right dial', where['Antenna'])
+
+    def test_two_contexts_share_one_axis_and_two_jobs_do_not(self):
+        # X4 steers with the stick's y axis and walks with it, Elite
+        # flies and drives with one lever, War Thunder has an aeroplane
+        # and a helicopter on every one: you are never doing both at
+        # once, so sharing there is the point. Two jobs in ONE context on
+        # one axis would drive both at the same time, off one lever.
+        devs = fake.hotas(
+            throttle_controls=[fake.control('lever', 'Big lever', [],
+                                            axes=[0]),
+                               fake.control('lever', 'Little lever', [],
+                                            axes=[1])],
+            throttle_axes=[fake.axis(0, rest='mid'),
+                           fake.axis(1, rest='min')])
+
+        def one(what, mode):
+            n = Need(what, 'lever', [[Bind(what, mode=mode)]],
+                     takes=corneeds.AXIS, device='throttle', rests='mid')
+            return n
+        ship, buggy = one('Throttle', 'Ship'), one('DriveSpeed', 'SRV')
+        placed, _un, _free = allocate([ship, buggy], devs)
+        self.assertEqual({'Big lever'}, {p.ctrl.label for p in placed},
+                         'two contexts, one lever')
+
+        prop = one('PropPitch', 'Ship')
+        placed, _un, _free = allocate([ship, prop], devs)
+        self.assertEqual({'Big lever', 'Little lever'},
+                         {p.ctrl.label for p in placed},
+                         'one context, two jobs, two levers')
+
+    def test_two_axes_that_move_together_are_one_input(self):
+        # The VMAX's throttle levers travel as a pair until you release
+        # the catch, so a function on the second one moves with whatever
+        # is on the first. Counted separately, MSFS's prop pitch went on
+        # the twin of its own throttle.
+        devs = fake.hotas(
+            throttle_controls=[fake.control('lever', 'Left lever', [],
+                                            axes=[0]),
+                               fake.control('lever', 'Right lever', [],
+                                            axes=[1]),
+                               fake.control('lever', 'Side lever', [],
+                                            axes=[2])],
+            throttle_axes=[fake.axis(0, rest='mid', moves_with=[1],
+                                     coupling='switchable'),
+                           fake.axis(1, rest='mid', moves_with=[0],
+                                     coupling='switchable'),
+                           fake.axis(2, rest='min')])
+        thr = self.axis('Throttle', shape='lever', device='throttle',
+                        rests='mid')
+        prop = self.axis('PropPitch', shape='lever', device='throttle',
+                         rests='mid')
+        placed, _un, _free = allocate([thr, prop], devs)
+        where = {p.need.what: p.ctrl.label for p in placed}
+        self.assertEqual('Left lever', where['Throttle'])
+        self.assertEqual('Side lever', where['PropPitch'],
+                         'not the twin, which moves with the throttle')
+
+    def test_with_nothing_free_it_shares_rather_than_go_homeless(self):
+        # War Thunder brakes both wheels off one lever because the desk
+        # has one brake lever. Splitting them across two would be a worse
+        # answer than the one it has, and refusing the second is worse
+        # still.
+        devs = fake.hotas(
+            stick_controls=[fake.control('lever', 'Brake lever', [],
+                                         axes=[0])],
+            stick_axes=[fake.axis(0, rest='min')])
+        left = self.axis('BrakeLeft', shape='lever', device='stick',
+                         rests='min')
+        right = self.axis('BrakeRight', shape='lever', device='stick',
+                          rests='min')
+        placed, un, _free = allocate([left, right], devs)
+        self.assertEqual([], un)
+        self.assertEqual(['Brake lever'] * 2, [p.ctrl.label for p in placed])
+
+    def test_the_resting_ask_is_held_to_the_map_s_own_words(self):
+        # A word the map does not use is a match that can never fire, and
+        # the only sign would be an axis quietly on the wrong lever.
+        with self.assertRaises(ValueError) as caught:
+            corneeds.read_needs([{'what': 'Pitch', 'shape': 'stick',
+                                  'takes': corneeds.AXIS, 'rests': 'middle',
+                                  'bindings': [[]]}])
+        self.assertIn('middle', str(caught.exception))
+        self.assertIn('centred', str(caught.exception))
+
+    def test_an_axis_that_only_reports_its_extremes_is_refused(self):
+        # A mini-hat wired to an axis: pitch on it is full nose-up, full
+        # nose-down and no flying.
+        devs = fake.hotas(
+            stick_controls=[fake.control('stick', 'Main stick', [],
+                                         axes=[0])],
+            stick_axes=[fake.axis(0, role='y', stepped=True)])
+        pitch = self.axis('Pitch', device='stick', on=('y',))
+        placed, un, _free = allocate([pitch], devs)
+        self.assertEqual([], placed)
+        self.assertEqual(['Pitch'], [n.what for n in un])
+
+    def test_the_order_a_pass_visits_things_in_stays_inside_it(self):
+        # It is worked out best-fit-first, and the result goes back into
+        # the file's order: letting the visiting order through rewrote
+        # every game's profile with the same bindings shuffled.
+        devs = self.desk()
+        first = self.axis('Zzz', shape='lever', device='stick', rests='min')
+        second = self.axis('Aaa', device='stick', on=('y',), rests='centred')
+        placed, _un, _free = allocate([first, second], devs)
+        self.assertEqual(['Zzz', 'Aaa'], [p.need.what for p in placed])
+
+    def test_what_else_would_have_answered_the_same_ask(self):
+        # No score to show -- a lever is named, not chosen -- but the
+        # resolver takes the first that answers and said nothing about
+        # the rest, so on a throttle with two levers the choice nobody
+        # recorded was not visible anywhere.
+        devs = self.desk()
+        thr = self.axis('Throttle', shape='lever', device='throttle')
+        dev = devs['throttle']
+        self.assertTrue(corneeds.answers_need(dev, dev.axis(1), thr))
+        pitch = self.axis('Pitch', device='stick', on=('y',))
+        stick = devs['stick']
+        self.assertFalse(corneeds.answers_need(stick, stick.axis(0), pitch))
+        self.assertTrue(corneeds.answers_need(stick, stick.axis(1), pitch))
+
+
 class LayoutShape(unittest.TestCase):
     """The one shape every adapter returns. Five of them used to disagree,
     which is why nothing generic could be written over the top."""
@@ -612,15 +932,15 @@ class LayoutShape(unittest.TestCase):
         needs = [Need('Gear', 'button', ['GEAR'], urgency=ON_APPROACH),
                  Need('Canopy', 'button', ['CANOPY'], urgency=ON_THE_RAMP),
                  Need('Trim', 'hat8', ['A'] * 8)]
-        return Layout(devs, *allocate(needs, devs),
-                      axes=[corneeds.Axis('stick', None, 'pitch')])
+        return Layout(devs, *allocate(needs, devs))
 
     def test_it_unpacks_in_the_canonical_order(self):
-        devices, placed, unplaced, free, axes = self.layout()
+        # Four names, not five. The axes were the fifth, and they are
+        # placements in the first now.
+        devices, placed, unplaced, free = self.layout()
         self.assertEqual(['stick'], list(devices))
         self.assertEqual(2, len(placed))
         self.assertEqual(['Trim'], [n.what for n in unplaced])
-        self.assertEqual(['pitch'], [a.does for a in axes])
         self.assertTrue(all(len(f) == 2 for f in free))
 
     def test_but_swaps_the_placements_and_keeps_the_rest(self):
@@ -631,7 +951,6 @@ class LayoutShape(unittest.TestCase):
         cut = full.but(one)
         self.assertEqual(['Gear'], [p.need.what for p in cut.placed])
         self.assertEqual(full.devices, cut.devices)
-        self.assertEqual(full.axes, cut.axes)
         self.assertEqual([n.what for n in full.unplaced],
                          [n.what for n in cut.unplaced])
         self.assertEqual(2, len(full.placed), 'the original is untouched')
@@ -1085,7 +1404,8 @@ class TheOrderTheScreenNamesIsTheOrderItUses(unittest.TestCase):
     before, and a paragraph does not move when the key does: it still
     said a pin went first long after what you choose by hand started
     outranking one, and it stopped at the factory count after a fourth
-    step was added under it.
+    step was added under it. The count itself is gone now, which is one
+    fewer step and one fewer thing to disagree about.
 
     One control both needs want and only one can have. Two needs alike
     in everything but the step being tested, and the one the screen
@@ -1120,30 +1440,26 @@ class TheOrderTheScreenNamesIsTheOrderItUses(unittest.TestCase):
             self.need('Urgent', urgency=IN_A_TURN),
             self.need('Pinned', prefer='Only one', urgency=ON_THE_RAMP)))
 
-    def test_3_being_more_urgent_beats_the_factory_count(self):
-        self.assertEqual('Urgent', self.wins(
-            self.need('Counted', urgency=IN_THE_AIR, rank=99),
-            self.need('Urgent', urgency=IN_A_TURN, rank=0)))
-
-    def test_4_the_factory_count_beats_the_name(self):
-        # `Aaa` sorts first, so only the count can put `Zzz` ahead.
+    def test_3_being_more_urgent_beats_the_name(self):
+        # `Aaa` sorts first, so only the band can put `Zzz` ahead.
         self.assertEqual('Zzz', self.wins(
-            self.need('Aaa', rank=1), self.need('Zzz', rank=9)))
+            self.need('Aaa', urgency=IN_THE_AIR),
+            self.need('Zzz', urgency=IN_A_TURN)))
 
-    def test_5_the_name_is_the_last_word(self):
+    def test_4_the_name_is_the_last_word(self):
         self.assertEqual('Aaa', self.wins(
             self.need('Zzz'), self.need('Aaa')))
 
-    def test_6_and_the_name_does_not_depend_on_the_order_they_came_in(self):
+    def test_5_and_the_name_does_not_depend_on_the_order_they_came_in(self):
         # The step that exists so that moving two lines in a file does
         # not move a binding.
         self.assertEqual('Aaa', self.wins(
             self.need('Aaa'), self.need('Zzz')))
 
     def test_the_screen_names_every_step_and_no_more(self):
-        self.assertEqual(6, len([m for m in dir(self)
+        self.assertEqual(5, len([m for m in dir(self)
                                  if m.startswith('test_') and m[5].isdigit()]))
-        self.assertEqual(5, len(corneeds.ORDERED_BY))
+        self.assertEqual(4, len(corneeds.ORDERED_BY))
         for what, why in corneeds.ORDERED_BY:
             self.assertTrue(what and why)
 
@@ -1464,7 +1780,7 @@ class TheSolverIsNeverWorseThanWalkingTheList(unittest.TestCase):
         which is what made the old rig place two of two either way.
 
         The names decide which goes first, and that is deliberate: needs
-        are ordered `(pinned, urgency, -rank, what)` and `what` is what
+        are ordered `(pinned, urgency, what)` and `what` is what
         breaks a tie. `Anything` fits either control and takes the scarce
         one; `Bigger` fits only that one and is left with nothing.
         """
@@ -1505,7 +1821,7 @@ class TheSolverIsNeverWorseThanWalkingTheList(unittest.TestCase):
         self.assertTrue(placed)
 
     def test_a_pinned_need_still_gets_its_pin(self):
-        # And the pin is the WORSE control, so the ranking would put it
+        # And the pin is the WORSE control, so the scoring would put it
         # elsewhere: a pin that only tips the scales is no use once
         # something outranks it. BMS's pinky shift lost the grip pinky
         # button to the landing lights exactly that way.

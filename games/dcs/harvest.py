@@ -2,13 +2,12 @@
 """harvest.py - read DCS's per-module command vocabulary
 
 DESCRIPTION
-    Read every module DCS has installed and report what each one can be told
-    to do, with how many of its factory joystick profiles bind each command.
-    With no arguments, print a summary.
+    Read every module DCS has installed and report what each one can be
+    told to do. With no arguments, print a summary.
 
 FILES
     Mods/aircraft/<module>/Input/<unit>/joystick/default.lua   read
-    dcs-actions.json    written by --json: commands and guide, per module
+    dcs-actions.json    written by --json: the commands, per module
 
 OPTIONS
     --game-dir PATH     the DCS install
@@ -74,15 +73,21 @@ def where_is_the_game(game_dir=None):
     if game_dir:
         cfg['game_dir'] = game_dir
     if not cfg.get('game_dir'):
-        raise SystemExit('pass --game-dir, or run the wizard once so it '
-                         'remembers where DCS is')
+        raise SystemExit('Pass --game-dir, or run the wizard once so '
+                         'that it remembers where DCS is.')
     return cfg
 
 
 def read_module(mod, cfg, key, factory_dir):
-    """{'commands': ..., 'guide': ...} for one aircraft."""
-    cmds = mod.harvest_commands(cfg, key, factory_dir)
-    return {'commands': cmds, 'guide': mod.build_guide(cmds)}
+    """{'commands': ...} for one aircraft: what the module says about
+    itself, and nothing this repo thinks about it.
+
+    The guide used to be written here beside the commands. It is the
+    wizard's own table applied to the command names, so a cached copy
+    would keep an edit to that table out of the next plan; `propose.py`
+    builds it on every run instead.
+    """
+    return {'commands': mod.harvest_commands(cfg, key, factory_dir)}
 
 
 @typing.final
@@ -94,9 +99,11 @@ class DcsHarvest(adapter.Harvest):
 
     @typing.override
     def arguments(self, parser) -> None:
-        parser.add_argument('--game-dir', help='the DCS install')
+        parser.add_argument('--game-dir',
+                            help='Where DCS is installed.')
         parser.add_argument('-a', '--aircraft',
-                            help='one module only (default: all of them)')
+                            help='Read one module only. The default is '
+                                 'every module.')
 
     @typing.override
     def read(self, args) -> dict:
@@ -106,8 +113,9 @@ class DcsHarvest(adapter.Harvest):
         keys = [args.aircraft] if args.aircraft else sorted(ac)
         for k in keys:
             if k not in ac:
-                raise SystemExit(f'no such module: {k} '
-                                 f'(have {", ".join(sorted(ac))})')
+                raise SystemExit(
+                    f'There is no module called {k}. These are installed: '
+                    f'{", ".join(sorted(ac))}.')
         self.where = cfg['game_dir']
         out = {k: read_module(mod, cfg, k, ac[k]['factory_dir'])
                for k in keys}
@@ -118,9 +126,9 @@ class DcsHarvest(adapter.Harvest):
         out = [f'game: {self.where}']
         for key, got in sorted(data['dcs-actions.json']['aircraft'].items()):
             cmds = got['commands']
-            bound = sum(1 for c in cmds.values() if c.get('votes'))
+            axes = sum(1 for c in cmds.values() if c.get('kind') == 'axis')
             out.append(f'  {key:16s} {len(cmds):5d} commands, '
-                       f'{bound} bound by a factory profile')
+                       f'{axes} of them axes')
         return out
 
 

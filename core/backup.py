@@ -68,9 +68,10 @@ def add_argument(parser, game):
     """
     return parser.add_argument(
         '--backup-dir', metavar='DIR', default=None,
-        help='where to copy the files this replaces, before replacing them '
-             f'(default {os.path.join("<repo>", "backups", game)}; '
-             'SIM_BIND_BACKUPS moves it)')
+        help='Where to copy the files this replaces, before it replaces '
+             f'them. The default is '
+             f'{os.path.join("<repo>", "backups", game)}. SIM_BIND_BACKUPS '
+             'moves it.')
 
 
 def _unique(paths):
@@ -185,18 +186,20 @@ def restore(game, which=None, into=None):
     """
     have = runs(game, into)
     if not have:
-        sys.exit(f'no backups for {game} under {dir_for(game, into)}')
+        sys.exit(f'There are no backups for {game} under '
+                 f'{dir_for(game, into)}.')
     if which:
         have = [r for r in have if r[0].startswith(which)]
         if not have:
-            sys.exit(f'{game} has no backup matching {which!r}')
+            sys.exit(f'{game} has no backup that matches {which!r}.')
     _when, path, files = have[-1]
 
     done = []
     for stored, original in files:
         src = os.path.join(path, stored)
         if not os.path.exists(src):
-            print(f'  missing from the backup: {stored}', file=sys.stderr)
+            print(f'  The backup does not have {stored}.',
+                  file=sys.stderr)
             continue
         os.makedirs(os.path.dirname(original), exist_ok=True)
         shutil.copy2(src, original)

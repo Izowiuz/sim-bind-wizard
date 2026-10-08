@@ -52,7 +52,7 @@ forwarded, so `./bind dcs plan -a su-25T` works.
 The scripts are still there to be run directly:
 
     cd games/falconbms
-    ./harvest.py             read the game: vocabulary and ranking
+    ./harvest.py             read the game: its own vocabulary
     ./plan.py --why          what it would bind, and why
     ./plan.py --write --write-axes    into the game
     ./plan.py --sheet --html the kneeboard

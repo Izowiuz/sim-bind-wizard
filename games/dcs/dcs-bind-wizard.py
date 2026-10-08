@@ -42,26 +42,21 @@ NOTES
 # the question a new module actually raises — not 'which button do I
 # press' but 'what is this thing and do I need it?':
 #
-#     * the commands are ranked by how many of the factory HOTAS profiles
-#       shipped with the module bind each one, so a Hornet opens on
-#       trigger, trim, sensor control and TDC rather than on the 800-odd
-#       switches of its cockpit;
+#     * the list is the hint table's answer: every command it puts on a
+#       HOTAS, so a Hornet opens on trigger, trim, sensor control and TDC
+#       rather than on the 800-odd switches of its cockpit;
 #     * they are grouped in the order you learn an aircraft — fly it,
 #       take off and land, fight with it, sensors and radio;
-#     * the selected row explains itself in the three lines above the key
-#       legend: what the control does, where it sits in the real aircraft
-#       and what kind of hardware it wants, and which of your two devices
-#       the factory profiles put it on, and for a switch with a direction
-#       (trim, the castle hat, weapon select, the TDC) which way it goes.
-#       All three stay on screen while you are capturing a button — the
-#       prompt gets its own line — because that is when you need them.
+#     * the selected row explains itself in the two lines above the key
+#       legend: what the control does, and where it sits in the real
+#       aircraft. Both stay on screen while you are capturing a button —
+#       the prompt gets its own line — because that is when you need them.
 #
 # Commands are harvested from the game files themselves: the module's
 # default.lua is run through a Lua interpreter (when one is installed) for
 # the full list with today's names and categories, and the factory joystick
-# profiles supply the hashes of the sim's own commands plus that popularity
-# score. Either way there is no hardcoded function list — the wizard works
-# for any installed module.
+# profiles supply the hashes of the sim's own commands. Either way there is
+# no hardcoded function list — the wizard works for any installed module.
 #
 # Bindings are edited in a table: every command of the section is a row
 # showing its current assignment straight from the results file. Keys:
@@ -93,6 +88,7 @@ NOTES
 #     dcs-bind-wizard.py -g -a su-25T         # write the diff.lua files
 
 import argparse
+import collections
 import copy
 import curses
 import glob
@@ -110,8 +106,8 @@ DEFAULT_RESULTS = os.path.join(SCRIPT_DIR, "dcs-bind-wizard-results.json")
 CORE = os.environ.get("SIM_BIND_WIZARD") or os.path.normpath(
     os.path.join(SCRIPT_DIR, "..", ".."))
 if not os.path.isdir(CORE):
-    raise SystemExit("no shared core at %s\n"
-                     "set SIM_BIND_WIZARD to the sim-bind-wizard checkout"
+    raise SystemExit("There is no shared core at %s.\n"
+                     "Set SIM_BIND_WIZARD to the sim-bind-wizard checkout."
                      % CORE)
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
@@ -125,6 +121,11 @@ from core.game import install_dir                           # noqa: E402
 from core import tui as ctui                                # noqa: E402
 from core.capture import (axis_map, drain, save,             # noqa: E402
                           wait_input)
+#: The bands the hint table answers in. The scale is the core's -- six
+#: games share it -- and only which band a command sits in is this
+#: module's to say.
+from core.needs import (IN_A_TURN, ON_APPROACH,              # noqa: E402
+                        IN_THE_AIR, ON_THE_RAMP)
 
 DCS_APPID = "223750"
 
@@ -386,62 +387,33 @@ def _norm(name):
     return re.sub(r"[^a-z0-9]+", " ", name.lower()).strip()
 
 
-STICK_AXES = ("a2001cdnil", "a2002cdnil")                    # pitch, roll
-THROTTLE_AXES = ("a2004cdnil", "a2005cdnil", "a2006cdnil")   # thrust x3
-
-
-def profile_role(bound, removed):
-    """'stick' / 'throttle' / both / neither, for one factory profile.
-
-    A profile says what its device is by what it does with the four axes
-    DCS hands to every joystick: a stick claims pitch and roll and throws
-    thrust away, a throttle does the opposite, and a button panel drops
-    the lot.
-    """
-    axes = set(STICK_AXES) | set(THROTTLE_AXES)
-    if axes <= removed:
-        return ()                                   # MFD / UFC / panel
-    roles = []
-    if set(STICK_AXES) & bound or set(THROTTLE_AXES) <= removed:
-        roles.append("stick")
-    if set(THROTTLE_AXES) & bound or set(STICK_AXES) <= removed:
-        roles.append("throttle")
-    return tuple(roles)
-
-
 def scan_profiles(dirs):
-    """(hash -> name, hash -> profiles binding it, hash -> {role: count}).
+    """hash -> name, read off the factory joystick profiles.
 
-    'Binds' means the profile added or changed the command rather than
-    only stripping a DCS default off it; the serializer sorts the keys of
-    a block, so "added"/"changed" always sit before ["name"] and
-    "removed" after it. Which device each profile is for is worked out
-    from its axes, so the counts also answer "stick or throttle?".
+    The one thing the shipped profiles are read for, and it is an
+    IDENTIFIER, not advice: the sim's own commands (Pitch, Thrust, gear,
+    the views) carry ids that live in the exe, so a profile that binds
+    one is the only offline place its hash can be found -- and a hash is
+    what `diff.lua` is written against. Twelve of the Hornet's 59
+    bindings have no other source.
+
+    Nothing about a profile's LAYOUT is read any more: which device it
+    was written for, and how many of them bound a command, used to pick
+    the list and the device for every command in the module. See the note
+    on HINTS for why that went.
     """
-    names, votes, where = {}, {}, {}
+    names = {}
     for d in dirs:
         for path in sorted(glob.glob(os.path.join(d, "*.diff.lua"))):
             text = open(path, encoding="utf-8", errors="replace").read()
-            bound, removed = set(), set()
             for m in _HASH_RE.finditer(text):
                 h = m.group(1)
                 block = text[m.end():m.end() + 3000]
                 nm = _DIFF_NAME_RE.search(block)
-                head = block[:nm.start()] if nm else block
                 if nm and (h not in names or (_is_latin(nm.group(1))
                                               and not _is_latin(names[h]))):
                     names[h] = nm.group(1)
-                if '"added"' in head or '"changed"' in head:
-                    bound.add(h)
-                elif '"removed"' in block:
-                    removed.add(h)
-            for h in bound:
-                votes[h] = votes.get(h, 0) + 1
-            for role in profile_role(bound, removed):
-                for h in bound:
-                    where.setdefault(h, {})
-                    where[h][role] = where[h].get(role, 0) + 1
-    return names, votes, where
+    return names
 
 
 _ENGINE_INDEX = {}
@@ -460,7 +432,7 @@ def engine_hash_index(cfg):
     if key not in _ENGINE_INDEX:
         dirs = [a["factory_dir"] for a in discover_aircraft(cfg).values()
                 if a["factory_dir"]]
-        names = scan_profiles(dirs)[0]
+        names = scan_profiles(dirs)
         _ENGINE_INDEX[key] = {_norm(n): h for h, n in names.items()
                               if "cdnil" in h and _is_latin(n)}
     return _ENGINE_INDEX[key]
@@ -559,9 +531,9 @@ def catalogue(cmds):
     command record already carries `ways`, `dir` and `family` -- how a
     switch moves, which way, and what it groups with -- which the shared
     record has no room for and seven places in `propose.py` read. Writing
-    the shared spelling beside it would put name, kind, category and the
-    vote count twice in every one of ~2500 records, for no reader. The
-    record stays one record; only the reading of it is settled here.
+    the shared spelling beside it would put name, kind and category twice
+    in every one of ~2500 records, for no reader. The record stays one
+    record; only the reading of it is settled here.
 
     Keyed by the wizard's command hash, because that is what every DCS
     record uses and what the results file is written against.
@@ -569,13 +541,13 @@ def catalogue(cmds):
     return [cactions.Action(h, c.get('name') or h,
                             kind=('axis' if c.get('kind') == 'axis'
                                   else 'button'),
-                            category=c.get('category'),
-                            rank=c.get('votes') or 0)
+                            category=c.get('category'))
             for h, c in sorted(cmds.items())]
 
 
 def harvest_commands(cfg, aircraft_key, factory_dir):
-    """hash -> {'name', 'kind', 'category', 'votes'} for one aircraft.
+    """hash -> {'name', 'kind', 'category', 'dir', 'family', 'ways'} for
+    one aircraft: what the module says about itself, and nothing else.
 
     Two sources, and the wizard needs both:
 
@@ -585,9 +557,8 @@ def harvest_commands(cfg, aircraft_key, factory_dir):
       commands it carries the ids the diff.lua hash is built from;
     * the factory joystick profiles shipped with the module, which supply
       the hashes of the commands wired to engine constants (the sim's own
-      pitch/thrust/gear/view commands, whose numbers live in the exe),
-      and how many profiles bind each command — the popularity score the
-      Essentials list is built from.
+      pitch/thrust/gear/view commands, whose numbers live in the exe).
+      That is all they supply — `scan_profiles` says why.
 
     With no Lua interpreter around the profiles are the only source, i.e.
     exactly what this did before: fewer commands, and whatever name and
@@ -596,9 +567,8 @@ def harvest_commands(cfg, aircraft_key, factory_dir):
     user_dirs = glob.glob(os.path.join(cfg["saved_games"], "Config",
                                        "Input", input_id(cfg, aircraft_key),
                                        "*"))
-    names, votes, where = scan_profiles([factory_dir] if factory_dir
-                                       else [])
-    user_names = scan_profiles(user_dirs)[0]
+    names = scan_profiles([factory_dir] if factory_dir else [])
+    user_names = scan_profiles(user_dirs)
     for h, name in user_names.items():
         names.setdefault(h, name)
     commands = {h: {"name": name} for h, name in names.items()}
@@ -654,8 +624,6 @@ def harvest_commands(cfg, aircraft_key, factory_dir):
         info["kind"] = "axis" if h.startswith("a") else "button"
         info["category"] = ("Axes" if info["kind"] == "axis"
                             else category_for(info["name"]))
-        info["votes"] = votes.get(h, 0)
-        info["where"] = where.get(h, {})
 
     # default.lua on top: current names and categories for the commands we
     # already have, plus every command no factory profile ever bound
@@ -668,8 +636,7 @@ def harvest_commands(cfg, aircraft_key, factory_dir):
                      or engine_hash_index(cfg).get(_norm(name)))
             if hash_ is None or hash_.startswith("a") != (kind == "axis"):
                 continue
-        info = commands.setdefault(hash_, {"votes": votes.get(hash_, 0),
-                                          "where": where.get(hash_, {})})
+        info = commands.setdefault(hash_, {})
         info["name"] = name
         info["kind"] = kind
         info["category"] = ("Axes" if kind == "axis"
@@ -703,283 +670,390 @@ def build_sections(commands):
     return [(cat, by_cat[cat]) for cat in sorted(by_cat, key=order)]
 
 
-ESSENTIALS_MAX = 80
-CORE_AXES = ("Pitch", "Roll", "Rudder", "Thrust")
-CORE_EXTRA = ("wheel brake",)      # you cannot land without them, yet half
-                                   # the factory profiles leave them alone
-
 THEMES = [
     ("fly", "FLY IT — nothing else matters until these work"),
     ("land", "TAKE OFF AND LAND"),
     ("fight", "FIGHT WITH IT"),
     ("sensors", "SENSORS AND RADIO"),
     ("cockpit", "COCKPIT AND VIEWS"),
-    ("other", "POPULAR IN THE FACTORY PROFILES (no plain-English hint yet)"),
 ]
+
+#: What a command is, said twice on purpose: in words for whoever is
+#: reading the screen, and as data for the layout.
+#:
+#: `on` puts a command on the HOTAS -- it names the device role it belongs
+#: to, or None for "anywhere the points like", and the band it is touched
+#: in. `off` says it is a cockpit control the keyboard can have. The words
+#: cannot carry that: "a handle on the right panel. A spare throttle
+#: switch" and "a cockpit handle: keyboard is fine" are one sentence apart
+#: and mean opposite things to a scorer.
+#:
+#: Being on the HOTAS is also what puts a command on the list to bind --
+#: `essentials` below. That used to be a popularity contest: the module's
+#: commands ranked by how many of its factory joystick profiles bound each
+#: one, cut at a third of the busiest. The question it answered was "what
+#: did Eagle Dynamics' profile authors put on a Warthog", which is not
+#: "what does this aircraft have, and where does it live" -- a profile
+#: says `throttle` because a Warthog has buttons there. So the judgement
+#: is written down here, by hand, where it can be argued with.
+#:
+#: First match wins, so the specific rows sit above the general ones: the
+#: tight row is the one that belongs on the HOTAS, and the broad row under
+#: it explains the rest of the cockpit. `COMM Switch - MIDS A` is the
+#: radio switch on the throttle; the 36 other Hornet commands with "comm"
+#: in their name are panel knobs.
+Hint = collections.namedtuple("Hint", "theme device band hint place")
+
+
+def on(pattern, theme, device, band, hint, place):
+    return pattern, Hint(theme, device, band, hint, place)
+
+
+def off(pattern, theme, hint, place):
+    return pattern, Hint(theme, None, None, hint, place)
+
 
 # What a control actually does, for someone who has never flown the type:
 # the command names come from the module, these are matched onto them by
 # concept, so gear/flaps/trim/countermeasures/radio explain themselves in
-# any aircraft. First match wins — keep the broad patterns last.
+# any aircraft.
 HINTS = [
-    (r"^pitch$", "fly",
-     "Stick fore and aft: pull = nose up.",
-     "The stick itself — its Y axis."),
-    (r"^roll$", "fly",
-     "Stick left and right: banks the jet.",
-     "The stick itself — its X axis."),
-    (r"^rudder$|rudder (left|right)$", "fly",
-     "Yaw. Keeps you straight on the runway and pulls the nose around.",
-     "Pedals if you have them, otherwise the stick's twist axis."),
-    (r"^thrust", "fly",
-     "Engine power.",
-     "The throttle lever — both levers if the jet has Thrust Left/Right."),
-    (r"trim", "fly",
-     "Trims stick forces away so the jet flies hands-off. Used all day.",
-     "On the jet: the TRIM hat on the front of the grip. Give it a "
-     "4-way hat."),
-    (r"paddle", "fly",
-     "Kicks the autopilot off. The 'get me out of this' switch.",
-     "On the jet: the paddle behind the grip. Use a base or pinky lever."),
-    (r"atc |automatic throttle|autothrottle|auto throttle", "fly",
-     "Autothrottle: holds your approach speed for you — a big help on "
-     "the ball.",
-     "On the jet: a button on the inboard side of the left throttle."),
-    (r"autopilot", "fly", "Autopilot master switch.", ""),
-    (r"war emergency power", "fly",
-     "WEP: emergency overboost. Minutes only, then the engine is scrap.",
-     "On the jet: shove the throttle past the gate. Any throttle "
-     "button."),
-    (r"engine rpm", "fly",
-     "Propeller RPM — set together with the throttle.",
-     "On the jet: the blue lever. A second throttle lever or a rotary."),
+    # First, above everything: DCS ships a "(special)" twin of many cockpit
+    # switches -- same switch, one of them written for a HOTAS toggle that
+    # holds its position. Two bindings for one switch is one wasted button,
+    # so the plain one gets it.
+    off(r"\(special\)", "other",
+        "The same switch as the command without `(special)`.",
+        "Bind the plain one."),
 
-    (r"wheel ?brake", "land",
-     "Wheel brakes: hold to slow down.",
-     "On the jet: toe brakes. A brake lever on the stick base stands in."),
-    (r"anti ?skid", "land",
-     "Anti-skid braking — and part of the Hornet's launch bar / hook "
-     "logic.",
-     "A console switch: keyboard is fine."),
-    (r"parking brake", "land",
-     "Parking brake: set before start, release before you taxi.",
-     "A cockpit handle: keyboard is fine."),
-    (r"speed ?brake|air ?brake", "land",
-     "Airbrake: slows you down. Out on approach, in for the go-around.",
-     "On the jet: under your left thumb on the throttle. A 2-way there."),
-    (r"flap", "land",
-     "Flaps — lift at low speed. HALF for takeoff, FULL in the landing "
-     "pattern.",
-     "On the jet: a lever on the left console. A spare 2-way switch on "
-     "the throttle."),
-    (r"gear", "land",
-     "Landing gear up/down. Every jet has a gear limit speed — 250 kt in "
-     "the Hornet.",
-     "On the jet: the gear handle, left panel. A spare 2-way, or keyboard."),
-    (r"nose ?wheel steer|undesignate", "land",
-     "Steers the nosewheel on the ground, undesignates a target in the "
-     "air.",
-     "On the jet: the small button on the front of the grip, under your "
-     "thumb."),
-    (r"hook bypass", "land",
-     "Tells the hook logic whether you are trapping at a FIELD or on the "
-     "CARRIER.",
-     "A cockpit switch: keyboard is fine."),
-    (r"hook", "land",
-     "Tailhook — down for a carrier trap or a field arrestment.",
-     "On the jet: a handle on the right panel. A spare throttle "
-     "switch."),
-    (r"launch bar", "land",
-     "Catapult launch bar: down to hook into the shuttle before the cat "
-     "shot.",
-     "On the jet: a switch on the left console. A spare throttle "
-     "switch."),
-    (r"catapult hook-?up", "land",
-     "Hooks the jet onto the catapult shuttle on the boat.",
-     "A ground-crew call: keyboard is fine."),
-    (r"ball|lso", "land",
-     "The 'ball' call to the LSO, three quarters of a mile behind the "
-     "boat.",
-     "A radio call: keyboard is fine."),
+    on(r"^pitch$", "fly", "stick", IN_A_TURN,
+       "Stick fore and aft: pull = nose up.",
+       "The stick itself — its Y axis."),
+    on(r"^roll$", "fly", "stick", IN_A_TURN,
+       "Stick left and right: banks the jet.",
+       "The stick itself — its X axis."),
+    on(r"^rudder$", "fly", "stick", IN_A_TURN,
+       "Yaw. Keeps you straight on the runway and pulls the nose around.",
+       "Pedals if you have them, otherwise the stick's twist axis."),
+    on(r"^thrust|^throttle$", "fly", "throttle", IN_A_TURN,
+       "Engine power.",
+       "The throttle lever — both levers if the jet has Thrust Left/Right."),
+    # The hat, and the pairs a propeller trimmer ships as two commands.
+    # NOT the Hornet's RUD TRIM knob or its T/O TRIM button: those are
+    # panel controls, and the knob is an axis that would go looking for a
+    # lever.
+    on(r"trimmer switch|^trim hat|^trim (aileron|elevator|rudder) "
+       r"(left|right|up|down)$", "fly", "stick", IN_A_TURN,
+       "Trims stick forces away so the jet flies hands-off. Used all day.",
+       "On the jet: the TRIM hat on the front of the grip. Give it a "
+       "4-way hat."),
+    off(r"trim", "fly",
+        "Trims stick forces away so the jet flies hands-off.",
+        "A panel wheel or knob in this aircraft: keyboard is fine."),
+    off(r"rudder", "fly",
+        "Yaw, one keypress at a time.",
+        "The rudder axis does this better: keyboard is fine."),
+    on(r"paddle", "fly", "stick", IN_A_TURN,
+       "Kicks the autopilot off. The 'get me out of this' switch.",
+       "On the jet: the paddle behind the grip. Use a base or pinky lever."),
+    on(r"atc |automatic throttle|autothrottle|auto throttle", "fly",
+       "throttle", IN_A_TURN,
+       "Autothrottle: holds your approach speed for you — a big help on "
+       "the ball.",
+       "On the jet: a button on the inboard side of the left throttle."),
+    off(r"autopilot", "fly", "Autopilot master switch.",
+        "A panel switch: keyboard is fine. The paddle is what you reach "
+        "for in a hurry."),
+    on(r"war emergency power", "fly", "throttle", IN_A_TURN,
+       "WEP: emergency overboost. Minutes only, then the engine is scrap.",
+       "On the jet: shove the throttle past the gate. Any throttle "
+       "button."),
+    on(r"engine rpm", "fly", "throttle", IN_A_TURN,
+       "Propeller RPM — set together with the throttle.",
+       "On the jet: the blue lever. A second throttle lever or a rotary."),
 
-    (r"^\(\d+\) ", "fight",
-     "Master mode selector: navigation, air-to-ground, gun modes.",
-     "Number keys in the real jet too — a stick hat if you have room."),
-    (r"gun trigger.*(first|1st)", "fight",
-     "Trigger's first detent: gun camera only, no rounds.",
-     "On the jet: the trigger, halfway. Stage 1 of a two-stage "
-     "trigger."),
-    (r"gun trigger|weapon fire|^cannon$|^fire\b", "fight",
-     "Fires the gun or the selected weapon — the trigger's full pull.",
-     "On the jet: the trigger. Your stick's trigger."),
-    (r"weapon release|pickle", "fight",
-     "Pickle button: releases the selected air-to-ground weapon.",
-     "On the jet: the red button on top of the grip, under your thumb."),
-    (r"select (gun|amraam|sidewinder|sparrow|missile)|weapon (select|"
-     r"change)", "fight",
-     "Jumps straight to that missile or the gun without touching an MFD.",
-     "On the jet: the four-way switch on the head of the grip. A stick "
-     "hat."),
-    (r"master arm", "fight",
-     "MASTER ARM — nothing leaves the jet until this says ARM.",
-     "A guarded switch on the panel, not a HOTAS control: keyboard is "
-     "fine."),
-    (r"master mode.*a/a|air.to.air mode", "fight",
-     "A/A master mode: sets the whole jet up for air-to-air in one "
-     "press.",
-     "Panel buttons under the HUD — often moved to spare throttle "
-     "buttons."),
-    (r"master mode.*a/g|air.to.ground mode", "fight",
-     "A/G master mode: sets the jet up for bombing and strafing.",
-     "Panel buttons under the HUD — often moved to spare throttle "
-     "buttons."),
-    (r"dispens|countermeasure|chaff|flare", "fight",
-     "Countermeasures: chaff against radar missiles, flares against heat "
-     "seekers.",
-     "On the jet: the CMS switch, outboard side of the throttle. A "
-     "4-way hat."),
-    (r"jettison", "fight",
-     "Jettison: throws stores off the jet. Emergency weight loss.",
-     "A panel button: keyboard is fine."),
-    (r"ecm|jamm", "fight", "Jammer — noise against enemy radars.",
-     "A panel switch: keyboard is fine."),
-    (r"gunsight|reticle|pipper|aiming", "fight",
-     "Gunsight / aiming reticle setting.", ""),
+    off(r"parking brake|brake parking", "land",
+        "Parking brake: set before start, release before you taxi.",
+        "A cockpit handle: keyboard is fine."),
+    on(r"wheel ?brake", "land", "stick", ON_APPROACH,
+       "Wheel brakes: hold to slow down.",
+       "On the jet: toe brakes. A brake lever on the stick base stands in."),
+    off(r"anti ?skid", "land",
+        "Anti-skid braking — and part of the Hornet's launch bar / hook "
+        "logic.",
+        "A console switch: keyboard is fine."),
+    on(r"speed ?brake|air ?brake", "land", "throttle", ON_APPROACH,
+       "Airbrake: slows you down. Out on approach, in for the go-around.",
+       "On the jet: under your left thumb on the throttle. A 2-way there."),
+    on(r"flap", "land", "throttle", ON_APPROACH,
+       "Flaps — lift at low speed. HALF for takeoff, FULL in the landing "
+       "pattern.",
+       "On the jet: a lever on the left console. A spare 2-way switch on "
+       "the throttle."),
+    on(r"^landing gear (control handle - )?(up|down|up/down)$", "land",
+       None, ON_APPROACH,
+       "Landing gear up/down. Every jet has a gear limit speed — 250 kt in "
+       "the Hornet.",
+       "On the jet: the gear handle, left panel. A spare 2-way switch."),
+    off(r"gear", "land",
+        "Landing gear plumbing: emergency extension, the lights, the test "
+        "switches.",
+        "Panel handles and breakers: keyboard is fine."),
+    on(r"nose ?wheel steer|undesignate", "land", "stick", IN_A_TURN,
+       "Steers the nosewheel on the ground, undesignates a target in the "
+       "air.",
+       "On the jet: the small button on the front of the grip, under your "
+       "thumb."),
+    off(r"hook bypass", "land",
+        "Tells the hook logic whether you are trapping at a FIELD or on the "
+        "CARRIER.",
+        "A cockpit switch: keyboard is fine."),
+    on(r"arresting hook", "land", "throttle", ON_APPROACH,
+       "Tailhook — down for a carrier trap or a field arrestment.",
+       "On the jet: a handle on the right panel. A spare throttle "
+       "switch."),
+    off(r"hook", "land",
+        "Hook wiring and breakers.",
+        "Panel switches: keyboard is fine."),
+    on(r"^launch bar control switch - ", "land", "throttle", ON_APPROACH,
+       "Catapult launch bar: down to hook into the shuttle before the cat "
+       "shot.",
+       "On the jet: a switch on the left console. A spare throttle "
+       "switch."),
+    off(r"launch bar", "land",
+        "Launch bar wiring and breakers.",
+        "Panel switches: keyboard is fine."),
+    off(r"catapult hook-?up", "land",
+        "Hooks the jet onto the catapult shuttle on the boat.",
+        "A ground-crew call: keyboard is fine."),
+    off(r"ball|lso", "land",
+        "The 'ball' call to the LSO, three quarters of a mile behind the "
+        "boat.",
+        "A radio call: keyboard is fine."),
 
-    (r"sensor control switch", "sensors",
-     "The 'castle': hands control to the radar, the pod, helmet or MFD.",
-     "On the jet: the hat on TOP of the grip. A 4-way hat that presses."),
-    (r"designator controller|^tdc", "sensors",
-     "TDC: drives the radar and targeting cursor. Depress = designate.",
-     "On the jet: the thumb slew on the left throttle — a mini-stick "
-     "or hat."),
-    (r"cage", "sensors",
-     "Uncages a seeker so a Sidewinder or Maverick can look around on "
-     "its own.",
-     "On the jet: a button under your index finger on the throttle."),
-    (r"radar elevation", "sensors",
-     "Tilts the radar beam — you aim it at the altitude you expect the "
-     "target.",
-     "On the jet: the antenna wheel on the throttle. A rotary or an axis."),
-    (r"target lock|lock target", "sensors",
-     "Locks whatever sits under the aiming pipper.",
-     "A thumb button on the grip in the real jet too."),
-    (r"unlock", "sensors", "Breaks the lock and goes back to searching.",
-     "Next to the lock button — keep the pair together."),
-    (r"laser", "sensors",
-     "Laser ranger / designator: needed for guided bombs and accurate "
-     "gun ranging.",
-     "A console switch — a spare throttle button works."),
-    (r"raid|fov", "sensors",
-     "Field of view / raid expand for the sensor you are driving.",
-     "On the jet: a button on the throttle grip."),
-    (r"display zoom", "sensors",
-     "Zooms the sensor picture (not the camera) — the TV or radar "
-     "display.", ""),
-    (r"hmd|helmet", "sensors",
-     "Helmet-mounted display: the brightness knob doubles as its "
-     "on/off.",
-     "A panel knob: keyboard is fine."),
-    (r"electro.optical|shkval|i-251|flir|night vision|goggle|lltv",
-     "sensors",
-     "TV or infrared sensor: the picture you aim with, and see at night.",
-     "A console switch: keyboard is fine; the cursor goes on the "
-     "throttle."),
-    (r"recce|event mark", "sensors",
-     "Marks a reconnaissance point. Safe to ignore while you are "
-     "learning.", ""),
-    (r"channel selector|preset", "sensors",
-     "Dials the radio's preset channel.",
-     "A panel knob: keyboard is fine."),
-    (r"comm|radio|voip|intercom|mids", "sensors",
-     "Radio: push-to-talk and the comms menu — ATC, wingmen, tankers.",
-     "On the jet: the radio switch on the throttle. Two buttons will "
-     "do."),
-    (r"waypoint|steer ?point|navigation mode", "sensors",
-     "Steps through your waypoints / picks the navigation mode.",
-     "Panel or UFC: keyboard is fine."),
+    on(r"^\(\d+\) ", "fight", None, IN_A_TURN,
+       "Master mode selector: navigation, air-to-ground, gun modes.",
+       "Number keys in the real jet too — a stick hat if you have room."),
+    on(r"gun trigger.*(first|1st)", "fight", "stick", IN_A_TURN,
+       "Trigger's first detent: gun camera only, no rounds.",
+       "On the jet: the trigger, halfway. Stage 1 of a two-stage "
+       "trigger."),
+    on(r"gun trigger|weapon fire|^cannon$", "fight", "stick", IN_A_TURN,
+       "Fires the gun or the selected weapon — the trigger's full pull.",
+       "On the jet: the trigger. Your stick's trigger."),
+    on(r"weapon release|pickle", "fight", "stick", IN_A_TURN,
+       "Pickle button: releases the selected air-to-ground weapon.",
+       "On the jet: the red button on top of the grip, under your thumb."),
+    on(r"select (gun|amraam|sidewinder|sparrow|missile)|weapon (select|"
+       r"change)", "fight", "stick", IN_A_TURN,
+       "Jumps straight to that missile or the gun without touching an MFD.",
+       "On the jet: the four-way switch on the head of the grip. A stick "
+       "hat."),
+    # The one two-position switch worth the lever over the trigger: the
+    # guard position becomes the switch position, so your own hand tells
+    # you whether the jet is armed.
+    on(r"master arm switch - (arm|safe)$", "fight", "stick", IN_A_TURN,
+       "MASTER ARM — nothing leaves the jet until this says ARM.",
+       "A guarded switch on the panel in the real jet. Give it the lever "
+       "over the trigger."),
+    off(r"master arm", "fight",
+        "Master arm wiring: the combined toggle and the special variants.",
+        "A panel switch: keyboard is fine."),
+    on(r"master mode.*a/a|air.to.air mode", "fight", "throttle", IN_A_TURN,
+       "A/A master mode: sets the whole jet up for air-to-air in one "
+       "press.",
+       "Panel buttons under the HUD — often moved to spare throttle "
+       "buttons."),
+    on(r"master mode.*a/g|air.to.ground mode", "fight", "throttle",
+       IN_A_TURN,
+       "A/G master mode: sets the jet up for bombing and strafing.",
+       "Panel buttons under the HUD — often moved to spare throttle "
+       "buttons."),
+    on(r"^dispense switch - |^countermeasures (flares|chaff) dispense",
+       "fight", "throttle", IN_A_TURN,
+       "Countermeasures: chaff against radar missiles, flares against heat "
+       "seekers.",
+       "On the jet: the CMS switch, outboard side of the throttle. A "
+       "4-way hat."),
+    off(r"dispens|countermeasure|chaff|flare", "fight",
+        "The dispenser's own panel: power, programme, bypass.",
+        "A console switch: keyboard is fine."),
+    off(r"jettison", "fight",
+        "Jettison: throws stores off the jet. Emergency weight loss.",
+        "A panel button: keyboard is fine."),
+    off(r"ecm|jamm", "fight", "Jammer — noise against enemy radars.",
+        "A panel switch: keyboard is fine."),
+    off(r"gunsight|reticle|pipper|aiming", "fight",
+        "Gunsight / aiming reticle setting.",
+        "A panel knob: keyboard is fine."),
 
-    (r"zoom", "cockpit",
-     "Zooms the view. You spot and read gauges with it.",
-     "A spare axis (rotary or lever), or two buttons."),
-    (r"kneeboard", "cockpit",
-     "Kneeboard pages: checklists, charts and your own notes.",
-     "Keyboard is fine."),
-    (r"master caution", "cockpit",
-     "Silences the master caution light once you have read what broke.",
-     "On the jet: the light you punch on the panel. A spare button."),
-    (r"canopy", "cockpit", "Opens and closes the canopy.",
-     "Keyboard is fine."),
-    (r"wing fold", "cockpit", "Folds the wings — carrier deck parking.",
-     "Keyboard is fine."),
-    (r"engine.*(start|stop|crank)|apu|electric power|battery|generator",
-     "cockpit",
-     "Startup switch, part of the cold-and-dark sequence.",
-     "Console switches: keyboard is fine."),
-    (r"exterior light|external light|position light|formation light",
-     "cockpit",
-     "External lights — on the boat this is also how you salute the "
-     "catapult crew.",
-     "On the jet: a fingertip switch on the throttle."),
-    (r"light|illuminat|dimmer|brightness", "cockpit",
-     "Lighting or display brightness.",
-     "Panel knobs: keyboard is fine."),
-    (r"hud", "cockpit", "HUD symbology or brightness.",
-     "A panel knob: keyboard is fine."),
-    (r"view|camera|snap", "cockpit",
-     "Camera control — mostly redundant if you have head tracking.",
-     "Head tracking, or a spare hat."),
-    (r"mode", "fight", "Master mode / weapon mode selector.", ""),
+    on(r"sensor control switch", "sensors", "stick", IN_A_TURN,
+       "The 'castle': hands control to the radar, the pod, helmet or MFD.",
+       "On the jet: the hat on TOP of the grip. A 4-way hat that presses."),
+    on(r"designator controller - (horizontal|vertical) axis$"
+       r"|designator controller - depress$|^tdc", "sensors", "throttle",
+       IN_THE_AIR,
+       "TDC: drives the radar and targeting cursor. Depress = designate.",
+       "On the jet: the thumb slew on the left throttle — a mini-stick "
+       "or hat."),
+    off(r"designator controller", "sensors",
+        "Drives the cursor one step at a time — the digital half of the "
+        "slew.",
+        "The slew axes do this better: keyboard is fine."),
+    on(r"^i-251 slew|shkval slew", "sensors", "throttle", IN_THE_AIR,
+       "Slews the TV sensor's box over the target.",
+       "On the jet: the slew controller on the throttle — a mini-stick."),
+    on(r"cage/uncage button$", "sensors", "throttle", IN_THE_AIR,
+       "Uncages a seeker so a Sidewinder or Maverick can look around on "
+       "its own.",
+       "On the jet: a button under your index finger on the throttle."),
+    off(r"cage", "sensors",
+        "Cages a gyro instrument so it can settle.",
+        "A panel knob: keyboard is fine."),
+    on(r"^radar elevation control$", "sensors", "throttle", IN_THE_AIR,
+       "Tilts the radar beam — you aim it at the altitude you expect the "
+       "target.",
+       "On the jet: the antenna wheel on the throttle. A rotary or an axis."),
+    off(r"radar elevation", "sensors",
+        "Tilts the radar beam one step at a time.",
+        "The antenna wheel does this better: keyboard is fine."),
+    on(r"target lock|lock target", "sensors", "stick", IN_A_TURN,
+       "Locks whatever sits under the aiming pipper.",
+       "A thumb button on the grip in the real jet too."),
+    on(r"target unlock", "sensors", "stick", IN_A_TURN,
+       "Breaks the lock and goes back to searching.",
+       "Next to the lock button — keep the pair together."),
+    on(r"laser", "sensors", "throttle", IN_THE_AIR,
+       "Laser ranger / designator: needed for guided bombs and accurate "
+       "gun ranging.",
+       "A console switch — a spare throttle button works."),
+    on(r"raid|fov", "sensors", "throttle", IN_THE_AIR,
+       "Field of view / raid expand for the sensor you are driving.",
+       "On the jet: a button on the throttle grip."),
+    on(r"display zoom", "sensors", None, IN_THE_AIR,
+       "Zooms the sensor picture (not the camera) — the TV or radar "
+       "display.",
+       "Two spare buttons."),
+    off(r"hmd|helmet", "sensors",
+        "Helmet-mounted display: the brightness knob doubles as its "
+        "on/off.",
+        "A panel knob: keyboard is fine."),
+    off(r"electro.optical|shkval|i-251|flir|night vision|goggle|lltv",
+        "sensors",
+        "TV or infrared sensor: the picture you aim with, and see at night.",
+        "A console switch: keyboard is fine; the slew goes on the "
+        "throttle."),
+    off(r"recce|event mark", "sensors",
+        "Marks a reconnaissance point. Safe to ignore while you are "
+        "learning.",
+        "A panel switch: keyboard is fine."),
+    off(r"channel selector|preset", "sensors",
+        "Dials the radio's preset channel.",
+        "A panel knob: keyboard is fine."),
+    on(r"^comm switch - ", "sensors", "throttle", IN_THE_AIR,
+       "Radio: push-to-talk and the comms menu — ATC, wingmen, tankers.",
+       "On the jet: the radio switch on the throttle. Two buttons will "
+       "do."),
+    on(r"communication menu$", "sensors", None, IN_THE_AIR,
+       "Opens the comms menu — ATC, wingmen, tankers.",
+       "Any spare button."),
+    off(r"comm|radio|voip|intercom|mids", "sensors",
+        "The radios' own panel: volumes, antennas, cipher, relay.",
+        "Panel knobs and switches: keyboard is fine."),
+    off(r"waypoint|steer ?point|navigation mode", "sensors",
+        "Steps through your waypoints / picks the navigation mode.",
+        "Panel or UFC: keyboard is fine."),
+
+    on(r"^zoom view$", "cockpit", None, ON_THE_RAMP,
+       "Zooms the view. You spot and read gauges with it.",
+       "A spare axis (rotary or lever)."),
+    off(r"zoom", "cockpit",
+        "Zooms the view a step at a time.",
+        "The zoom axis does this better: keyboard is fine."),
+    off(r"kneeboard", "cockpit",
+        "Kneeboard pages: checklists, charts and your own notes.",
+        "Keyboard is fine."),
+    on(r"master caution", "cockpit", None, ON_THE_RAMP,
+       "Silences the master caution light once you have read what broke.",
+       "On the jet: the light you punch on the panel. A spare button."),
+    off(r"canopy", "cockpit", "Opens and closes the canopy.",
+        "A cockpit handle: keyboard is fine."),
+    off(r"wing fold", "cockpit", "Folds the wings — carrier deck parking.",
+        "A cockpit handle: keyboard is fine."),
+    # A cold start is the one time the HOTAS is worth switches nobody
+    # touches in flight: both hands are already on it, and the alternative
+    # is hunting the cockpit with a mouse.
+    on(r"^throttle \((left|right)\).*off\(hold\)", "cockpit", "throttle",
+       ON_THE_RAMP,
+       "Engine cutoff: hold it to shut that engine down.",
+       "On the jet: lift the throttle over the cutoff gate. A spare "
+       "throttle button."),
+    on(r"^engine crank switch - (left|right)$", "cockpit", None,
+       ON_THE_RAMP,
+       "Spins one engine up for the start. Left, then right.",
+       "A console switch — a spare button saves a trip to the cockpit."),
+    on(r"^engine (left|right) (start|stop)$", "cockpit", None, ON_THE_RAMP,
+       "Starts or shuts down one engine.",
+       "A console switch — a spare button saves a trip to the cockpit."),
+    on(r"apu control sw|^electric power switch$", "cockpit", None,
+       ON_THE_RAMP,
+       "APU and battery: the first switches of a cold start.",
+       "A console switch — a spare button saves a trip to the cockpit."),
+    off(r"engine.*(start|stop|crank)|apu|electric power|battery|generator",
+        "cockpit",
+        "Startup switch, part of the cold-and-dark sequence.",
+        "Console switches: keyboard is fine."),
+    on(r"^exterior lights? switch - ", "cockpit", "throttle", ON_THE_RAMP,
+       "External lights — on the boat this is also how you salute the "
+       "catapult crew.",
+       "On the jet: a fingertip switch on the throttle."),
+    off(r"exterior light|external light|position light|formation light",
+        "cockpit",
+        "The exterior lights' dimmers and their per-lamp switches.",
+        "Panel knobs: keyboard is fine."),
+    off(r"light|illuminat|dimmer|brightness", "cockpit",
+        "Lighting or display brightness.",
+        "Panel knobs: keyboard is fine."),
+    off(r"hud", "cockpit", "HUD symbology or brightness.",
+        "A panel knob: keyboard is fine."),
+    off(r"view|camera|snap", "cockpit",
+        "Camera control — mostly redundant if you have head tracking.",
+        "Head tracking, or the keyboard."),
+    off(r"mode", "fight", "Master mode / weapon mode selector.",
+        "A panel switch: keyboard is fine."),
 ]
+
+#: nothing in the table fits, so there is nothing to say and nowhere to
+#: put it
+NO_HINT = Hint("other", None, None, "", "")
 
 
 def hint_for(name):
-    """(theme, what it does, where it lives on the real aircraft)."""
-    for pattern, theme, text, place in HINTS:
+    """What the table says about this command."""
+    for pattern, said in HINTS:
         if re.search(pattern, name, re.I):
-            return theme, text, place
-    return "other", "", ""
-
-
-def where_text(info):
-    """'the factory profiles put this on the stick' — derived, not guessed."""
-    seen = info.get("where") or {}
-    stick, throttle = seen.get("stick", 0), seen.get("throttle", 0)
-    total = stick + throttle
-    if not total:
-        return ""
-    if stick >= 2 * throttle:
-        return "factory profiles: STICK (%d of %d)" % (stick, total)
-    if throttle >= 2 * stick:
-        return "factory profiles: THROTTLE (%d of %d)" % (throttle, total)
-    return ("factory profiles: split, stick %d / throttle %d"
-            % (stick, throttle))
+            return said
+    return NO_HINT
 
 
 def build_guide(commands):
-    """hash -> {'theme', 'hint', 'where', 'note'} — what the table shows
-    about a command besides its name."""
+    """hash -> {'theme', 'hint', 'place', 'device', 'band'} — what the
+    table says about a command besides its name.
+
+    Never cached. It is this module's own judgement applied to the
+    command names, not something read off the install, and a copy in the
+    cache would keep an edit to the table out of the next plan.
+    """
     guide = {}
     for h, c in commands.items():
-        theme, hint, place = hint_for(c["name"])
-        where = where_text(c)
-        # a switch with a direction says which way it goes; how many
-        # siblings it has is what separates a four-way hat from a plain
-        # two-position toggle
-        if re.search(r"hat|mini-stick", place, re.I):
-            move = hat_move(c["name"], c.get("dir"))
-            ways = c.get("ways", 0)
-            if move and ways > 1:
-                where = "%s: %s%s" % ("hat" if ways > 2 else "2-way switch",
-                                      move,
-                                      "  ·  " + where if where else "")
+        said = hint_for(c["name"])
         guide[h] = {
-            "theme": theme,
-            "hint": hint or ("%s — no hint for this one yet"
-                             % c.get("category", "?")),
-            "place": place,
-            "where": where,
-            "note": "%d profiles" % c["votes"] if c["votes"] else "",
+            "theme": said.theme,
+            "hint": said.hint or ("%s — no hint for this one yet"
+                                  % c.get("category", "?")),
+            "place": said.place,
+            "device": said.device,
+            "band": said.band,
         }
     return guide
 
@@ -987,38 +1061,22 @@ def build_guide(commands):
 def essentials(commands, guide):
     """[(theme title, [(hash, name, kind)])]: the list to bind first.
 
-    Which controls matter on a HOTAS is a question the game files already
-    answer: every module ships a pile of factory profiles for real sticks
-    and throttles, and a command that eleven of them put on a button is a
-    command that belongs on a button. So this is just the module's own
-    commands ranked by how many of its profiles bind them — no hardcoded
-    per-aircraft table — led by the axes DCS hands to every device, and
-    split into the order you actually learn an aircraft in.
+    Which commands those are is the hint table's answer and nothing
+    else: a row the table puts on the HOTAS carries a band — when you
+    touch it — and carrying one is what being on this list means. Inside
+    a theme the name decides; the themes are the order you learn an
+    aircraft in.
 
-    The cut is relative to the busiest command, because how many profiles
-    a module ships (and how many of those are for panels that bind next
-    to nothing) varies wildly from module to module.
+    It used to be a vote count, and the cut was relative to the busiest
+    command because how many profiles a module ships varies wildly. Both
+    are gone: see the note on HINTS.
     """
-    order = {name: i for i, name in enumerate(CORE_AXES)}
-    pinned = sorted((h for h, c in commands.items()
-                     if c["kind"] == "axis" and c["name"] in order),
-                    key=lambda h: order[commands[h]["name"]])
-    pinned += sorted((h for h, c in commands.items() if h not in pinned
-                      and _norm(c["name"]).startswith(CORE_EXTRA)),
-                     key=lambda h: (-commands[h]["votes"],
-                                    commands[h]["name"].lower()))[:2]
-    top = max([c["votes"] for c in commands.values()] or [0])
-    floor = max(2, -(-top // 3)) if top > 3 else 1
-    rest = [h for h, c in commands.items()
-            if c["votes"] >= floor and h not in pinned]
-    rest.sort(key=lambda h: (-commands[h]["votes"],
-                             commands[h]["name"].lower()))
-
-    chosen = pinned + rest[:ESSENTIALS_MAX]
     sections = []
     for theme, title in THEMES:
-        items = [(h, commands[h]["name"], commands[h]["kind"])
-                 for h in chosen if guide[h]["theme"] == theme]
+        items = sorted(((h, commands[h]["name"], commands[h]["kind"])
+                        for h, g in guide.items()
+                        if g["band"] is not None and g["theme"] == theme),
+                       key=lambda x: x[1].lower())
         if items:
             sections.append((title, items))
     return sections
@@ -1115,9 +1173,9 @@ def resolve_devices(results):
     missing = {"stick", "throttle"} - set(out)
     if missing:
         raise RuntimeError(
-            "cannot resolve devices for: %s — run the TUI wizard once "
-            "with the devices plugged in (and after DCS has seen them "
-            "at least once, so their ids appear in dcs.log)"
+            "Nothing resolves the devices for: %s. Run the TUI wizard "
+            "once with the devices plugged in. DCS must also have seen "
+            "them once, so that their ids are in dcs.log."
             % ", ".join(sorted(missing)))
     return out
 
@@ -1138,7 +1196,7 @@ def build_diffs(bindings, snapshot, devs):
     Returns {role: {'axisDiffs': ..., 'keyDiffs': ...}}.
     """
     if not bindings and not snapshot:
-        raise RuntimeError("nothing bound yet")
+        raise RuntimeError("Nothing is bound yet.")
     diffs = {role: {"axisDiffs": {}, "keyDiffs": {}} for role in devs}
 
     def other(role):
@@ -1151,8 +1209,9 @@ def build_diffs(bindings, snapshot, devs):
         if r["type"] == "axis":
             axmap = devs[role]["axmap"]
             if r["index"] >= len(axmap) or axmap[r["index"]] not in ABS_TO_DCS:
-                raise RuntimeError("%s: cannot map %s axis %d — axmap=%s"
-                                   % (name, role, r["index"], axmap))
+                raise RuntimeError(
+                    "%s: nothing maps %s axis %d. The axis map is %s."
+                    % (name, role, r["index"], axmap))
             key = ABS_TO_DCS[axmap[r["index"]]]
             filt = make_filter(name, r.get("invert"))
             default = DEFAULT_AXIS_KEYS.get(name)
@@ -1225,8 +1284,8 @@ def render_all(results, cfg, aircraft, bindings=None):
     wizard has no reviewer to ask.
     """
     if dcs_running():
-        raise RuntimeError("DCS is running — quit the game first "
-                           "(it overwrites Config/Input on exit)")
+        raise RuntimeError("DCS is running. Quit the game first: it "
+                           "overwrites Config/Input when it exits.")
     devs = resolve_devices(results)
     ac = results.get("aircraft", {}).get(aircraft, {})
     if bindings is None:
@@ -1350,7 +1409,8 @@ def detect_devices_screen(tui, cfg, results):
     tui.page("Device detection")
     devices = capture.detect_roles(tui, ("stick", "throttle"))
     if devices is None:
-        tui.log("Need at least two joystick devices — check connections.")
+        tui.log("This needs two joystick devices. Check the "
+                "connections.")
         tui.wait_any_key()
         return None
     stick = next(d for d in devices if d.role == "stick")
@@ -1369,8 +1429,9 @@ def detect_devices_screen(tui, cfg, results):
         devinfo[d.role] = {"name": d.name, "dcs_id": dcs_id,
                            "axmap": axis_map(d.fd, d.n_axes)}
         if not dcs_id:
-            tui.log("WARNING: no DCS id found for '%s' — start DCS once "
-                    "so it lands in dcs.log, then rerun." % d.name)
+            tui.log("WARNING: there is no DCS id for '%s'. Start DCS "
+                    "once, so that the id lands in dcs.log. Then run this "
+                    "again." % d.name)
     results["_devices"] = devinfo
     if any(not v["dcs_id"] for v in devinfo.values()):
         tui.wait_any_key()
@@ -1387,12 +1448,12 @@ def resolve_config(args, cfg):
     game = (args.game_dir or cfg.get("game_dir")
             or install_dir("DCSWorld"))
     if not game:
-        sys.exit("Pass --game-dir /path/to/steamapps/common/DCSWorld "
-                 "(remembered in the results file afterwards).")
+        sys.exit("Pass --game-dir /path/to/steamapps/common/DCSWorld. "
+                 "The results file remembers it afterwards.")
     game = os.path.abspath(os.path.expanduser(game))
     if not os.path.isdir(os.path.join(game, "Mods", "aircraft")):
-        sys.exit("%s\ndoes not look like a DCS World install "
-                 "(missing Mods/aircraft)." % game)
+        sys.exit("%s\nis not a DCS World install: it has no "
+                 "Mods/aircraft folder." % game)
     # <steamapps>/common/DCSWorld -> <steamapps>/compatdata/223750/...
     steamapps = os.path.dirname(os.path.dirname(game))
     derived = os.path.join(steamapps, "compatdata", DCS_APPID, "pfx",
@@ -1401,8 +1462,9 @@ def resolve_config(args, cfg):
     saved = args.saved_games or (cfg.get("saved_games")
                                  if not args.game_dir else None) or derived
     if not os.path.isdir(saved):
-        sys.exit("Saved Games folder not found:\n%s\nRun the game once so "
-                 "it creates it, or pass --saved-games." % saved)
+        sys.exit("There is no Saved Games folder at:\n%s\nRun the game "
+                 "once, and it creates one. Or pass --saved-games."
+                 % saved)
     cfg.update({"game_dir": game, "saved_games": saved})
     return cfg
 
@@ -1452,7 +1514,8 @@ def tui_main(scr, args, results, cfg):
     aircraft_all = discover_aircraft(cfg)
     if not aircraft_all:
         tui.page("Aircraft")
-        tui.log("No aircraft modules found under %s" % cfg["game_dir"])
+        tui.log("There are no aircraft modules under %s."
+                % cfg["game_dir"])
         tui.wait_any_key()
         return
 
@@ -1463,8 +1526,8 @@ def tui_main(scr, args, results, cfg):
         if aircraft not in aircraft_all:
             idx = tui.menu("Pick an aircraft",
                            [aircraft_all[k]["display"] for k in keys],
-                           footer="arrows = move, RETURN = select, "
-                                  "ESC = quit")
+                           footer="Arrows move. RETURN selects. "
+                                  "ESC quits.")
             if idx is None:
                 return
             aircraft = keys[idx]
@@ -1505,11 +1568,11 @@ def tui_main(scr, args, results, cfg):
             # it. This wizard is what is left: find the devices, pick the
             # module, write the diff.lua.
             tui.page("Binding — %s" % display)
-            tui.log("  the review screen does this now:")
+            tui.log("  The review screen does this now:")
             tui.log("")
             tui.log("      ./bind dcs tui")
             tui.log("")
-            tui.log("  it reads and writes this same results file, and")
+            tui.log("  It reads and writes this same results file. It")
             tui.log("  shows what you confirmed here in green.")
             tui.wait_any_key()
             continue
@@ -1529,25 +1592,29 @@ def main():
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-r", "--results", default=DEFAULT_RESULTS,
-                    help="results JSON: wizard state / generator input "
-                         "(default: next to this script)")
+                    help="The results JSON: the wizard state, and the "
+                         "input the generator reads. The default is the "
+                         "file next to this script.")
     ap.add_argument("--reset", action="store_true",
-                    help="delete the results file and start from scratch")
+                    help="Delete the results file and start again.")
     ap.add_argument("-g", "--generate", action="store_true",
-                    help="generate the diff.lua files and exit")
+                    help="Write the diff.lua files, then exit.")
     ap.add_argument("-s", "--sync", action="store_true",
-                    help="import the installed diff.lua files into the "
-                         "results file (absorbs changes made in the DCS "
-                         "UI) and exit")
+                    help="Read the installed diff.lua files into the "
+                         "results file, then exit. This takes in what you "
+                         "changed in the DCS UI.")
     ap.add_argument("-a", "--aircraft", default=None,
-                    help="aircraft key for --generate (e.g. su-25T); "
-                         "defaults to the one last used in the TUI")
+                    help="Which aircraft --generate writes, for example "
+                         "su-25T. The default is the last one the TUI "
+                         "used.")
     ap.add_argument("--game-dir", default=None,
-                    help="DCS World game folder (steamapps/common/DCSWorld);"
-                         " auto-detected or remembered afterwards")
+                    help="The DCS World folder, under "
+                         "steamapps/common/DCSWorld. This finds it, or "
+                         "remembers it afterwards.")
     ap.add_argument("--saved-games", default=None,
-                    help="Saved Games/DCS folder inside the Proton prefix "
-                         "(default: derived from --game-dir)")
+                    help="The Saved Games/DCS folder inside the Proton "
+                         "prefix. By default this is worked out from "
+                         "--game-dir.")
     backup.add_argument(ap, "dcs")
     args = ap.parse_args()
 
@@ -1563,7 +1630,7 @@ def main():
     if args.generate or args.sync:
         aircraft = args.aircraft or cfg.get("aircraft")
         if not aircraft:
-            sys.exit("Pass --aircraft (e.g. -a su-25T).")
+            sys.exit("Pass --aircraft, for example -a su-25T.")
         try:
             if args.sync:
                 lines = sync(results, cfg, aircraft)
@@ -1579,8 +1646,9 @@ def main():
         return
 
     if not sys.stdin.isatty() or not sys.stdout.isatty():
-        sys.exit("Run this in a regular terminal (the wizard is a TUI), "
-                 "or use --generate for headless generation.")
+        sys.exit("Run this in a terminal: the wizard is a full-screen "
+                 "program. Or pass --generate, which needs no "
+                 "terminal.")
     curses.wrapper(tui_main, args, results, cfg)
 
 

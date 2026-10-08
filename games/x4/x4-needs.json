@@ -1,646 +1,791 @@
 {
-"needs": [
-{
-"what": "Fire primary",
-"shape": "trigger",
-"bindings": [
-[
-{
-"action": "INPUT_STATE_FIRE_PRIMARY_WEAPON"
-}
-]
-],
-"urgency": 0,
-"suits": "fire",
-"held": true,
-"by_feel": true
-},
-{
-"what": "Fire secondary",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_STATE_FIRE_SECONDARY_WEAPON"
-}
-]
-],
-"urgency": 0,
-"suits": "fire",
-"held": true,
-"by_feel": true
-},
-{
-"what": "Boost",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_STATE_BOOST"
-},
-{
-"action": "INPUT_ACTION_FP_RUN"
-}
-]
-],
-"urgency": 0,
-"suits": "flight",
-"held": true,
-"by_feel": true
-},
-{
-"what": "Target next enemy",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_TARGET_NEXT_ENEMY"
-}
-]
-],
-"urgency": 0,
-"suits": "lock",
-"rapid": true,
-"by_feel": true
-},
-{
-"what": "Strafe",
-"shape": "hat4",
-"bindings": [
-[
-{
-"action": "INPUT_STATE_STRAFE_UP"
-}
-],
-[
-{
-"action": "INPUT_STATE_STRAFE_RIGHT"
-}
-],
-[
-{
-"action": "INPUT_STATE_STRAFE_DOWN"
-}
-],
-[
-{
-"action": "INPUT_STATE_STRAFE_LEFT"
-}
-]
-],
-"urgency": 0,
-"suits": "flight",
-"held": true,
-"by_feel": true,
-"on": [
-"up",
-"right",
-"down",
-"left"
-]
-},
-{
-"what": "Weapon group",
-"shape": "hat2",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_CYCLE_NEXT_PRIMARY_WEAPONGROUP"
-}
-],
-[
-{
-"action": "INPUT_ACTION_CYCLE_PREV_PRIMARY_WEAPONGROUP"
-}
-]
-],
-"urgency": 0,
-"suits": "fire",
-"rapid": true,
-"by_feel": true,
-"on": [
-"forward",
-"back"
-]
-},
-{
-"what": "Missile group",
-"shape": "hat2",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_CYCLE_NEXT_SECONDARY_WEAPONGROUP"
-}
-],
-[
-{
-"action": "INPUT_ACTION_CYCLE_PREV_SECONDARY_WEAPONGROUP"
-}
-]
-],
-"urgency": 0,
-"suits": "fire",
-"rapid": true,
-"by_feel": true,
-"on": [
-"forward",
-"back"
-]
-},
-{
-"what": "Match speed",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_STATE_MATCH_SPEED"
-}
-]
-],
-"urgency": 0,
-"suits": "flight",
-"by_feel": true
-},
-{
-"what": "Travel mode",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_TOGGLE_TRAVEL_MODE"
-}
-]
-],
-"urgency": 1,
-"suits": "flight",
-"by_feel": true
-},
-{
-"what": "Flight assist",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_TOGGLE_FLIGHT_ASSIST"
-}
-]
-],
-"urgency": 1,
-"suits": "flight",
-"by_feel": true
-},
-{
-"what": "Dock / undock",
-"shape": "hat2",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_DOCK_ACTION"
-}
-],
-[
-{
-"action": "INPUT_ACTION_UNDOCK"
-}
-]
-],
-"urgency": 1,
-"suits": "nav",
-"on": [
-"forward",
-"back"
-]
-},
-{
-"what": "Autopilot",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_TOGGLE_AUTOPILOT"
-}
-]
-],
-"urgency": 1,
-"suits": "nav"
-},
-{
-"what": "Target action",
-"shape": "hat2",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_NEXT_TARGET_ACTION"
-}
-],
-[
-{
-"action": "INPUT_ACTION_PREV_TARGET_ACTION"
-}
-]
-],
-"urgency": 1,
-"suits": "lock",
-"on": [
-"forward",
-"back"
-]
-},
-{
-"what": "Subcomponent",
-"shape": "hat2",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_NEXT_SUBCOMPONENT"
-}
-],
-[
-{
-"action": "INPUT_ACTION_PREV_SUBCOMPONENT"
-}
-]
-],
-"urgency": 1,
-"suits": "lock",
-"rapid": true,
-"on": [
-"right",
-"left"
-]
-},
-{
-"what": "Deselect target",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_DESELECT_TARGET"
-},
-{
-"action": "INPUT_STATE_MAP_BACK"
-}
-]
-],
-"urgency": 1,
-"suits": "lock",
-"by_feel": true
-},
-{
-"what": "Scan mode",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_TOGGLE_SCAN_MODE"
-}
-]
-],
-"suits": "sensor"
-},
-{
-"what": "Long-range scan",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_TOGGLE_LONGRANGE_SCAN_MODE"
-}
-]
-],
-"suits": "sensor"
-},
-{
-"what": "Scan action",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_SCAN_ACTION"
-}
-]
-],
-"suits": "sensor"
-},
-{
-"what": "SETA",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_TOGGLE_SETA_MODE"
-}
-]
-],
-"suits": "systems"
-},
-{
-"what": "Map",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_OPEN_MAP"
-}
-]
-],
-"suits": "nav"
-},
-{
-"what": "View",
-"shape": "hat4",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_COCKPIT_VIEW"
-},
-{
-"action": "INPUT_STATE_MAP_RESET_POSITION"
-}
-],
-[
-{
-"action": "INPUT_ACTION_TARGET_VIEW"
-}
-],
-[
-{
-"action": "INPUT_ACTION_EXTERNAL_VIEW"
-},
-{
-"action": "INPUT_STATE_MAP_RESET_ROTATION"
-}
-],
-[
-{
-"action": "INPUT_ACTION_CYCLE_VIEW"
-}
-]
-],
-"suits": "view",
-"rapid": true,
-"by_feel": true
-},
-{
-"what": "Map rotate",
-"shape": "hat4",
-"bindings": [
-[
-{
-"action": "INPUT_STATE_MAP_PAN_TO_ROTATE"
-}
-],
-[],
-[],
-[]
-],
-"suits": "view"
-},
-{
-"what": "Cockpit menu",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_OPEN_COCKPIT_MENU"
-}
-]
-],
-"urgency": 3,
-"suits": "comms"
-},
-{
-"what": "Quicksave",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_QUICKSAVE"
-}
-]
-],
-"urgency": 3,
-"suits": "systems"
-},
-{
-"what": "Pause",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_PAUSE"
-}
-]
-],
-"urgency": 3,
-"suits": "systems"
-},
-{
-"what": "Jump / crouch",
-"shape": "hat2",
-"bindings": [
-[
-{
-"action": "INPUT_STATE_FP_JUMP"
-}
-],
-[
-{
-"action": "INPUT_STATE_FP_CROUCH"
-}
-]
-],
-"urgency": 3,
-"suits": "flight",
-"on": [
-"forward",
-"back"
-]
-},
-{
-"what": "Player ship info",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_OPEN_PLAYERSHIP_INFO"
-}
-]
-],
-"urgency": 3,
-"suits": "comms"
-},
-{
-"what": "Target under cursor",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_TARGET_NEXT_TARGET"
-},
-{
-"action": "INPUT_STATE_MAP_SELECT"
-}
-]
-],
-"urgency": 0,
-"suits": "lock",
-"by_feel": true
-},
-{
-"what": "Countermeasure",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_DEPLOY_COUNTERMEASURE"
-}
-]
-],
-"urgency": 0,
-"suits": "defence",
-"by_feel": true
-},
-{
-"what": "Comms",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_COMM_ACTION"
-}
-]
-],
-"suits": "comms"
-},
-{
-"what": "Zoom goggles",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_ZOOMGOGGLES"
-}
-]
-],
-"suits": "view"
-},
-{
-"what": "Missions",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "INPUT_ACTION_OPEN_MISSIONS"
-}
-]
-],
-"urgency": 3,
-"suits": "comms"
-}
-],
-"axes": [
-{
-"does": "INPUT_RANGE_STEERING_PRIMARY",
-"role": "stick",
-"on": {
-"kind": "stick",
-"axis": "x"
-}
-},
-{
-"does": "INPUT_RANGE_STEERING_PITCH",
-"role": "stick",
-"on": {
-"kind": "stick",
-"axis": "y"
-}
-},
-{
-"does": "INPUT_RANGE_STEERING_SECONDARY",
-"role": "stick",
-"on": {
-"kind": "stick",
-"axis": "z"
-}
-},
-{
-"does": "INPUT_RANGE_STRAFE_LEFT_RIGHT",
-"role": "stick",
-"on": {
-"kind": "ministick",
-"axis": "x"
-}
-},
-{
-"does": "INPUT_RANGE_STRAFE_UP_DOWN",
-"role": "stick",
-"on": {
-"kind": "ministick",
-"axis": "y"
-}
-},
-{
-"does": "INPUT_RANGE_THROTTLE",
-"role": "throttle",
-"on": {
-"label": "Left throttle lever"
-}
-},
-{
-"does": "INPUT_RANGE_MAP_ZOOM_IN",
-"role": "throttle",
-"on": {
-"label": "Side lever"
-}
-},
-{
-"does": "INPUT_RANGE_MAP_PAN_LEFT_RIGHT",
-"role": "throttle",
-"on": {
-"kind": "ministick",
-"axis": "x"
-}
-},
-{
-"does": "INPUT_RANGE_MAP_PAN_UP_DOWN",
-"role": "throttle",
-"on": {
-"kind": "ministick",
-"axis": "y"
-}
-},
-{
-"does": "INPUT_RANGE_FP_YAW",
-"role": "stick",
-"on": {
-"kind": "ministick",
-"axis": "x"
-}
-},
-{
-"does": "INPUT_RANGE_FP_PITCH",
-"role": "stick",
-"on": {
-"kind": "ministick",
-"axis": "y"
-}
-},
-{
-"does": "INPUT_RANGE_FP_WALK",
-"role": "stick",
-"on": {
-"kind": "stick",
-"axis": "y"
-}
-},
-{
-"does": "INPUT_RANGE_FP_STRAFE",
-"role": "stick",
-"on": {
-"kind": "stick",
-"axis": "x"
-}
-}
-]
+ "needs": [
+  {
+   "what": "Fire primary",
+   "shape": "trigger",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_STATE_FIRE_PRIMARY_WEAPON"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "fire",
+   "held": true,
+   "by_feel": true
+  },
+  {
+   "what": "Fire secondary",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_STATE_FIRE_SECONDARY_WEAPON"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "fire",
+   "held": true,
+   "by_feel": true
+  },
+  {
+   "what": "Boost",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_STATE_BOOST"
+     },
+     {
+      "action": "INPUT_ACTION_FP_RUN"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "flight",
+   "held": true,
+   "by_feel": true
+  },
+  {
+   "what": "Target next enemy",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_TARGET_NEXT_ENEMY"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "lock",
+   "rapid": true,
+   "by_feel": true
+  },
+  {
+   "what": "Strafe",
+   "shape": "hat4",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_STATE_STRAFE_UP"
+     }
+    ],
+    [
+     {
+      "action": "INPUT_STATE_STRAFE_RIGHT"
+     }
+    ],
+    [
+     {
+      "action": "INPUT_STATE_STRAFE_DOWN"
+     }
+    ],
+    [
+     {
+      "action": "INPUT_STATE_STRAFE_LEFT"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "flight",
+   "held": true,
+   "by_feel": true,
+   "on": [
+    "up",
+    "right",
+    "down",
+    "left"
+   ]
+  },
+  {
+   "what": "Weapon group",
+   "shape": "hat2",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_CYCLE_NEXT_PRIMARY_WEAPONGROUP"
+     }
+    ],
+    [
+     {
+      "action": "INPUT_ACTION_CYCLE_PREV_PRIMARY_WEAPONGROUP"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "fire",
+   "rapid": true,
+   "by_feel": true,
+   "on": [
+    "forward",
+    "back"
+   ]
+  },
+  {
+   "what": "Missile group",
+   "shape": "hat2",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_CYCLE_NEXT_SECONDARY_WEAPONGROUP"
+     }
+    ],
+    [
+     {
+      "action": "INPUT_ACTION_CYCLE_PREV_SECONDARY_WEAPONGROUP"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "fire",
+   "rapid": true,
+   "by_feel": true,
+   "on": [
+    "forward",
+    "back"
+   ]
+  },
+  {
+   "what": "Match speed",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_STATE_MATCH_SPEED"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "flight",
+   "by_feel": true
+  },
+  {
+   "what": "Travel mode",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_TOGGLE_TRAVEL_MODE"
+     }
+    ]
+   ],
+   "urgency": 1,
+   "suits": "flight",
+   "by_feel": true
+  },
+  {
+   "what": "Flight assist",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_TOGGLE_FLIGHT_ASSIST"
+     }
+    ]
+   ],
+   "urgency": 1,
+   "suits": "flight",
+   "by_feel": true
+  },
+  {
+   "what": "Dock / undock",
+   "shape": "hat2",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_DOCK_ACTION"
+     }
+    ],
+    [
+     {
+      "action": "INPUT_ACTION_UNDOCK"
+     }
+    ]
+   ],
+   "urgency": 1,
+   "suits": "nav",
+   "on": [
+    "forward",
+    "back"
+   ]
+  },
+  {
+   "what": "Autopilot",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_TOGGLE_AUTOPILOT"
+     }
+    ]
+   ],
+   "urgency": 1,
+   "suits": "nav"
+  },
+  {
+   "what": "Target action",
+   "shape": "hat2",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_NEXT_TARGET_ACTION"
+     }
+    ],
+    [
+     {
+      "action": "INPUT_ACTION_PREV_TARGET_ACTION"
+     }
+    ]
+   ],
+   "urgency": 1,
+   "suits": "lock",
+   "on": [
+    "forward",
+    "back"
+   ]
+  },
+  {
+   "what": "Subcomponent",
+   "shape": "hat2",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_NEXT_SUBCOMPONENT"
+     }
+    ],
+    [
+     {
+      "action": "INPUT_ACTION_PREV_SUBCOMPONENT"
+     }
+    ]
+   ],
+   "urgency": 1,
+   "suits": "lock",
+   "rapid": true,
+   "on": [
+    "right",
+    "left"
+   ]
+  },
+  {
+   "what": "Deselect target",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_DESELECT_TARGET"
+     },
+     {
+      "action": "INPUT_STATE_MAP_BACK"
+     }
+    ]
+   ],
+   "urgency": 1,
+   "suits": "lock",
+   "by_feel": true
+  },
+  {
+   "what": "Scan mode",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_TOGGLE_SCAN_MODE"
+     }
+    ]
+   ],
+   "suits": "sensor"
+  },
+  {
+   "what": "Long-range scan",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_TOGGLE_LONGRANGE_SCAN_MODE"
+     }
+    ]
+   ],
+   "suits": "sensor"
+  },
+  {
+   "what": "Scan action",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_SCAN_ACTION"
+     }
+    ]
+   ],
+   "suits": "sensor"
+  },
+  {
+   "what": "SETA",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_TOGGLE_SETA_MODE"
+     }
+    ]
+   ],
+   "suits": "systems"
+  },
+  {
+   "what": "Map",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_OPEN_MAP"
+     }
+    ]
+   ],
+   "suits": "nav"
+  },
+  {
+   "what": "View",
+   "shape": "hat4",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_COCKPIT_VIEW"
+     },
+     {
+      "action": "INPUT_STATE_MAP_RESET_POSITION"
+     }
+    ],
+    [
+     {
+      "action": "INPUT_ACTION_TARGET_VIEW"
+     }
+    ],
+    [
+     {
+      "action": "INPUT_ACTION_EXTERNAL_VIEW"
+     },
+     {
+      "action": "INPUT_STATE_MAP_RESET_ROTATION"
+     }
+    ],
+    [
+     {
+      "action": "INPUT_ACTION_CYCLE_VIEW"
+     }
+    ]
+   ],
+   "suits": "view",
+   "rapid": true,
+   "by_feel": true
+  },
+  {
+   "what": "Map rotate",
+   "shape": "hat4",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_STATE_MAP_PAN_TO_ROTATE"
+     }
+    ],
+    [],
+    [],
+    []
+   ],
+   "suits": "view"
+  },
+  {
+   "what": "Cockpit menu",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_OPEN_COCKPIT_MENU"
+     }
+    ]
+   ],
+   "urgency": 3,
+   "suits": "comms"
+  },
+  {
+   "what": "Quicksave",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_QUICKSAVE"
+     }
+    ]
+   ],
+   "urgency": 3,
+   "suits": "systems"
+  },
+  {
+   "what": "Pause",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_PAUSE"
+     }
+    ]
+   ],
+   "urgency": 3,
+   "suits": "systems"
+  },
+  {
+   "what": "Jump / crouch",
+   "shape": "hat2",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_STATE_FP_JUMP"
+     }
+    ],
+    [
+     {
+      "action": "INPUT_STATE_FP_CROUCH"
+     }
+    ]
+   ],
+   "urgency": 3,
+   "suits": "flight",
+   "on": [
+    "forward",
+    "back"
+   ]
+  },
+  {
+   "what": "Player ship info",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_OPEN_PLAYERSHIP_INFO"
+     }
+    ]
+   ],
+   "urgency": 3,
+   "suits": "comms"
+  },
+  {
+   "what": "Target under cursor",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_TARGET_NEXT_TARGET"
+     },
+     {
+      "action": "INPUT_STATE_MAP_SELECT"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "lock",
+   "by_feel": true
+  },
+  {
+   "what": "Countermeasure",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_DEPLOY_COUNTERMEASURE"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "defence",
+   "by_feel": true
+  },
+  {
+   "what": "Comms",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_COMM_ACTION"
+     }
+    ]
+   ],
+   "suits": "comms"
+  },
+  {
+   "what": "Zoom goggles",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_ZOOMGOGGLES"
+     }
+    ]
+   ],
+   "suits": "view"
+  },
+  {
+   "what": "Missions",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_ACTION_OPEN_MISSIONS"
+     }
+    ]
+   ],
+   "urgency": 3,
+   "suits": "comms"
+  },
+  {
+   "what": "INPUT_RANGE_STEERING_PRIMARY",
+   "takes": "axis",
+   "device": "stick",
+   "suits": "flight",
+   "shape": "stick",
+   "on": [
+    "x"
+   ],
+   "bindings": [
+    [
+     {
+      "action": "INPUT_RANGE_STEERING_PRIMARY",
+      "mode": "Ship"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "rests": "centred"
+  },
+  {
+   "what": "INPUT_RANGE_STEERING_PITCH",
+   "takes": "axis",
+   "device": "stick",
+   "suits": "flight",
+   "shape": "stick",
+   "on": [
+    "y"
+   ],
+   "bindings": [
+    [
+     {
+      "action": "INPUT_RANGE_STEERING_PITCH",
+      "mode": "Ship"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "rests": "centred"
+  },
+  {
+   "what": "INPUT_RANGE_STEERING_SECONDARY",
+   "takes": "axis",
+   "device": "stick",
+   "suits": "flight",
+   "shape": "stick",
+   "on": [
+    "z"
+   ],
+   "bindings": [
+    [
+     {
+      "action": "INPUT_RANGE_STEERING_SECONDARY",
+      "mode": "Ship"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "rests": "centred"
+  },
+  {
+   "what": "INPUT_RANGE_STRAFE_LEFT_RIGHT",
+   "takes": "axis",
+   "device": "stick",
+   "suits": "flight",
+   "shape": "ministick",
+   "on": [
+    "x"
+   ],
+   "bindings": [
+    [
+     {
+      "action": "INPUT_RANGE_STRAFE_LEFT_RIGHT",
+      "mode": "Ship"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "rests": "centred"
+  },
+  {
+   "what": "INPUT_RANGE_STRAFE_UP_DOWN",
+   "takes": "axis",
+   "device": "stick",
+   "suits": "flight",
+   "shape": "ministick",
+   "on": [
+    "y"
+   ],
+   "bindings": [
+    [
+     {
+      "action": "INPUT_RANGE_STRAFE_UP_DOWN",
+      "mode": "Ship"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "rests": "centred"
+  },
+  {
+   "what": "INPUT_RANGE_THROTTLE",
+   "takes": "axis",
+   "device": "throttle",
+   "suits": "flight",
+   "shape": "lever",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_RANGE_THROTTLE",
+      "mode": "Ship"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "rests": "mid"
+  },
+  {
+   "what": "INPUT_RANGE_MAP_ZOOM_IN",
+   "takes": "axis",
+   "device": "throttle",
+   "suits": "nav",
+   "shape": "lever",
+   "bindings": [
+    [
+     {
+      "action": "INPUT_RANGE_MAP_ZOOM_IN",
+      "mode": "Map"
+     }
+    ]
+   ],
+   "rests": "min"
+  },
+  {
+   "what": "INPUT_RANGE_MAP_PAN_LEFT_RIGHT",
+   "takes": "axis",
+   "device": "throttle",
+   "suits": "nav",
+   "shape": "ministick",
+   "on": [
+    "x"
+   ],
+   "bindings": [
+    [
+     {
+      "action": "INPUT_RANGE_MAP_PAN_LEFT_RIGHT",
+      "mode": "Map"
+     }
+    ]
+   ],
+   "rests": "centred"
+  },
+  {
+   "what": "INPUT_RANGE_MAP_PAN_UP_DOWN",
+   "takes": "axis",
+   "device": "throttle",
+   "suits": "nav",
+   "shape": "ministick",
+   "on": [
+    "y"
+   ],
+   "bindings": [
+    [
+     {
+      "action": "INPUT_RANGE_MAP_PAN_UP_DOWN",
+      "mode": "Map"
+     }
+    ]
+   ],
+   "rests": "centred"
+  },
+  {
+   "what": "INPUT_RANGE_FP_YAW",
+   "takes": "axis",
+   "device": "stick",
+   "suits": "view",
+   "shape": "ministick",
+   "on": [
+    "x"
+   ],
+   "bindings": [
+    [
+     {
+      "action": "INPUT_RANGE_FP_YAW",
+      "mode": "On foot"
+     }
+    ]
+   ],
+   "rests": "centred"
+  },
+  {
+   "what": "INPUT_RANGE_FP_PITCH",
+   "takes": "axis",
+   "device": "stick",
+   "suits": "view",
+   "shape": "ministick",
+   "on": [
+    "y"
+   ],
+   "bindings": [
+    [
+     {
+      "action": "INPUT_RANGE_FP_PITCH",
+      "mode": "On foot"
+     }
+    ]
+   ],
+   "rests": "centred"
+  },
+  {
+   "what": "INPUT_RANGE_FP_WALK",
+   "takes": "axis",
+   "device": "stick",
+   "suits": "flight",
+   "shape": "stick",
+   "on": [
+    "y"
+   ],
+   "bindings": [
+    [
+     {
+      "action": "INPUT_RANGE_FP_WALK",
+      "mode": "On foot"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "rests": "centred"
+  },
+  {
+   "what": "INPUT_RANGE_FP_STRAFE",
+   "takes": "axis",
+   "device": "stick",
+   "suits": "flight",
+   "shape": "stick",
+   "on": [
+    "x"
+   ],
+   "bindings": [
+    [
+     {
+      "action": "INPUT_RANGE_FP_STRAFE",
+      "mode": "On foot"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "rests": "centred"
+  }
+ ]
 }

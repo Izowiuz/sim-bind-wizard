@@ -7,14 +7,16 @@ Profiles are Steam Cloud saves, not files in the install:
     ~/.local/share/Steam/userdata/<steam id>/2537590/remote/
       inputprofile_<n>      two per device
 
-The ranking comes from the install:
+The vocabulary comes from the install:
 
     .../steamapps/common/MSFS2024/Packages/
-      asobo-input-profiles-pc/InputProfiles/Categories/   551 shipped profiles
+      asobo-input-profiles-pc/InputProfiles/Categories/   551 shipped profiles,
+                                                          read for the action
+                                                          names they mention
 
 ## How to run it
 
-    ./harvest.py              vocabulary and per-category ranking
+    ./harvest.py              the action vocabulary
     ./plan.py                 the layout
     ./plan.py --why           and the evidence for each choice
     ./plan.py --sheet --html  the kneeboard
@@ -69,4 +71,5 @@ accepted and never fires. `find_profiles()` decides by the `AircraftInfo`
 element, not by filename.
 
 **`Look around` binds nothing.** It reserves the mini-stick so a button need
-cannot take it; the head-look axes come from `axis_plan()`.
+cannot take it; the head-look axes are rows in the needs file like
+everything else, asking for the throttle's mini-stick by name.

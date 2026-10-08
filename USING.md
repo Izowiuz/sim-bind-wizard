@@ -50,10 +50,12 @@ found it a home or not, and each row is in one of three states:
 
     c / C   confirm this one / every proposal
     p / P   put the planner's choice on this one / into every gap
-    RETURN  press the control you want it on
+    RETURN  press the control you want it on — or move the lever, on a
+            row that wants an axis
     l       or assign from the free controls that fit, with no hardware
     x / X   clear this one / drop every proposal, leaving yours
-    j       say what this function is FOR, from the ten jobs
+    i       turn an axis round
+    J       say what this function is FOR, from the ten jobs
     o       lay the whole thing out to an overlay, or to none
     m       the device map, which desk, and which overlay
     y       why a control is chosen: the weights, and what they are for
@@ -76,6 +78,11 @@ key for the same act in both halves of the pair.
 
 `w` is the other thing: it writes the layout into the game's own config, with
 a backup. Nothing reaches the game until you press it.
+
+A game may add a key of its own for the one thing only it does: DCS's `t`
+picks which aircraft module the screen is of, because that is a different list
+of commands, a different store and a different kneeboard. The sill shows it
+beside the rest, and the screen refuses a key it already answers to.
 
 `o` lays the whole list out again to a cockpit template from `overlays/` —
 `f-18`, `generic-hotas-spaceship`, or none at all — and says how many of its
@@ -204,12 +211,16 @@ Two halves have to exist before a layout can:
 
 ### What a harvest is
 
-**In: the installed game's own files — archives, shipped profiles, configs.
-Out: two JSON files next to `harvest.py` — every action the game will accept a
-binding for, and how many factory profiles bind each one.**
+**In: the installed game's own files — archives, configs, whatever
+enumerates the actions. Out: one JSON file next to `harvest.py` — every
+action the game will accept a binding for.**
 
-The vocabulary is what `plan.py` may name. The ranking is what belongs on
-hardware, counted rather than guessed.
+The vocabulary is what `plan.py` may name, and that is all a harvest
+answers. It used to answer a second question — how many of the profiles the
+game ships bind each action — and that number ranked somebody else's layout
+for somebody else's hardware. What belongs on a HOTAS is a judgement, and it
+is written down where judgements live: the needs file, or for DCS, its own
+hint table.
 
 ### Steps
 

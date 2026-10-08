@@ -6,7 +6,7 @@ DESCRIPTION
     map. --write hands the result to wt-bind-preset.py, which owns machine.blk.
 
 FILES
-    harvest.py          the action vocabulary and the factory ranking
+    harvest.py          the action vocabulary
     wt-bind-preset.py   the writer; it also has --dry-run, --render, --restore
     machine.blk         written by --write, one per account under Saves/
     KNEEBOARD.md, kneeboard.html   written by --sheet and --html
@@ -32,9 +32,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CORE = os.environ.get('SIM_BIND_WIZARD') or os.path.normpath(
     os.path.join(HERE, '..', '..'))
 if not os.path.isdir(CORE):
-    raise SystemExit(f'no shared core at {CORE}\n'
-                     'clone sim-bind-wizard next to this repo, '
-                     'or set SIM_BIND_WIZARD')
+    raise SystemExit(f'There is no shared core at {CORE}.\n'
+                     'Clone sim-bind-wizard next to this repo, or set '
+                     'SIM_BIND_WIZARD.')
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
@@ -56,9 +56,8 @@ harvest = adapter.from_file('wtharvest', os.path.join(HERE, 'harvest.py'))
 
 #: The catalogue as the harvest wrote it, and the view of it this file asks
 #: for. Filled by `WarThunder.__init__`, never at import -- see the note in
-#: games/falconbms/plan.py. The rank file may be absent: it only annotates
-#: `--why`, so `__init__` shrugs where the actions file is fatal.
-CAT, BY_ID, FACTORY = [], {}, {}
+#: games/falconbms/plan.py.
+CAT, BY_ID = [], {}
 
 #: War Thunder's naming convention, kept in the harvest where the whole
 #: vocabulary is parsed: a twin is only ABSENT relative to the whole of it.
@@ -100,7 +99,6 @@ def needs(described, placed):
     """[Need] -- the hand-written list, read rather than executed."""
     out = corneeds.read_needs(vocab.load(HERE, described, key='needs'),
                               make=Need)
-    corneeds.load_assignments(HERE, placed, out)
     return out
 
 
@@ -148,51 +146,37 @@ def devices():
     return devmap.by_role('stick', 'throttle')
 
 
-def deadzones(row, a):
+def deadzones(name, a):
     """The properties wt-bind-preset writes beside an axis.
 
     Computed, not judged: a ministick needs more slack than a lever, and
     a lever none at all. `AXIS_DEADZONE` overrides where somebody has an
     opinion about one.
     """
-    dead = AXIS_DEADZONE.get(row['does'])
+    dead = AXIS_DEADZONE.get(name)
     if dead is None:
         dead = 0.06 if a.kind == 'ministick' else (
             0 if a.kind == 'lever' else 0.02)
     props = {'innerDeadzone': dead}
-    props.update(AXIS_PROPS.get(row['does'], {}))
+    props.update(AXIS_PROPS.get(name, {}))
     return props
 
 
-def search(what, devs):
-    """An axis that is a search rather than a name.
+def axis_rows(devs, axes):
+    """[(name, role, axis index, invert, props)] -- what the preset writes.
 
-    Two of War Thunder's are: the brake is "a slider or lever on the stick
-    you can read absolutely", and no vocabulary makes that a label.
+    One shape, computed here: `wt-bind-preset.py` used to reach into the
+    plan objects for five fields, which is the only reason that script
+    knew what a Placement was.
     """
-    stick, thr = devs['stick'], devs['throttle']
-    if what == 'brake':
-        return next((a for a in stick.axes()
-                     if a.kind in ('slider', 'lever')
-                     and a.safe_for_absolute), None)
-    # A dial first, to match DCS: the same hand does the same thing in both
-    # sims, which is worth more than either sim's local optimum. It rests
-    # centred rather than at zero, so the view starts part-zoomed -- live
-    # with it, or fall back to a slider that rests at its minimum.
-    dial = next((a for a in thr.axes(kind='dial') if a.proportional), None)
-    return dial or next((a for a in thr.axes()
-                         if a.kind == 'slider' and a.safe_for_absolute
-                         and a.proportional), None)
-
-
-def axis_plan(devs, rows):
-    """[corneeds.Axis] -- what wt-bind-preset writes.
-
-    `rows` is the `axes` section of the needs file. It was a literal here
-    with a private vocabulary -- `stick-x`, `view-y`, `cue-x` -- which is
-    the map's two words said as one, plus two that are really searches.
-    """
-    return corneeds.read_axes(rows, devs, carries=deadzones, finds=search)
+    out = []
+    for p in axes:
+        idx = p.slots[0][0].index
+        a = devs[p.role].axis(idx)
+        for name in (b.action for b in p.slots[0][1]):
+            out.append((name, p.role, idx, p.need.invert,
+                        deadzones(name, a)))
+    return out
 
 
 def button_table(placed):
@@ -273,7 +257,8 @@ def _sheet(layout):
     at a glance, and it is why the context list is part of the contract rather
     than something each game solves again.
     """
-    _devs, placed, unmet, free, axes = layout
+    placed, unmet, free = layout.on_buttons, layout.unplaced, layout.free
+    axes = layout.on_axes
     buttons = button_table(placed)
     off = wt_offsets()
     devs = devices()
@@ -302,10 +287,9 @@ def _sheet(layout):
                           bindings=cell))
 
     seen = {}
-    for plan in axes:
-        name, role, idx = plan.does, plan.role, plan.axis.index
+    for name, role, idx, invert, _props in axis_rows(devs, axes):
         cell = seen.setdefault((role, idx), {'Air': [], 'Helicopter': [],
-                                             'inv': plan.invert})
+                                             'inv': invert})
         cell['Helicopter' if name.startswith('helicopter_')
              else 'Air'].append(name)
     for (role, idx), cell in sorted(seen.items()):
@@ -319,13 +303,16 @@ def _sheet(layout):
                 sh.add_axis(role, label, str(off[role][0] + idx), name, ctx)
 
     sh.note('Check in flight', [
-        ('Elevator trim', 'hat forward should drop the nose, the way it does '
-                          'in DCS and BMS. War Thunder names the steps by sign '
-                          '("Positive"/"Negative") and the sign is not settled'),
-        ('Zoom', 'the dial does not centre, so the view may start part-zoomed'),
-        ('View mini-stick', 'your head should go where your thumb goes'),
+        ('Elevator trim', 'Forward on the hat must drop the nose, as it '
+                          'does in DCS and BMS. War Thunder names the steps '
+                          'by sign, "Positive" and "Negative", and nothing '
+                          'here settles which sign is which.'),
+        ('Zoom', 'The dial does not return to the centre, so the view can '
+                 'start part-zoomed.'),
+        ('View mini-stick', 'Your head must go where your thumb goes.'),
     ])
-    sh.note('Undo', 'Run ./wt-bind-preset.py --restore with the game closed.')
+    sh.note('Undo', 'Close the game. Then run ./wt-bind-preset.py '
+                    '--restore.')
     for n in unmet:
         sh.add_unplaced(n.what, n.shape if isinstance(n.shape, str)
                         else '/'.join(n.shape))
@@ -374,8 +361,9 @@ class WarThunder(adapter.Planner):
     NEEDS_FILE = 'warthunder-needs.json'
     BINDS = 'warthunder-binds.json'
     CATALOGUE = 'wt-actions.json'
-    CACHE = {'wt-actions.json': 'actions',
-             'wt-factory-rank.json': 'actions'}
+    SAYS = {'game_dir': 'the War Thunder install',
+            'saves': 'where its config lives, if not beside the install'}
+    CACHE = {'wt-actions.json': 'actions'}
 
 
     @property
@@ -390,30 +378,12 @@ class WarThunder(adapter.Planner):
         """
         return self._needs
 
-    @property
-    def AXES(self) -> list:
-        """The `axes` section of the needs file.
-
-        Axes never go through the allocator -- an aircraft's pitch axis is
-        the stick's pitch axis on every desk there is -- but which lever
-        is the throttle is a judgement like any other, and it used to be
-        a literal in this file.
-        """
-        return self._axes
-
     def __init__(self, game_dir=None, saves=None, backup_dir=None):
         self.backup_dir = backup_dir
         CAT[:] = cactions.read(self.cache('wt-actions.json'))
         BY_ID.update(cactions.by_id(CAT))
-        try:
-            FACTORY.update(self.cache('wt-factory-rank.json'))
-        except vocab.Missing:
-            pass          # only annotates --why, so it may be absent
         self._needs = needs(self.NEEDS_FILE, self.BINDS)
-        # `list()` because `vocab.load` answers with whatever the
-        # file holds and `AXES` promises a list.
-        self._axes = list(vocab.load(HERE, self.NEEDS_FILE,
-                                     key='axes'))
+
         # The writer owns machine.blk and where the install is; these were
         # module constants in it with no override at all.
         self.writer = typing.cast(Preset,
@@ -426,14 +396,13 @@ class WarThunder(adapter.Planner):
     @typing.override
     def build(self):
         devs = devmap.by_role('stick', 'throttle')
-        flat = [n for n in self.NEEDS if n.first_shape != 'axis']
-        return corneeds.Layout(devs, *corneeds.allocate(flat, devs),
-                               axes=axis_plan(devs, self.AXES))
+        self.answers(self.NEEDS)
+        return corneeds.Layout(devs, *corneeds.allocate(self.NEEDS, devs))
 
     @typing.override
     def catalogue(self):
-        # A read, not a translation: the harvest settles the name, the
-        # context and the ranking in the run that parses the archives.
+        # A read, not a translation: the harvest settles the name and the
+        # context in the run that parses the archives.
         return list(CAT)
 
 
@@ -461,7 +430,7 @@ class WarThunder(adapter.Planner):
     @typing.override
     def arguments(self, parser):
         parser.add_argument('--unused', dest='free', action='store_true',
-                            help='list controls left unbound')
+                            help='List the controls that stay unbound.')
 
     @typing.override
     def paths(self, args):
@@ -471,7 +440,9 @@ class WarThunder(adapter.Planner):
 
     @typing.override
     def show(self, layout, why=False):
-        _devs, placed, unmet, free, axes = layout
+        placed, unmet, free = (layout.on_buttons, layout.unplaced,
+                               layout.free)
+        axes = layout.on_axes
         buttons = button_table(placed)
         out = [f'{len(placed)} needs matched, {len(buttons)} bindings, '
                f'{len(axes)} axes', '']
@@ -484,15 +455,6 @@ class WarThunder(adapter.Planner):
                        + (f' — {where}' if where else ''))
             if why:
                 out.append('      ' + ', '.join(corneeds.why_bits(p_)))
-                # War Thunder's own: the count is keyed by the ACTION ids
-                # this need carries, not by `need.rank`, because one need
-                # binds several and the busiest of them is the answer.
-                air = [b.action for slot in need.bindings for b in slot
-                       if not harvest.is_heli(b.action)]
-                f = max((FACTORY.get(a, 0) for a in air), default=0)
-                if f:
-                    out.append('      factory HOTAS profiles binding this: '
-                               f'{f}/29')
                 out.append('')
 
         if unmet:

@@ -57,8 +57,7 @@ def plan():
 
 def made(needs=None, devs=None, **kw):
     devs = devs or DEVS()
-    lay = Layout(devs, *allocate(list(needs or plan()), devs),
-                 axes=[corneeds.Axis('stick', None, 'pitch')])
+    lay = Layout(devs, *allocate(list(needs or plan()), devs))
     return review.Review(lay, 'Test', 'fake hardware', **kw)
 
 
@@ -140,7 +139,7 @@ class Confirming(unittest.TestCase):
     def test_confirming_twice_says_so_rather_than_pretending(self):
         rv = made()
         rv.confirm(by(rv, 'Gear'))
-        self.assertIn('already yours', rv.confirm(by(rv, 'Gear')))
+        self.assertIn('is yours.', rv.confirm(by(rv, 'Gear')))
 
     def test_there_is_nothing_to_confirm_on_an_empty_row(self):
         rv = made([Need('Trim', 'hat8', [[Bind('A')]] * 8)])
@@ -178,17 +177,39 @@ class Clearing(unittest.TestCase):
         rv.clear_all()
         self.assertEqual((0, 0, 3), rv.counts())
 
-    def test_clear_all_leaves_what_you_chose_alone(self):
-        # The rule that makes X safe to press an hour in: it undoes the
-        # planner, never you.
+    def test_a_row_does_not_move_when_it_is_cleared(self):
+        # The rows came in the order the needs list happens to be in,
+        # which is every placement followed by everything unplaced -- so
+        # clearing a binding sent its row to the bottom of its group on
+        # the next open, and a row you were walking towards was not where
+        # you left it.
+        rv = made()
+        before = [r.text for r in rv.rows() if r.kind == 'need']
+        for need in list(rv.needs):
+            rv.clear(need)
+        self.assertEqual(before,
+                         [r.text for r in rv.rows() if r.kind == 'need'])
+
+    def test_rows_are_in_name_order_inside_a_group(self):
+        # The name is the one thing about a row that does not change when
+        # you bind or clear it.
+        rv = made()
+        for _name, members in rv.groups():
+            got = [n.what for n in members]
+            self.assertEqual(sorted(got, key=str.lower), got)
+
+    def test_clear_all_takes_yours_off_too(self):
+        # It used to drop the proposals and nothing else, which left it
+        # doing nothing at all on a screen you had just saved: everything
+        # there is yours, so there was never a proposal to drop. `s` is
+        # still what writes it, so the way back out is quitting.
         rv = made()
         trim = by(rv, 'Trim')
         rv.confirm(trim)
-        was = at(rv, trim).ctrl.label
         rv.clear_all()
-        self.assertEqual(MINE, rv.mark[trim])
-        self.assertEqual(was, at(rv, trim).ctrl.label)
-        self.assertEqual((1, 0, 2), rv.counts())
+        self.assertEqual(UNSET, rv.mark[trim])
+        self.assertIsNone(rv.at[trim])
+        self.assertEqual((0, 0, 3), rv.counts())
 
     def test_the_controls_the_proposals_had_come_back_free(self):
         rv = made()
@@ -196,10 +217,10 @@ class Clearing(unittest.TestCase):
         rv.clear_all()
         self.assertIn(had, [c.label for _r, c in rv.free()])
 
-    def test_clear_all_says_when_there_is_nothing_to_drop(self):
+    def test_clear_all_says_when_there_is_nothing_bound(self):
         rv = made()
-        rv.confirm_all()
-        self.assertIn('no proposals left', rv.clear_all())
+        rv.clear_all()
+        self.assertIn('Nothing is bound.', rv.clear_all())
 
     def test_what_P_puts_in_X_takes_back_out(self):
         rv = made()
@@ -226,12 +247,12 @@ class Proposing(unittest.TestCase):
         rv.clear(gear)
         role, ctrl = rv.fits(gear)[-1]
         rv.assign(gear, role, ctrl)
-        self.assertIn('yours already', rv.propose(gear))
+        self.assertIn('Press x to clear it first', rv.propose(gear))
         self.assertEqual(ctrl.label, at(rv, gear).ctrl.label)
 
     def test_it_says_so_when_the_planner_had_nothing(self):
         rv = made([Need('Trim', 'hat8', [[Bind('A')]] * 8)])
-        self.assertIn('nowhere to put it', rv.propose(by(rv, 'Trim')))
+        self.assertIn('has no control for', rv.propose(by(rv, 'Trim')))
 
     def test_it_refuses_a_control_someone_else_took_meanwhile(self):
         rv = made()
@@ -239,7 +260,7 @@ class Proposing(unittest.TestCase):
         wanted = at(rv, gear).ctrl
         rv.clear(gear)
         rv.assign(canopy, 'stick', wanted)      # by hand, onto Gear's control
-        self.assertIn('is taken now', rv.propose(gear))
+        self.assertIn('is taken, so', rv.propose(gear))
         self.assertEqual(UNSET, rv.mark[gear])
 
     def test_propose_all_fills_only_the_gaps(self):
@@ -322,7 +343,7 @@ class ByPress(unittest.TestCase):
         self.assertIsNone(self.rv.control_at('nosuchrole', 0))
 
     def test_a_button_the_map_does_not_know_is_refused_by_name(self):
-        self.assertIn('not in the device map',
+        self.assertIn('does not have this button',
                       refused(self.rv, self.gear, 'stick', None))
 
     def test_a_control_that_carries_nothing_is_refused(self):
@@ -356,7 +377,7 @@ class ByPress(unittest.TestCase):
         canopy = by(rv, 'Canopy')
         why = refused(rv, gear, 'stick', at(rv, canopy).ctrl)
         self.assertIn('Canopy', why)
-        self.assertIn('x clears it', why)
+        self.assertIn('Press x to clear it', why)
 
     def test_shape_is_reported_before_occupancy(self):
         # Pressing a hat while a button need is selected: that it is the wrong
@@ -364,7 +385,7 @@ class ByPress(unittest.TestCase):
         # would not work even if it were free.
         rv, gear = self.rv, self.gear
         why = refused(rv, gear, 'stick', at(rv, by(rv, 'Trim')).ctrl)
-        self.assertIn('wants button', why)
+        self.assertIn('This row needs a button', why)
 
     def test_moving_a_need_onto_the_control_it_already_has_is_fine(self):
         rv, gear = self.rv, self.gear
@@ -452,13 +473,15 @@ class Took(unittest.TestCase):
     def test_pressing_an_unmapped_button_changes_nothing(self):
         rv, gear = self.rv, self.gear
         was = rv.at[gear]
-        self.assertIn('not in the device map', rv.took(gear, 'stick', 99))
+        self.assertIn('does not have this button',
+                      rv.took(gear, 'stick', 99))
         self.assertIs(was, rv.at[gear])
 
     def test_pressing_the_wrong_shape_changes_nothing(self):
         rv, gear = self.rv, self.gear
         rv.clear(gear)
-        self.assertIn('wants button', rv.took(gear, 'stick', 0))
+        self.assertIn('This row needs a button',
+                      rv.took(gear, 'stick', 0))
         self.assertEqual(UNSET, rv.mark[gear])
 
     def test_pressing_a_control_another_need_has_changes_nothing(self):
@@ -565,8 +588,44 @@ class Writing(unittest.TestCase):
         rv.clear(by(rv, 'Gear'))
         out = rv.result()
         self.assertEqual(rv.layout.devices, out.devices)
-        self.assertEqual(['pitch'], [a.does for a in out.axes])
+        self.assertEqual(2, len(out.placed))
         self.assertEqual(3, len(rv.layout.placed), 'the plan is not mutated')
+
+    def test_axes_alone_are_something_to_write(self):
+        # Clear every button and the layout still says which lever is
+        # pitch, which is throttle and which way round they run -- nine
+        # rows for the Hornet -- and `w` refused to write any of it,
+        # because no BUTTON had a home.
+        from core import tui as ctui
+        from test_box import Keyed
+        devs = {'stick': fake.device('stick', [
+            fake.button('Thumb', 0, reach=fake.THUMB),
+            fake.control('stick', 'Main stick', [], axes=[0])],
+            [fake.axis(0, role='x')])}
+        pitch = corneeds.Need('Pitch', 'stick', [[Bind('PITCH')]],
+                              takes=corneeds.AXIS, device='stick')
+        rv = made([pitch, Need('Boost', 'button', [[Bind('BOOST')]])],
+                  devs=devs)
+        for need in list(rv.needs):
+            if need is not pitch:
+                rv.clear(need)
+        self.assertEqual([], rv.result().on_buttons)
+        wrote = []
+        tui = ctui.Tui(Keyed([10, 10, 27]), ctui.Theme(False))
+        review._write(None, tui, rv, lambda kept: wrote.append(kept) or [])
+        self.assertEqual(1, len(wrote), rv.status)
+        self.assertEqual(['Pitch'],
+                         [p.need.what for p in wrote[0].on_axes])
+
+    def test_a_layout_with_neither_is_refused(self):
+        from core import tui as ctui
+        from test_box import Keyed
+        rv = made()
+        for need in list(rv.needs):
+            rv.clear(need)
+        tui = ctui.Tui(Keyed([10, 10, 27]), ctui.Theme(False))
+        review._write(None, tui, rv, lambda kept: self.fail('wrote nothing'))
+        self.assertIn('nothing to write', rv.status)
 
     def test_a_hand_placed_need_reaches_the_writer(self):
         devs = stick(fake.button('Panel button', 0, reach=fake.PANEL))
@@ -658,6 +717,21 @@ class BindsUnderTheAction(unittest.TestCase):
                    if r.kind == 'need' and r.need is gear)
         said = '\n'.join(t for _tone, t in review._side(rv, row, 40))
         self.assertIn('fit', said)
+
+    def test_an_unassigned_row_costs_what_would_take_it(self):
+        # It named the planner's choice and stopped. An empty row is
+        # where "why there?" is still open, so it was the row that
+        # answered least: nothing on screen to agree or disagree with.
+        rv = self.rv()
+        gear = by(rv, 'Gear')
+        was = at(rv, gear).ctrl
+        rv.clear(gear)
+        row = next(r for r in rv.rows()
+                   if r.kind == 'need' and r.need is gear)
+        said = '\n'.join(t for _tone, t in review._side(rv, row, 60))
+        self.assertIn('WHAT WOULD TAKE IT', said)
+        self.assertIn('points', said)
+        self.assertIn(f'WHAT MAKES {was.label.upper()} WORTH', said)
 
 
 class TheDetailPanel(unittest.TestCase):
@@ -757,7 +831,7 @@ class TheDetailPanel(unittest.TestCase):
         rv = made([Need('A', 'button', [[Bind('A')]], urgency=IN_A_TURN)],
                   devs=devs)
         got = self.text(rv, 'A', width=60)
-        self.assertIn('shape and count fit', got)
+        self.assertIn('the shape and the count fit', got)
         self.assertRegex(got, r'\+\d+  \S')
 
     def test_a_control_carrying_several_needs_says_how_many(self):
@@ -813,9 +887,9 @@ class TheDetailPanel(unittest.TestCase):
             rv.clear(holder)
         rv.assign(gear, 'stick', ctrl)
         got = self.text(rv, 'Gear', width=60)
-        self.assertIn('you chose it', got)
+        self.assertIn('by hand', got)
         self.assertIn(was.label, got, 'where the planner had wanted it')
-        self.assertIn('the planner wanted this', got)
+        self.assertIn(f'The planner wants {was.label}.', got)
 
     def test_a_borrowed_button_names_whose_control_it_is(self):
         devs = stick(fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4))
@@ -843,7 +917,7 @@ class TheDetailPanel(unittest.TestCase):
                         urgency=IN_A_TURN)],
                   devs=stick(fake.hat2('Panel rocker', 0,
                                        reach=fake.PANEL)))
-        self.assertIn('nothing nearer was free',
+        self.assertIn('No closer control was free.',
                       self.text(rv, 'Airbrake', width=44))
 
     # ---- the override mention ----
@@ -877,15 +951,21 @@ class TheDetailPanel(unittest.TestCase):
 
     # ---- the decision, drawn ----
 
-    def test_a_hand_placed_one_has_no_score_to_draw(self):
-        # You did not score it, you chose it. A tree of terms under
-        # "assigned by you" would be the screen inventing an argument.
+    def test_a_hand_placed_one_is_costed_like_any_other(self):
+        # It drew one line, the control's name, and stopped -- on the
+        # argument that you chose it so there was no argument to draw.
+        # But what a control is worth to an action is a fact about the
+        # desk and not about who typed it, and the number is the whole
+        # of what there is to disagree with. Counted over the six games
+        # the panel was refusing it on 45 rows of 174, 31 of them DCS's.
         rv = self.rv()
         gear = by(rv, 'Gear')
         ctrl = next(c for c in rv.layout.devices['stick'].groups(bindable=True)
                     if c.label == 'Panel button')
         rv.assign(gear, 'stick', ctrl)
-        self.assertNotIn('points', self.text(rv, 'Gear'))
+        got = self.text(rv, 'Gear', width=60)
+        self.assertIn('points', got)
+        self.assertIn('WHAT MAKES PANEL BUTTON WORTH', got)
 
     # ---- which button of the control ----
 
@@ -912,6 +992,73 @@ class TheDetailPanel(unittest.TestCase):
         for w in (18, 22, 26, 40):
             for _tone, t in self.side(self.rv(), 'Trim', w):
                 self.assertLessEqual(len(t), w, repr(t))
+
+
+class HowItWasSet(unittest.TestCase):
+    """The panel names which of the three ways a binding got there.
+
+    Three can be true of a row and the file records which: the planner
+    put it there and nobody has looked, the planner put it there and you
+    said yes, you put it there by hand. The panel said one of them, as a
+    phrase under the heading about which control beat which; the other
+    two were only a row colour, and a colour is gone the moment you read
+    the sheet instead of the screen.
+    """
+
+    def set(self, rv, what):
+        row = next(r for r in rv.rows()
+                   if r.kind == 'need' and r.need.what == what)
+        said = '\n'.join(t for _tone, t in review._side(rv, row, 46))
+        tail = said[said.index('HOW IT WAS SET'):]
+        end = tail.find('WHICH CONTROL')
+        return tail if end < 0 else tail[:end]
+
+    def test_the_planner_put_it_there_and_you_have_not_looked(self):
+        got = self.set(made(), 'Gear')
+        self.assertIn('the planner', got)
+        self.assertIn('nothing yet', got)
+
+    def test_the_planner_put_it_there_and_you_said_yes(self):
+        rv = made()
+        rv.confirm(by(rv, 'Gear'))
+        got = self.set(rv, 'Gear')
+        self.assertIn('the planner', got)
+        self.assertIn('yes, to this control', got)
+
+    def test_you_said_yes_to_a_control_the_allocator_has_since_left(self):
+        # The row is still yours in the file and the planner has moved
+        # on: `yes, to this control` would be a lie about the control
+        # under the cursor.
+        rv = made()
+        gear = by(rv, 'Gear')
+        rv.confirm(gear)
+        gear.assignment = dict(gear.assignment or {}, control='gone')
+        self.assertIn('yes, to another control', self.set(rv, 'Gear'))
+
+    def test_you_put_it_there_by_hand(self):
+        rv = made()
+        gear = by(rv, 'Gear')
+        ctrl = next(c for c in rv.layout.devices['stick'].groups(bindable=True)
+                    if c is not at(rv, gear).ctrl and c.kind in gear.shapes)
+        for holder in rv.who_has('stick', ctrl):
+            rv.clear(holder)
+        rv.assign(gear, 'stick', ctrl)
+        got = self.set(rv, 'Gear')
+        self.assertIn('by hand', got)
+        self.assertIn('yours', got)
+        self.assertNotIn('set by  the planner', got)
+
+    def test_it_is_not_under_the_heading_about_which_control_won(self):
+        # Where it used to live. That heading answers "why this control
+        # and not that one", and who typed it is not an answer to that.
+        rv = made()
+        rv.confirm(by(rv, 'Gear'))
+        row = next(r for r in rv.rows()
+                   if r.kind == 'need' and r.need.what == 'Gear')
+        said = '\n'.join(t for _tone, t in review._side(rv, row, 46))
+        self.assertLess(said.index('HOW IT WAS SET'),
+                        said.index('WHICH CONTROL GOT IT'))
+        self.assertNotIn('you said', said[said.index('WHICH CONTROL GOT IT'):])
 
 
 class Categories(unittest.TestCase):
@@ -1250,9 +1397,16 @@ class WhatYouDecidedOutLastsTheSession(unittest.TestCase):
         self.needs = [Need('Boost', 'button', [[Bind('BOOST')]])]
 
     def open(self, devs=None):
-        return made(self.needs, devs=devs or self.devs,
+        devs = devs or self.devs
+        return made(self.needs, devs=devs,
                     save=lambda needs, axes=():
-                    self.saved.append(needs))
+                    self.saved.append(needs),
+                    # What the adapter hands the real screen. `p` on a
+                    # row you cleared and saved has to lay the thing out
+                    # again -- the allocator was told to leave that row
+                    # alone, so the last plan has nothing for it.
+                    rebuild=lambda: Layout(devs,
+                                           *allocate(self.needs, devs)))
 
     def only(self, rv):
         return rv.needs[0]
@@ -1338,8 +1492,9 @@ class WhatYouDecidedOutLastsTheSession(unittest.TestCase):
         self.assertEqual(['Boost'], [n.what for n in unplaced])
 
     def test_an_empty_row_says_which_kind_of_empty_it_is(self):
-        # "the planner had nowhere to put it" and "the thing you chose is
-        # gone" look identical on a row and want opposite things from you.
+        # "The planner has no control for this row" and "the thing you
+        # chose is gone" look identical on a row and want opposite things
+        # from you.
         rv = self.open()
         other = next(c for c in self.devs['stick'].groups()
                      if c.label == 'Thumb B')
@@ -1349,10 +1504,13 @@ class WhatYouDecidedOutLastsTheSession(unittest.TestCase):
         self.assertIsNone(gone.at[need])
         said = gone.unhonoured(need)
         self.assertIn('thumb-b', said)
-        self.assertIn('no such control', said)
-        panel = '\n'.join(t for _tone, t in review._side(
+        self.assertIn('does not have this control', said)
+        # Joined with a space, not a newline: the panel wraps to its
+        # width, so a sentence long enough to matter is split across two
+        # of these pieces.
+        panel = ' '.join(t for _tone, t in review._side(
             gone, review.Row('need', '', need=need), 60))
-        self.assertIn('no such control', panel)
+        self.assertIn('does not have this control', panel)
 
     def test_a_row_the_planner_simply_could_not_fill_says_no_such_thing(self):
         rv = made([Need('Trim', 'hat4', [[Bind('U')], [Bind('R')],
@@ -1375,15 +1533,47 @@ class WhatYouDecidedOutLastsTheSession(unittest.TestCase):
     # ---- clearing ----
 
     def test_clearing_forgets_that_you_chose_it(self):
-        # Otherwise `x` clears the screen and the next open puts it back.
+        # Otherwise `x` clears the screen and the next open puts it back
+        # on the control you had just taken it off.
         rv = self.open()
         other = next(c for c in self.devs['stick'].groups()
                      if c.label == 'Thumb B')
         rv.assign(self.only(rv), 'stick', other)
         rv.clear(self.only(rv))
-        self.assertIsNone(self.only(rv).assignment)
+        self.assertEqual(corneeds.CLEARED,
+                         self.only(rv).assignment['how'])
+
+    def test_a_row_you_cleared_opens_cleared(self):
+        # The bug this file is the record of: the file held what sits
+        # where and had no way to say "nothing, and I meant it", so `s`
+        # answered that nothing had changed and the next open proposed
+        # the row straight back.
+        rv = self.open()
+        rv.clear(self.only(rv))
+        self.assertTrue(rv.unsaved)
         again = self.open()
+        self.assertEqual(review.UNSET, again.mark[self.only(again)])
+        self.assertIsNone(again.at[self.only(again)])
+
+    def test_clearing_a_proposal_is_something_to_save(self):
+        # It was not: `touched` ran only where you had chosen the control
+        # by hand, so clearing what the planner proposed left the screen
+        # saying `nothing has changed since the last save`.
+        rv = self.open()
+        self.assertEqual(review.PROPOSED, rv.mark[self.only(rv)])
+        rv.clear(self.only(rv))
+        self.assertTrue(rv.unsaved)
+
+    def test_p_puts_back_a_row_you_cleared_and_saved(self):
+        # Otherwise `x` on a saved row could only be undone by assigning
+        # the thing by hand, and the key that says it restores a proposal
+        # would answer that there is none to restore.
+        rv = self.open()
+        rv.clear(self.only(rv))
+        again = self.open()
+        again.propose(self.only(again))
         self.assertEqual(review.PROPOSED, again.mark[self.only(again)])
+        self.assertIsNotNone(again.at[self.only(again)])
 
     def test_dropping_proposals_leaves_what_you_chose(self):
         rv = self.open()
@@ -1482,55 +1672,211 @@ class EveryKeyTheScreenNamesIsOneItAnswers(unittest.TestCase):
         self.assertIn('w write', review.HINTS)
         self.assertIn('w', self.answered())
 
+    def test_no_key_is_answered_twice(self):
+        # Answered is not the same as reachable. `j` was a step down the
+        # list AND the job menu, and the step is first in the chain, so
+        # the menu could not be opened and `j job` in the sill was a line
+        # about nothing -- which the two tests above pass straight over,
+        # because the key IS answered, just not for the thing it says.
+        # Twice is allowed and used: `c` and `enter` mean one thing on an
+        # axis row and another on a need, and each branch says which row
+        # it wants. What kills a key is an earlier branch that asks for
+        # nothing but the key -- after that, nothing else can see it.
+        src = inspect.getsource(review._loop)
+        branches = re.findall(r"^\s+(?:el)?if k (?:==|in) ([^:]+):", src,
+                              re.M)
+        alone, dead = set(), set()
+        for cond in branches:
+            test, _sep, rest = cond.partition(' and ')
+            keys = {t.strip().strip("'") for t in test.strip('()').split(',')
+                    if "'" in t}
+            dead |= keys & alone
+            if not rest:
+                alone |= keys
+        self.assertEqual(set(), dead, 'shadowed by an earlier branch')
 
-class TurningAnAxisRound(unittest.TestCase):
-    """The axes on screen, and `i`.
 
-    They never went through the allocator -- an aircraft's pitch axis is
-    the stick's pitch axis on every desk there is -- so the screen hid
-    them entirely, and the one thing you might want to change about one,
-    which way it runs, had nowhere to be changed from. DCS had it on a
-    screen of its own; the family had it nowhere.
+class AGameMayPutAKeyOnTheScreen(unittest.TestCase):
+    """For the one thing only it does.
+
+    DCS lays out one aircraft module at a time -- the Hornet's commands
+    are not the Su-25T's -- so changing which is a different list, a
+    different store and a different kneeboard. It kept a menu of its own
+    for that, which is half of why it kept a whole screen.
     """
 
-    def rv(self):
-        devs = {'stick': fake.device('stick', [
-            fake.button('Thumb', 0, reach=fake.THUMB)])}
-        plan = corneeds.Axis('stick', None, 'PitchAxis')
+    def rv(self, offers):
         return made([Need('Boost', 'button', [[Bind('BOOST')]])],
-                    devs=devs, save=lambda needs, axes=(): 'ok'), plan
+                    offers=offers)
 
-    def rows_of(self, rv):
-        return [r for r in rv.rows() if r.kind == 'axis']
+    def test_the_word_goes_in_the_sill_beside_the_family_s(self):
+        rv = self.rv([('t', 'type', lambda _rv, _tui: 'picked')])
+        said = review.HINTS + tuple(f'{k} {w}' for k, w, _d in rv.offers)
+        self.assertIn('t type', said)
 
-    def test_an_axis_with_nothing_behind_it_is_not_a_row(self):
-        # `read_axes` says so on stderr and leaves the row out; a line
-        # naming a lever that is not there is worse than its absence.
-        rv, _plan = self.rv()
-        self.assertEqual([], self.rows_of(rv))
+    def test_a_key_the_screen_already_answers_to_is_refused(self):
+        # Which of the two wins depends on the order of an elif chain,
+        # and neither answer is a thing to find out at the keyboard.
+        with self.assertRaises(ValueError) as caught:
+            self.rv([('c', 'clash', lambda _rv, _tui: '')])
+        self.assertIn('already', str(caught.exception))
 
-    def test_a_resolved_axis_is_a_row_you_can_stand_on(self):
-        rv, _plan = self.rv()
-        dev = rv.layout.devices['stick']
-        rv.layout.axes = [corneeds.Axis('stick', next(iter(dev.axes()), None)
-                                        or _Fake(), 'PitchAxis')]
-        (row,) = self.rows_of(rv)
-        self.assertEqual('PitchAxis', row.text)
+    def test_a_game_that_offers_nothing_is_the_normal_case(self):
+        self.assertEqual([], self.rv([]).offers)
+
+
+class AnAxisIsARowLikeAnyOther(unittest.TestCase):
+    """The axes, on the one list, answering the one set of keys.
+
+    They were a second model of everything: their own object, their own
+    resolver, their own section at the bottom of the list, their own
+    panel, their own file section and their own branch of `c`, `x`, `↵`
+    and `i`. None of that was a decision -- it is how they grew. The one
+    thing that really is different is that a lever is NAMED and not
+    chosen, which is one pass in the allocator.
+    """
+
+    def rv(self, **kw):
+        devs = {'stick': fake.device('stick', [
+            fake.button('Thumb', 0, reach=fake.THUMB),
+            fake.control('stick', 'Main stick', [], axes=[0, 1])],
+            [fake.axis(0, role='x'),
+             fake.axis(1, hid='Y', role='y', moves_with=[0],
+                       coupling='fixed')])}
+        pitch = corneeds.Need('Pitch', 'stick', [[Bind('PITCH')]],
+                              takes=corneeds.AXIS, device='stick',
+                              on=('y',), urgency=IN_A_TURN)
+        boost = Need('Boost', 'button', [[Bind('BOOST')]])
+        return made([pitch, boost], devs=devs,
+                    save=lambda needs: 'ok', **kw), pitch
+
+    def row_of(self, rv, need):
+        return next(r for r in rv.rows()
+                    if r.kind == 'need' and r.need is need)
+
+    def panel(self, rv, need, width=44):
+        return '\n'.join(t for _tone, t in review._side(
+            rv, self.row_of(rv, need), width))
+
+    def test_it_is_in_the_list_with_everything_else(self):
+        # Not in a section of its own at the bottom. It is filed by band
+        # like every other row, and `f` filters it like every other row.
+        rv, pitch = self.rv()
+        rv.layout.axes = []
+        self.assertNotIn('AXES', [r.text for r in rv.rows()])
+        row = self.row_of(rv, pitch)
+        self.assertEqual('Pitch', row.text)
         self.assertTrue(row.selectable)
 
-    def test_i_turns_it_round_and_says_so(self):
-        rv, plan = self.rv()
-        self.assertIn('inverted', rv.turn_round(plan))
-        self.assertTrue(plan.invert)
-        self.assertIn('the way it was', rv.turn_round(plan))
-        self.assertFalse(plan.invert)
+    def test_it_wears_the_same_two_marks(self):
+        rv, pitch = self.rv()
+        self.assertEqual(PROPOSED, rv.mark[pitch])
+        rv.confirm(pitch)
+        self.assertEqual(MINE, rv.mark[pitch])
 
-    def test_turning_one_round_makes_the_file_behind(self):
-        rv, plan = self.rv()
-        rv.turn_round(plan)
+    def test_c_says_yes_to_it(self):
+        rv, pitch = self.rv()
+        self.assertIn('confirmed', rv.confirm(pitch))
+        self.assertIn('is yours.', rv.confirm(pitch))
+
+    def test_capital_c_takes_it_too(self):
+        # `C` greened every need and left the axes purple, which is what
+        # "I saved it and it is still purple" turned out to be -- and
+        # there is nothing left for it to walk past now.
+        rv, pitch = self.rv()
+        rv.confirm_all()
+        self.assertEqual(MINE, rv.mark[pitch])
+        self.assertEqual(0, rv.counts()[1])
+
+    def test_x_clears_it_like_any_other_row(self):
+        rv, pitch = self.rv()
+        self.assertIn('is clear.', rv.clear(pitch))
+        self.assertIsNone(rv.at[pitch])
+        self.assertEqual(UNSET, rv.mark[pitch])
+        self.assertIn('Pitch', rv.propose(pitch))
+
+    def test_i_turns_it_round_and_says_so(self):
+        rv, pitch = self.rv()
+        self.assertIn('is inverted', rv.turn_round(pitch))
+        self.assertTrue(pitch.invert)
+        self.assertIn('is not inverted', rv.turn_round(pitch))
+        self.assertFalse(pitch.invert)
+
+    def test_i_on_a_button_row_says_it_is_not_an_axis(self):
+        rv, _pitch = self.rv()
+        self.assertIn('not an axis', rv.turn_round(by(rv, 'Boost')))
+
+    def test_turning_it_round_makes_the_file_behind(self):
+        rv, pitch = self.rv()
+        rv.turn_round(pitch)
         self.assertTrue(rv.unsaved)
 
-    def test_the_key_is_in_the_sill_and_the_help(self):
+    def test_the_tally_counts_it(self):
+        rv, _pitch = self.rv()
+        mine, prop, _unset = rv.counts()
+        self.assertEqual(2, mine + prop)
+
+    def test_the_row_says_which_lever_not_which_control(self):
+        # `stick · Main stick` was the whole answer for pitch, roll AND
+        # rudder.
+        rv, pitch = self.rv()
+        self.assertIn('(y)', rv.where(pitch))
+        rv.turn_round(pitch)
+        self.assertIn('inverted', rv.where(pitch))
+
+    def test_the_panel_has_the_sections_a_button_row_has(self):
+        rv, pitch = self.rv()
+        said = self.panel(rv, pitch)
+        self.assertIn('WHERE', said)
+        self.assertIn('WHAT IT ASKED FOR', said)
+        self.assertIn('HOW IT WAS SET', said)
+        self.assertIn('lever', said)
+
+    def test_the_panel_draws_no_points_for_it(self):
+        # Not because it is a lesser row: it was never compared with
+        # anything, so a score would be the screen inventing a contest.
+        rv, pitch = self.rv()
+        said = self.panel(rv, pitch)
+        self.assertNotIn('points', said)
+        self.assertNotIn('WHICH CONTROL GOT IT', said)
+
+    def test_the_panel_says_what_the_map_measured(self):
+        rv, pitch = self.rv()
+        said = self.panel(rv, pitch)
+        self.assertNotIn('THE LEVER', said)
+        if getattr(rv.lever(rv.at[pitch]), 'rest', ''):
+            self.assertIn('HOW IT MOVES', said)
+
+    def test_the_panel_lists_the_device_s_other_levers(self):
+        rv, pitch = self.rv()
+        dev = rv.layout.devices['stick']
+        if len(list(dev.axes())) <= 1:
+            self.skipTest('the fake stick has one axis')
+        self.assertIn('EVERY LEVER', self.panel(rv, pitch))
+
+    def test_a_replan_keeps_what_you_said_about_it(self):
+        # It is the same object through a replan, the way every other
+        # need is, so there is nothing to carry across by hand.
+        rv, pitch = self.rv()
+        rv.confirm(pitch)
+        rv.turn_round(pitch)
+        rv.relay(corneeds.Layout(rv.layout.devices,
+                                 *allocate(list(rv.needs),
+                                           rv.layout.devices)))
+        self.assertEqual(MINE, rv.mark[pitch])
+        self.assertTrue(pitch.invert)
+
+    def test_an_axis_this_desk_cannot_answer_is_unplaced(self):
+        devs = {'stick': fake.device('stick', [
+            fake.button('Thumb', 0, reach=fake.THUMB)])}
+        nope = corneeds.Need('Pedals', 'pedal', [[Bind('P')]],
+                             takes=corneeds.AXIS, device='stick')
+        rv = made([nope], devs=devs)
+        self.assertIsNone(rv.at[nope])
+        self.assertIn('NOWHERE', '\n'.join(
+            t for _tone, t in review._side(rv, self.row_of(rv, nope), 40)))
+
+    def test_the_keys_are_the_ones_in_the_sill_and_the_help(self):
         self.assertIn('i invert', review.HINTS)
         self.assertIn('  i ', '\n'.join(t for _tone, t in review.KEYS))
 
@@ -1584,7 +1930,7 @@ class LayingItOutToAnOverlay(unittest.TestCase):
         rv = self.rv()
         rv.lay_over('f-18')
         said = rv.lay_over(None)
-        self.assertIn('reach and shape', said)
+        self.assertIn('The reach and the shape decide', said)
         self.assertIn('no overlay', review._tally(rv))
         self.assertIsNone(self.needs[0].finger, 'kept a wish nobody asked')
 
@@ -1612,7 +1958,7 @@ class LayingItOutToAnOverlay(unittest.TestCase):
 
     def test_a_game_that_cannot_lay_itself_out_again_says_so(self):
         said = self.rv(rebuild=False).lay_over('f-18')
-        self.assertIn('cannot lay itself out again', said)
+        self.assertIn('cannot make a layout again', said)
 
     def test_an_overlay_nobody_wrote_says_which_there_are(self):
         said = self.rv().lay_over('no-such-thing')
@@ -1680,8 +2026,10 @@ class WhatAFunctionIsFor(unittest.TestCase):
         self.assertIn('not a job', said)
 
     def test_the_key_is_in_the_sill_and_the_help(self):
-        self.assertIn('j job', review.HINTS)
-        self.assertIn('  j ', '\n'.join(t for _tone, t in review.KEYS))
+        # `J`: `j` is a step down the list, and the step is first in the
+        # chain, so the menu on `j` could not be opened at all.
+        self.assertIn('J job', review.HINTS)
+        self.assertIn('  J ', '\n'.join(t for _tone, t in review.KEYS))
 
 
 class SavingIsAKeystroke(unittest.TestCase):
@@ -1738,13 +2086,42 @@ class SavingIsAKeystroke(unittest.TestCase):
         rv.keep()
         self.assertNotIn('unsaved', review._tally(rv))
 
+    def test_the_box_names_what_the_files_do_not_have(self):
+        # The counts say how much is about to be written, which is not
+        # the question somebody has when this box comes up on the way out
+        # after they pressed `s`. That question is what changed since,
+        # and twelve keys can have changed it -- one of them a button
+        # read off the stick while the box asking for it was on screen.
+        rv = self.rv()
+        rv.confirm_all()
+        said = '\n'.join(t for _tone, t in review._save_plan(rv, 44))
+        self.assertIn('SINCE THE LAST SAVE', said)
+        self.assertIn('confirmed in bulk', said)
+
+    def test_a_fresh_screen_has_nothing_to_name(self):
+        said = '\n'.join(t for _tone, t in review._save_plan(self.rv(), 44))
+        self.assertNotIn('SINCE', said)
+
+    def test_saving_forgets_it(self):
+        rv = self.rv()
+        rv.confirm_all()
+        rv.keep()
+        self.assertEqual('', rv.since)
+
+    def test_every_key_that_marks_the_screen_says_which_it_was(self):
+        # A phrase per call site, so the box can never come up with the
+        # mark set and nothing to show for it.
+        with open(review.__file__) as f:
+            src = f.read()
+        self.assertNotIn('self.touched()', src)
+
     def test_a_screen_with_nowhere_to_write_says_so_rather_than_raising(self):
         # DCS derives its needs. A screen that raised would take the whole
         # review down over a thing it cannot help.
         rv = self.rv(save=False)
         rv.confirm_all()
         said, still = rv.keep()
-        self.assertIn('derives its needs', said)
+        self.assertIn('makes its own list', said)
         self.assertTrue(still)
 
     def test_a_save_that_fails_leaves_it_unsaved(self):
@@ -1786,7 +2163,10 @@ class TheRulesScreen(unittest.TestCase):
         said = self.said()
         for band, limit in zip(corneeds.URGENCY_NAME,
                                corneeds.MAX_REACH.values()):
-            row = [ln for ln in said.splitlines() if band in ln]
+            # The table row, not any line that mentions the band: the
+            # paragraph above the table names two of them.
+            row = [ln for ln in said.splitlines()
+                   if ln.strip().startswith(band)]
             self.assertTrue(row, band)
             self.assertIn(str(limit), row[0])
 
@@ -1830,7 +2210,9 @@ class TheRulesScreen(unittest.TestCase):
         # factory count after a step was added under it.
         said = self.said()
         for what, why in corneeds.ORDERED_BY:
-            self.assertIn(what, said)
+            # The table holds a fragment and the screen starts a sentence
+            # with it, so the capital is the screen's.
+            self.assertIn(what[0].upper() + what[1:], said)
             # A prefix: the screen wraps at the width it is given.
             self.assertIn(why.split()[0] + ' ' + why.split()[1], said)
 
@@ -1840,11 +2222,14 @@ class TheRulesScreen(unittest.TestCase):
         # It then did: a fifth refusal arrived and the screen kept saying
         # there were four.
         said = self.said()
+        # The table holds a fragment and the screen makes it a sentence,
+        # so the comparison is against the sentence the screen makes.
         for gate in corneeds.GATES:
-            self.assertIn(gate['says'], said)
+            self.assertIn(review._sentence(gate['says']), said)
         for fact in corneeds.FACTS:
             if fact.get('refuses'):
-                self.assertIn(fact['says'], said, fact['reads'])
+                self.assertIn(review._sentence(fact['says']), said,
+                              fact['reads'])
         # Asserting the four strings are present passes whether they were
         # read or typed, because typed they were copied correctly. So say
         # something else in the table and see whether the screen changes
@@ -1852,7 +2237,7 @@ class TheRulesScreen(unittest.TestCase):
         mine = corneeds.merge_rules(corneeds.RULES, {})
         mine['gate'] = [dict(g, says='the dog ate it')
                         for g in mine['gate']]
-        self.assertIn('the dog ate it', self.said(made(rules=mine)))
+        self.assertIn('The dog ate it.', self.said(made(rules=mine)))
         for gate in corneeds.GATES:
             self.assertNotIn(gate['says'], self.said(made(rules=mine)))
 
@@ -2308,6 +2693,11 @@ class Footer(unittest.TestCase):
             return re.search(rf'(^|[ ·/]){re.escape(token)}([ /]|$)', listed)
 
         for keys in branches:
+            if not keys:
+                # A branch on no literal key at all: the game's own
+                # offers, whose words go into the sill beside these at
+                # draw time because only the adapter knows them.
+                continue
             tokens = {spelled.get(k, k) for k in keys}
             self.assertTrue(any(spelled_out(t) for t in tokens),
                             f'{sorted(keys)} works, the footer never says so')

@@ -1,37 +1,35 @@
 #!/usr/bin/env python3
-"""harvest.py - read Elite's function vocabulary and factory ranking
+"""harvest.py - read Elite's function vocabulary
 
 DESCRIPTION
-    Read the control schemes Elite ships and report every bindable function,
-    plus how many factory presets bind each one.
+    Read the control schemes Elite ships and report every bindable
+    function.
 
 FILES
     ed-actions.json     written by --json: every function
-    ed-rank.json        written by --json: how many presets bind each
 
 OPTIONS
     --schemes-dir PATH  the ControlSchemes directory
 """
 
-# Read Elite Dangerous: every function it accepts a binding for, and how many
-# of the HOTAS presets it ships bind each one.
+# Read Elite Dangerous: every function it accepts a binding for.
 #
 #     ./harvest.py              what it found
 #     ./harvest.py --vocab      every function, by kind
 #     ./harvest.py --grep word  functions matching a word
 #     ./harvest.py --json       cache it, the way the other games do
 #
-# In: the shipped `.binds` presets under `ControlSchemes/`. Out: two JSON files
-# next to this script -- the vocabulary and the ranking.
+# In: the shipped `.binds` presets under `ControlSchemes/`. Out: one JSON file
+# next to this script -- the vocabulary.
 #
 # The vocabulary is `KeyboardMouseOnly.binds`, which carries every function as an
 # element whether or not it is bound: 311 buttons, 58 axes and 68 settings that
 # are not bindings at all (`MouseSensitivity`, deadzones, `YawToRollMode`).
 #
-# The ranking is the other presets. Fifteen of the thirty are real HOTAS
-# profiles, and five of those -- the X55, X56, Warthog, T16000M and G940 -- name
-# the stick and the throttle as separate devices, so they say which device a
-# function belongs on as well as how much it matters.
+# The other presets used to be counted as well -- how many of the fifteen
+# HOTAS ones bound each function, and which device they put it on. That is
+# a layout Frontier wrote for a Warthog, not a fact about Elite, and
+# nothing reads it any more.
 
 import argparse
 import os
@@ -68,19 +66,6 @@ BINDINGS_PARTS = ('users', 'steamuser', 'AppData', 'Local',
 #: let a typo of ours enter the vocabulary and then validate itself.
 WRITTEN = re.compile(r'Custom(\.[\d.]+)?\.binds$')
 
-#: the preset that carries every function whether bound or not
-BASE = 'KeyboardMouseOnly.binds'
-
-#: Presets whose device is a keyboard, a mouse, a gamepad or a VR controller.
-#: Counting them would rank a gamepad's layout, which is a different machine.
-NOT_HOTAS = re.compile(
-    r'keyboard|mouse|blackwidow|controlpad|consolex360|ps3|playstation|'
-    r'dualshock|oculus|gamepad|xb360|empty', re.I)
-
-#: What the device name in a shipped preset says the device IS.
-THROTTLE = re.compile(r'throttle', re.I)
-PEDALS = re.compile(r'pedal', re.I)
-
 
 def schemes_dir(path=None):
     """Where the shipped presets live."""
@@ -90,11 +75,11 @@ def schemes_dir(path=None):
         return os.path.join(os.environ['ED_DIR'], *SCHEMES)
     install = game.install_dir(INSTALL)
     if not install:
-        sys.exit(f'{INSTALL} is not installed in any Steam library; '
-                 'set ED_DIR to its folder')
+        sys.exit(f'{INSTALL} is not installed in any Steam library. Set '
+                 'ED_DIR to its folder.')
     out = os.path.join(install, *SCHEMES)
     if not os.path.isdir(out):
-        sys.exit(f'no ControlSchemes at {out}')
+        sys.exit(f'There is no ControlSchemes folder at {out}.')
     return out
 
 
@@ -181,58 +166,10 @@ def vocabulary(path=None, also=None):
     """
     seen = [functions_in(r) for r in presets(path).values()]
     if not seen:
-        sys.exit('no presets found -- the vocabulary comes from them')
+        sys.exit('There are no presets. The vocabulary comes from '
+                 'them.')
     seen += [functions_in(r) for r in (written() if also is None else also)]
     return merge(seen)
-
-
-def role_of(device):
-    """Which of our roles a shipped preset's device name corresponds to."""
-    if PEDALS.search(device):
-        return 'pedals'
-    if THROTTLE.search(device):
-        return 'throttle'
-    return 'stick'
-
-
-def hotas(path=None):
-    """{filename: Root} for the presets that are HOTAS rather than pad."""
-    return {n: r for n, r in presets(path).items()
-            if n != BASE and not NOT_HOTAS.search(n)}
-
-
-def ranking(path=None):
-    """{function: {'votes': n, 'where': {role: n}}}.
-
-    `votes` is how many HOTAS presets put the function on hardware at all --
-    the same measure the other games in the family use, and the only one here
-    that is counted rather than judged. `where` only fills in from the five
-    presets that name the stick and the throttle separately; the rest describe
-    one device and cannot say.
-    """
-    out = {}
-    for name, root in hotas(path).items():
-        devices = set()
-        for fn in root:
-            for c in fn:
-                d = c.get('Device')
-                if d and d not in ('{NoDevice}', '', 'Keyboard', 'Mouse'):
-                    devices.add(d)
-        split = len({role_of(d) for d in devices}) > 1
-        seen = set()
-        for fn in root:
-            for c in fn:
-                d = c.get('Device')
-                if not d or d in ('{NoDevice}', '', 'Keyboard', 'Mouse'):
-                    continue
-                rec = out.setdefault(fn.tag, {'votes': 0, 'where': {}})
-                if fn.tag not in seen:
-                    rec['votes'] += 1
-                    seen.add(fn.tag)
-                if split:
-                    role = role_of(d)
-                    rec['where'][role] = rec['where'].get(role, 0) + 1
-    return out
 
 
 _WORDS = re.compile(r'(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])')
@@ -260,44 +197,40 @@ def readable(name):
     return ' '.join(out)
 
 
-def catalogue(voc=None, rank=None):
+def catalogue(voc=None):
     """[Action] -- the whole vocabulary in the shape every game shares.
 
     Built here because everything it needs is read here anyway: the kinds
-    come from the same parse, `readable` turns Elite's CamelCase into
-    words, and the ranking is counted in the same run rather than joined
-    back on by whoever loads the cache.
+    come from the same parse, and `readable` turns Elite's CamelCase into
+    words.
     """
     voc = vocabulary() if voc is None else voc
-    rank = ranking() if rank is None else rank
     axes = set(voc.get('axis', ()))
     return [cactions.Action(fn, readable(fn),
-                            kind='axis' if fn in axes else 'button',
-                            rank=(rank.get(fn) or {}).get('votes', 0))
+                            kind='axis' if fn in axes else 'button')
             for fn in sorted(axes | set(voc.get('button', ())))]
 
 
-def action_rows(voc=None, rank=None):
+def action_rows(voc=None):
     """The section the cache holds."""
-    return cactions.dump(catalogue(voc, rank))
+    return cactions.dump(catalogue(voc))
 
 
 @typing.final
 class EliteHarvest(adapter.Harvest):
-    """Elite's function vocabulary and its factory ranking."""
+    """Elite's function vocabulary."""
 
     game = 'elite'
-    files = {'ed-actions.json': ('actions',),
-             'ed-rank.json': ('ranking', 'profiles')}
+    files = {'ed-actions.json': ('actions',)}
 
     @typing.override
     def arguments(self, parser):
         parser.add_argument('--vocab', action='store_true',
-                            help='every function, by kind')
+                            help='List every function, by kind.')
         parser.add_argument('--grep', metavar='WORD',
-                            help='functions matching a word')
+                            help='List the functions that match a word.')
         parser.add_argument('--schemes-dir',
-                            help='override the ControlSchemes lookup')
+                            help='Where the ControlSchemes folder is.')
 
     @typing.override
     def read(self, args):
@@ -305,12 +238,7 @@ class EliteHarvest(adapter.Harvest):
         path = args.schemes_dir
         self.where = schemes_dir(path)
         self.v = vocabulary(path)
-        self.rank = ranking(path)
-        self.profiles = hotas(path)
-        return {'ed-actions.json': {
-                    'actions': action_rows(self.v, self.rank)},
-                'ed-rank.json': {'ranking': self.rank,
-                                 'profiles': sorted(self.profiles)}}
+        return {'ed-actions.json': {'actions': action_rows(self.v)}}
 
     @typing.override
     def summary(self, data):
@@ -323,17 +251,12 @@ class EliteHarvest(adapter.Harvest):
         flags, opposite meanings. The order lives in `core.adapter` now and
         there is only one of it.
         """
-        v, rank, profiles = self.v, self.rank, self.profiles
+        v = self.v
         if self.args.grep:
-            out = []
-            for kind in ('button', 'axis'):
-                for f in v.get(kind, ()):
-                    if self.args.grep.lower() in f.lower():
-                        r = rank.get(f, {})
-                        out.append(f'  {kind:7} {f:38} '
-                                   f'{r.get("votes", 0):2}/{len(profiles)}'
-                                   f'  {r.get("where") or ""}')
-            return out
+            return [f'  {kind:7} {f}'
+                    for kind in ('button', 'axis')
+                    for f in v.get(kind, ())
+                    if self.args.grep.lower() in f.lower()]
 
         if self.args.vocab:
             out = []
@@ -342,27 +265,9 @@ class EliteHarvest(adapter.Harvest):
                 out += [f'  {f}' for f in v.get(kind, ())]
             return out
 
-        out = [str(self.where), '',
-               f'vocabulary  {len(v.get("button", ()))} button, '
-               f'{len(v.get("axis", ()))} axis',
-               f'ranking     {len(rank)} functions, from '
-               f'{len(profiles)} HOTAS presets', '']
-        split = [n for n, r in profiles.items()
-                 if len({role_of(c.get('Device'))
-                         for fn in r for c in fn
-                         if c.get('Device') not in (None, '{NoDevice}', '',
-                                                    'Keyboard', 'Mouse')}) > 1]
-        out.append(f'of those, {len(split)} name the stick and throttle '
-                   'separately:')
-        out += [f'  {n}' for n in sorted(split)]
-        out += ['', 'most bound']
-        for f, r in sorted(rank.items(),
-                           key=lambda x: (-x[1]['votes'], x[0]))[:18]:
-            kind = 'axis' if f in v.get('axis', ()) else 'button'
-            where = ' '.join(f'{k} {n}' for k, n in sorted(r['where'].items()))
-            out.append(f'  {readable(f)[:36]:38} {kind:7} '
-                       f'{r["votes"]:2}/{len(profiles)}  {where}')
-        return out
+        return [str(self.where), '',
+                f'vocabulary  {len(v.get("button", ()))} button, '
+                f'{len(v.get("axis", ()))} axis']
 
 
 if __name__ == '__main__':

@@ -137,16 +137,18 @@ def _guard(cls):
         if base is None:
             if fn is not None and getattr(fn, '__override__', False):
                 raise TypeError(
-                    f'{cls.__name__}.{name} is marked @override but no base '
-                    'class defines it -- a typo here is silent otherwise')
+                    f'{cls.__name__}.{name} is marked @override. No base '
+                    'class defines it. A typo here is silent otherwise.')
             continue
         if getattr(_func(base) or base, '__final__', False):
-            raise TypeError(f'{cls.__name__}.{name} overrides a final member')
+            raise TypeError(
+                f'{cls.__name__}.{name} overrides a final member.')
         basefn = _func(base)
         if fn is not None and basefn is not None and not _accepts(fn, basefn):
             raise TypeError(
-                f'{cls.__name__}.{name}{inspect.signature(fn)} cannot be '
-                f'called the way {name}{inspect.signature(basefn)} promised')
+                f'{cls.__name__}.{name}{inspect.signature(fn)} cannot '
+                f'take the arguments that '
+                f'{name}{inspect.signature(basefn)} promised.')
 
 
 # --------------------------------------------------------- what a writer says
@@ -173,7 +175,7 @@ def from_file(name, path, argv=None):
         loader = importlib.machinery.SourceFileLoader(name, path)
     spec = importlib.util.spec_from_file_location(name, path, loader=loader)
     if spec is None or spec.loader is None:
-        raise RuntimeError(f'{path} cannot be loaded as a module')
+        raise RuntimeError(f'{path} cannot be loaded as a module.')
     mod = importlib.util.module_from_spec(spec)
     sys.modules[name] = mod
     was = sys.argv
@@ -219,7 +221,7 @@ MOVE = None
 # ----------------------------------------------------------------- harvest
 
 class Harvest(abc.ABC):
-    """in: the game's files.  out: vocabulary and ranking JSON.
+    """in: the game's files.  out: the vocabulary, as JSON.
 
     `--json` exists because this created it, and the cache goes through
     `core.vocab.save` because this calls it. Three harvests used to write
@@ -248,8 +250,8 @@ class Harvest(abc.ABC):
         path = getattr(mod, '__file__', None)
         if not path:
             raise RuntimeError(
-                f'{type(self).__name__} is not in sys.modules, so it cannot '
-                'find its own directory')
+                f'{type(self).__name__} is not in sys.modules. It cannot '
+                'find its own directory.')
         return os.path.dirname(os.path.abspath(path))
 
     @abc.abstractmethod
@@ -269,7 +271,7 @@ class Harvest(abc.ABC):
             description=sys.modules[type(self).__module__].__doc__,
             formatter_class=argparse.RawDescriptionHelpFormatter)
         p.add_argument('--json', action='store_true',
-                       help='write the cache')
+                       help='Write the cache.')
         self.arguments(p)
         return p
 
@@ -343,6 +345,10 @@ class Adapter(abc.ABC):
     #: constructor parameter -> extra flag spellings, for a game whose own
     #: word for something predates the common one.
     ALIASES: dict = {}
+
+    #: constructor parameter -> what `--help` says about it. A flag with
+    #: no line is a flag nobody finds.
+    SAYS: dict = {}
 
     def __init_subclass__(cls, **kw):
         super().__init_subclass__(**kw)
@@ -454,10 +460,11 @@ class Adapter(abc.ABC):
         path = getattr(mod, '__file__', None)
         if not path:
             raise RuntimeError(
-                f'{type(self).__name__} was defined in a module that is not '
-                f'in sys.modules ({type(self).__module__!r}), so it cannot '
-                'find its own directory -- register it under spec.name '
-                'before exec_module, the way core.adapter.load does')
+                f'{type(self).__name__} comes from a module that is not '
+                f'in sys.modules ({type(self).__module__!r}). It cannot '
+                'find its own directory. Register the module under '
+                'spec.name before exec_module, as core.adapter.load '
+                'does.')
         return os.path.dirname(os.path.abspath(path))
 
     @typing.final
@@ -518,7 +525,44 @@ class Adapter(abc.ABC):
         with open(mine, 'rb') as f:
             return corneeds.merge_rules(corneeds.RULES, tomllib.load(f))
 
-    def save_needs(self, needs, axes=()) -> str:
+    #: Whether the answers file has been read onto these needs yet. A
+    #: class default so that a game with its own `__init__` does not have
+    #: to remember to set it.
+    _answered = False
+
+    @typing.final
+    def answers(self, needs) -> None:
+        """Put what you decided last time onto these needs. Once.
+
+        `build` runs again every time the screen replans -- a key, an
+        overlay, a new aircraft -- and the file is the record of what you
+        decided BEFORE this session. Read again mid-session it undoes the
+        session: a row you cleared came back carrying its old `chose`, so
+        the `chose` pass put it straight back on the control you had just
+        taken it off, and the next save wrote the resurrected row to the
+        file. Clearing a hand-placed binding was not possible at all.
+
+        Measured on this desk: 32 of DCS's 32 rows and 32 of X4's 32 came
+        back from one replan. The four games with no answers file yet
+        read the same way and had nothing to resurrect.
+
+        Once means once per adapter. Switching aircraft builds another
+        one, and that one does read its own file.
+
+        Once for the NEEDS. The axes are answered every time, because an
+        axis plan is built fresh from the devices on every build while
+        the needs are the same objects all session: `main` builds a
+        layout for the plan and the review builds another, so a screen
+        whose axes were only seeded on the first build opened with every
+        one of them purple. What the session has decided about an axis
+        survives this because `Review.relay` carries it over the top.
+        """
+        if self._answered:
+            return
+        self._answered = True
+        corneeds.load_assignments(self.here, self.BINDS, needs)
+
+    def save_needs(self, needs) -> str:
         """Write what the screen decided down.
 
         Not final: DCS keeps its decisions in the wizard's results file,
@@ -544,35 +588,14 @@ class Adapter(abc.ABC):
         """
         if not self.NEEDS_FILE:
             raise RuntimeError(
-                f'{self.game} derives its needs rather than keeping them, '
-                'so there is no list to write')
+                f'{self.game} makes its own list rather than keeping '
+                'one. There is no file to write it to.')
         filed = self.as_filed(needs)
-        corneeds.save_needs(self.here, self.NEEDS_FILE, filed,
-                            self.axes_filed(axes))
+        corneeds.save_needs(self.here, self.NEEDS_FILE, filed)
         corneeds.save_assignments(self.here, self.BINDS, filed)
         return (f'wrote {len(needs)} to {self.NEEDS_FILE} and where '
                 f'{sum(1 for n in needs if n.assignment)} of them sit to '
                 f'{self.BINDS}')
-
-    def axes_filed(self, axes):
-        """The `axes` section as it should go back, or what it already is.
-
-        The rows carry the search and the context; the `Axis` objects the
-        screen holds carry which way each runs. So this is the file's own
-        rows with `invert` taken from the screen -- an axis turned round
-        with `i` is the one thing about an axis the screen can change.
-        """
-        rows = [dict(r) for r in getattr(self, 'AXES', ())]
-        by = {a.does: a for a in axes}
-        for row in rows:
-            got = by.get(row['does'])
-            if got is None:
-                continue
-            if got.invert:
-                row['invert'] = True
-            else:
-                row.pop('invert', None)
-        return rows
 
     def as_filed(self, needs):
         """`needs` in the order the file on disk has them."""
@@ -590,7 +613,8 @@ class Adapter(abc.ABC):
         want = self.CACHE.get(filename)
         if isinstance(want, tuple):
             if key not in want:
-                raise TypeError(f'{filename} holds {want}; asked for {key!r}')
+                raise TypeError(f'{filename} holds {want}. This asked for '
+                            f'{key!r}.')
             want = key
         return vocab.load(self.here, filename, key=want, build=build)
 
@@ -620,36 +644,51 @@ class Adapter(abc.ABC):
             description=sys.modules[type(self).__module__].__doc__,
             formatter_class=argparse.RawDescriptionHelpFormatter)
         p.add_argument('--desk', metavar='NAME',
-                       help='which rig in the device map this is for')
+                       help='Which rig in the device map this is for.')
         p.add_argument('--why', action='store_true',
-                       help='print why each control was chosen')
+                       help='Print why each control was chosen.')
         p.add_argument('--free', action='store_true',
-                       help='list controls left unbound')
+                       help='List the controls that stay unbound.')
         # `nargs='?'` because two adapters already took a path here and
         # standardising on the poorer of the two spellings would have been a
         # regression dressed as a contract.
         p.add_argument('--sheet', nargs='?', const='', metavar='PATH',
-                       help='write KNEEBOARD.md, or to PATH')
+                       help='Write KNEEBOARD.md, or write it to PATH.')
         p.add_argument('--html', nargs='?', const='', metavar='PATH',
-                       help='write kneeboard.html, or to PATH')
+                       help='Write kneeboard.html, or write it to PATH.')
         p.add_argument('--tui', action='store_true',
-                       help='review the layout, save what you keep')
+                       help='Review the layout. Save what you keep.')
         p.add_argument('--write', action='store_true',
-                       help='write the whole layout into the game')
+                       help='Write the whole layout into the game.')
         p.add_argument('--overlay', metavar='NAME',
-                       help='which layout to ask for, from overlays/: '
+                       help='Which layout to ask for, from overlays/: '
                             + (', '.join(coverlay.names()) or 'none written')
-                            + f'. {self.OVERLAY or "none"}, by default; '
-                              '`none` asks for nothing.')
+                            + f'. The default is {self.OVERLAY or "none"}. '
+                              'Give none to ask for nothing.')
         p.add_argument('--solver', metavar='NAME',
                        choices=[n for n, _s, _w in csolvers.choices()],
-                       help='who decides which need takes which control: '
-                            + '; '.join(f'{n} — {said}'
+                       help='Who decides which need takes which control: '
+                            + '. '.join(f'{n} is {said}'
                                         for n, said, _w in
                                         csolvers.choices())
-                            + '. The best one that runs here, by default.')
+                            + '. The default is the best one that runs '
+                              'here.')
         backup.add_argument(p, self.game)
+        # The constructor's own flags, so `--help` lists them. They are
+        # PARSED before this parser exists -- `run()` takes them off the
+        # command line to build the adapter at all -- and so were missing
+        # from every help text in the family: `./bind dcs plan -a su-25T`
+        # is in the top-level README and `--help` had never heard of it.
         self.arguments(p)
+        for names, name in _flags(type(self)):
+            if any(n in p._option_string_actions for n in names):
+                # The game words this one itself, in `arguments`. Two
+                # declarations of one flag is argparse's error, not a
+                # choice to make here.
+                continue
+            p.add_argument(*names, metavar=name.split('_')[0].upper(),
+                           help=self.SAYS.get(name, f'Which {name} this '
+                                                    'is for.'))
         return p
 
     @typing.final
@@ -757,10 +796,11 @@ class Adapter(abc.ABC):
         bad = self.unknown()
         if bad:
             for what, kind, ident in bad:
-                print(f'!! {what}: the game has no {kind} called {ident}',
-                      file=sys.stderr)
-            raise SystemExit(f'the vocabulary disagrees with NEEDS; '
-                             f'run ./bind {self.game} harvest')
+                print(f'!! {what}: the game has no {kind} called '
+                      f'{ident}.', file=sys.stderr)
+            raise SystemExit(
+                'The vocabulary does not agree with the list. Run '
+                f'./bind {self.game} harvest.')
 
         layout = self.build()
         asked = False
@@ -807,6 +847,22 @@ class Adapter(abc.ABC):
     def sheet(self, layout) -> csheet.Sheet:
         """The kneeboard, in the core's shape."""
 
+    def offers(self) -> list:
+        """[(key, word, what it does)] this game puts on the review screen.
+
+        For a key only one game needs. DCS lays out one aircraft module at
+        a time and had a menu of its own to change which, which is half of
+        why it kept a whole screen; a game that needs one key asks for one
+        key.
+
+        The callable is handed the `Review` and the `tui`, and answers
+        with a line for the status bar -- or with an `Adapter`, and then
+        the screen reopens on that one. Changing module is a different list of
+        needs, a different store and a different kneeboard, so it is a
+        new screen rather than a redraw.
+        """
+        return []
+
     def sheet_suffix(self) -> str:
         """What tells this game's kneeboard from another of its own, if
         anything. DCS writes one per aircraft module: `-FA-18C`.
@@ -837,10 +893,10 @@ class Adapter(abc.ABC):
         tail = self.sheet_suffix()
         out = []
         if markdown is not None:
-            out.append('wrote %s (%d rows, %d axes)' % sh.markdown(
+            out.append('wrote %s (%d rows, %d of them axes)' % sh.markdown(
                 markdown or os.path.join(self.here, f'KNEEBOARD{tail}.md')))
         if html is not None:
-            out.append('wrote %s (%d rows, %d axes)' % sh.html(
+            out.append('wrote %s (%d rows, %d of them axes)' % sh.html(
                 html or os.path.join(self.here, f'kneeboard{tail}.html')))
         for line in out:
             print(line)
@@ -909,8 +965,9 @@ class Adapter(abc.ABC):
                 raise RuntimeError(
                     f'{type(self).__name__} left files behind in {d}: '
                     + ', '.join(sorted(os.path.basename(s) for s in strays))
-                    + ' -- what a writer replaces goes to core.backup, never '
-                      'to a sibling file: the game reads that folder')
+                    + '. A writer sends what it replaces to core.backup. '
+                      'It must not write a sibling file: the game reads '
+                      'that folder.')
         return out
 
     @typing.final
@@ -925,14 +982,25 @@ class Adapter(abc.ABC):
         On `Adapter` and not on `Planner`, so a proposer gets it too. DCS
         had a screen of its own with `c C x X ↵` on it -- the same keys,
         the same three states -- because nothing offered it this one.
+
+        The loop is for an `offers` key that answers with another adapter:
+        DCS lays out one aircraft at a time, and changing which is a
+        different list of needs, a different store and a different
+        kneeboard. So the screen closes and opens on the new one rather
+        than redrawing.
         """
-        creview.run(self.build(), self.title, self.subtitle,
-                    describe=self.describe, write=self.write_all,
-                    paths=self.paths(args), catalogue=self.catalogue(),
-                    source=os.path.join('games', self.game, self.CATALOGUE),
-                    save=self.save_needs, harvest=self.reharvest,
-                    drop=self.drop_cache, rules=self.rules(),
-                    rebuild=self.build, game=self.game)
+        on = self
+        while on is not None:
+            on = creview.run(
+                on.build(), on.title, on.subtitle,
+                describe=on.describe, write=on.write_all,
+                paths=on.paths(args), catalogue=on.catalogue(),
+                source=os.path.join('games', on.game, on.CATALOGUE),
+                save=on.save_needs, harvest=on.reharvest,
+                drop=on.drop_cache, rules=on.rules(),
+                rebuild=on.build, game=on.game, offers=on.offers())
+            if not isinstance(on, Adapter):
+                return
 
 
 class Planner(Adapter):

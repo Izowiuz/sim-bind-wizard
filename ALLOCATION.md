@@ -26,7 +26,6 @@ only ever indexes that list.
 | `dev` | which device kind it belongs on |
 | `prefer` | pin to a control by its label in the map |
 | `on` | the directions it physically moves in |
-| `rank` | how many factory profiles bind it — a tiebreak, never a promotion |
 
 **Devices** come from `core/devmap.py` → `sim-device-map`, keyed by the map's
 own `kind`. The allocator sees each device as a flat list of `groups` —
@@ -90,12 +89,16 @@ A pin short-circuits everything except shape and capacity. It used to be a
 ceiling excluded scored `None` and the bonus never ran — BMS's pinky shift
 scored 721 with a loose ceiling and nothing with a tight one, and moved
 silently to the thumb mini-stick. A pin is a decision, so it outranks the
-tables and not just the ranking.
+tables and not just the scoring.
 
 ## Five passes
 
-Needs are ordered `(pinned first, then urgency, then −rank)` and walked five
-times. Each pass takes whole controls out of the pool as it places them.
+Needs are ordered `(pinned first, then urgency, then the name)` and walked
+five times. There used to be a step between the band and the name: how many
+of the game's own factory profiles bound the thing. It decided ties inside a
+band, which is real work, and it decided them by what somebody else bound on
+somebody else's hardware — so it is gone, and the name, which decides
+nothing, breaks what the band leaves. Each pass takes whole controls out of the pool as it places them.
 
 **1 — yours.** Anything carrying `Need.yours` with `how: chose` — a control
 you put it on yourself, from the review screen. Placed before anything is
@@ -241,9 +244,9 @@ have one. That is what a writer iterates; it is the only place the button
 arithmetic is done, and an adapter re-deriving it by hand loses `need.on`.
 
 `unplaced` is the needs with no home. For a hand-written `NEEDS` that means a
-function you asked for has nowhere to go. For a derived list like DCS's, where
-the top of a ranked vocabulary is offered and the rest simply is not chosen,
-it is normal.
+function you asked for has nowhere to go. For a derived list like DCS's, which
+offers everything its own table puts on a HOTAS, it means the desk ran out of
+that shape — and that is normal.
 
 `free` is `[(role, ctrl)]` for controls with **every** button still free, not
 merely the ones no need chose.

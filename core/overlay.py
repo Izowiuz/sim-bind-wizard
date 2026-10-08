@@ -249,8 +249,8 @@ def _in_the_map(rule, where):
             # empty wish here means no wish at all -- so that one is not
             # askable, and listing it as `''` would read as a typo.
             said = ', '.join(repr(k) for k in known if k)
-            raise Bad(f'{where}: {word} = {want!r} is not one the map says. '
-                      f'There are: {said}')
+            raise Bad(f'{where}: {word} = {want!r} is not a word the map '
+                      f'says. It says these: {said}.')
 
 
 def read(path, game=None):
@@ -267,28 +267,29 @@ def read(path, game=None):
         unknown = sorted(set(rule) - set(SETS) - set(ASKS) - {SCOPE})
         if unknown:
             raise Bad(f'{os.path.basename(path)}: a want names '
-                      f'{", ".join(unknown)}, which is neither something to '
-                      f'ask for ({", ".join(SETS)}) nor something to ask '
-                      f'about ({", ".join(ASKS)})')
+                      f'{", ".join(unknown)}. That is not something to ask '
+                      f'for ({", ".join(SETS)}). It is not something to '
+                      f'ask about either ({", ".join(ASKS)}).')
         if not any(key in rule for key in SETS):
-            raise Bad(f'{os.path.basename(path)}: a want asks for nothing -- '
-                      f'it names only {", ".join(sorted(rule))}')
+            raise Bad(f'{os.path.basename(path)}: a want asks for '
+                      f'nothing. It names only '
+                      f'{", ".join(sorted(rule))}.')
         _in_the_map(rule, os.path.basename(path))
     pairs = _mine(got.get('pair', []), game)
     for rule in pairs:
         if rule.get('rule') not in PAIRS:
-            raise Bad(f'{os.path.basename(path)}: no rule called '
-                      f'{rule.get("rule")!r}. There are: '
-                      f'{", ".join(sorted(PAIRS))}')
+            raise Bad(f'{os.path.basename(path)}: no rule is called '
+                      f'{rule.get("rule")!r}. These are: '
+                      f'{", ".join(sorted(PAIRS))}.')
         for half in ('one', 'other'):
             if not rule.get(half):
                 raise Bad(f'{os.path.basename(path)}: the '
-                          f'{rule["rule"]!r} rule has no {half!r} side')
+                          f'{rule["rule"]!r} rule has no {half!r} side.')
             unknown = sorted(set(rule[half]) - set(ASKS))
             if unknown:
                 raise Bad(f'{os.path.basename(path)}: the {half} side of '
-                          f'{rule["rule"]!r} names {", ".join(unknown)}, '
-                          f'which is not something to ask about')
+                          f'{rule["rule"]!r} names {", ".join(unknown)}. '
+                          'That is not something to ask about.')
     return Overlay(name, got.get('says', ''), wants, pairs,
                    called=os.path.splitext(os.path.basename(path))[0])
 
@@ -298,7 +299,7 @@ def named(name, game=None):
     path = os.path.join(WHERE, f'{name}.toml')
     if not os.path.exists(path):
         there = ', '.join(names()) or 'none'
-        raise Bad(f'no overlay called {name!r}. There are: {there}')
+        raise Bad(f'No overlay is called {name!r}. These are: {there}.')
     return read(path, game)
 
 

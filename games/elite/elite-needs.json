@@ -1,672 +1,770 @@
 {
-"needs": [
-{
-"what": "Primary fire",
-"shape": "trigger",
-"bindings": [
-[
-{
-"action": "PrimaryFire"
-},
-{
-"action": "BuggyPrimaryFireButton"
-}
-]
-],
-"urgency": 0,
-"suits": "fire",
-"held": true,
-"by_feel": true,
-"rank": 13
-},
-{
-"what": "Secondary fire",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "SecondaryFire"
-},
-{
-"action": "BuggySecondaryFireButton"
-}
-]
-],
-"urgency": 0,
-"suits": "fire",
-"held": true,
-"by_feel": true,
-"rank": 13
-},
-{
-"what": "Boost",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "UseBoostJuice"
-}
-]
-],
-"urgency": 0,
-"suits": "flight",
-"by_feel": true,
-"rank": 13
-},
-{
-"what": "Select target",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "SelectTarget"
-},
-{
-"action": "SelectTarget_Buggy"
-}
-]
-],
-"urgency": 0,
-"suits": "lock",
-"by_feel": true,
-"rank": 13
-},
-{
-"what": "Next hostile",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "CycleNextHostileTarget"
-}
-]
-],
-"urgency": 0,
-"suits": "lock",
-"rapid": true,
-"by_feel": true,
-"rank": 9
-},
-{
-"what": "Highest threat",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "SelectHighestThreat"
-}
-]
-],
-"urgency": 0,
-"suits": "lock",
-"by_feel": true,
-"rank": 5
-},
-{
-"what": "Power distribution",
-"shape": "hat4",
-"bindings": [
-[
-{
-"action": "IncreaseSystemsPower"
-},
-{
-"action": "IncreaseSystemsPower_Buggy"
-}
-],
-[
-{
-"action": "IncreaseWeaponsPower"
-},
-{
-"action": "IncreaseWeaponsPower_Buggy"
-}
-],
-[
-{
-"action": "ResetPowerDistribution"
-},
-{
-"action": "ResetPowerDistribution_Buggy"
-}
-],
-[
-{
-"action": "IncreaseEnginesPower"
-},
-{
-"action": "IncreaseEnginesPower_Buggy"
-}
-]
-],
-"urgency": 0,
-"suits": "systems",
-"rapid": true,
-"by_feel": true,
-"on": [
-"up",
-"right",
-"down",
-"left"
-],
-"rank": 13
-},
-{
-"what": "Fire group",
-"shape": "hat2",
-"bindings": [
-[
-{
-"action": "CycleFireGroupNext"
-}
-],
-[
-{
-"action": "CycleFireGroupPrevious"
-}
-]
-],
-"urgency": 0,
-"suits": "fire",
-"rapid": true,
-"by_feel": true,
-"on": [
-"forward",
-"back"
-],
-"rank": 12
-},
-{
-"what": "Hardpoints",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "DeployHardpointToggle"
-}
-]
-],
-"urgency": 0,
-"suits": "fire",
-"by_feel": true,
-"rank": 12
-},
-{
-"what": "Chaff",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "FireChaffLauncher"
-}
-]
-],
-"urgency": 0,
-"suits": "defence",
-"by_feel": true,
-"rank": 3
-},
-{
-"what": "Heat sink",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "DeployHeatSink"
-}
-]
-],
-"urgency": 0,
-"suits": "defence",
-"by_feel": true,
-"rank": 6
-},
-{
-"what": "Shield cell",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "UseShieldCell"
-}
-]
-],
-"urgency": 0,
-"suits": "defence",
-"by_feel": true,
-"rank": 3
-},
-{
-"what": "Landing gear",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "LandingGearToggle"
-}
-]
-],
-"urgency": 1,
-"suits": "systems",
-"by_feel": true,
-"rank": 9
-},
-{
-"what": "Cargo scoop",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "ToggleCargoScoop"
-},
-{
-"action": "ToggleCargoScoop_Buggy"
-}
-]
-],
-"urgency": 1,
-"suits": "systems",
-"rank": 9
-},
-{
-"what": "Flight assist",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "ToggleFlightAssist"
-},
-{
-"action": "ToggleDriveAssist"
-}
-]
-],
-"urgency": 1,
-"suits": "flight",
-"by_feel": true,
-"rank": 12
-},
-{
-"what": "Speed zero",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "SetSpeedZero"
-}
-]
-],
-"urgency": 1,
-"suits": "flight",
-"by_feel": true
-},
-{
-"what": "Reverse throttle",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "ToggleReverseThrottleInput"
-},
-{
-"action": "BuggyToggleReverseThrottleInput"
-}
-]
-],
-"urgency": 1,
-"suits": "flight",
-"by_feel": true,
-"rank": 8
-},
-{
-"what": "Frame shift",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "HyperSuperCombination"
-}
-]
-],
-"urgency": 1,
-"suits": "nav",
-"by_feel": true,
-"rank": 4
-},
-{
-"what": "Subsystem",
-"shape": "hat2",
-"bindings": [
-[
-{
-"action": "CycleNextSubsystem"
-}
-],
-[
-{
-"action": "CyclePreviousSubsystem"
-}
-]
-],
-"suits": "lock",
-"rapid": true,
-"by_feel": true,
-"on": [
-"forward",
-"back"
-],
-"rank": 6
-},
-{
-"what": "Target",
-"shape": "hat2",
-"bindings": [
-[
-{
-"action": "CycleNextTarget"
-}
-],
-[
-{
-"action": "CyclePreviousTarget"
-}
-]
-],
-"suits": "lock",
-"rapid": true,
-"by_feel": true,
-"on": [
-"right",
-"left"
-],
-"rank": 9
-},
-{
-"what": "Radar range",
-"shape": "hat2",
-"bindings": [
-[
-{
-"action": "RadarIncreaseRange"
-}
-],
-[
-{
-"action": "RadarDecreaseRange"
-}
-]
-],
-"suits": "sensor",
-"rapid": true,
-"on": [
-"forward",
-"back"
-],
-"rank": 4
-},
-{
-"what": "Head look",
-"shape": "ministick",
-"bindings": [],
-"suits": "view"
-},
-{
-"what": "Head look reset",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "HeadLookReset"
-}
-]
-],
-"suits": "view"
-},
-{
-"what": "Discovery scan",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "ExplorationFSSDiscoveryScan"
-}
-]
-],
-"suits": "sensor",
-"rank": 13
-},
-{
-"what": "Night vision",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "NightVisionToggle"
-}
-]
-],
-"suits": "view"
-},
-{
-"what": "Spotlight",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "ShipSpotLightToggle"
-},
-{
-"action": "HeadlightsBuggyButton"
-}
-]
-],
-"suits": "systems",
-"rank": 7
-},
-{
-"what": "Panel",
-"shape": "hat2",
-"bindings": [
-[
-{
-"action": "CycleNextPanel"
-}
-],
-[
-{
-"action": "CyclePreviousPanel"
-}
-]
-],
-"suits": "comms",
-"on": [
-"forward",
-"back"
-],
-"rank": 13
-},
-{
-"what": "Panel page",
-"shape": "hat2",
-"bindings": [
-[
-{
-"action": "CycleNextPage"
-}
-],
-[
-{
-"action": "CyclePreviousPage"
-}
-]
-],
-"suits": "comms",
-"on": [
-"right",
-"left"
-],
-"rank": 12
-},
-{
-"what": "Galaxy map",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "GalaxyMapOpen"
-},
-{
-"action": "GalaxyMapOpen_Buggy"
-}
-]
-],
-"urgency": 3,
-"suits": "nav",
-"rank": 4
-},
-{
-"what": "System map",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "SystemMapOpen"
-},
-{
-"action": "SystemMapOpen_Buggy"
-}
-]
-],
-"urgency": 3,
-"suits": "nav",
-"rank": 4
-},
-{
-"what": "Eject cargo",
-"shape": "button",
-"bindings": [
-[
-{
-"action": "EjectAllCargo"
-},
-{
-"action": "EjectAllCargo_Buggy"
-}
-]
-],
-"urgency": 3,
-"suits": "systems",
-"costly": true
-}
-],
-"axes": [
-{
-"does": "RollAxisRaw",
-"role": "stick",
-"on": {
-"kind": "stick",
-"axis": "x"
-},
-"context": "Ship"
-},
-{
-"does": "PitchAxisRaw",
-"role": "stick",
-"on": {
-"kind": "stick",
-"axis": "y"
-},
-"context": "Ship",
-"invert": true
-},
-{
-"does": "YawAxisRaw",
-"role": "stick",
-"on": {
-"kind": "stick",
-"axis": "z"
-},
-"context": "Ship"
-},
-{
-"does": "ThrottleAxis",
-"role": "throttle",
-"on": {
-"label": "Left throttle lever"
-},
-"context": "Ship"
-},
-{
-"does": "LateralThrustRaw",
-"role": "throttle",
-"on": {
-"kind": "ministick",
-"axis": "x"
-},
-"context": "Ship"
-},
-{
-"does": "VerticalThrustRaw",
-"role": "throttle",
-"on": {
-"kind": "ministick",
-"axis": "y"
-},
-"context": "Ship"
-},
-{
-"does": "BuggyRollAxisRaw",
-"role": "stick",
-"on": {
-"kind": "stick",
-"axis": "x"
-},
-"context": "SRV"
-},
-{
-"does": "BuggyPitchAxis",
-"role": "stick",
-"on": {
-"kind": "stick",
-"axis": "y"
-},
-"context": "SRV",
-"invert": true
-},
-{
-"does": "SteeringAxis",
-"role": "stick",
-"on": {
-"kind": "stick",
-"axis": "x"
-},
-"context": "SRV"
-},
-{
-"does": "DriveSpeedAxis",
-"role": "throttle",
-"on": {
-"label": "Left throttle lever"
-},
-"context": "SRV"
-},
-{
-"does": "CamTranslateXAxis",
-"role": "stick",
-"on": {
-"kind": "ministick",
-"axis": "x"
-},
-"context": "Ship"
-},
-{
-"does": "CamTranslateYAxis",
-"role": "stick",
-"on": {
-"kind": "ministick",
-"axis": "y"
-},
-"context": "Ship"
-}
-]
+ "needs": [
+  {
+   "what": "Primary fire",
+   "shape": "trigger",
+   "bindings": [
+    [
+     {
+      "action": "PrimaryFire"
+     },
+     {
+      "action": "BuggyPrimaryFireButton"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "fire",
+   "held": true,
+   "by_feel": true
+  },
+  {
+   "what": "Secondary fire",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "SecondaryFire"
+     },
+     {
+      "action": "BuggySecondaryFireButton"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "fire",
+   "held": true,
+   "by_feel": true
+  },
+  {
+   "what": "Boost",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "UseBoostJuice"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "flight",
+   "by_feel": true
+  },
+  {
+   "what": "Select target",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "SelectTarget"
+     },
+     {
+      "action": "SelectTarget_Buggy"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "lock",
+   "by_feel": true
+  },
+  {
+   "what": "Next hostile",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "CycleNextHostileTarget"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "lock",
+   "rapid": true,
+   "by_feel": true
+  },
+  {
+   "what": "Highest threat",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "SelectHighestThreat"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "lock",
+   "by_feel": true
+  },
+  {
+   "what": "Power distribution",
+   "shape": "hat4",
+   "bindings": [
+    [
+     {
+      "action": "IncreaseSystemsPower"
+     },
+     {
+      "action": "IncreaseSystemsPower_Buggy"
+     }
+    ],
+    [
+     {
+      "action": "IncreaseWeaponsPower"
+     },
+     {
+      "action": "IncreaseWeaponsPower_Buggy"
+     }
+    ],
+    [
+     {
+      "action": "ResetPowerDistribution"
+     },
+     {
+      "action": "ResetPowerDistribution_Buggy"
+     }
+    ],
+    [
+     {
+      "action": "IncreaseEnginesPower"
+     },
+     {
+      "action": "IncreaseEnginesPower_Buggy"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "systems",
+   "rapid": true,
+   "by_feel": true,
+   "on": [
+    "up",
+    "right",
+    "down",
+    "left"
+   ]
+  },
+  {
+   "what": "Fire group",
+   "shape": "hat2",
+   "bindings": [
+    [
+     {
+      "action": "CycleFireGroupNext"
+     }
+    ],
+    [
+     {
+      "action": "CycleFireGroupPrevious"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "fire",
+   "rapid": true,
+   "by_feel": true,
+   "on": [
+    "forward",
+    "back"
+   ]
+  },
+  {
+   "what": "Hardpoints",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "DeployHardpointToggle"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "fire",
+   "by_feel": true
+  },
+  {
+   "what": "Chaff",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "FireChaffLauncher"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "defence",
+   "by_feel": true
+  },
+  {
+   "what": "Heat sink",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "DeployHeatSink"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "defence",
+   "by_feel": true
+  },
+  {
+   "what": "Shield cell",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "UseShieldCell"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "suits": "defence",
+   "by_feel": true
+  },
+  {
+   "what": "Landing gear",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "LandingGearToggle"
+     }
+    ]
+   ],
+   "urgency": 1,
+   "suits": "systems",
+   "by_feel": true
+  },
+  {
+   "what": "Cargo scoop",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "ToggleCargoScoop"
+     },
+     {
+      "action": "ToggleCargoScoop_Buggy"
+     }
+    ]
+   ],
+   "urgency": 1,
+   "suits": "systems"
+  },
+  {
+   "what": "Flight assist",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "ToggleFlightAssist"
+     },
+     {
+      "action": "ToggleDriveAssist"
+     }
+    ]
+   ],
+   "urgency": 1,
+   "suits": "flight",
+   "by_feel": true
+  },
+  {
+   "what": "Speed zero",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "SetSpeedZero"
+     }
+    ]
+   ],
+   "urgency": 1,
+   "suits": "flight",
+   "by_feel": true
+  },
+  {
+   "what": "Reverse throttle",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "ToggleReverseThrottleInput"
+     },
+     {
+      "action": "BuggyToggleReverseThrottleInput"
+     }
+    ]
+   ],
+   "urgency": 1,
+   "suits": "flight",
+   "by_feel": true
+  },
+  {
+   "what": "Frame shift",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "HyperSuperCombination"
+     }
+    ]
+   ],
+   "urgency": 1,
+   "suits": "nav",
+   "by_feel": true
+  },
+  {
+   "what": "Subsystem",
+   "shape": "hat2",
+   "bindings": [
+    [
+     {
+      "action": "CycleNextSubsystem"
+     }
+    ],
+    [
+     {
+      "action": "CyclePreviousSubsystem"
+     }
+    ]
+   ],
+   "suits": "lock",
+   "rapid": true,
+   "by_feel": true,
+   "on": [
+    "forward",
+    "back"
+   ]
+  },
+  {
+   "what": "Target",
+   "shape": "hat2",
+   "bindings": [
+    [
+     {
+      "action": "CycleNextTarget"
+     }
+    ],
+    [
+     {
+      "action": "CyclePreviousTarget"
+     }
+    ]
+   ],
+   "suits": "lock",
+   "rapid": true,
+   "by_feel": true,
+   "on": [
+    "right",
+    "left"
+   ]
+  },
+  {
+   "what": "Radar range",
+   "shape": "hat2",
+   "bindings": [
+    [
+     {
+      "action": "RadarIncreaseRange"
+     }
+    ],
+    [
+     {
+      "action": "RadarDecreaseRange"
+     }
+    ]
+   ],
+   "suits": "sensor",
+   "rapid": true,
+   "on": [
+    "forward",
+    "back"
+   ]
+  },
+  {
+   "what": "Head look",
+   "shape": "ministick",
+   "bindings": [],
+   "suits": "view"
+  },
+  {
+   "what": "Head look reset",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "HeadLookReset"
+     }
+    ]
+   ],
+   "suits": "view"
+  },
+  {
+   "what": "Discovery scan",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "ExplorationFSSDiscoveryScan"
+     }
+    ]
+   ],
+   "suits": "sensor"
+  },
+  {
+   "what": "Night vision",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "NightVisionToggle"
+     }
+    ]
+   ],
+   "suits": "view"
+  },
+  {
+   "what": "Spotlight",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "ShipSpotLightToggle"
+     },
+     {
+      "action": "HeadlightsBuggyButton"
+     }
+    ]
+   ],
+   "suits": "systems"
+  },
+  {
+   "what": "Panel",
+   "shape": "hat2",
+   "bindings": [
+    [
+     {
+      "action": "CycleNextPanel"
+     }
+    ],
+    [
+     {
+      "action": "CyclePreviousPanel"
+     }
+    ]
+   ],
+   "suits": "comms",
+   "on": [
+    "forward",
+    "back"
+   ]
+  },
+  {
+   "what": "Panel page",
+   "shape": "hat2",
+   "bindings": [
+    [
+     {
+      "action": "CycleNextPage"
+     }
+    ],
+    [
+     {
+      "action": "CyclePreviousPage"
+     }
+    ]
+   ],
+   "suits": "comms",
+   "on": [
+    "right",
+    "left"
+   ]
+  },
+  {
+   "what": "Galaxy map",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "GalaxyMapOpen"
+     },
+     {
+      "action": "GalaxyMapOpen_Buggy"
+     }
+    ]
+   ],
+   "urgency": 3,
+   "suits": "nav"
+  },
+  {
+   "what": "System map",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "SystemMapOpen"
+     },
+     {
+      "action": "SystemMapOpen_Buggy"
+     }
+    ]
+   ],
+   "urgency": 3,
+   "suits": "nav"
+  },
+  {
+   "what": "Eject cargo",
+   "shape": "button",
+   "bindings": [
+    [
+     {
+      "action": "EjectAllCargo"
+     },
+     {
+      "action": "EjectAllCargo_Buggy"
+     }
+    ]
+   ],
+   "urgency": 3,
+   "suits": "systems",
+   "costly": true
+  },
+  {
+   "what": "RollAxisRaw",
+   "takes": "axis",
+   "device": "stick",
+   "suits": "flight",
+   "shape": "stick",
+   "on": [
+    "x"
+   ],
+   "bindings": [
+    [
+     {
+      "action": "RollAxisRaw",
+      "mode": "Ship"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "rests": "centred"
+  },
+  {
+   "what": "PitchAxisRaw",
+   "takes": "axis",
+   "device": "stick",
+   "suits": "flight",
+   "shape": "stick",
+   "on": [
+    "y"
+   ],
+   "invert": true,
+   "bindings": [
+    [
+     {
+      "action": "PitchAxisRaw",
+      "mode": "Ship"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "rests": "centred"
+  },
+  {
+   "what": "YawAxisRaw",
+   "takes": "axis",
+   "device": "stick",
+   "suits": "flight",
+   "shape": "stick",
+   "on": [
+    "z"
+   ],
+   "bindings": [
+    [
+     {
+      "action": "YawAxisRaw",
+      "mode": "Ship"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "rests": "centred"
+  },
+  {
+   "what": "ThrottleAxis",
+   "takes": "axis",
+   "device": "throttle",
+   "suits": "flight",
+   "shape": "lever",
+   "bindings": [
+    [
+     {
+      "action": "ThrottleAxis",
+      "mode": "Ship"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "rests": "mid"
+  },
+  {
+   "what": "LateralThrustRaw",
+   "takes": "axis",
+   "device": "throttle",
+   "suits": "flight",
+   "shape": "ministick",
+   "on": [
+    "x"
+   ],
+   "bindings": [
+    [
+     {
+      "action": "LateralThrustRaw",
+      "mode": "Ship"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "rests": "centred"
+  },
+  {
+   "what": "VerticalThrustRaw",
+   "takes": "axis",
+   "device": "throttle",
+   "suits": "flight",
+   "shape": "ministick",
+   "on": [
+    "y"
+   ],
+   "bindings": [
+    [
+     {
+      "action": "VerticalThrustRaw",
+      "mode": "Ship"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "rests": "centred"
+  },
+  {
+   "what": "BuggyRollAxisRaw",
+   "takes": "axis",
+   "device": "stick",
+   "suits": "flight",
+   "shape": "stick",
+   "on": [
+    "x"
+   ],
+   "bindings": [
+    [
+     {
+      "action": "BuggyRollAxisRaw",
+      "mode": "SRV"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "rests": "centred"
+  },
+  {
+   "what": "BuggyPitchAxis",
+   "takes": "axis",
+   "device": "stick",
+   "suits": "flight",
+   "shape": "stick",
+   "on": [
+    "y"
+   ],
+   "invert": true,
+   "bindings": [
+    [
+     {
+      "action": "BuggyPitchAxis",
+      "mode": "SRV"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "rests": "centred"
+  },
+  {
+   "what": "SteeringAxis",
+   "takes": "axis",
+   "device": "stick",
+   "suits": "flight",
+   "shape": "stick",
+   "on": [
+    "x"
+   ],
+   "bindings": [
+    [
+     {
+      "action": "SteeringAxis",
+      "mode": "SRV"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "rests": "centred"
+  },
+  {
+   "what": "DriveSpeedAxis",
+   "takes": "axis",
+   "device": "throttle",
+   "suits": "flight",
+   "shape": "lever",
+   "bindings": [
+    [
+     {
+      "action": "DriveSpeedAxis",
+      "mode": "SRV"
+     }
+    ]
+   ],
+   "urgency": 0,
+   "rests": "mid"
+  },
+  {
+   "what": "CamTranslateXAxis",
+   "takes": "axis",
+   "device": "stick",
+   "suits": "view",
+   "shape": "ministick",
+   "on": [
+    "x"
+   ],
+   "bindings": [
+    [
+     {
+      "action": "CamTranslateXAxis",
+      "mode": "Ship"
+     }
+    ]
+   ],
+   "rests": "centred"
+  },
+  {
+   "what": "CamTranslateYAxis",
+   "takes": "axis",
+   "device": "stick",
+   "suits": "view",
+   "shape": "ministick",
+   "on": [
+    "y"
+   ],
+   "bindings": [
+    [
+     {
+      "action": "CamTranslateYAxis",
+      "mode": "Ship"
+     }
+    ]
+   ],
+   "rests": "centred"
+  }
+ ]
 }

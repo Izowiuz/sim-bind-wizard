@@ -504,7 +504,7 @@ class TheKneeboardPanels(unittest.TestCase):
         sh.add(csheet.Row('stick', 'Thumb hat', 'up', 'BTN23', 'CMS',
                           {'': 'CMS'}, mark='?'))
         sh.add_axis('stick', 'Main stick', 'axis 0', 'Roll')
-        sh.axes[-1].mark = '?'
+        sh.rows[-1].mark = '?'
         return sh
 
     def wrote(self, sheet, how):

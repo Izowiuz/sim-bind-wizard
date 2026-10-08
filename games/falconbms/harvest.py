@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-"""harvest.py - read BMS's callback vocabulary and vendor ranking
+"""harvest.py - read BMS's callback vocabulary
 
 DESCRIPTION
-    Read BMS's shipped key file and its vendor profiles, and report every
-    callback with how many of those profiles bind it. Also reports the DX
-    offset each device gets, which decides its button numbering.
+    Read BMS's shipped key file and report every callback. Also reports the
+    DX offset each device gets, which decides its button numbering.
 
 FILES
     BMS - Full.key      read: the callback vocabulary
-    Hotas/Archive/*.key read: the vendor profiles, for the ranking
     DeviceSorting.txt   read: device order, which fixes the DX offsets
 
 ENVIRONMENT
@@ -17,26 +15,26 @@ ENVIRONMENT
 
 # Read everything Falcon BMS already knows about bindings, and write it out as JSON.
 #
-# Nothing here touches the game.  Three things come off disk:
+# Nothing here touches the game.  Two things come off disk:
 #
 #   * the vocabulary  - every bindable callback in `BMS - Full.key`, with the
 #     human description and the cockpit section it sits in.  BMS is the only sim
 #     of the four that ships its action list already grouped by panel.
-#   * the ranking     - the 22 vendor HOTAS profiles in `Hotas/Archive`.  They are
-#     deprecated and no longer maintained, but they are still 22 independent
-#     answers to "what belongs on a stick", which is exactly what we rank by
-#     everywhere else.
 #   * the devices     - `DeviceSorting.txt` fixes the DX numbering: device N owns
 #     DX numbers N*32 .. N*32+31, so the sorting order *is* the offset table.
 #
-# Outputs bms-actions.json and bms-rank.json next to this file.
+# The 22 vendor HOTAS profiles in `Hotas/Archive` used to be counted too --
+# how many of them bound each callback, and whether they put it on the stick,
+# the throttle or the shifted layer. They are deprecated, and what they rank
+# is somebody else's Warthog. Gone from the whole family.
+#
+# Outputs bms-actions.json next to this file.
 
 import argparse
 import json
 import os
 import re
 import sys
-from collections import Counter, defaultdict
 from pathlib import Path
 
 DEFAULT_BMS = Path.home() / (
@@ -57,14 +55,10 @@ from core import adapter                                    # noqa: E402
 KEY_LINE = re.compile(
     r'^(\w+)\s+(-?\w+)\s+(-?\w+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(-?\d+)\s+"(.*)"\s*$'
 )
-# A DX line is shorter and has no description: callback, dx, sound, kind, press, hex, sound2
-DX_LINE = re.compile(r"^(\w+)\s+(-?\d+)\s+(-1|-2)\s+(-2|-3)\s+(\S+)\s+(\S+)\s+(-?\d+)\s*$")
-
 SECTION = re.compile(r"^(\d+)\.\s+(.*)$")
 SUBSECTION = re.compile(r"^=+\s*(\d+\.\d+)\s+(.*?)\s*=+$")
 
 BUTTONS_PER_DEVICE = 32
-SHIFT_MAGNITUDE = 256  # g_nHotasPinkyShiftMagnitude
 
 
 def bms_dir():
@@ -120,50 +114,6 @@ def harvest_actions(path):
     return actions
 
 
-def harvest_rank(archive):
-    """Count how many vendor profiles put each callback on the hardware.
-
-    Also record *where* they put it, because that carries as much information as
-    the count: DX < 32 is the first device (a stick, in every one of these
-    profiles), >= 32 the second (a throttle), and >= 256 is the pinky-shifted
-    layer, i.e. deliberately demoted.
-    """
-    votes = Counter()
-    placement = defaultdict(Counter)
-    profiles = {}
-
-    for path in sorted(archive.glob("*.key")):
-        seen = set()
-        per_profile = 0
-        for raw in read_key(path):
-            line = raw.strip()
-            if not line or line.startswith("#"):
-                continue
-            m = DX_LINE.match(line)
-            if not m:
-                continue
-            cb, dx, sound, kind, press, _hex, _snd2 = m.groups()
-            if cb == "SimDoNothing":
-                continue
-            dx = int(dx)
-            per_profile += 1
-            shifted = dx >= SHIFT_MAGNITUDE
-            local = dx - SHIFT_MAGNITUDE if shifted else dx
-            device = local // BUTTONS_PER_DEVICE
-
-            where = "hat" if kind == "-3" else ("stick" if device == 0 else "throttle")
-            if shifted:
-                placement[cb]["shifted"] += 1
-            placement[cb][where] += 1
-            if cb not in seen:  # one vote per profile, not per line
-                votes[cb] += 1
-                seen.add(cb)
-        if per_profile:
-            profiles[path.name] = per_profile
-
-    return votes, placement, profiles
-
-
 def harvest_devices(path):
     """DeviceSorting.txt: order decides the DX offset, GUID carries VID:PID."""
     out = []
@@ -204,8 +154,7 @@ def catalogue(actions=None):
     actions = actions or {}
     return [cactions.Action(call, rec.get('desc') or call, kind='button',
                             category=(rec.get('subsection')
-                                      or rec.get('section')),
-                            rank=rec.get('votes') or 0)
+                                      or rec.get('section')))
             for call, rec in sorted(actions.items())]
 
 
@@ -216,80 +165,40 @@ def action_rows(actions=None):
 
 @typing.final
 class FalconBmsHarvest(adapter.Harvest):
-    """BMS's callback vocabulary and the twenty-two vendor profiles."""
+    """BMS's callback vocabulary."""
 
     game = "falconbms"
-    files = {"bms-actions.json": ("devices", "actions"),
-             "bms-rank.json": ("profiles", "votes", "placement",
-                               "not_in_keyfile")}
+    files = {"bms-actions.json": ("devices", "actions")}
 
     @typing.override
     def read(self, args):
         self.bms = bms_dir()
         keyfile = self.bms / "User" / "Config" / "BMS - Full.key"
-        archive = self.bms / "Hotas" / "Archive"
         sorting = self.bms / "User" / "Config" / "DeviceSorting.txt"
 
         if not keyfile.exists():
-            raise SystemExit(f"no key file at {keyfile} — set BMS_DIR to "
-                             "the BMS install")
+            raise SystemExit(f"There is no key file at {keyfile}. Set "
+                             "BMS_DIR to the BMS install.")
 
         actions = harvest_actions(keyfile)
-        votes, placement, profiles = harvest_rank(archive)
-        devices = harvest_devices(sorting)
-
-        for cb, a in actions.items():
-            a["votes"] = votes.get(cb, 0)
-            a["placement"] = dict(placement.get(cb, {}))
-
-        self.votes, self.placement = votes, placement
         # Kept for `summary()`, which wants the full record the key file
         # gave; what reaches the cache is the shared one.
         self.actions = actions
-        # Most-voted first, ties by name: `Counter.most_common()` leaves ties
-        # in insertion order, which is whatever order the profiles happened
-        # to be read in.
-        order = sorted(votes.items(), key=lambda kv: (-kv[1], kv[0]))
-        return {
-            "bms-actions.json": {"devices": devices,
-                                 "actions": action_rows(actions)},
-            "bms-rank.json": {
-                "profiles": profiles,
-                "votes": order,
-                "placement": {k: dict(v) for k, v in placement.items()},
-                "not_in_keyfile": sorted(set(votes) - set(actions)),
-            },
-        }
+        return {"bms-actions.json": {"devices": harvest_devices(sorting),
+                                     "actions": action_rows(actions)}}
 
     @typing.override
     def summary(self, data):
         actions = self.actions
-        devices = data["bms-actions.json"]["devices"]
-        rank = data["bms-rank.json"]
-        unknown = rank["not_in_keyfile"]
         out = [f"BMS      {self.bms}",
                f"actions  {len(actions)} bindable callbacks",
                f"sections {len(set(a['section'] for a in actions.values()))}"
                f" / {len(set(a['subsection'] for a in actions.values()))}"
                " subsections",
-               f"ranking  {len(rank['profiles'])} vendor profiles, "
-               f"{len(rank['votes'])} callbacks ever on hardware"]
-        if unknown:
-            out.append(f"         {len(unknown)} ranked callbacks no longer "
-                       "in the key file: " + ", ".join(unknown[:6])
-                       + ("..." if len(unknown) > 6 else ""))
-        out.append("devices")
-        for d in devices:
+               "devices"]
+        for d in data["bms-actions.json"]["devices"]:
             out.append(f"  DX {d['dx_range'][0]:>3}-{d['dx_range'][1]:<3} "
                        f"{d['usb']}  {d['name']}")
-        out += ["", "top of the ranking"]
-        for cb, n in rank["votes"][:15]:
-            a = actions.get(cb)
-            where = ", ".join(f"{k} x{v}"
-                              for k, v in self.placement[cb].most_common(3))
-            out.append(f"  {n:>3}  {cb:<28} "
-                       f"{(a['desc'] if a else '(gone from key file)')[:44]:<46}"
-                       f" {where}")
         return out
 
 

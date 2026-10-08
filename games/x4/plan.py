@@ -22,10 +22,11 @@ NOTES
     Every id in NEEDS is checked against the vocabulary before anything runs.
 """
 
-# X4 ships no factory HOTAS profiles to count, unlike BMS, War Thunder, MSFS
-# and DCS, so there is no ranking to read off the game. NEEDS below is seeded
-# from the bindings already in inputmap_3.xml -- a record of what was worth
-# binding by hand -- and ordered by urgency alone.
+# NEEDS below is seeded from the bindings already in inputmap_3.xml -- a
+# record of what was worth binding by hand -- and ordered by urgency alone.
+# This was the only game in the family with nothing to count, back when the
+# family counted the HOTAS profiles its games ship. Nothing counts them any
+# more, so it is no longer the odd one out.
 
 import argparse
 import os
@@ -37,8 +38,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CORE = os.environ.get('SIM_BIND_WIZARD') or os.path.normpath(
     os.path.join(HERE, '..', '..'))
 if not os.path.isdir(CORE):
-    raise SystemExit(f'no shared core at {CORE}\n'
-                     'set SIM_BIND_WIZARD to the sim-bind-wizard checkout')
+    raise SystemExit(f'There is no shared core at {CORE}.\n'
+                     'Set SIM_BIND_WIZARD to the sim-bind-wizard '
+                     'checkout.')
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
@@ -119,7 +121,6 @@ def needs(described, placed):
     """[Need] -- the hand-written list, read rather than executed."""
     out = corneeds.read_needs(vocab.load(HERE, described, key='needs'),
                               make=Need)
-    corneeds.load_assignments(HERE, placed, out)
     return out
 
 
@@ -152,24 +153,6 @@ def unknown(needs, catalogue, axes=()):
 
 # ------------------------------------------------------------ the hardware --
 
-def axis_plan(devs, rows):
-    """[corneeds.Axis] -- axes never go through the allocator.
-
-    `rows` is the `axes` section of the needs file: it was a literal in
-    this file, which meant changing which lever the throttle is on meant
-    editing code, and an axis moved on the review screen had nowhere to
-    be written down.
-    """
-    out = []
-    for plan in corneeds.read_axes(rows, devs):
-        if plan.axis.hid not in AXIS_CODE:
-            print(f'!! {plan.role} axis {plan.axis.hid!r} has no X4 code',
-                  file=sys.stderr)
-            continue
-        out.append(plan)
-    return out
-
-
 def slots(devs, profile):
     """{role: X4 slot number}.
 
@@ -192,8 +175,8 @@ def slots(devs, profile):
     profs = harvest.profiles()
     name = profile
     if name not in profs:
-        sys.exit(f'{name} is not in the profile folder; have '
-                 + ', '.join(sorted(profs)))
+        sys.exit(f'{name} is not in the profile folder. These are: '
+                 + ', '.join(sorted(profs)) + '.')
     guessed = harvest.slots(profs[name])
     out = dict(forced)
     for slot, info in guessed.items():
@@ -202,13 +185,13 @@ def slots(devs, profile):
             out[role] = int(slot.lstrip('_'))
     missing = set(devs) - set(out)
     if missing:
-        sys.exit(f'cannot tell which X4 slot is the '
+        sys.exit('Nothing says which X4 slot is the '
                  f'{", ".join(sorted(missing))} in {name}.\n'
-                 '  slots seen: '
-                 + '; '.join(f'{s} -> {i["guess"]} '
+                 '  These are the slots it saw: '
+                 + ', '.join(f'{s} is the {i["guess"]} '
                              f'({len(i["axes"])} axes)'
                              for s, i in sorted(guessed.items()))
-                 + '\n  set it with X4_SLOTS="stick=2,throttle=3"')
+                 + '.\n  Say which with X4_SLOTS="stick=2,throttle=3".')
     return out
 
 
@@ -237,6 +220,10 @@ def lines_for(devs, placed, axes, slot):
 
     Placement.slots is already [(button index, payload)] with the control's
     click appended, so the button arithmetic is the core's, not repeated here.
+
+    Two loops because the FILE spells them differently --
+    `INPUT_SOURCE_JOYAXES` against `INPUT_SOURCE_JOYBUTTONS` -- and that
+    is a fact about X4's profile, not about the plan.
     """
     out = []
     for p in placed:
@@ -245,10 +232,15 @@ def lines_for(devs, placed, axes, slot):
             code = harvest.code(button)
             for ident in (b.action for b in payload):
                 out.append((kind_of(ident), ident, src, code))
-    for plan in axes:
-        ident, role, a = plan.does, plan.role, plan.axis
-        out.append((RANGE, ident, source(slot[role], axis=True),
-                    'INPUT_JOYAXIS_' + AXIS_CODE[a.hid]))
+    for p in axes:
+        a = devs[p.role].axis(p.slots[0][0].index)
+        if a.hid not in AXIS_CODE:
+            print(f'!! {p.role} axis {a.hid!r} has no X4 code.',
+                  file=sys.stderr)
+            continue
+        for ident in (b.action for b in p.slots[0][1]):
+            out.append((RANGE, ident, source(slot[p.role], axis=True),
+                        'INPUT_JOYAXIS_' + AXIS_CODE[a.hid]))
     return out
 
 
@@ -295,13 +287,13 @@ def contents(devs, placed, axes, profile):
     signature can state, and the one `tests/test_formats.py` holds.
     """
     if game.running('X4', 'X4.exe'):
-        raise SystemExit('X4 is running -- it rewrites these files on exit. '
-                         'Quit the game first.')
+        raise SystemExit('X4 is running. It rewrites these files when it '
+                         'exits. Quit the game first.')
     slot = slots(devs, profile)
     path = profile_path(profile)
     if not os.path.exists(path):
-        raise SystemExit(f'{path} does not exist -- save a profile of that '
-                         'name in the game once so X4 creates it.')
+        raise SystemExit(f'{path} does not exist. Save a profile of that '
+                         'name in the game once. X4 then creates it.')
     text = open(path, encoding='utf-8').read()
 
     ours = set()
@@ -320,7 +312,9 @@ CTX = ('Ship', 'Map', 'On foot')
 
 
 def _sheet(layout, profile):
-    devs, placed, unmet, free, axes = layout
+    devs, placed, unmet, free = (layout.devices, layout.on_buttons,
+                                 layout.unplaced, layout.free)
+    axes = layout.on_axes
     slot = slots(devs, profile)
     sh = csheet.Sheet(
         'Kneeboard X4', 'X4 Foundations · VIRPIL',
@@ -345,11 +339,12 @@ def _sheet(layout, profile):
     # is one row with a column each -- the same shape the buttons have.
     # It used to be three rows of one lever with the context written into
     # the text, because AxisRow had no bindings dict.
-    for plan in axes:
-        ident, role, a = plan.does, plan.role, plan.axis
-        g = devs[role].axis_group(a.index)
-        sh.add_axis(role, g.label if g else a.label, AXIS_CODE[a.hid],
-                    harvest.readable(ident), context_of(ident))
+    for p in axes:
+        a = devs[p.role].axis(p.slots[0][0].index)
+        g = devs[p.role].axis_group(a.index)
+        for ident in (b.action for b in p.slots[0][1]):
+            sh.add_axis(p.role, g.label if g else a.label, AXIS_CODE[a.hid],
+                        harvest.readable(ident), context_of(ident))
 
     for r, c in free:
         sh.add_free(r, c.label)
@@ -389,6 +384,7 @@ class X4(adapter.Planner):
     NEEDS_FILE = 'x4-needs.json'
     BINDS = 'x4-binds.json'
     CATALOGUE = 'x4-actions.json'
+    SAYS = {'slots': 'which device X4 enumerated as which slot, when it has them in another order (X4_SLOTS sets it)'}
     CACHE = {'x4-actions.json': 'actions'}
 
 
@@ -404,17 +400,6 @@ class X4(adapter.Planner):
         """
         return self._needs
 
-    @property
-    def AXES(self) -> list:
-        """The `axes` section of the needs file.
-
-        Axes never go through the allocator -- an aircraft's pitch axis is
-        the stick's pitch axis on every desk there is -- but which lever
-        is the throttle is a judgement like any other, and it used to be
-        a literal in this file.
-        """
-        return self._axes
-
     def __init__(self, profile=None, slots=None, backup_dir=None):
         self.profile = profile or os.environ.get('X4_PROFILE',
                                                  DEFAULT_PROFILE)
@@ -429,20 +414,16 @@ class X4(adapter.Planner):
         self.rows = self.cache('x4-actions.json',
                                build=harvest.action_rows)
         self._needs = needs(self.NEEDS_FILE, self.BINDS)
-        # `list()` because `vocab.load` answers with whatever the
-        # file holds and `AXES` promises a list.
-        self._axes = list(vocab.load(HERE, self.NEEDS_FILE,
-                                     key='axes'))
 
     @typing.override
     def build(self):
         devs = devmap.by_role('stick', 'throttle')
-        return corneeds.Layout(devs, *corneeds.allocate(self.NEEDS, devs),
-                               axes=axis_plan(devs, self.AXES))
+        self.answers(self.NEEDS)
+        return corneeds.Layout(devs, *corneeds.allocate(self.NEEDS, devs))
 
     @typing.override
     def unknown(self):
-        return unknown(self.NEEDS, self.catalogue(), self.AXES)
+        return unknown(self.NEEDS, self.catalogue())
 
     @typing.override
     def catalogue(self):
@@ -463,7 +444,8 @@ class X4(adapter.Planner):
     @typing.override
     def write_layout(self, layout):
         path, new, wanted, dropped, slot = contents(
-            layout.devices, layout.placed, layout.axes, self.profile)
+            layout.devices, layout.on_buttons, layout.on_axes,
+            self.profile)
         print(f'  removed {len(dropped)}, wrote {len(wanted)} on slots '
               + ', '.join(f'{r}={slot[r]}'
                           for r in sorted(layout.devices)))
@@ -476,7 +458,8 @@ class X4(adapter.Planner):
     @typing.override
     def arguments(self, parser):
         parser.add_argument('--profile',
-                            help=f'profile to write (default {self.profile})')
+                            help='Which profile to write. The default is '
+                                 f'{self.profile}.')
 
     @typing.override
     def paths(self, args):
@@ -486,7 +469,9 @@ class X4(adapter.Planner):
 
     @typing.override
     def show(self, layout, why=False):
-        devs, placed, unmet, _free, axes = layout
+        devs, placed, unmet = (layout.devices, layout.on_buttons,
+                               layout.unplaced)
+        axes = layout.on_axes
         slot = slots(devs, self.profile)
         out = [f'{self.profile}  '
                + '  '.join(f'{r} = slot {s}'
@@ -506,10 +491,11 @@ class X4(adapter.Planner):
             if why:
                 out.append('      ' + ' · '.join(corneeds.why_bits(p_)))
         out.append('')
-        for plan in axes:
-            ident, role, a = plan.does, plan.role, plan.axis
-            out.append(f'  {harvest.readable(ident):28} {role:9} '
-                       f'{AXIS_CODE[a.hid]:8} {a.label}')
+        for p_ in axes:
+            a = devs[p_.role].axis(p_.slots[0][0].index)
+            for ident in (b.action for b in p_.slots[0][1]):
+                out.append(f'  {harvest.readable(ident):28} {p_.role:9} '
+                           f'{AXIS_CODE[a.hid]:8} {a.label}')
         if unmet:
             out.append('')
             out.append(f'{len(unmet)} unplaced: '

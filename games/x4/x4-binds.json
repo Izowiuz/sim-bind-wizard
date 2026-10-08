@@ -1,196 +1,287 @@
 {
-"binds": [
-{
-"what": "Fire primary",
-"role": "stick",
-"control": "main-trigger",
-"how": "accepted"
-},
-{
-"what": "Fire secondary",
-"role": "stick",
-"control": "thumb-bottom-button",
-"how": "accepted"
-},
-{
-"what": "Boost",
-"role": "throttle",
-"control": "bottom-thumb-button",
-"how": "accepted"
-},
-{
-"what": "Target next enemy",
-"role": "stick",
-"control": "thumb-top-button",
-"how": "accepted"
-},
-{
-"what": "Strafe",
-"role": "stick",
-"control": "top-thumb-hat",
-"how": "accepted"
-},
-{
-"what": "Weapon group",
-"role": "stick",
-"control": "bottom-thumb-hat",
-"how": "accepted"
-},
-{
-"what": "Missile group",
-"role": "throttle",
-"control": "thumb-two-way-hat",
-"how": "accepted"
-},
-{
-"what": "Match speed",
-"role": "throttle",
-"control": "middle-finger-button",
-"how": "accepted"
-},
-{
-"what": "Travel mode",
-"role": "throttle",
-"control": "keyboard-b3-button",
-"how": "accepted"
-},
-{
-"what": "Flight assist",
-"role": "throttle",
-"control": "keyboard-b2-button",
-"how": "accepted"
-},
-{
-"what": "Dock / undock",
-"role": "throttle",
-"control": "t4-rocker",
-"how": "accepted"
-},
-{
-"what": "Autopilot",
-"role": "throttle",
-"control": "keyboard-b1-button",
-"how": "accepted"
-},
-{
-"what": "Target action",
-"role": "throttle",
-"control": "t3-rocker",
-"how": "accepted"
-},
-{
-"what": "Subcomponent",
-"role": "stick",
-"control": "grip-thumb-hat",
-"how": "accepted"
-},
-{
-"what": "Deselect target",
-"role": "throttle",
-"control": "left-side-dial",
-"how": "accepted"
-},
-{
-"what": "Scan mode",
-"role": "throttle",
-"control": "big-red-button",
-"how": "accepted"
-},
-{
-"what": "Long-range scan",
-"role": "throttle",
-"control": "keyboard-b4-button",
-"how": "accepted"
-},
-{
-"what": "Scan action",
-"role": "throttle",
-"control": "pinky-button",
-"how": "accepted"
-},
-{
-"what": "SETA",
-"role": "throttle",
-"control": "apu-button",
-"how": "accepted"
-},
-{
-"what": "Map",
-"role": "throttle",
-"control": "keyboard-b6-button",
-"how": "accepted"
-},
-{
-"what": "View",
-"role": "throttle",
-"control": "thumb-hat",
-"how": "accepted"
-},
-{
-"what": "Map rotate",
-"role": "throttle",
-"control": "mode-selector",
-"how": "accepted"
-},
-{
-"what": "Cockpit menu",
-"role": "throttle",
-"control": "e1-encoder",
-"how": "accepted"
-},
-{
-"what": "Quicksave",
-"role": "stick",
-"control": "grip-thumb-hat",
-"how": "accepted"
-},
-{
-"what": "Pause",
-"role": "stick",
-"control": "bottom-thumb-hat",
-"how": "accepted"
-},
-{
-"what": "Jump / crouch",
-"role": "throttle",
-"control": "t5-rocker",
-"how": "accepted"
-},
-{
-"what": "Player ship info",
-"role": "stick",
-"control": "bottom-thumb-hat",
-"how": "accepted"
-},
-{
-"what": "Target under cursor",
-"role": "throttle",
-"control": "thumb-button",
-"how": "accepted"
-},
-{
-"what": "Countermeasure",
-"role": "stick",
-"control": "grip-pinky-button",
-"how": "accepted"
-},
-{
-"what": "Comms",
-"role": "throttle",
-"control": "keyboard-b5-button",
-"how": "accepted"
-},
-{
-"what": "Zoom goggles",
-"role": "throttle",
-"control": "right-side-dial",
-"how": "accepted"
-},
-{
-"what": "Missions",
-"role": "throttle",
-"control": "e2-encoder",
-"how": "accepted"
-}
-]
+ "binds": [
+  {
+   "what": "Fire primary",
+   "role": "stick",
+   "control": "main-trigger",
+   "how": "accepted"
+  },
+  {
+   "what": "Fire secondary",
+   "role": "stick",
+   "control": "thumb-bottom-button",
+   "how": "accepted"
+  },
+  {
+   "what": "Boost",
+   "role": "throttle",
+   "control": "bottom-thumb-button",
+   "how": "accepted"
+  },
+  {
+   "what": "Target next enemy",
+   "role": "stick",
+   "control": "thumb-top-button",
+   "how": "accepted"
+  },
+  {
+   "what": "Strafe",
+   "role": "stick",
+   "control": "top-thumb-hat",
+   "how": "accepted"
+  },
+  {
+   "what": "Weapon group",
+   "role": "stick",
+   "control": "bottom-thumb-hat",
+   "how": "accepted"
+  },
+  {
+   "what": "Missile group",
+   "role": "throttle",
+   "control": "thumb-two-way-hat",
+   "how": "accepted"
+  },
+  {
+   "what": "Match speed",
+   "role": "throttle",
+   "control": "middle-finger-button",
+   "how": "accepted"
+  },
+  {
+   "what": "Travel mode",
+   "role": "throttle",
+   "control": "keyboard-b3-button",
+   "how": "accepted"
+  },
+  {
+   "what": "Flight assist",
+   "role": "throttle",
+   "control": "keyboard-b2-button",
+   "how": "accepted"
+  },
+  {
+   "what": "Dock / undock",
+   "role": "throttle",
+   "control": "t4-rocker",
+   "how": "accepted"
+  },
+  {
+   "what": "Autopilot",
+   "role": "throttle",
+   "control": "keyboard-b1-button",
+   "how": "accepted"
+  },
+  {
+   "what": "Target action",
+   "role": "throttle",
+   "control": "t3-rocker",
+   "how": "accepted"
+  },
+  {
+   "what": "Subcomponent",
+   "role": "stick",
+   "control": "grip-thumb-hat",
+   "how": "accepted"
+  },
+  {
+   "what": "Deselect target",
+   "role": "throttle",
+   "control": "left-side-dial",
+   "how": "accepted"
+  },
+  {
+   "what": "Scan mode",
+   "role": "throttle",
+   "control": "big-red-button",
+   "how": "accepted"
+  },
+  {
+   "what": "Long-range scan",
+   "role": "throttle",
+   "control": "keyboard-b4-button",
+   "how": "accepted"
+  },
+  {
+   "what": "Scan action",
+   "role": "throttle",
+   "control": "pinky-button",
+   "how": "accepted"
+  },
+  {
+   "what": "SETA",
+   "role": "throttle",
+   "control": "apu-button",
+   "how": "accepted"
+  },
+  {
+   "what": "Map",
+   "role": "throttle",
+   "control": "keyboard-b6-button",
+   "how": "accepted"
+  },
+  {
+   "what": "View",
+   "role": "throttle",
+   "control": "thumb-hat",
+   "how": "accepted"
+  },
+  {
+   "what": "Map rotate",
+   "role": "throttle",
+   "control": "mode-selector",
+   "how": "accepted"
+  },
+  {
+   "what": "Cockpit menu",
+   "role": "throttle",
+   "control": "e1-encoder",
+   "how": "accepted"
+  },
+  {
+   "what": "Quicksave",
+   "role": "stick",
+   "control": "grip-thumb-hat",
+   "how": "accepted"
+  },
+  {
+   "what": "Pause",
+   "role": "stick",
+   "control": "bottom-thumb-hat",
+   "how": "accepted"
+  },
+  {
+   "what": "Jump / crouch",
+   "role": "throttle",
+   "control": "t5-rocker",
+   "how": "accepted"
+  },
+  {
+   "what": "Player ship info",
+   "role": "stick",
+   "control": "bottom-thumb-hat",
+   "how": "accepted"
+  },
+  {
+   "what": "Target under cursor",
+   "role": "throttle",
+   "control": "thumb-button",
+   "how": "accepted"
+  },
+  {
+   "what": "Countermeasure",
+   "role": "stick",
+   "control": "grip-pinky-button",
+   "how": "accepted"
+  },
+  {
+   "what": "Comms",
+   "role": "throttle",
+   "control": "keyboard-b5-button",
+   "how": "accepted"
+  },
+  {
+   "what": "Zoom goggles",
+   "role": "throttle",
+   "control": "right-side-dial",
+   "how": "accepted"
+  },
+  {
+   "what": "Missions",
+   "role": "throttle",
+   "control": "e2-encoder",
+   "how": "accepted"
+  },
+  {
+   "what": "INPUT_RANGE_STEERING_PRIMARY",
+   "role": "stick",
+   "control": "main-stick",
+   "axis": 0,
+   "how": "accepted"
+  },
+  {
+   "what": "INPUT_RANGE_STEERING_PITCH",
+   "role": "stick",
+   "control": "main-stick",
+   "axis": 1,
+   "how": "accepted"
+  },
+  {
+   "what": "INPUT_RANGE_STEERING_SECONDARY",
+   "role": "stick",
+   "control": "main-stick",
+   "axis": 2,
+   "how": "accepted"
+  },
+  {
+   "what": "INPUT_RANGE_STRAFE_LEFT_RIGHT",
+   "role": "stick",
+   "control": "mini-stick",
+   "axis": 3,
+   "how": "accepted"
+  },
+  {
+   "what": "INPUT_RANGE_STRAFE_UP_DOWN",
+   "role": "stick",
+   "control": "mini-stick",
+   "axis": 4,
+   "how": "accepted"
+  },
+  {
+   "what": "INPUT_RANGE_THROTTLE",
+   "role": "throttle",
+   "control": "left-throttle-lever",
+   "axis": 2,
+   "how": "accepted"
+  },
+  {
+   "what": "INPUT_RANGE_MAP_ZOOM_IN",
+   "role": "throttle",
+   "control": "side-lever",
+   "axis": 4,
+   "how": "accepted"
+  },
+  {
+   "what": "INPUT_RANGE_MAP_PAN_LEFT_RIGHT",
+   "role": "throttle",
+   "control": "thumb-mini-stick",
+   "axis": 0,
+   "how": "accepted"
+  },
+  {
+   "what": "INPUT_RANGE_MAP_PAN_UP_DOWN",
+   "role": "throttle",
+   "control": "thumb-mini-stick",
+   "axis": 1,
+   "how": "accepted"
+  },
+  {
+   "what": "INPUT_RANGE_FP_YAW",
+   "role": "stick",
+   "control": "mini-stick",
+   "axis": 3,
+   "how": "accepted"
+  },
+  {
+   "what": "INPUT_RANGE_FP_PITCH",
+   "role": "stick",
+   "control": "mini-stick",
+   "axis": 4,
+   "how": "accepted"
+  },
+  {
+   "what": "INPUT_RANGE_FP_WALK",
+   "role": "stick",
+   "control": "main-stick",
+   "axis": 1,
+   "how": "accepted"
+  },
+  {
+   "what": "INPUT_RANGE_FP_STRAFE",
+   "role": "stick",
+   "control": "main-stick",
+   "axis": 0,
+   "how": "accepted"
+  }
+ ]
 }

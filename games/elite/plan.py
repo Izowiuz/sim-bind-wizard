@@ -6,7 +6,7 @@ DESCRIPTION
     map, then write a .binds preset through ed-bind-wizard.py.
 
 FILES
-    harvest.py                  the function vocabulary and the ranking
+    harvest.py                  the function vocabulary
     ed-bind-wizard-results.json device ids and axis maps, from the capture TUI
     <preset>.4.2.binds          written by --write, in the game's Bindings dir
     KNEEBOARD.md, kneeboard.html   written by --sheet and --html
@@ -33,8 +33,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CORE = os.environ.get('SIM_BIND_WIZARD') or os.path.normpath(
     os.path.join(HERE, '..', '..'))
 if not os.path.isdir(CORE):
-    raise SystemExit(f'no shared core at {CORE}\n'
-                     'set SIM_BIND_WIZARD to the sim-bind-wizard checkout')
+    raise SystemExit(f'There is no shared core at {CORE}.\n'
+                     'Set SIM_BIND_WIZARD to the sim-bind-wizard '
+                     'checkout.')
 if CORE not in sys.path:
     sys.path.insert(0, CORE)
 
@@ -59,14 +60,12 @@ RESULTS = 'ed-bind-wizard-results.json'
 #: Deliberately not in `CACHE`: that names what the harvest wrote, and a
 #: harvest cannot write a judgement.
 
-#: Filled by `Elite.__init__`, never at import -- see the note in
-#: games/falconbms/plan.py. `known()` and `votes()` are functions, so they
-#: read these only once an adapter exists.
-#: The catalogue as the harvest wrote it, and the two views of it this
-#: file asks for. Filled when an adapter is constructed, never at import:
-#: a module that reads a cache on import cannot be told apart from one that
-#: is broken, on a clone where nothing is harvested.
-CAT, RANK, AXES = [], {}, set()
+#: The catalogue as the harvest wrote it, and the one view of it this file
+#: asks for. Filled by `Elite.__init__`, never at import -- see the note
+#: in games/falconbms/plan.py: a module that reads a cache on import
+#: cannot be told apart from one that is broken, on a clone where nothing
+#: is harvested. `known()` is a function for the same reason.
+CAT, AXES = [], set()
 
 
 def known():
@@ -93,12 +92,6 @@ def known():
 #: options and records the choice in StartPreset.4.start, which nothing here
 #: writes -- so a freshly written preset is selected once, by hand.
 PRESET = os.environ.get('ED_PRESET', 'Izowiuz-PLAN')
-
-
-def votes(*functions):
-    """How many of the shipped HOTAS presets bind any of these."""
-    return max((RANK.get(f, {}).get('votes', 0) for f in functions),
-               default=0)
 
 
 #: Elite names an SRV function with a `_Buggy` suffix OR a `Buggy` prefix, and
@@ -146,23 +139,18 @@ def twinned(*ship):
 def _needs(described, placed):
     """[Need] -- the hand-written list, read rather than executed.
 
-    This used to BUILD them, and two parts were derived on the way: the
-    factory vote count (`votes(*flat)`) and whether the game has an SRV
-    twin of each ship function (`twinned(...)`). Both are written down now.
-
-    That is a real change and it is the intended one. A vote count read
-    out of a cache silently reordered the plan whenever the cache was
-    refreshed -- which is exactly the hidden input the judgements are
-    leaving source to escape. Re-deriving is something to ask for rather
-    than something that happens to you.
+    This used to BUILD them, and two parts were derived on the way: how
+    many of the shipped HOTAS presets bound each function, and whether
+    the game has an SRV twin of it (`twinned(...)`). The twin is written
+    down now; the count is gone from the whole family -- it ranked other
+    people's layouts for other people's hardware.
     """
     out = corneeds.read_needs(vocab.load(HERE, described, key='needs'),
                               make=Need)
-    corneeds.load_assignments(HERE, placed, out)
     return out
 
 
-def unknown(needs, axes=()):
+def unknown(needs):
     """Functions named in the needs file that the game will not accept.
 
     The vocabulary comes out of the game's own base preset, so a typo or a
@@ -178,13 +166,10 @@ def unknown(needs, axes=()):
                     bad.append((n.what, f))
         if n.push and n.push not in allf:
             bad.append((n.what, n.push))
-    for row in axes:
-        if row['does'] not in AXES:
-            bad.append(('axis', row['does']))
     return bad
 
 
-def duplicates(needs, axes=()):
+def duplicates(needs):
     """Functions named by more than one need.
 
     Elite has one element per function, so two needs claiming one function
@@ -196,23 +181,10 @@ def duplicates(needs, axes=()):
             for f in slot:
                 if f:
                     seen[f] += 1
-    axis = collections.Counter(row['does'] for row in axes)
-    return ([f for f, c in seen.items() if c > 1]
-            + [f for f, c in axis.items() if c > 1])
+    return [f for f, c in seen.items() if c > 1]
 
 
 # ------------------------------------------------------------ the hardware --
-
-def axis_plan(devs, rows):
-    """[corneeds.Axis] -- axes skip allocate().
-
-    `rows` is the `axes` section of the needs file; `carries` is Elite's
-    context, which is a judgement like the rest of the row and so lives
-    beside it rather than in this file.
-    """
-    return corneeds.read_axes(rows, devs,
-                              carries=lambda row, _a: row.get('context', ''))
-
 
 # ----------------------------------------------------------------- writing --
 
@@ -231,11 +203,11 @@ def as_results(devs, placed, axes):
                 if func:
                     out[func] = {'role': p.role, 'type': 'button',
                                  'index': button, 'sign': 1}
-    for plan in axes:
-        func, role, a, invert = (plan.does, plan.role, plan.axis,
-                                 plan.invert)
-        out[func] = {'role': role, 'type': 'axis', 'index': a.index,
-                     'sign': -1 if invert else 1}
+    for p in axes:
+        index = p.slots[0][0].index
+        for func in (b.action for b in p.slots[0][1]):
+            out[func] = {'role': p.role, 'type': 'axis', 'index': index,
+                         'sign': -1 if p.need.invert else 1}
     return out
 
 
@@ -283,7 +255,12 @@ CTX = ('Ship', 'SRV')
 #: `ToggleDriveAssist` of `ToggleFlightAssist`, and nothing in either pair
 #: of names is shared. Read off a written-out list because they were found
 #: by somebody who knew the game, which is the only way they can be found.
-SRV_BY_HAND = frozenset(('HeadlightsBuggyButton', 'ToggleDriveAssist'))
+#: Four, not two. `SteeringAxis` and `DriveSpeedAxis` are the SRV's
+#: steering and throttle and are named like neither rule; the axes
+#: section declared their context in the row, which is the same list
+#: written in a second place, and the rows have moved into the needs.
+SRV_BY_HAND = frozenset(('HeadlightsBuggyButton', 'ToggleDriveAssist',
+                         'SteeringAxis', 'DriveSpeedAxis'))
 
 
 def context_of(function):
@@ -300,7 +277,9 @@ def context_of(function):
 
 
 def _sheet(layout):
-    devs, placed, unmet, free, axes = layout
+    devs, placed, unmet, free = (layout.devices, layout.on_buttons,
+                                 layout.unplaced, layout.free)
+    axes = layout.on_axes
     sh = csheet.Sheet(
         'Kneeboard Elite Dangerous', 'Elite Dangerous · VIRPIL',
         ident='Joy', contexts=CTX,
@@ -321,13 +300,14 @@ def _sheet(layout):
                 ident=f'Joy_{button + 1}',
                 does=p.need.what, bindings=by_ctx))
 
-    for plan in axes:
-        func, ctx, role, a, invert = (plan.does, plan.carries, plan.role,
-                                      plan.axis, plan.invert)
-        g = devs[role].axis_group(a.index)
-        sh.add_axis(role, g.label if g else a.label, f'axis {a.index}',
-                    harvest.readable(func)
-                    + (' (inverted)' if invert else ''), ctx)
+    for p in axes:
+        a = devs[p.role].axis(p.slots[0][0].index)
+        g = devs[p.role].axis_group(a.index)
+        for func in (b.action for b in p.slots[0][1]):
+            sh.add_axis(p.role, g.label if g else a.label, f'axis {a.index}',
+                        harvest.readable(func)
+                        + (' (inverted)' if p.need.invert else ''),
+                        context_of(func))
 
     for r, c in free:
         sh.add_free(r, c.label)
@@ -371,7 +351,7 @@ class Elite(adapter.Planner):
     NEEDS_FILE = 'elite-needs.json'
     BINDS = 'elite-binds.json'
     CATALOGUE = 'ed-actions.json'
-    CACHE = {'ed-actions.json': 'actions', 'ed-rank.json': 'ranking'}
+    CACHE = {'ed-actions.json': 'actions'}
 
 
     def __init__(self, preset=None, backup_dir=None):
@@ -380,37 +360,21 @@ class Elite(adapter.Planner):
         self.subtitle = f'VIRPIL · {self.preset}'
         CAT[:] = cactions.read(self.cache('ed-actions.json',
                                           build=harvest.action_rows))
-        RANK.update(self.cache('ed-rank.json', build=harvest.ranking))
         AXES.update(a.id for a in CAT if a.kind == 'axis')
         # Elite has one element per function, so a function two needs both
         # claim does not clash -- the second simply wins, silently. The
         # adapter refuses to exist rather than write that.
         self._needs = _needs(self.NEEDS_FILE, self.BINDS)
-        # `list()` because `vocab.load` answers with whatever the
-        # file holds and `AXES` promises a list.
-        self._axes = list(vocab.load(HERE, self.NEEDS_FILE,
-                                     key='axes'))
-        dup = duplicates(self._needs, self._axes)
+        dup = duplicates(self._needs)
         if dup:
-            raise SystemExit('claimed by more than one need: '
-                             + ', '.join(dup))
+            raise SystemExit('More than one need claims these: '
+                             + ', '.join(dup) + '.')
 
     @property
     @typing.override
     def NEEDS(self):
         """Derived from the game's own vocabulary, so it is a property."""
         return self._needs
-
-    @property
-    def AXES(self) -> list:
-        """The `axes` section of the needs file.
-
-        Axes never go through the allocator -- an aircraft's pitch axis is
-        the stick's pitch axis on every desk there is -- but which lever
-        is the throttle is a judgement like any other, and it used to be
-        a literal in this file.
-        """
-        return self._axes
 
     @typing.final
     def wizard(self):
@@ -423,14 +387,14 @@ class Elite(adapter.Planner):
         # whole job is to reserve a control -- `Head look` over the throttle
         # mini-stick, which the axes take -- has `wanted == 0` and binds
         # nothing, and dropping it let a button need claim the click.
+        self.answers(self.NEEDS)
         return corneeds.Layout(devs, *corneeds.allocate(list(self.NEEDS),
-                                                        devs),
-                               axes=axis_plan(devs, self.AXES))
+                                                        devs))
 
     @typing.override
     def unknown(self):
         return [(what, 'function', func)
-                for what, func in unknown(self._needs, self._axes)]
+                for what, func in unknown(self._needs)]
 
     @typing.override
     def catalogue(self):
@@ -454,8 +418,8 @@ class Elite(adapter.Planner):
 
     @typing.override
     def write_layout(self, layout):
-        files, said = contents(self.wizard(), layout.devices, layout.placed,
-                               layout.axes, self.preset)
+        files, said = contents(self.wizard(), layout.devices, layout.on_buttons,
+                               layout.on_axes, self.preset)
         for line in said:
             print(line)
         return files
@@ -463,7 +427,8 @@ class Elite(adapter.Planner):
     @typing.override
     def arguments(self, parser):
         parser.add_argument('--preset',
-                            help=f'preset to write (default {self.preset})')
+                            help='Which preset to write. The default is '
+                                 f'{self.preset}.')
 
     @typing.override
     def paths(self, args):
@@ -479,7 +444,9 @@ class Elite(adapter.Planner):
 
     @typing.override
     def show(self, layout, why=False):
-        _devs, placed, unmet, _free, axes = layout
+        devs, placed, unmet = (layout.devices, layout.on_buttons,
+                               layout.unplaced)
+        axes = layout.on_axes
         out = []
         for p_ in sorted(placed, key=lambda p_: (p_.need.urgency, p_.role)):
             n = p_.need
@@ -493,18 +460,15 @@ class Elite(adapter.Planner):
                         out.append(f'      {part:9} Joy_{button + 1:<4} '
                                    f'{ctx:5} {harvest.readable(func)}')
             if why:
-                # 13 is what Elite's count is a count OF: the HOTAS presets
-                # it ships. The number itself is `need.rank` like everyone
-                # else's.
-                out.append('      ' + ' · '.join(
-                    corneeds.why_bits(p_, out_of=13)))
+                out.append('      ' + ' · '.join(corneeds.why_bits(p_)))
         out.append('')
-        for plan in axes:
-            func, ctx, role, a_, invert = (plan.does, plan.carries,
-                                           plan.role, plan.axis, plan.invert)
-            out.append(f'  {harvest.readable(func):34} {ctx:5} {role:9} '
-                       f'axis {a_.index} {a_.label}'
-                       f'{"  inverted" if invert else ""}')
+        for p_ in axes:
+            a_ = devs[p_.role].axis(p_.slots[0][0].index)
+            for func in (b.action for b in p_.slots[0][1]):
+                out.append(f'  {harvest.readable(func):34} '
+                           f'{context_of(func):5} {p_.role:9} '
+                           f'axis {a_.index} {a_.label}'
+                           f'{"  inverted" if p_.need.invert else ""}')
         if unmet:
             out.append('')
             out.append(f'{len(unmet)} unplaced: '
