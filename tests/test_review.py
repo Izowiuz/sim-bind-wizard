@@ -58,7 +58,7 @@ def plan():
 def made(needs=None, devs=None, **kw):
     devs = devs or DEVS()
     lay = Layout(devs, *allocate(list(needs or plan()), devs),
-                 axes=[('pitch', 'stick')])
+                 axes=[corneeds.Axis('stick', None, 'pitch')])
     return review.Review(lay, 'Test', 'fake hardware', **kw)
 
 
@@ -565,7 +565,7 @@ class Writing(unittest.TestCase):
         rv.clear(by(rv, 'Gear'))
         out = rv.result()
         self.assertEqual(rv.layout.devices, out.devices)
-        self.assertEqual([('pitch', 'stick')], out.axes)
+        self.assertEqual(['pitch'], [a.does for a in out.axes])
         self.assertEqual(3, len(rv.layout.placed), 'the plan is not mutated')
 
     def test_a_hand_placed_need_reaches_the_writer(self):
@@ -1038,7 +1038,7 @@ class Promoting(unittest.TestCase):
         # capture wizard does, and the screen says `unsaved` until it has.
         kept = []
         rv = made(catalogue=self.CAT,
-                  save=lambda needs: kept.append(list(needs)) or 'saved')
+                  save=lambda needs, axes=(): kept.append(list(needs)) or 'saved')
         rv.promote(self.CAT[0], 'Combat')
         self.assertEqual([], kept, 'wrote without being asked')
         self.assertTrue(rv.unsaved)
@@ -1081,7 +1081,7 @@ class Refiling(unittest.TestCase):
 
     def test_it_is_written_down_when_you_save(self):
         kept = []
-        rv = made(save=lambda needs: kept.append(list(needs)) or 'ok')
+        rv = made(save=lambda needs, axes=(): kept.append(list(needs)) or 'ok')
         rv.refile(by(rv, 'Trim'), 'Combat')
         self.assertTrue(rv.unsaved)
         rv.keep()
@@ -1251,7 +1251,8 @@ class WhatYouDecidedOutLastsTheSession(unittest.TestCase):
 
     def open(self, devs=None):
         return made(self.needs, devs=devs or self.devs,
-                    save=self.saved.append)
+                    save=lambda needs, axes=():
+                    self.saved.append(needs))
 
     def only(self, rv):
         return rv.needs[0]
@@ -1482,6 +1483,64 @@ class EveryKeyTheScreenNamesIsOneItAnswers(unittest.TestCase):
         self.assertIn('w', self.answered())
 
 
+class TurningAnAxisRound(unittest.TestCase):
+    """The axes on screen, and `i`.
+
+    They never went through the allocator -- an aircraft's pitch axis is
+    the stick's pitch axis on every desk there is -- so the screen hid
+    them entirely, and the one thing you might want to change about one,
+    which way it runs, had nowhere to be changed from. DCS had it on a
+    screen of its own; the family had it nowhere.
+    """
+
+    def rv(self):
+        devs = {'stick': fake.device('stick', [
+            fake.button('Thumb', 0, reach=fake.THUMB)])}
+        plan = corneeds.Axis('stick', None, 'PitchAxis')
+        return made([Need('Boost', 'button', [[Bind('BOOST')]])],
+                    devs=devs, save=lambda needs, axes=(): 'ok'), plan
+
+    def rows_of(self, rv):
+        return [r for r in rv.rows() if r.kind == 'axis']
+
+    def test_an_axis_with_nothing_behind_it_is_not_a_row(self):
+        # `read_axes` says so on stderr and leaves the row out; a line
+        # naming a lever that is not there is worse than its absence.
+        rv, _plan = self.rv()
+        self.assertEqual([], self.rows_of(rv))
+
+    def test_a_resolved_axis_is_a_row_you_can_stand_on(self):
+        rv, _plan = self.rv()
+        dev = rv.layout.devices['stick']
+        rv.layout.axes = [corneeds.Axis('stick', next(iter(dev.axes()), None)
+                                        or _Fake(), 'PitchAxis')]
+        (row,) = self.rows_of(rv)
+        self.assertEqual('PitchAxis', row.text)
+        self.assertTrue(row.selectable)
+
+    def test_i_turns_it_round_and_says_so(self):
+        rv, plan = self.rv()
+        self.assertIn('inverted', rv.turn_round(plan))
+        self.assertTrue(plan.invert)
+        self.assertIn('the way it was', rv.turn_round(plan))
+        self.assertFalse(plan.invert)
+
+    def test_turning_one_round_makes_the_file_behind(self):
+        rv, plan = self.rv()
+        rv.turn_round(plan)
+        self.assertTrue(rv.unsaved)
+
+    def test_the_key_is_in_the_sill_and_the_help(self):
+        self.assertIn('i invert', review.HINTS)
+        self.assertIn('  i ', '\n'.join(t for _tone, t in review.KEYS))
+
+
+class _Fake:
+    """An axis object with just enough on it to be drawn."""
+    index = 0
+    label = 'Main stick'
+
+
 class LayingItOutToAnOverlay(unittest.TestCase):
     """`o`: put a cockpit template on, take it off, and plan again.
 
@@ -1591,7 +1650,7 @@ class WhatAFunctionIsFor(unittest.TestCase):
     def rv(self):
         return made([Need('Boost', 'button', [[Bind('BOOST')]],
                           suits='flight')],
-                    save=lambda needs: 'wrote 1')
+                    save=lambda needs, axes=(): 'wrote 1')
 
     def side(self, rv):
         row = next(r for r in rv.rows() if r.kind == 'need')
@@ -1646,7 +1705,7 @@ class SavingIsAKeystroke(unittest.TestCase):
 
     def rv(self, save=True):
         return made(self.needs, devs=self.devs,
-                    save=((lambda needs: self.saved.append(list(needs))
+                    save=((lambda needs, axes=(): self.saved.append(list(needs))
                            or 'wrote 1') if save else None))
 
     def test_a_fresh_screen_has_nothing_to_save(self):
@@ -1690,7 +1749,7 @@ class SavingIsAKeystroke(unittest.TestCase):
 
     def test_a_save_that_fails_leaves_it_unsaved(self):
         # Otherwise the frame says the files have it and they do not.
-        def refuse(_needs):
+        def refuse(_needs, _axes=()):
             raise OSError('read-only file system')
 
         rv = made(self.needs, devs=self.devs, save=refuse)

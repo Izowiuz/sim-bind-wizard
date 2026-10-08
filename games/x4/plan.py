@@ -103,21 +103,6 @@ class Need(corneeds.Need):
 
 #: Axes are resolved by what the device map says a control IS, never by index.
 #: (X4 id, role, how to find it)
-AXIS_NEEDS = [
-    ('INPUT_RANGE_STEERING_PRIMARY',   'stick',    ('axis', 'stick', 'x')),
-    ('INPUT_RANGE_STEERING_PITCH',     'stick',    ('axis', 'stick', 'y')),
-    ('INPUT_RANGE_STEERING_SECONDARY', 'stick',    ('axis', 'stick', 'z')),
-    ('INPUT_RANGE_STRAFE_LEFT_RIGHT',  'stick',    ('axis', 'ministick', 'x')),
-    ('INPUT_RANGE_STRAFE_UP_DOWN',     'stick',    ('axis', 'ministick', 'y')),
-    ('INPUT_RANGE_THROTTLE',           'throttle', ('label', 'Left throttle lever')),
-    ('INPUT_RANGE_MAP_ZOOM_IN',        'throttle', ('label', 'Side lever')),
-    ('INPUT_RANGE_MAP_PAN_LEFT_RIGHT', 'throttle', ('axis', 'ministick', 'x')),
-    ('INPUT_RANGE_MAP_PAN_UP_DOWN',    'throttle', ('axis', 'ministick', 'y')),
-    ('INPUT_RANGE_FP_YAW',             'stick',    ('axis', 'ministick', 'x')),
-    ('INPUT_RANGE_FP_PITCH',           'stick',    ('axis', 'ministick', 'y')),
-    ('INPUT_RANGE_FP_WALK',            'stick',    ('axis', 'stick', 'y')),
-    ('INPUT_RANGE_FP_STRAFE',          'stick',    ('axis', 'stick', 'x')),
-]
 
 #: Where the judgements live. Which band a thing is in, what shape it wants,
 #: which device it belongs on, what somebody wrote about it -- 373 of them
@@ -139,8 +124,8 @@ def needs(described, placed):
 
 
 
-def unknown(needs, catalogue):
-    """Ids in NEEDS or AXIS_NEEDS that the game will not accept a binding for.
+def unknown(needs, catalogue, axes=()):
+    """Ids in the needs file that the game will not accept a binding for.
 
     The catalogue is read from the game's own files, so a typo or an id
     dropped by a patch shows up here rather than as a binding that silently
@@ -157,7 +142,8 @@ def unknown(needs, catalogue):
             ident = n.push.action
             if ident not in known:
                 bad.append((n.what, kind_of(ident), ident))
-    for ident, _role, _how in AXIS_NEEDS:
+    for row in axes:
+        ident = row['does']
         a = known.get(ident)
         if a is None or a.kind != 'axis':
             bad.append(('axis', RANGE, ident))
@@ -166,31 +152,21 @@ def unknown(needs, catalogue):
 
 # ------------------------------------------------------------ the hardware --
 
-def axis_of(devs, role, how):
-    """The axis a need names, by what the map says it is."""
-    dev = devs[role]
-    if how[0] == 'axis':
-        # The control's kind and which axis of it, said separately. One
-        # word for both -- `mini-stick-x` -- said the kind twice, and a
-        # stick is one control with three axes, not three controls.
-        return dev.axis_of(how[1], how[2])
-    return next((a for a in dev.axes()
-                 if dev.axis_label(a.index) == how[1]), None)
+def axis_plan(devs, rows):
+    """[corneeds.Axis] -- axes never go through the allocator.
 
-
-def axis_plan(devs):
-    """[(x4 id, role, axis)] -- axes never go through the allocator."""
+    `rows` is the `axes` section of the needs file: it was a literal in
+    this file, which meant changing which lever the throttle is on meant
+    editing code, and an axis moved on the review screen had nowhere to
+    be written down.
+    """
     out = []
-    for ident, role, how in AXIS_NEEDS:
-        a = axis_of(devs, role, how)
-        if a is None:
-            print(f'!! no {how[1]!r} axis on the {role} for {ident}',
+    for plan in corneeds.read_axes(rows, devs):
+        if plan.axis.hid not in AXIS_CODE:
+            print(f'!! {plan.role} axis {plan.axis.hid!r} has no X4 code',
                   file=sys.stderr)
             continue
-        if a.hid not in AXIS_CODE:
-            print(f'!! {role} axis {a.hid!r} has no X4 code', file=sys.stderr)
-            continue
-        out.append((ident, role, a))
+        out.append(plan)
     return out
 
 
@@ -269,7 +245,8 @@ def lines_for(devs, placed, axes, slot):
             code = harvest.code(button)
             for ident in (b.action for b in payload):
                 out.append((kind_of(ident), ident, src, code))
-    for ident, role, a in axes:
+    for plan in axes:
+        ident, role, a = plan.does, plan.role, plan.axis
         out.append((RANGE, ident, source(slot[role], axis=True),
                     'INPUT_JOYAXIS_' + AXIS_CODE[a.hid]))
     return out
@@ -368,7 +345,8 @@ def _sheet(layout, profile):
     # is one row with a column each -- the same shape the buttons have.
     # It used to be three rows of one lever with the context written into
     # the text, because AxisRow had no bindings dict.
-    for ident, role, a in axes:
+    for plan in axes:
+        ident, role, a = plan.does, plan.role, plan.axis
         g = devs[role].axis_group(a.index)
         sh.add_axis(role, g.label if g else a.label, AXIS_CODE[a.hid],
                     harvest.readable(ident), context_of(ident))
@@ -426,6 +404,17 @@ class X4(adapter.Planner):
         """
         return self._needs
 
+    @property
+    def AXES(self) -> list:
+        """The `axes` section of the needs file.
+
+        Axes never go through the allocator -- an aircraft's pitch axis is
+        the stick's pitch axis on every desk there is -- but which lever
+        is the throttle is a judgement like any other, and it used to be
+        a literal in this file.
+        """
+        return self._axes
+
     def __init__(self, profile=None, slots=None, backup_dir=None):
         self.profile = profile or os.environ.get('X4_PROFILE',
                                                  DEFAULT_PROFILE)
@@ -440,16 +429,20 @@ class X4(adapter.Planner):
         self.rows = self.cache('x4-actions.json',
                                build=harvest.action_rows)
         self._needs = needs(self.NEEDS_FILE, self.BINDS)
+        # `list()` because `vocab.load` answers with whatever the
+        # file holds and `AXES` promises a list.
+        self._axes = list(vocab.load(HERE, self.NEEDS_FILE,
+                                     key='axes'))
 
     @typing.override
     def build(self):
         devs = devmap.by_role('stick', 'throttle')
         return corneeds.Layout(devs, *corneeds.allocate(self.NEEDS, devs),
-                               axes=axis_plan(devs))
+                               axes=axis_plan(devs, self.AXES))
 
     @typing.override
     def unknown(self):
-        return unknown(self.NEEDS, self.catalogue())
+        return unknown(self.NEEDS, self.catalogue(), self.AXES)
 
     @typing.override
     def catalogue(self):
@@ -513,7 +506,8 @@ class X4(adapter.Planner):
             if why:
                 out.append('      ' + ' · '.join(corneeds.why_bits(p_)))
         out.append('')
-        for ident, role, a in axes:
+        for plan in axes:
+            ident, role, a = plan.does, plan.role, plan.axis
             out.append(f'  {harvest.readable(ident):28} {role:9} '
                        f'{AXIS_CODE[a.hid]:8} {a.label}')
         if unmet:

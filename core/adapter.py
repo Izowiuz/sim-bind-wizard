@@ -396,10 +396,35 @@ class Adapter(abc.ABC):
         """[(label, path)] for the review screen's map."""
         return []
 
+    def says_button(self, role, index) -> str:
+        """What this game calls one button of one device, or '' if nothing.
+
+        Falcon says `DX17` and War Thunder a number off its own base; the
+        map says 16, and which of the three you need depends on which
+        screen of which game you are in front of. Each game worked this
+        out for its kneeboard already -- this is that, where the shared
+        listings can reach it too.
+        """
+        return ''
+
+    @typing.final
     def free(self, layout) -> list[str]:
-        return [f'  {role:9} {c.label:34} {c.kind:10} '
-                f'{corneeds.reach_said(c)}'
-                for role, c in layout.free]
+        """What nothing was put on. One shape for six games.
+
+        Three of them answered this question in three layouts -- the same
+        four facts in a different order with different brackets round them
+        -- because `free` was overridable and two games overrode it rather
+        than ask for the one thing the shared one lacked, which was their
+        own numbering for a spare button.
+        """
+        out = [f'{len(layout.free)} controls left free:']
+        for role, c in layout.free:
+            says = ', '.join(x for x in
+                             (self.says_button(role, b)
+                              for b in c.bindable_buttons) if x)
+            out.append(f'  {role:9} {c.label:34} {c.kind:10} '
+                       f'{says:18} {corneeds.reach_said(c)}')
+        return out
 
     def extra(self, args, layout) -> list[str] | None:
         """A verb only this game has. -> lines, or None if none was asked for.
@@ -493,9 +518,13 @@ class Adapter(abc.ABC):
         with open(mine, 'rb') as f:
             return corneeds.merge_rules(corneeds.RULES, tomllib.load(f))
 
-    @typing.final
-    def save_needs(self, needs) -> str:
-        """Write both halves down, or say why there is nowhere to.
+    def save_needs(self, needs, axes=()) -> str:
+        """Write what the screen decided down.
+
+        Not final: DCS keeps its decisions in the wizard's results file,
+        per command rather than per function, because that is the
+        granularity it captures at. The screen does not care -- it hands
+        over needs and the adapter knows where its own answers live.
 
         The description and where things sit go to different files, and
         both are written together because one keystroke saves what you
@@ -518,11 +547,32 @@ class Adapter(abc.ABC):
                 f'{self.game} derives its needs rather than keeping them, '
                 'so there is no list to write')
         filed = self.as_filed(needs)
-        corneeds.save_needs(self.here, self.NEEDS_FILE, filed)
+        corneeds.save_needs(self.here, self.NEEDS_FILE, filed,
+                            self.axes_filed(axes))
         corneeds.save_assignments(self.here, self.BINDS, filed)
         return (f'wrote {len(needs)} to {self.NEEDS_FILE} and where '
                 f'{sum(1 for n in needs if n.assignment)} of them sit to '
                 f'{self.BINDS}')
+
+    def axes_filed(self, axes):
+        """The `axes` section as it should go back, or what it already is.
+
+        The rows carry the search and the context; the `Axis` objects the
+        screen holds carry which way each runs. So this is the file's own
+        rows with `invert` taken from the screen -- an axis turned round
+        with `i` is the one thing about an axis the screen can change.
+        """
+        rows = [dict(r) for r in getattr(self, 'AXES', ())]
+        by = {a.does: a for a in axes}
+        for row in rows:
+            got = by.get(row['does'])
+            if got is None:
+                continue
+            if got.invert:
+                row['invert'] = True
+            else:
+                row.pop('invert', None)
+        return rows
 
     def as_filed(self, needs):
         """`needs` in the order the file on disk has them."""
@@ -863,9 +913,26 @@ class Adapter(abc.ABC):
                       'to a sibling file: the game reads that folder')
         return out
 
-    @abc.abstractmethod
+    @typing.final
     def review(self, args) -> None:
-        """Walk the layout on screen and write what was kept."""
+        """core.review, wired to this adapter.
+
+        Final because the wiring *is* the clause: `write=` is handed the
+        layout the screen kept and nothing wider, and it reaches the writer
+        through `write_all`, so the review's output is backed up and
+        checked for strays on exactly the same path as `--write`.
+
+        On `Adapter` and not on `Planner`, so a proposer gets it too. DCS
+        had a screen of its own with `c C x X ↵` on it -- the same keys,
+        the same three states -- because nothing offered it this one.
+        """
+        creview.run(self.build(), self.title, self.subtitle,
+                    describe=self.describe, write=self.write_all,
+                    paths=self.paths(args), catalogue=self.catalogue(),
+                    source=os.path.join('games', self.game, self.CATALOGUE),
+                    save=self.save_needs, harvest=self.reharvest,
+                    drop=self.drop_cache, rules=self.rules(),
+                    rebuild=self.build, game=self.game)
 
 
 class Planner(Adapter):
@@ -902,72 +969,6 @@ class Planner(Adapter):
     def write_all(self, layout) -> list[str]:
         since = time.time()
         return self.lay_down(self.write_layout(layout), since=since)
-
-    @typing.final
-    def review(self, args) -> None:
-        """core.review, wired to this adapter.
-
-        Final because the wiring *is* the clause: `write=` is handed the
-        layout the screen kept and nothing wider, and it reaches the writer
-        through `write_all`, so the review's output is backed up and checked
-        for strays on exactly the same path as `--write`.
-        """
-        creview.run(self.build(), self.title, self.subtitle,
-                    describe=self.describe, write=self.write_all,
-                    paths=self.paths(args), catalogue=self.catalogue(),
-                    source=os.path.join('games', self.game, self.CATALOGUE),
-                    save=self.save_needs, harvest=self.reharvest,
-                    drop=self.drop_cache, rules=self.rules(),
-                    rebuild=self.build, game=self.game)
-
-
-class Proposer(Adapter):
-    """An adapter that seeds a file a capture wizard confirms.
-
-    DCS cannot be handed a narrowed layout: its writer reads the wizard's
-    results file, because a binding somebody confirmed at the stick is better
-    evidence than one a planner proposed. That used to be a sentence in
-    `bind`'s `GAPS` table. It is a type now.
-    """
-
-    @abc.abstractmethod
-    def seed(self, layout) -> dict:
-        """What the wizard's results file should now contain.
-
-        -> {path: Text or str}, the same shape `Planner.write_layout`
-        returns and laid down the same way, so a proposer is under the same
-        two clauses as a planner even though nothing narrows its layout.
-        """
-
-    @abc.abstractmethod
-    def write_game(self) -> dict:
-        """-> {path: Text or str}: the game's own config.
-
-        Built from what the wizard confirmed, not from a layout -- which is
-        the whole reason this is not a `Planner`. A proposal that nobody has
-        walked is a guess, and the file the wizard owns is the record of
-        which guesses somebody accepted at the stick.
-        """
-
-    @typing.final
-    def write_all(self, layout) -> list[str]:
-        since = time.time()
-        return self.lay_down(self.write_game(), since=since)
-
-    @typing.final
-    def write_seed(self, layout) -> list[str]:
-        """The proposal into the wizard's file, on the same laid-down path."""
-        since = time.time()
-        return self.lay_down(self.seed(layout), since=since) + [
-            f'seeded -- confirm it with ./bind {self.game} capture']
-
-    @typing.final
-    def review(self, args) -> None:
-        raise SystemExit(f'its capture wizard already is one -- '
-                         f'./bind {self.game} capture')
-
-
-# ------------------------------------------------------------- the bridge
 
 def _flags(cls):
     """[(flag names, parameter)] for this adapter's constructor.

@@ -74,7 +74,12 @@
          font-variant-numeric: tabular-nums; text-align: right;
          white-space: nowrap; width: 1%; }
   td.c { font-weight: 600; white-space: nowrap; }
-  td.c em { font-style: normal; color: var(--faint); font-weight: 400; }
+  /* Which part of the control, on a line of its own. It was inline, and
+     `travel contact (held while the lever is used)` is forty-four
+     characters that may not wrap -- so one row set the column's width
+     and every command name beside it broke over four lines. */
+  td.c em { font-style: normal; color: var(--faint); font-weight: 400;
+            display: block; white-space: normal; font-size: 11px; }
   td.h { color: var(--muted); }
   td.none { color: var(--faint); }
 
@@ -107,7 +112,7 @@
   <header>
     <h1>Kneeboard</h1>
     <span class="sub">Falcon BMS · F-16C · VIRPIL</span>
-    <span class="stamp">generated 2026-10-07 · 53 bindings · 9 axes · IzoDesk · By hand</span>
+    <span class="stamp">generated 2026-10-08 · 53 bindings · 9 axes · IzoDesk · By hand</span>
   </header>
 
   <div class="cols">
@@ -115,7 +120,7 @@
   </div>
 
   <div class="cols3">
-    <div class="panel"><h2>Not placed<small>nothing on the desk for these</small></h2><table><tr><th>Wanted</th><th>Shape</th><th class="a">Why</th></tr><tr><td class="c">AVTR</td><td class="n">button</td><td>—</td></tr><tr><td class="c">JFS — engine start</td><td class="n">hat2</td><td>—</td></tr><tr><td class="c">Throttle idle detent</td><td class="n">hat2</td><td>—</td></tr><tr><td class="c">IFF MASTER knob</td><td class="n">selector</td><td>—</td></tr><tr><td class="c">Radar gain</td><td class="n">encoder</td><td>—</td></tr></table></div>
+    <div class="panel"><h2>Not placed<small>nothing on the desk for these</small></h2><table><tr><th>Wanted</th><th>Shape</th></tr><tr><td class="c">AVTR</td><td class="n">button</td></tr><tr><td class="c">JFS — engine start</td><td class="n">hat2</td></tr><tr><td class="c">Throttle idle detent</td><td class="n">hat2</td></tr><tr><td class="c">IFF MASTER knob</td><td class="n">selector</td></tr><tr><td class="c">Radar gain</td><td class="n">encoder</td></tr></table></div>
     <div class="panel"><h2>Left free</h2><table><tr><th>R-VPC Stick WarBRD-D  (DX 0–31)</th><th>DX</th></tr><tr><td class="c">Main stick</td><td class="n">—</td></tr><tr><td class="c">Mini-stick</td><td class="n">5</td></tr><tr><td class="c">Analogue brake lever on the grip</td><td class="n">—</td></tr></table><table><tr><th>L-VPC VMAX Prime Throttle  (DX 32–63)</th><th>DX</th></tr><tr><td class="c">Left throttle lever</td><td class="n">—</td></tr><tr><td class="c">Right throttle lever</td><td class="n">—</td></tr><tr><td class="c">Side lever</td><td class="n">—</td></tr><tr><td class="c">T2 rocker</td><td class="n">63, 64</td></tr><tr><td class="c">T3 rocker</td><td class="n">65, 66</td></tr><tr><td class="c">T4 rocker</td><td class="n">67, 68</td></tr><tr><td class="c">T5 rocker</td><td class="n">69, 70</td></tr><tr><td class="c">APU button</td><td class="n">71</td></tr><tr><td class="c">E1 encoder</td><td class="n">73, 74, 72</td></tr><tr><td class="c">E2 encoder</td><td class="n">77, 76, 75</td></tr><tr><td class="c">Mode selector</td><td class="n">82, 81, 80, 79, 78</td></tr></table></div>
     <div class="panel"><h2>Check on the ramp</h2><div class="note"><ul><li><b>Master arm</b> — it is on the trigger lever, so the guard position IS the switch position. Which of the two contacts is the closed lever was never measured — if the jet arms with the lever down, swap the two names in NEEDS and regenerate.</li><li><b>Trim</b> — BMS names trim after the wheel, not the nose: <code>AFElevatorTrimUp</code> is nose DOWN.</li><li><b>DOGFIGHT switch</b> — hold it forward for MRM, back for dogfight, let go and it should cancel. The cancel is the release edge — no other sim of the four can express it.</li></ul></div></div><div class="panel"><h2>Where the hardware and the jet disagree</h2><div class="note"><ul><li><b>Roll trim</b> — the F-16 grip has four hats and the WarBRD has three, so TMS, DMS and CMS take them and trim gets the encoder: pitch only. Roll trim stays on the keyboard.</li><li><b>Eject</b> — not bound. Twenty of the twenty-two vendor profiles hide it on the pinky-shifted layer; we do not use that layer, and no button here is awkward enough to be safe.</li><li><b>Zoom</b> — on the dial, which rests centred rather than at zero — so the view may start part-zoomed. The price of the same dial carrying zoom in DCS and War Thunder too.</li><li><b>Axis direction</b> — not ours to set. <code>DeviceDefaults.txt</code> says <i>which</i> physical axis, never <i>which way</i> — so walk the four Advanced Options tabs, move each control, watch its value bar and hit <b>Reverse</b> where it runs backwards. Pitch almost certainly needs it.</li><li><b>SET AB</b> — on the Controllers page: left-click sets the afterburner detent, right-click the idle detent. Without the first there is no afterburner. <b>CENTER</b>, stick released, zeroes pitch and roll.</li><li><b>A missing axis</b> — is usually assigned already — BMS allows one physical axis per in-game axis, so an axis in use vanishes from every other dropdown. Check all four tabs before concluding a device is dead.</li></ul></div></div><div class="panel"><h2>Picking it up</h2><div class="note"><p>falcon-bms launcher → Keyfile → "BMS - VIRPIL". Regenerate with ./plan.py --write; never hand-edit.</p></div></div>
   </div>

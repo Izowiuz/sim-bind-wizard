@@ -1,0 +1,90 @@
+{
+"binds": [
+{
+"what": "Trim Aileron",
+"role": "stick",
+"control": "top-thumb-hat",
+"buttons": [
+9,
+11
+],
+"how": "solver"
+},
+{
+"what": "Trim Elevator",
+"role": "stick",
+"control": "bottom-thumb-hat",
+"buttons": [
+14,
+16
+],
+"how": "solver"
+},
+{
+"what": "Trim Rudder",
+"role": "stick",
+"control": "grip-thumb-hat",
+"buttons": [
+24,
+26
+],
+"how": "solver"
+},
+{
+"what": "War Emergency Power",
+"role": "stick",
+"control": "thumb-top-button",
+"buttons": [
+6
+],
+"how": "solver"
+},
+{
+"what": "Trimmers Reset",
+"role": "throttle",
+"control": "middle-finger-hat",
+"buttons": [
+3
+],
+"how": "solver"
+},
+{
+"what": "Flaps",
+"role": "throttle",
+"control": "t1-rocker",
+"buttons": [
+30,
+29
+],
+"how": "solver"
+},
+{
+"what": "Landing Gear Up/Down",
+"role": "throttle",
+"control": "t2-rocker",
+"buttons": [
+31
+],
+"how": "solver"
+},
+{
+"what": "Wheel brake",
+"role": "throttle",
+"control": "t3-rocker",
+"buttons": [
+33,
+34
+],
+"how": "solver"
+},
+{
+"what": "COMM Communication menu",
+"role": "throttle",
+"control": "pinky-button",
+"buttons": [
+0
+],
+"how": "solver"
+}
+]
+}

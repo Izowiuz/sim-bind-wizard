@@ -80,14 +80,31 @@ DCS does still pass its own `reach` table to `allocate()`, and
 it writes the vocabulary `propose.py` reads, and of the core it uses only
 `capture`, `game`, `tui` and `backup`.
 
-`games/elite` has two tools on one writer: `plan.py` lays out from `NEEDS` like
-the rest of the family, and hands the result to `ed-bind-wizard.py`'s own
-`generate()` in the shape that capture TUI produces. One implementation of the
-`.binds` format, two ways to fill it, and they write different presets so
-neither overwrites the other.
+Its binding table is gone -- `./bind dcs tui` is `core/review.py`, the screen
+the other five open. It had the same keys over the same three states (`c C x X
+↵` against proposed / confirmed / nothing) because nothing offered it this one;
+`Adapter.review` is where that now lives, rather than `Planner.review`. What is
+left of the wizard is finding the devices, picking the module and writing the
+diff.lua.
 
-The two capture wizards read `/dev/input/js*` themselves rather than asking the
-game what it saw, because a binding has to be captured before the game has one.
+Its bindings live in `games/dcs/dcs-<module>-binds.json`, the family's own
+shape, one file per aircraft because an adapter is built for one. The wizard's
+results file is left holding what it is actually about: where the game is, and
+which joystick DCS calls what.
+
+`Need.assignment` grew `buttons`, one per slot, on the way: DCS captures one
+direction of a hat at a time, and that is now something every game can do
+rather than DCS's private trick. The hand-placed pass reserves BUTTONS rather
+than whole controls for the same reason -- four of DCS's commands share a hat,
+and refusing the control to the second comer left three of them orphaned.
+
+`games/elite` keeps `ed-bind-wizard.py` for what only it does: picking a base
+preset, naming which joystick is which, and writing the `.binds` format.
+Binding is `./bind elite tui`, the screen the other five open -- it had a table
+of its own with the same keys on it, and that went the way DCS's did.
+
+Both wizards read `/dev/input/js*` themselves rather than asking the game what
+it saw, because a binding has to be captured before the game has one.
 `core/capture.py`'s `Device` is the raw kernel node -- unrelated to
 `sim-device-map`'s `Device`, which says what a control physically IS. Both are
 in scope in those two files.
@@ -349,9 +366,10 @@ yellow on white does not read. Without colour every tone falls back to bold,
 dim or reverse, which is all `core/tui.py` ever used, so a terminal with no
 colour and the capture wizards both look exactly as they did.
 
-DCS is not on this screen. Its bindings live in a results file where each one
-carries a `proposed` flag, and its own table is where all of the above came
-from. The generic one would have to invent the same state twice.
+DCS is on this screen too now. Its own table is where the three states came
+from -- a `proposed` flag in its results file -- and keeping a second screen to
+draw them was the thing that made the flag look like DCS's own idea rather than
+the family's.
 
 ## core.backup
 
@@ -492,9 +510,11 @@ replaced it -- and nothing says so, which is what makes this the one worth
 holding. The six do it two ways: x4 and War Thunder own a region of the file
 and replace it whole; BMS and Elite rebuild theirs from the one the game
 shipped; MSFS strips our device from whatever the plan stopped naming, which
-it did not do until `tests/test_formats.py` was made to say so. DCS is not
-under this clause at all -- its writer builds from the capture wizard's
-results file, not from `NEEDS`, and `--reseed` is its equivalent.
+it did not do until `tests/test_formats.py` was made to say so. DCS is under it like
+the rest: `write_layout` takes the layout the screen kept and `seed` turns it
+into the per-command records `diff.lua` is built from. It used to read the
+results file and ignore the argument, so anything cleared on the screen came
+straight back.
 
 **A writer must take the placements it is handed**, not call `build()` for
 itself. Two did, and the review screen -- whose entire job is to write some

@@ -1,16 +1,18 @@
 # DCS World
 
-Two tools, on the core for the matching:
+Two tools, on the core for everything but the format:
 
-    dcs-bind-wizard.py   a curses capture TUI: harvests the vocabulary,
-                         captures bindings off the devices, writes the files
-    propose.py           derives needs from the module's own commands, hands
-                         them to core.needs.allocate, lays a layout over the
-                         wizard's results
+    dcs-bind-wizard.py   harvests the module's vocabulary, names which
+                         joystick DCS calls what, writes the diff.lua
+    propose.py           derives needs from the module's own commands and
+                         hands them to core.needs.allocate
 
-`propose.py` builds its kneeboard from the results file rather than from a
-layout, so its rows carry `?` where nobody has confirmed them at the stick.
-The page itself is the core's — see `ARCHITECTURE.md`.
+`propose.py`'s kneeboard carries `?` where nobody has confirmed a row at the
+stick — the one thing this page says that the other five do not. The page
+itself is the core's — see `ARCHITECTURE.md`.
+
+`./bind dcs tui` is the family's review screen. `./bind dcs capture` is what is
+left of the wizard: find the devices, pick the module, write the diff.lua.
 
 ## Where it lives
 
@@ -47,19 +49,11 @@ library — not the default one under `~/.local/share/Steam`.
     ./propose.py -a FA-18C --audit        bindings that no longer fit the
                                           hardware
     ./propose.py -a '' --audit            ...across every module
-    ./propose.py -a FA-18C --reseed       lay it out fresh
     ./propose.py -a FA-18C --sheet --html the kneeboard
 
-In the TUI's table:
-
-    P        seed every unbound row from the hardware map
-    c / C    confirm the selected proposal / the whole section
-    RETURN   capture a press, to overrule one
-    I        invert an axis
-    X        clear a binding
-
-`P` needs `sim-device-map` cloned beside this repo, or `SIM_DEVICE_MAP`
-pointing at it. The results file is saved after every change.
+Binding is `./bind dcs tui`, the family's review screen — `./bind` and
+`USING.md` have its keys. The wizard's own results file holds where the game
+is and which joystick DCS calls what, and is saved after every change.
 
 ## The format
 

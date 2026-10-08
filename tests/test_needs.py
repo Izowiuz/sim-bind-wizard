@@ -328,6 +328,48 @@ class NeedsOnDisk(unittest.TestCase):
         self.assertEqual(1, kept)
         self.assertEqual(one.assignment, back.assignment)
 
+    def test_a_button_can_be_pinned_per_slot(self):
+        # One direction of a hat at a time. `slots_for` answers in the
+        # control's own order, which is right until somebody has pressed:
+        # a trim hat whose directions the module names in another order
+        # came out scrambled, and the only way back was to re-take the
+        # whole control and get the same order again.
+        devs = {'stick': fake.device('stick', [
+            fake.hat4('Thumb hat', 0, reach=fake.THUMB)])}
+        ctrl = next(iter(devs['stick'].groups(bindable=True)))
+        one = Need('Trim', 'hat4', [[Bind('U')], [Bind('R')],
+                                    [Bind('D')], [Bind('L')]])
+        plain = corneeds.put(one, 'stick', ctrl, corneeds.Reason('yours'))
+        was = [b for b, _v in plain.slots]
+        # the second slot moved to the button the first had
+        got = corneeds.put(one, 'stick', ctrl, corneeds.Reason('yours'),
+                           pinned=[None, was[0]])
+        self.assertEqual(was[0], got.slots[1][0])
+        self.assertEqual(was[0], got.slots[0][0], 'the rest keep their order')
+
+    def test_a_pin_the_control_has_no_button_for_is_ignored(self):
+        # Rather than handed on: a button number off another control is
+        # how a renumbered desk would scramble a hat silently.
+        devs = {'stick': fake.device('stick', [
+            fake.hat4('Thumb hat', 0, reach=fake.THUMB)])}
+        ctrl = next(iter(devs['stick'].groups(bindable=True)))
+        one = Need('Trim', 'hat4', [[Bind('U')], [Bind('R')]])
+        plain = corneeds.put(one, 'stick', ctrl, corneeds.Reason('yours'))
+        got = corneeds.put(one, 'stick', ctrl, corneeds.Reason('yours'),
+                           pinned=[999, None])
+        self.assertEqual([b for b, _v in plain.slots],
+                         [b for b, _v in got.slots])
+
+    def test_the_pins_survive_the_file(self):
+        one = Need('Trim', 'hat4', [[Bind('U')], [Bind('R')]])
+        one.assignment = {'role': 'stick', 'control': 'thumb-hat',
+                          'buttons': [3, None], 'how': corneeds.CHOSE}
+        (row,) = corneeds.dump_assignments([one])
+        self.assertEqual([3, None], row['buttons'])
+        (back,) = read_needs(corneeds.dump_needs([one]))
+        corneeds.read_assignments([row], [back])
+        self.assertEqual([3, None], back.assignment['buttons'])
+
     def test_a_desk_nobody_has_saved_yet_is_not_an_error(self):
         # The binds file is written by the review screen. A game somebody
         # has planned and never saved has no answers on disk, and the
@@ -570,14 +612,15 @@ class LayoutShape(unittest.TestCase):
         needs = [Need('Gear', 'button', ['GEAR'], urgency=ON_APPROACH),
                  Need('Canopy', 'button', ['CANOPY'], urgency=ON_THE_RAMP),
                  Need('Trim', 'hat8', ['A'] * 8)]
-        return Layout(devs, *allocate(needs, devs), axes=[('pitch', 'stick')])
+        return Layout(devs, *allocate(needs, devs),
+                      axes=[corneeds.Axis('stick', None, 'pitch')])
 
     def test_it_unpacks_in_the_canonical_order(self):
         devices, placed, unplaced, free, axes = self.layout()
         self.assertEqual(['stick'], list(devices))
         self.assertEqual(2, len(placed))
         self.assertEqual(['Trim'], [n.what for n in unplaced])
-        self.assertEqual([('pitch', 'stick')], axes)
+        self.assertEqual(['pitch'], [a.does for a in axes])
         self.assertTrue(all(len(f) == 2 for f in free))
 
     def test_but_swaps_the_placements_and_keeps_the_rest(self):

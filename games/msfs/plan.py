@@ -121,12 +121,18 @@ def axis_plan(devs, known):
     stick, thr = devs['stick'], devs['throttle']
     out = []
 
-    def by_kind(d, kind):
-        got = d.axes(kind=kind)
-        return got[0] if got else None
-
-    roll, pitch, yaw = (by_kind(stick, 'stick-x'), by_kind(stick, 'stick-y'),
-                        by_kind(stick, 'twist'))
+    # `('stick', 'x')` and not `stick-x`. One word for both said the
+    # control's kind and which axis of it at once, and so said the kind
+    # twice -- the map stopped spelling it that way and nothing here
+    # followed, so `axes(kind='stick-x')` matched a kind no control has.
+    # Roll, pitch and yaw came back None and `if ax:` dropped them: MSFS
+    # planned eight axes and not one of them was a flight control.
+    roll, pitch, yaw = (stick.axis_of('stick', 'x'),
+                        stick.axis_of('stick', 'y'),
+                        stick.axis_of('stick', 'z'))
+    for what, got in (('roll', roll), ('pitch', pitch), ('yaw', yaw)):
+        if got is None:
+            print(f'!! no {what} axis on the stick', file=sys.stderr)
     lever = next((a for a in thr.axes(kind='lever')
                   if 'left' in thr.axis_label(a.index).lower()),
                  next(iter(thr.axes(kind='lever')), None))
@@ -146,22 +152,29 @@ def axis_plan(devs, known):
                                 'KEY_AXIS_TAIL_ROTOR_SET'))):
         for action, ax in zip(trio, (roll, pitch, yaw)):
             if ax:
-                out.append((ctx, action, 'stick', ax))
+                out.append(corneeds.Axis('stick', ax, action, carries=ctx))
     if lever:
-        out.append(('plane', 'KEY_THROTTLE_AXIS_SET_EX1', 'throttle', lever))
-        out.append(('heli', 'KEY_AXIS_COLLECTIVE_SET', 'throttle', lever))
+        out.append(corneeds.Axis('throttle', lever,
+                                 'KEY_THROTTLE_AXIS_SET_EX1', carries='plane'))
+        out.append(corneeds.Axis('throttle', lever,
+                                 'KEY_AXIS_COLLECTIVE_SET', carries='heli'))
     if brake:
-        out.append(('plane', 'KEY_BRAKES', 'stick', brake))
-        out.append(('heli', 'KEY_BRAKES', 'stick', brake))
+        out.append(corneeds.Axis('stick', brake, 'KEY_BRAKES', carries='plane'))
+        out.append(corneeds.Axis('stick', brake, 'KEY_BRAKES', carries='heli'))
     if prop:
-        out.append(('plane', 'KEY_PROP_PITCH_AXIS_SET_EX1', 'throttle', prop))
+        out.append(corneeds.Axis('throttle', prop,
+                                 'KEY_PROP_PITCH_AXIS_SET_EX1',
+                                 carries='plane'))
     if dial:
-        out.append(('plane', 'KEY_AXIS_VERTICAL_SPEED_SET', 'throttle', dial))
+        out.append(corneeds.Axis('throttle', dial,
+                                 'KEY_AXIS_VERTICAL_SPEED_SET',
+                                 carries='plane'))
     ms = next(iter(thr.groups('ministick')), None)
     if ms and len(ms.axes) == 2:
         for action, i in (('KEY_AXIS_PAN_HEADING', 0), ('KEY_AXIS_PAN_PITCH', 1)):
             if action in known:
-                out.append(('glob', action, 'throttle', thr.axis(ms.axes[i])))
+                out.append(corneeds.Axis('throttle', thr.axis(ms.axes[i]),
+                                         action, carries='glob'))
     return out
 
 
@@ -275,7 +288,9 @@ def bindings_for(devs, placed, axes):
                 add(p.role, 'global' if b.mode == 'glob' else 'flight',
                     b.action, info, code)
 
-    for ctx, action, role, ax in axes:
+    for plan in axes:
+        ctx, action, role, ax = (plan.carries, plan.does, plan.role,
+                                 plan.axis)
         pair = AXIS_CODE.get(ax.hid)
         if not pair:
             continue
@@ -374,7 +389,9 @@ def _sheet(layout):
                               ident=info.replace('Joystick Button ', '#'),
                               does=p.need.what, bindings=by_ctx))
 
-    for ctx, action, role, ax in axes:
+    for plan in axes:
+        ctx, action, role, ax = (plan.carries, plan.does, plan.role,
+                                 plan.axis)
         pair = AXIS_CODE.get(ax.hid)
         g = devs[role].axis_group(ax.index)
         sh.add_axis(role, g.label if g else ax.label,
@@ -498,7 +515,9 @@ class Msfs(adapter.Planner):
                                'bind this')
             out.append('')
         out.append('AXES')
-        for ctx, action, role, ax in axes:
+        for plan in axes:
+            ctx, action, role, ax = (plan.carries, plan.does, plan.role,
+                                     plan.axis)
             out.append(f'  {ctx:5s} {action:44s} {role:8s} '
                        f'{AXIS_CODE.get(ax.hid, ("?",))[0]}  ({ax.label})')
         if unmet:

@@ -558,5 +558,115 @@
 "suits": "systems",
 "costly": true
 }
+],
+"axes": [
+{
+"does": "RollAxisRaw",
+"role": "stick",
+"on": {
+"kind": "stick",
+"axis": "x"
+},
+"context": "Ship"
+},
+{
+"does": "PitchAxisRaw",
+"role": "stick",
+"on": {
+"kind": "stick",
+"axis": "y"
+},
+"context": "Ship",
+"invert": true
+},
+{
+"does": "YawAxisRaw",
+"role": "stick",
+"on": {
+"kind": "stick",
+"axis": "z"
+},
+"context": "Ship"
+},
+{
+"does": "ThrottleAxis",
+"role": "throttle",
+"on": {
+"label": "Left throttle lever"
+},
+"context": "Ship"
+},
+{
+"does": "LateralThrustRaw",
+"role": "throttle",
+"on": {
+"kind": "ministick",
+"axis": "x"
+},
+"context": "Ship"
+},
+{
+"does": "VerticalThrustRaw",
+"role": "throttle",
+"on": {
+"kind": "ministick",
+"axis": "y"
+},
+"context": "Ship"
+},
+{
+"does": "BuggyRollAxisRaw",
+"role": "stick",
+"on": {
+"kind": "stick",
+"axis": "x"
+},
+"context": "SRV"
+},
+{
+"does": "BuggyPitchAxis",
+"role": "stick",
+"on": {
+"kind": "stick",
+"axis": "y"
+},
+"context": "SRV",
+"invert": true
+},
+{
+"does": "SteeringAxis",
+"role": "stick",
+"on": {
+"kind": "stick",
+"axis": "x"
+},
+"context": "SRV"
+},
+{
+"does": "DriveSpeedAxis",
+"role": "throttle",
+"on": {
+"label": "Left throttle lever"
+},
+"context": "SRV"
+},
+{
+"does": "CamTranslateXAxis",
+"role": "stick",
+"on": {
+"kind": "ministick",
+"axis": "x"
+},
+"context": "Ship"
+},
+{
+"does": "CamTranslateYAxis",
+"role": "stick",
+"on": {
+"kind": "ministick",
+"axis": "y"
+},
+"context": "Ship"
+}
 ]
 }

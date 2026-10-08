@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
-"""ed-bind-wizard.py - capture Elite bindings, and write the preset
+"""ed-bind-wizard.py - pick a preset, find the devices, write the .binds
 
 DESCRIPTION
-    Full-screen wizard by default: pick a base preset, pick SHIP or SRV, pick
-    a section, then bind each function by pressing the control. Every change
-    is saved at once, so quitting is safe at any point.
-    With --generate, headless: build the .binds preset and exit.
+    Full-screen wizard by default: pick a base preset, name which joystick is
+    which, and write the .binds preset.
+    With --generate, headless: build it and exit.
+
+    Binding is `./bind elite tui` -- the review screen the other five games
+    open. It reads and writes elite-binds.json, and this still turns that
+    into the preset.
 
 KEYS
-    arrows  move between functions
-    RETURN  (re)bind the selected one, then press the button or move the axis
-    I       invert an axis
-    X       clear the binding, leaving the base preset's
+    arrows  move between entries
+    RETURN  select
     ESC     back, cancel, redo
 
 FILES
-    ed-bind-wizard-results.json   the bindings, and where the game is (-r)
+    ed-bind-wizard-results.json   where the game is, and which device is which
     <preset>.4.2.binds            written by --generate
 
 NOTES
@@ -474,119 +475,6 @@ def progress_label(title, bound, skipped, total):
     return label + "]"
 
 
-def run_table(tui, devices, results, used, sections, path, heading):
-    """Arrow-key table over all functions of the given sections."""
-    rows = []                             # ("header", title) / ("item", ...)
-    for sec_title, items in sections:
-        rows.append(("header", sec_title, None, None))
-        for func, kind, desc in items:
-            rows.append(("item", func, kind, desc))
-    item_rows = [i for i, r in enumerate(rows) if r[0] == "item"]
-    if not item_rows:
-        return
-    sel = item_rows[0]
-    state = {"top": 0}
-
-    def move(step):
-        nonlocal sel
-        pos = item_rows.index(sel)
-        pos = max(0, min(len(item_rows) - 1, pos + step))
-        sel = item_rows[pos]
-
-    def draw(status_lines):
-        h, _ = tui.scr.getmaxyx()
-        visible = max(4, h - 6)
-        top = state["top"]
-        if sel < top:
-            top = sel
-        elif sel >= top + visible:
-            top = sel - visible + 1
-        state["top"] = top
-        tui.scr.erase()
-        tui._put(0, 0, heading, curses.A_BOLD)
-        for row, i in enumerate(range(top, min(len(rows), top + visible))):
-            what, a, _, _ = rows[i]
-            y = 2 + row
-            if what == "header":
-                tui._put(y, 0, f"--- {a} ---", curses.A_BOLD)
-            else:
-                current = (describe(results[a]) if a in results
-                           else "(unset)")
-                attr = curses.A_REVERSE if i == sel else curses.A_NORMAL
-                tui._put(y, 2, f"{a:32s} {current}", attr)
-        for j, line in enumerate(status_lines[:2]):
-            tui._put(h - 3 + j, 0, line)
-        tui._put(h - 1, 0, "arrows = move, RETURN = bind, I = invert, "
-                           "X = clear, ESC = back")
-        tui.scr.refresh()
-
-    status = []
-    while True:
-        draw(status)
-        k = tui.key(0.5)
-        if k is None:
-            continue
-        if k == "esc":
-            return
-        if k == "up":
-            move(-1)
-            status = []
-        elif k == "down":
-            move(+1)
-            status = []
-        elif k in ("x", "X"):
-            _, func, _, _ = rows[sel]
-            results[func] = None
-            save(results, path)
-            status = [f"{func}: cleared (base preset binding stays)"]
-        elif k in ("i", "I"):
-            _, func, _, _ = rows[sel]
-            r = results.get(func)
-            if r and r["type"] == "axis":
-                r["sign"] = -r["sign"]
-                save(results, path)
-                status = [f"{func}: inverted -> {describe(r)}"]
-        elif k == "enter":
-            _, func, kind, desc = rows[sel]
-            while True:
-                draw([f"-> {desc}", "   waiting for input...  (ESC = cancel)"])
-                got = wait_input(devices, want_axis=(kind == "axis"), tui=tui)
-                if got == "skip":                  # ESC = cancel capture
-                    status = [f"{func}: unchanged"]
-                    break
-                d, etype, number, sign = got
-                key_ = (d.role, etype, number)
-                dup = (f"  WARNING: same as {used[key_]}!"
-                       if key_ in used and etype == "button" else "")
-                drain(devices, tui)
-                accept = None
-                while accept is None:
-                    label = (f"button {number + 1}" if etype == "button"
-                             else f"axis {number} "
-                                  f"({'+' if sign > 0 else '-'})")
-                    opts = ("[RETURN = accept, ESC = redo, I = invert]"
-                            if etype == "axis"
-                            else "[RETURN = accept, ESC = redo]")
-                    draw([f"-> {desc}",
-                          f"   captured: {d.role} {label}{dup}  {opts}"])
-                    kk = tui.key(0.5)
-                    if kk == "enter":
-                        accept = True
-                    elif kk == "esc":
-                        accept = False
-                    elif kk in ("i", "I") and etype == "axis":
-                        sign = -sign
-                if accept:
-                    used.setdefault(key_, func)
-                    results[func] = {"role": d.role, "type": etype,
-                                     "index": number, "sign": sign}
-                    save(results, path)
-                    status = [f"{func}: {describe(results[func])}"]
-                    move(+1)                       # the NEXT affordance
-                    break
-            drain(devices, tui)
-
-
 def tui_main(scr, args, results, cfg):
     tui = ctui.setup(scr)
 
@@ -635,22 +523,18 @@ def tui_main(scr, args, results, cfg):
                 tui.log(f"ERROR: {e}")
             tui.wait_any_key()
             continue
-        target = "ship" if choice == 0 else "srv"
-        while True:
-            secs = SECTIONS[target]
-            labels = ([progress_label("ALL sections",
-                                      *target_stats(results, target))]
-                      + [progress_label(title, *section_stats(results, items))
-                         for title, items in secs]
-                      + ["<- back"])
-            sc = tui.menu(f"{target.upper()} — mapping sections", labels)
-            if sc is None or sc == len(labels) - 1:
-                break
-            chosen = secs if sc == 0 else [secs[sc - 1]]
-            heading = (f"{target.upper()} — "
-                       f"{'all sections' if sc == 0 else chosen[0][0]}")
-            run_table(tui, active, results, used, chosen, args.results,
-                      heading)
+        # The table that used to be here is `./bind elite tui` now -- the
+        # same screen the other five open, with the same keys on it. This
+        # wizard is what is left: pick the preset, find the devices,
+        # write the .binds.
+        tui.page("Binding")
+        tui.log("  the review screen does this now:")
+        tui.log("")
+        tui.log("      ./bind elite tui")
+        tui.log("")
+        tui.log("  it reads and writes elite-binds.json, and this")
+        tui.log("  wizard still writes the .binds preset from it.")
+        tui.wait_any_key()
 
 
 # -------------------------------------------------------------------- main --

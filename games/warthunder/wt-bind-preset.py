@@ -295,7 +295,8 @@ def compose(layout, targets, say=print):
             problems.append(f'unknown action id: {action}')
         if idx >= dev[role]['buttons']:
             problems.append(f'{role} has no button {idx}')
-    for name, role, idx, *_ in AXES:
+    for plan in AXES:
+        name, role, idx = plan.does, plan.role, plan.axis.index
         if idx >= dev[role]['axes']:
             problems.append(f'{role} has no axis {idx}')
     if problems:
@@ -392,7 +393,9 @@ def compose(layout, targets, say=print):
     existing = {name: sub for k, name, sub in
                 [i for i in axes if i[0] == 'blk']}
 
-    for name, role, idx, inverse, props in AXES:
+    for plan in AXES:
+        name, role, idx, inverse, props = (
+            plan.does, plan.role, plan.axis.index, plan.invert, plan.carries)
         wt = dev[role]['axes_off'] + idx
         old = {k: (t, v) for _, k, t, v in
                [x for x in existing.get(name, []) if x[0] == 'val']}
@@ -548,7 +551,9 @@ def main(argv=None, layout=None):
             pl = known_actions[action][1]
             print(f'  {role:8s} btn {idx:2d} -> WT {wt:3d}  {action:46s} '
                   f'{where:24s} {pl or en}')
-        for name, role, idx, inv, _ in AXES:
+        for plan in AXES:
+            name, role, idx, inv = (
+                plan.does, plan.role, plan.axis.index, plan.invert)
             wt = dev[role]['axes_off'] + idx
             print(f'  {role:8s} axis {idx} -> WT {wt:2d}  {name:26s}'
                   f'{"  (inverted)" if inv else ""}')

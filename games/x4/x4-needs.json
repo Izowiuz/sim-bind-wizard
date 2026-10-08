@@ -538,5 +538,109 @@
 "urgency": 3,
 "suits": "comms"
 }
+],
+"axes": [
+{
+"does": "INPUT_RANGE_STEERING_PRIMARY",
+"role": "stick",
+"on": {
+"kind": "stick",
+"axis": "x"
+}
+},
+{
+"does": "INPUT_RANGE_STEERING_PITCH",
+"role": "stick",
+"on": {
+"kind": "stick",
+"axis": "y"
+}
+},
+{
+"does": "INPUT_RANGE_STEERING_SECONDARY",
+"role": "stick",
+"on": {
+"kind": "stick",
+"axis": "z"
+}
+},
+{
+"does": "INPUT_RANGE_STRAFE_LEFT_RIGHT",
+"role": "stick",
+"on": {
+"kind": "ministick",
+"axis": "x"
+}
+},
+{
+"does": "INPUT_RANGE_STRAFE_UP_DOWN",
+"role": "stick",
+"on": {
+"kind": "ministick",
+"axis": "y"
+}
+},
+{
+"does": "INPUT_RANGE_THROTTLE",
+"role": "throttle",
+"on": {
+"label": "Left throttle lever"
+}
+},
+{
+"does": "INPUT_RANGE_MAP_ZOOM_IN",
+"role": "throttle",
+"on": {
+"label": "Side lever"
+}
+},
+{
+"does": "INPUT_RANGE_MAP_PAN_LEFT_RIGHT",
+"role": "throttle",
+"on": {
+"kind": "ministick",
+"axis": "x"
+}
+},
+{
+"does": "INPUT_RANGE_MAP_PAN_UP_DOWN",
+"role": "throttle",
+"on": {
+"kind": "ministick",
+"axis": "y"
+}
+},
+{
+"does": "INPUT_RANGE_FP_YAW",
+"role": "stick",
+"on": {
+"kind": "ministick",
+"axis": "x"
+}
+},
+{
+"does": "INPUT_RANGE_FP_PITCH",
+"role": "stick",
+"on": {
+"kind": "ministick",
+"axis": "y"
+}
+},
+{
+"does": "INPUT_RANGE_FP_WALK",
+"role": "stick",
+"on": {
+"kind": "stick",
+"axis": "y"
+}
+},
+{
+"does": "INPUT_RANGE_FP_STRAFE",
+"role": "stick",
+"on": {
+"kind": "stick",
+"axis": "x"
+}
+}
 ]
 }

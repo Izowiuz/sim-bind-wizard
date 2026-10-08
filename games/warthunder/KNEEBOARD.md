@@ -8,6 +8,9 @@ War Thunder · air simulator + helicopters · VIRPIL · IzoDesk · By hand. Gene
 
 | Axis | WT | Air | Helicopter |
 |---|---|---|---|
+| Main stick | `7` | ailerons | helicopter_cyclic_roll |
+| Main stick (inverted) | `8` | elevator | helicopter_cyclic_pitch |
+| Main stick | `9` | rudder | helicopter_pedals |
 | Mini-stick | `10` | sensor_cue_x | helicopter_atgm_aim_x |
 | Mini-stick | `11` | sensor_cue_y | helicopter_atgm_aim_y |
 | Analogue brake lever on the grip | `12` | brake_left · brake_right | — |

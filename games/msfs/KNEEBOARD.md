@@ -8,6 +8,9 @@ Microsoft Flight Simulator 2024 · VIRPIL · IzoDesk · By hand. Generated — d
 
 | Axis | Button | Aeroplane | Helicopter | Global |
 |---|---|---|---|---|
+| Main stick | `Joystick L-Axis X ` | KEY_AXIS_AILERONS_SET | KEY_AXIS_CYCLIC_LATERAL_SET | — |
+| Main stick | `Joystick L-Axis Y ` | KEY_AXIS_ELEVATOR_SET | KEY_AXIS_CYCLIC_LONGITUDINAL_SET | — |
+| Main stick | `Joystick L-Axis Z ` | KEY_AXIS_RUDDER_SET | KEY_AXIS_TAIL_ROTOR_SET | — |
 | Analogue brake lever on the grip | `Joystick Slider X ` | KEY_BRAKES | KEY_BRAKES | — |
 
 ### Buttons

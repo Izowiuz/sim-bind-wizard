@@ -59,6 +59,23 @@ device = "throttle"
 finger = "thumb"
 level  = "HOME"
 
+# ---- and the exception, which is why order matters ---------------------
+#
+# Later rules win, so the broad wish goes above and the exception here.
+#
+# The castle switch. `sensor` holds two different things in this jet: the
+# TDC above, which you slew with the left thumb, and the Sensor Control
+# Switch, which picks WHICH sensor and lives on the stick under the right
+# thumb. The needs file tells them apart by band -- the castle is in a
+# turn, the TDC is not -- so this does too. Without it the castle went to
+# the throttle, which is the wrong hand on the real aircraft.
+[[want]]
+suits   = "sensor"
+urgency = 0
+device  = "stick"
+finger  = "thumb"
+level   = "HOME"
+
 # Countermeasures dispense, left index. Under the finger that is already
 # there, because the moment you want it you want it now.
 [[want]]

@@ -567,5 +567,156 @@
 "rapid": true,
 "by_feel": true
 }
+],
+"axes": [
+{
+"does": "ailerons",
+"role": "stick",
+"on": {
+"kind": "stick",
+"axis": "x"
+}
+},
+{
+"does": "elevator",
+"role": "stick",
+"on": {
+"kind": "stick",
+"axis": "y"
+},
+"invert": true
+},
+{
+"does": "rudder",
+"role": "stick",
+"on": {
+"kind": "stick",
+"axis": "z"
+}
+},
+{
+"does": "helicopter_cyclic_roll",
+"role": "stick",
+"on": {
+"kind": "stick",
+"axis": "x"
+}
+},
+{
+"does": "helicopter_cyclic_pitch",
+"role": "stick",
+"on": {
+"kind": "stick",
+"axis": "y"
+},
+"invert": true
+},
+{
+"does": "helicopter_pedals",
+"role": "stick",
+"on": {
+"kind": "stick",
+"axis": "z"
+}
+},
+{
+"does": "throttle",
+"role": "throttle",
+"on": {
+"label": "left throttle lever"
+}
+},
+{
+"does": "helicopter_collective",
+"role": "throttle",
+"on": {
+"label": "left throttle lever"
+}
+},
+{
+"does": "camx",
+"role": "throttle",
+"on": {
+"kind": "ministick",
+"axis": "x"
+}
+},
+{
+"does": "camy",
+"role": "throttle",
+"on": {
+"kind": "ministick",
+"axis": "y"
+}
+},
+{
+"does": "helicopter_camx",
+"role": "throttle",
+"on": {
+"kind": "ministick",
+"axis": "x"
+}
+},
+{
+"does": "helicopter_camy",
+"role": "throttle",
+"on": {
+"kind": "ministick",
+"axis": "y"
+}
+},
+{
+"does": "sensor_cue_x",
+"role": "stick",
+"on": {
+"kind": "ministick",
+"axis": "x"
+}
+},
+{
+"does": "sensor_cue_y",
+"role": "stick",
+"on": {
+"kind": "ministick",
+"axis": "y"
+}
+},
+{
+"does": "helicopter_atgm_aim_x",
+"role": "stick",
+"on": {
+"kind": "ministick",
+"axis": "x"
+}
+},
+{
+"does": "helicopter_atgm_aim_y",
+"role": "stick",
+"on": {
+"kind": "ministick",
+"axis": "y"
+}
+},
+{
+"does": "brake_left",
+"role": "stick",
+"on": {
+"find": "brake"
+}
+},
+{
+"does": "brake_right",
+"role": "stick",
+"on": {
+"find": "brake"
+}
+},
+{
+"does": "zoom",
+"role": "throttle",
+"on": {
+"find": "zoom"
+}
+}
 ]
 }

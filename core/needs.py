@@ -445,6 +445,84 @@ class Need:
         return f'<Need {self.what!r} {self.shape} u{self.urgency}>'
 
 
+@dataclasses.dataclass
+class Axis:
+    """One axis of the hardware, and what the game does with it.
+
+    Axes never go through `allocate`: there is nothing to choose, because
+    an aircraft's pitch axis is the stick's pitch axis on every desk
+    there is. So a game resolves them itself and hands the list over --
+    and for a long time each handed over a tuple of its own, five of them
+    shaped differently, which is why nothing could draw them on a screen
+    or hold them to a common rule.
+
+    `carries` is the game's own payload, opaque here exactly as
+    `Need.bindings` is: War Thunder's deadzone table, Falcon's DirectInput
+    index, MSFS's context. The core moves it and never opens it.
+    """
+    #: which device: 'stick', 'throttle'. None where a game keeps a row
+    #: for something it deliberately binds nowhere -- DCS's combined
+    #: Thrust, because the two engines are bound separately and the sheet
+    #: says so rather than leaving a silent gap.
+    role: str | None
+    axis: typing.Any            # devicemap's Axis, or None if nothing fits
+    does: str                   # the game's own id or name for the job
+    invert: bool = False
+    carries: typing.Any = None
+
+
+def axis_at(dev, on):
+    """The axis a line of an axes file names, or None.
+
+    Two ways, because there are two kinds of answer. `{"kind": "stick",
+    "axis": "y"}` is the map's own vocabulary -- the control, and which
+    of its axes -- and survives relabelling. `{"label": "left throttle
+    lever"}` is for a lever the map has no finer word for, matched
+    case-insensitively anywhere in the label.
+
+    Three games had a copy of this, two of them identical to the
+    character.
+    """
+    if 'kind' in on:
+        return dev.axis_of(on['kind'], on.get('axis', ''))
+    want = on['label'].lower()
+    return next((a for a in dev.axes()
+                 if want in dev.axis_label(a.index).lower()), None)
+
+
+def read_axes(rows, devs, carries=None, finds=None):
+    """[Axis] from a game's axes file. Says what it could not find.
+
+    `carries` is called with the row and the resolved axis for whatever
+    the game alone needs -- War Thunder's deadzone, Falcon's DirectInput
+    index -- and the core never opens what it returns.
+
+    `finds` is the escape hatch, for an axis that is a SEARCH rather than
+    a name: War Thunder's brake is "a slider or lever on the stick that is
+    safe to read absolutely", and no amount of vocabulary makes that a
+    label. A row says `{"find": "brake"}` and the game answers.
+
+    Loudly, where nothing fits: four of the six dropped a missing axis
+    with `continue`, and two of them planned a layout with no aileron,
+    elevator or rudder in it without saying a word.
+    """
+    out = []
+    for row in rows:
+        dev = devs.get(row['role'])
+        if 'find' in row['on']:
+            got = finds(row['on']['find'], devs) if finds else None
+        else:
+            got = axis_at(dev, row['on']) if dev else None
+        if got is None:
+            print(f'!! no axis on the {row["role"]} for {row["does"]}',
+                  file=sys.stderr)
+            continue
+        out.append(Axis(row['role'], got, row['does'],
+                        invert=row.get('invert', False),
+                        carries=carries(row, got) if carries else None))
+    return out
+
+
 def desk_of(layout):
     """Which rig a layout is for, or '' if nothing says.
 
@@ -524,15 +602,22 @@ def dump_needs(needs):
     return out
 
 
-def save_needs(directory, filename, needs):
+def save_needs(directory, filename, needs, axes=()):
     """Write the description down. One place, because five games had none.
 
     It is derived from nothing: delete it and it is gone. So a screen that
     lets somebody make one has to be able to keep it, and until this
     existed, promoting an action lasted until `q`.
+
+    `axes` is the file's second section. An axis never goes through the
+    allocator, but which lever is the throttle is a judgement like any
+    other -- and it was a literal in five games' source, where a change
+    meant editing code and an axis turned round on the screen had nowhere
+    to go.
     """
     from core import vocab
-    path, _said = vocab.save(directory, filename, needs=dump_needs(needs))
+    path, _said = vocab.save(directory, filename, needs=dump_needs(needs),
+                             axes=list(axes))
     return path
 
 
@@ -591,7 +676,7 @@ def dump_assignments(needs):
         if not n.assignment:
             continue
         row = {'what': n.what}
-        for field in ('role', 'control', 'button', 'how'):
+        for field in ('role', 'control', 'button', 'buttons', 'how'):
             if n.assignment.get(field) is not None:
                 row[field] = n.assignment[field]
         out.append(row)
@@ -1225,7 +1310,8 @@ def honours_press(need, ctrl, button):
             and button in ctrl.bindable_buttons)
 
 
-def put(need, role, ctrl, why, button=None, points: int | None = 0):
+def put(need, role, ctrl, why, button=None, points: int | None = 0,
+        pinned=()):
     """The placement: which button takes which binding, and everyone told.
 
     Two callers had a copy -- the allocator's passes and the review
@@ -1235,10 +1321,23 @@ def put(need, role, ctrl, why, button=None, points: int | None = 0):
     at which a copy becomes a definition.
 
     `button` is the one actually pressed, when a press is what decided.
+
+    `pinned` is one button per SLOT, `None` where nothing was said -- what
+    you get from pressing for one direction of a hat rather than for the
+    hat. `slots_for` answers in the control's own order, which is right
+    until somebody has pressed: a trim hat whose directions the module
+    names in another order came out scrambled, and the only way back was
+    to re-take the whole control and get the same order again. DCS
+    captures a direction at a time and had its own file to keep them in;
+    this is that, where every game can reach it.
     """
     buttons = slots_for(need, ctrl)
     if button is not None and honours_press(need, ctrl, button):
         buttons = [button]
+    if pinned:
+        buttons = [want if want is not None and want in ctrl.bindable_buttons
+                   else got for want, got in
+                   zip(list(pinned) + [None] * len(buttons), buttons)]
     # `if v` rather than `is not None`: a payload is a list of Binds and an
     # empty one means this direction was left alone, which is what `None`
     # used to say.
@@ -1456,6 +1555,9 @@ def allocate(needs, devices, usable=None, rules=None, solver=None,
     # hand-placed binding was rebuilt from the planner on the next open,
     # so an evening of walking the list came back purple and in the
     # planner's order.
+    #: pool index -> the buttons of it that hand-placed needs have taken.
+    #: A control is only `taken` once every button of it is spoken for.
+    spoken = {}
     chose, orphan = set(), []
     for i, need in enumerate(needs):
         if not need.assignment \
@@ -1474,17 +1576,29 @@ def allocate(needs, devices, usable=None, rules=None, solver=None,
             chose.add(i)
             orphan.append(i)
             continue
-        if j in taken:
+        role, ctrl = pool[j]
+        here = put(need, role, ctrl, Reason('yours'),
+                   button=need.assignment.get('button'),
+                   pinned=need.assignment.get('buttons') or ())
+        clash = {b for b, _v in here.slots} & spoken.get(j, set())
+        if clash:
+            # The BUTTONS, not the control. Two things you put by hand on
+            # one hat -- a four-way carrying four separate commands, which
+            # is how DCS's vocabulary names them -- are not a conflict;
+            # two things on one button are. This refused the whole control
+            # to the second comer, so a hat you had filled a direction at a
+            # time came back with one direction on it and three orphans.
             print(f'!! {need.what!r} and something else are both on '
-                  f'{need.assignment.get("control")!r}; the first keeps it',
+                  f'{need.assignment.get("control")!r} button '
+                  f'{sorted(clash)[0]}; the first keeps it',
                   file=sys.stderr)
             chose.add(i)
             orphan.append(i)
             continue
-        taken.add(j)
-        role, ctrl = pool[j]
-        placed.append(put(need, role, ctrl, Reason('yours'),
-                          button=need.assignment.get('button')))
+        spoken.setdefault(j, set()).update(b for b, _v in here.slots)
+        if set(ctrl.bindable_buttons) <= spoken[j]:
+            taken.add(j)        # nothing spare on it any more
+        placed.append(here)
         sat[id(need)] = ctrl
         chose.add(i)
 

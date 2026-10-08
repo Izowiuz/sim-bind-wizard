@@ -74,7 +74,12 @@
          font-variant-numeric: tabular-nums; text-align: right;
          white-space: nowrap; width: 1%; }
   td.c { font-weight: 600; white-space: nowrap; }
-  td.c em { font-style: normal; color: var(--faint); font-weight: 400; }
+  /* Which part of the control, on a line of its own. It was inline, and
+     `travel contact (held while the lever is used)` is forty-four
+     characters that may not wrap -- so one row set the column's width
+     and every command name beside it broke over four lines. */
+  td.c em { font-style: normal; color: var(--faint); font-weight: 400;
+            display: block; white-space: normal; font-size: 11px; }
   td.h { color: var(--muted); }
   td.none { color: var(--faint); }
 
@@ -107,7 +112,7 @@
   <header>
     <h1>Kneeboard</h1>
     <span class="sub">X4 Foundations · VIRPIL</span>
-    <span class="stamp">generated 2026-10-07 · 43 bindings · 9 axes · IzoDesk · By hand</span>
+    <span class="stamp">generated 2026-10-08 · 43 bindings · 9 axes · IzoDesk · By hand</span>
   </header>
 
   <div class="cols">
@@ -115,7 +120,7 @@
   </div>
 
   <div class="cols3">
-    <div class="panel"><h2>Not placed<small>nothing on the desk for these</small></h2><table><tr><th>Wanted</th><th>Shape</th><th class="a">Why</th></tr><tr><td class="c">Player ship info</td><td class="n">button</td><td>—</td></tr></table></div>
+    <div class="panel"><h2>Not placed<small>nothing on the desk for these</small></h2><table><tr><th>Wanted</th><th>Shape</th></tr><tr><td class="c">Player ship info</td><td class="n">button</td></tr></table></div>
     <div class="panel"><h2>Left free</h2><table><tr><th>R-VPC Stick WarBRD-D</th><th>Code</th></tr><tr><td class="c">Trigger initial lever</td><td class="n">—</td></tr><tr><td class="c">Main stick</td><td class="n">—</td></tr><tr><td class="c">Mini-stick</td><td class="n">—</td></tr><tr><td class="c">Stick encoder and click</td><td class="n">—</td></tr><tr><td class="c">Analogue brake lever on the grip</td><td class="n">—</td></tr></table><table><tr><th>L-VPC VMAX Prime Throttle</th><th>Code</th></tr><tr><td class="c">Left throttle lever</td><td class="n">—</td></tr><tr><td class="c">Right throttle lever</td><td class="n">—</td></tr><tr><td class="c">Side lever</td><td class="n">—</td></tr><tr><td class="c">Middle finger hat</td><td class="n">—</td></tr><tr><td class="c">Thumb mini-stick</td><td class="n">—</td></tr><tr><td class="c">T1 rocker</td><td class="n">—</td></tr><tr><td class="c">T2 rocker</td><td class="n">—</td></tr></table></div>
     
   </div>

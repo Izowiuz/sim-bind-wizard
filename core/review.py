@@ -84,10 +84,14 @@ MARK_SAID = {
 class Row:
     """One line of the table. `kind` decides what it answers to."""
 
-    def __init__(self, kind, text, need=None, group=None):
-        self.kind = kind                # 'head' | 'need' | 'bind' | 'gap'
+    def __init__(self, kind, text, need=None, group=None, axis=None):
+        self.kind = kind        # 'head' | 'need' | 'bind' | 'axis' | 'gap'
         self.text = text
         self.need = need
+        #: on an axis row, the `corneeds.Axis` it draws. Axes never go
+        #: through the allocator, so they have no `Need` and no mark --
+        #: what they have is a direction, and `i` turns it round.
+        self.axis = axis
         #: on a heading, the group's real name. `text` is upper-cased for
         #: the screen and `rename` needs what the needs actually hold --
         #: 'IN A TURN' is not it.
@@ -101,7 +105,7 @@ class Row:
         #
         # A `bind` is the answer to the row above it, not a thing you put
         # anywhere, and a `gap` answers nothing -- moving skips both.
-        return self.kind in ('need', 'head')
+        return self.kind in ('need', 'head', 'axis')
 
 
 class Review:
@@ -304,6 +308,27 @@ class Review:
         """The one-line answer to 'what is this on?'."""
         p = self.at[need]
         return '(unset)' if p is None else f'{p.role} · {p.ctrl.label}'
+
+    def where_axis(self, plan):
+        """The same, for an axis, plus which way it runs."""
+        dev = self.layout.devices.get(plan.role)
+        g = dev.axis_group(plan.axis.index) if dev else None
+        label = (g.label if g else None) or plan.axis.label
+        return (f'{plan.role} · {label}'
+                + (' · inverted' if plan.invert else ''))
+
+    def turn_round(self, plan):
+        """Flip which way an axis runs. Returns a line.
+
+        The one thing about an axis you might want to change from a
+        screen: which end is which is a fact about your hardware and your
+        wrist, not about the game. DCS had this on its own screen and the
+        family had it nowhere.
+        """
+        plan.invert = not plan.invert
+        self.touched()
+        return (f'{plan.does}: '
+                + ('inverted' if plan.invert else 'the way it was'))
 
     def occupied(self, besides=None):
         """{(role, button)} carrying something now, ignoring one need."""
@@ -635,11 +660,17 @@ class Review:
         return (f'dropped {n} proposal{"" if n == 1 else "s"} — what is '
                 'yours stayed' if n else 'no proposals left to drop')
 
-    def assign(self, need, role, ctrl, button=None):
+    def assign(self, need, role, ctrl, button=None, slot=None):
         """Give a need a control by hand. Yours at once, with no confirming
         step: you just chose it.
 
         `button` is the one actually pressed, when a press is what did this.
+
+        `slot` says WHICH of the need's bindings that press was for, when
+        you are taking one direction of a hat rather than the hat. The
+        rest keep whatever they had, so a trim hat whose directions the
+        game names in another order can be put right one at a time
+        instead of re-taken whole and scrambled the same way again.
         """
         was = self.at[need]
         # Putting it back where it already was is not an override, and a
@@ -650,12 +681,24 @@ class Review:
         moved = was is not None and not (was.role == role
                                          and was.ctrl is ctrl)
         why = corneeds.Reason('yours', instead=was if moved else None)
-        placed = corneeds.put(need, role, ctrl, why, button=button)
+        # What was already pinned per slot, kept across a re-take of the
+        # same control: taking one direction must not forget the three
+        # you took before it.
+        pinned = list((need.assignment or {}).get('buttons') or ())
+        if slot is not None and button is not None:
+            pinned += [None] * (len(need.bindings) - len(pinned))
+            pinned[slot] = button
+        elif moved or was is None:
+            pinned = []
+        placed = corneeds.put(need, role, ctrl, why, button=button,
+                              pinned=pinned)
         self.at[need] = placed
         self.mark[need] = MINE
         need.assignment = {'role': role, 'control': ctrl.id,
                       'how': corneeds.CHOSE}
-        if button is not None and corneeds.honours_press(need, ctrl, button):
+        if any(b is not None for b in pinned):
+            need.assignment['buttons'] = pinned
+        elif button is not None and corneeds.honours_press(need, ctrl, button):
             need.assignment['button'] = button
         self.touched()
         return placed
@@ -693,7 +736,7 @@ class Review:
             return 'this game derives its needs, so there is nothing to ' \
                    'write them to', True
         try:
-            said = self.save(self.needs)
+            said = self.save(self.needs, self.layout.axes)
         except (OSError, RuntimeError) as e:
             return f'could not write it: {e}', True
         self.unsaved = False
@@ -976,7 +1019,23 @@ class Review:
                                    if self.show_binds else ()):
                     out.append(Row('bind', f'{part:10} {what}', need=need))
             out.append(Row('gap', ''))
+        # The axes, after everything you can move about. They never went
+        # through the allocator -- an aircraft's pitch axis is the stick's
+        # pitch axis on every desk -- so the screen hid them entirely, and
+        # the one thing you might want to change about one, which way it
+        # runs, had nowhere to be changed from.
+        axes = [a for a in self.layout.axes
+                if a.axis is not None and self.matches_axis(a)]
+        if axes:
+            out.append(Row('head', 'AXES'))
+            for plan in axes:
+                out.append(Row('axis', plan.does, axis=plan))
+            out.append(Row('gap', ''))
         return out
+
+    def matches_axis(self, plan):
+        """Does `f` leave this axis on screen?"""
+        return not self.filter or self.filter.lower() in plan.does.lower()
 
 
 # ------------------------------------------------------------------- drawing
@@ -1033,6 +1092,7 @@ KEYS = (
     ('plain', '  R           rename the category it is in; all of it moves'),
     ('plain', ''),
     ('head', 'OTHER'),
+    ('plain', '  i           turn an axis round, on an AXES row'),
     ('plain', '  o           lay the whole thing out to an overlay'),
     ('plain', '  y           why a control is chosen'),
     ('plain', '  m           device map and install paths'),
@@ -1142,8 +1202,8 @@ def _layout(width, height, wants=None):
 #: In the sill, most-needed first: what is dropped on a narrow panel is
 #: dropped from the end, and nothing else is reachable without moving.
 HINTS = ('↑↓ move', '↵ assign', 'l from free', 'c accept', 'x unassign',
-         'a add', 'j job', 'r category', 'f filter', 'h binds', 'o overlay',
-         'y why', 'm map', 's save', 'w write')
+         'a add', 'j job', 'i invert', 'r category', 'f filter', 'h binds',
+         'o overlay', 'y why', 'm map', 's save', 'w write')
 
 
 def _fit(width, text, lead=''):
@@ -1500,6 +1560,15 @@ def _draw(scr, rv, sel, state, theme):
                 _put(scr, y, ix + NAME_W, ctui.V, theme.meta)
                 _put(scr, y, ix + NAME_W + 2,
                      rv.where(row.need)[:iw - NAME_W - 2], attr)
+        elif row.kind == 'axis':
+            # No mark: an axis was never proposed, it was resolved. What
+            # it has instead is which way it runs.
+            attr = theme.sel if i == sel else theme.plain
+            _put(scr, y, ix, f'  {row.text[:26]:26}'[:iw], attr)
+            if iw > NAME_W + 2:
+                _put(scr, y, ix + NAME_W, ctui.V, theme.meta)
+                _put(scr, y, ix + NAME_W + 2,
+                     rv.where_axis(row.axis)[:iw - NAME_W - 2], attr)
 
     row = rows[sel] if 0 <= sel < len(rows) else None
     # The group on a heading, the need on a row: the panel is about
@@ -1940,6 +2009,8 @@ def _loop(scr, rv, write, sticks):
                 # Every row may have moved, so the index it was at means
                 # nothing. The need under the cursor is still a need.
                 sel = _row_of(rv, need, sel) if need is not None else sel
+        elif k == 'i' and here.kind == 'axis':
+            rv.status = rv.turn_round(here.axis)
         elif k == 'j' and need is not None:
             job = _pick_job(tui, need)
             if job:

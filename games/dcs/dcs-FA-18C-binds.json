@@ -1,0 +1,297 @@
+{
+"binds": [
+{
+"what": "Trimmer Switch",
+"role": "stick",
+"control": "top-thumb-hat",
+"buttons": [
+9,
+10,
+8,
+11
+],
+"how": "chose"
+},
+{
+"what": "Autopilot/Nosewheel Steering Disengage (Paddle) Switch",
+"role": "stick",
+"control": "analogue-brake-lever-on-the-grip",
+"how": "chose"
+},
+{
+"what": "Undesignate/Nose Wheel Steer Switch",
+"role": "stick",
+"control": "thumb-top-button",
+"buttons": [
+6
+],
+"how": "chose"
+},
+{
+"what": "Gun Trigger - SECOND DETENT (Press to shoot)",
+"role": "stick",
+"control": "main-trigger",
+"buttons": [
+3
+],
+"how": "chose"
+},
+{
+"what": "Weapon Release Button",
+"role": "stick",
+"control": "thumb-bottom-button",
+"buttons": [
+12
+],
+"how": "chose"
+},
+{
+"what": "Select",
+"role": "stick",
+"control": "bottom-thumb-hat",
+"buttons": [
+15,
+16,
+17,
+14
+],
+"how": "chose"
+},
+{
+"what": "Sensor Control Switch",
+"role": "stick",
+"control": "grip-thumb-hat",
+"buttons": [
+25,
+23,
+24,
+26,
+22
+],
+"how": "chose"
+},
+{
+"what": "Dispense Switch",
+"role": "throttle",
+"control": "thumb-two-way-hat",
+"buttons": [
+10,
+12
+],
+"how": "chose"
+},
+{
+"what": "ATC Engage/Disengage Switch",
+"role": "throttle",
+"control": "pinky-button",
+"buttons": [
+0
+],
+"how": "chose"
+},
+{
+"what": "Master Mode Button - A/A",
+"role": "throttle",
+"control": "middle-finger-button",
+"buttons": [
+2
+],
+"how": "chose"
+},
+{
+"what": "Master Mode Button - A/G",
+"role": "throttle",
+"control": "thumb-button",
+"buttons": [
+15
+],
+"how": "chose"
+},
+{
+"what": "Arresting Hook Handle",
+"role": "throttle",
+"control": "t1-rocker",
+"buttons": [
+30,
+29
+],
+"how": "chose"
+},
+{
+"what": "Speed Brake Switch - EXTEND",
+"role": "throttle",
+"control": "t2-rocker",
+"buttons": [
+31
+],
+"how": "chose"
+},
+{
+"what": "Speed Brake Switch - RETRACT",
+"role": "throttle",
+"control": "t3-rocker",
+"buttons": [
+33
+],
+"how": "chose"
+},
+{
+"what": "FLAP Switch",
+"role": "throttle",
+"control": "mode-selector",
+"buttons": [
+50,
+49,
+48,
+47
+],
+"how": "chose"
+},
+{
+"what": "Landing Gear Control Handle",
+"role": "throttle",
+"control": "t4-rocker",
+"buttons": [
+36,
+35
+],
+"how": "chose"
+},
+{
+"what": "Launch Bar Control Switch - EXTEND",
+"role": "throttle",
+"control": "keyboard-b1-button",
+"buttons": [
+22
+],
+"how": "chose"
+},
+{
+"what": "Launch Bar Control Switch - RETRACT",
+"role": "throttle",
+"control": "keyboard-b2-button",
+"buttons": [
+23
+],
+"how": "chose"
+},
+{
+"what": "Wheel Brake - ON/OFF",
+"role": "throttle",
+"control": "keyboard-b3-button",
+"buttons": [
+24
+],
+"how": "chose"
+},
+{
+"what": "Throttle Designator Controller - Depress",
+"role": "throttle",
+"control": "thumb-mini-stick",
+"buttons": [
+14
+],
+"how": "chose"
+},
+{
+"what": "Cage/Uncage Button",
+"role": "throttle",
+"control": "bottom-thumb-button",
+"buttons": [
+16
+],
+"how": "chose"
+},
+{
+"what": "RECCE Event Mark Switch",
+"role": "stick",
+"control": "top-thumb-hat",
+"buttons": [
+7
+],
+"how": "chose"
+},
+{
+"what": "RAID/FLIR FOV Select Button",
+"role": "throttle",
+"control": "thumb-two-way-hat",
+"buttons": [
+9
+],
+"how": "chose"
+},
+{
+"what": "COMM Switch - COMM 1 (call radio menu)",
+"role": "throttle",
+"control": "middle-finger-hat",
+"buttons": [
+3
+],
+"how": "chose"
+},
+{
+"what": "COMM Switch - COMM 2 (call radio menu)",
+"role": "throttle",
+"control": "middle-finger-hat",
+"buttons": [
+4
+],
+"how": "chose"
+},
+{
+"what": "COMM Switch - MIDS A",
+"role": "throttle",
+"control": "middle-finger-hat",
+"buttons": [
+5
+],
+"how": "chose"
+},
+{
+"what": "COMM Switch - MIDS B",
+"role": "throttle",
+"control": "middle-finger-hat",
+"buttons": [
+6
+],
+"how": "chose"
+},
+{
+"what": "MASTER CAUTION Reset Button",
+"role": "throttle",
+"control": "keyboard-b4-button",
+"buttons": [
+25
+],
+"how": "chose"
+},
+{
+"what": "Exterior Lights Switch - OFF",
+"role": "throttle",
+"control": "keyboard-b5-button",
+"buttons": [
+26
+],
+"how": "chose"
+},
+{
+"what": "Exterior Lights Switch - ON",
+"role": "throttle",
+"control": "keyboard-b6-button",
+"buttons": [
+27
+],
+"how": "chose"
+},
+{
+"what": "Throttle",
+"role": "throttle",
+"control": "t5-rocker",
+"buttons": [
+37,
+38
+],
+"how": "chose"
+}
+]
+}

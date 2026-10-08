@@ -8,7 +8,7 @@ DESCRIPTION
     --write hands the result to dcs-bind-wizard.py, which owns diff.lua.
 
 FILES
-    dcs-bind-wizard.py             the capture TUI and the writer
+    dcs-bind-wizard.py             device detection and the diff.lua writer
     dcs-bind-wizard-results.json   the bindings, and where the game is
     jobs.toml                      what each command is for, by name
     <device>.diff.lua              written by --write, per aircraft
@@ -518,7 +518,7 @@ def _rules():
     return _RULES
 
 
-def place(module, cmds, guide, chosen, rules=None):
+def place(module, cmds, guide, chosen, rules=None, needs=None):
     """-> core.needs.Layout.
 
     The matching is `core.needs.allocate`. What stays here is what the core
@@ -532,7 +532,8 @@ def place(module, cmds, guide, chosen, rules=None):
     where `--free` comes from.
     """
     devs = devmap.by_role('stick', 'throttle')
-    needs = families(cmds, guide, chosen)
+    # Given, when a caller has already put what you confirmed onto them.
+    needs = families(cmds, guide, chosen) if needs is None else needs
     claims, axes = [], []
 
     # A trigger has stages and more than one command wants it: on the Su-25T
@@ -577,7 +578,12 @@ def place(module, cmds, guide, chosen, rules=None):
     buttons = []
     for need in needs:
         if need.shape == 'axis':
-            axes.append((need, resolve_axis(devs, need, cmds)))
+            role, got = resolve_axis(devs, need, cmds)
+            name = cmds[need.members[0]]['name']
+            # The first of what fits, because `resolve_axis` answers with
+            # every axis that could serve and the writer takes one.
+            axes.append(corneeds.Axis(role, got[0] if got else None, name,
+                                      invert=_inverted(name), carries=need))
         else:
             buttons.append(need)
 
@@ -615,7 +621,8 @@ def rows(layout):
     claims = [p for p in layout.placed if claimed(p)]
     rest = [p for p in layout.placed if not claimed(p)]
     return ([(p.need, (p.role, p.ctrl), p.points) for p in claims]
-            + [(n, spot, None) for n, spot in layout.axes]
+            + [(p.carries, (p.role, [p.axis] if p.axis else []), None)
+               for p in layout.axes]
             + [(p.need, (p.role, p.ctrl), p.points) for p in rest])
 
 
@@ -667,6 +674,17 @@ def seed(module, cmds, guide, chosen=None, layout=None):
                         press_only=len(need.members) == 1
                         and len(ctrl.bindable_buttons) > 1,
                         borrowed=need.borrowed)
+        # What you pinned by hand wins over what the prose works out.
+        # `lay_out` reads the module's own direction words, which is
+        # right until somebody has pressed for one direction of a hat --
+        # and then re-deriving it is the tool overruling a choice you
+        # just made. The pins are per slot and a need's members are its
+        # commands in slot order, so they line up.
+        pinned = ((need.assignment or {}).get('buttons') or ())
+        for n, want in enumerate(pinned):
+            if want is not None and n < len(need.members) \
+                    and want in ctrl.bindable_buttons:
+                spots[need.members[n]] = want
         for h, b in spots.items():
             recs[h] = {'name': cmds[h]['name'], 'role': role,
                        'type': 'button', 'index': b, 'proposed': True}
@@ -687,41 +705,6 @@ def _inverted(name):
 ROLE_ORDER = ('stick', 'throttle')
 
 
-def bound_rows(module, key, cmds, guide):
-    """What is actually bound, joined with what the hardware map calls it.
-
-    The results file is the source of truth, not the proposal: half of it is
-    yours by the time you read a sheet.
-    """
-    binds = json.load(open(results_path()))['aircraft'].get(key, {})
-    devs = devmap.by_role('stick', 'throttle')
-    # Keyed off the devices the map actually gave us, not a literal pair: a
-    # captured third device -- pedals, a button box -- used to raise KeyError
-    # here rather than show up on the sheet.
-    rows = {role: [] for role in devs}
-    rows['axes'] = []
-    for h, r in binds.items():
-        if not isinstance(r, dict) or 'role' not in r:
-            continue
-        d = devs.get(r['role'])
-        mark = '?' if r.get('proposed') else ''
-        if r['type'] == 'axis':
-            a = d.axis(r['index']) if d else None
-            g = d.axis_group(r['index']) if d else None
-            label = (g.label if g else (a.label if a else f'axis {r["index"]}'))
-            rows['axes'].append((r['role'], r['index'], label, r['name'],
-                                 ' (inverted)' if r.get('invert') else '', mark))
-            continue
-        g = d.group_of(r['index']) if d else None
-        part = g.direction(r['index']) if g else ''
-        label = g.label if g else f'button {r["index"]}'
-        rows.setdefault(r['role'], []).append(
-            (r['index'], label, part, r['name'], mark))
-    for k in rows:
-        rows[k].sort()
-    return rows, devs
-
-
 def unbound(module, cmds, guide, key):
     binds = json.load(open(results_path()))['aircraft'].get(key, {})
     out = []
@@ -731,34 +714,6 @@ def unbound(module, cmds, guide, key):
                 out.append((name, kind, cmds[h]['votes']))
     out.sort(key=lambda x: -x[2])
     return out
-
-
-def reseed(module, key, cmds, guide, backup_dir=None, when=None):
-    """Throw an aircraft's bindings away and lay it out fresh.
-
-    A results file that has been through several device configurations and two
-    generations of this matcher is sediment: an old capture numbered against
-    hardware that has since been reconfigured, a combined Thrust axis left
-    beside the split pair that replaced it, an inversion nobody meant. Patching
-    those one at a time is slower and less certain than starting over, because
-    everything the proposal knows is now better than what is there.
-
-    Everything comes out marked `proposed`, so the wizard still asks you to
-    confirm it -- this replaces the guesses, not your judgement.
-    """
-    path = results_path()
-    data = json.load(open(path))
-    # One folder for the whole --reseed, however many aircraft it walks: the
-    # results file is rewritten once per aircraft, and a copy per rewrite would
-    # be six backups of six intermediate states of the same run.
-    dest, _ = backup.save('dcs', path, into=backup_dir, when=when)
-
-    before = len(data['aircraft'].get(key, {}))
-    recs = seed(module, cmds, guide)
-    data.setdefault('aircraft', {})[key] = recs
-    with open(path, 'w') as f:
-        json.dump(data, f, indent=2)
-    return dest, before, len(recs)
 
 
 def write(module, cfg, aircraft, backup_dir=None):
@@ -849,24 +804,28 @@ class Wizard(typing.Protocol):
 
     def build_guide(self, commands: dict) -> dict: ...
 
-    def render_all(self, results: dict, cfg: dict,
-                   aircraft: str) -> tuple[dict, list[str]]: ...
+    def render_all(self, results: dict, cfg: dict, aircraft: str,
+                   bindings: dict | None = ...) -> tuple[dict, list[str]]: ...
 
 
 @typing.final
-class Dcs(adapter.Proposer):
+class Dcs(adapter.Planner):
     """DCS World, one module at a time.
 
-    A `Proposer` rather than a `Planner` because its writer reads the capture
-    wizard's results file: a binding somebody confirmed at the stick is better
-    evidence than one this proposed, and the review screen the other five use
-    is the wizard itself.
+    A `Planner` like the other five. It used to be a `Proposer` -- a type
+    of its own, with its own writer path, its own store and its own review
+    screen -- on the argument that a binding confirmed at the stick beats
+    one a planner proposed. That is true and it is not a reason for a
+    second set of interfaces: the family already draws that line with `+`
+    and `?`, writes both, and says so before the keystroke.
 
-    It is also why the adapters had to become classes. The needs here are
-    derived from the module's own command vocabulary, so they are a function
-    of `--aircraft`; `NEEDS` as a module constant could never mean both the
-    Hornet's and the Su-25T's, which is why `propose.py` had neither `NEEDS`
-    nor `build()` until now.
+    What stays DCS's own is what no other game has. The needs are derived
+    from the module's command vocabulary on every run, so they are a
+    function of `--aircraft` and there is no needs file to keep them in --
+    which is also why the adapters had to become classes, since `NEEDS` as
+    a module constant could never mean both the Hornet's and the Su-25T's.
+    The `diff.lua` format and naming the devices by DCS's own GUIDs live in
+    `dcs-bind-wizard.py`.
     """
 
     game = 'dcs'
@@ -900,8 +859,17 @@ class Dcs(adapter.Proposer):
                 self.cfg, self.aircraft, ac[self.aircraft]['factory_dir'])
             got = {'commands': cmds, 'guide': self.module.build_guide(cmds)}
         self.cmds, self.guide = got['commands'], got['guide']
+        # Where things sit, one file per module: an adapter is built FOR
+        # an aircraft, and the Hornet and the Viper are two layouts. Set
+        # here rather than declared on the class, because the class does
+        # not know which aircraft it is yet.
+        self.BINDS = f'dcs-{self.aircraft}-binds.json'
         self._needs = families(self.cmds, self.guide,
                                candidates(self.module, self.cmds, self.guide))
+        # Where things sit, onto those same needs -- so `NEEDS` is the
+        # list the screen walks AND the list the plan is built from, not
+        # two lists that happen to agree.
+        corneeds.load_assignments(HERE, self.BINDS, self._needs)
 
     @property
     @typing.override
@@ -911,8 +879,14 @@ class Dcs(adapter.Proposer):
 
     @typing.override
     def build(self):
+        # The same needs the screen walks, carrying what you confirmed at
+        # the stick -- so the `chose` pass takes those controls first and
+        # the screen opens green on them rather than rebuilding every mark
+        # from the planner.
         return place(self.module, self.cmds, self.guide,
-                     candidates(self.module, self.cmds, self.guide))
+                     candidates(self.module, self.cmds, self.guide),
+                     needs=self._needs)
+
 
     @typing.override
     def catalogue(self):
@@ -932,24 +906,43 @@ class Dcs(adapter.Proposer):
                 for b in payload if b.action in self.cmds]
 
     @typing.override
-    def seed(self, layout):
-        path = results_path()
-        data = json.load(open(path))
-        # The layout, not a fresh one. Five games hand `write_layout`
-        # whatever the reviewer accepted and `Layout.but()` exists to make
-        # it; this used to take the same argument and throw it away, so
-        # anything cleared on the screen came straight back.
-        data.setdefault('aircraft', {})[self.aircraft] = seed(
-            self.module, self.cmds, self.guide, layout=layout)
-        return {path: json.dumps(data, indent=2)}
+    def write_layout(self, layout):
+        """The game's files, for the layout it is handed.
 
-    @typing.override
-    def write_game(self):
+        The layout and nothing else, like the other five: what the review
+        screen kept is what goes into the game, `?` rows included -- the
+        box before the keystroke says so, and clearing one with `x` is
+        how you say no. This used to read the results file and ignore the
+        argument, so anything cleared on the screen came straight back.
+        """
         results = json.load(open(results_path()))
-        files, said = self.module.render_all(results, self.cfg, self.aircraft)
+        # `seed` the module function: the layout-to-records step DCS
+        # already had. `proposed` is the screen's business, not the
+        # game's.
+        bound = {h: {k: v for k, v in r.items() if k != 'proposed'}
+                 for h, r in seed(self.module, self.cmds, self.guide,
+                                  layout=layout).items()}
+        files, said = self.module.render_all(results, self.cfg,
+                                             self.aircraft, bound)
         for line in said:
             print(line)
         return files
+
+    @typing.override
+    def save_needs(self, needs, axes=()):
+        """Where things sit, in the family's own file.
+
+        One per module, because an adapter is built for one: the Hornet
+        and the Viper are two aircraft and two layouts. There is no
+        needs file beside it -- DCS derives its needs from the module's
+        vocabulary on every run, so there is no judgement to keep.
+        """
+        # `axes` goes nowhere: DCS resolves them from the module's own
+        # vocabulary on every run, so there is no file to keep them in --
+        # and turning one round on the screen lasts until you quit.
+        corneeds.save_assignments(self.here, self.BINDS, needs)
+        return (f'wrote where {sum(1 for n in needs if n.assignment)} '
+                f'things sit to {self.BINDS}')
 
     @typing.override
     def sheet_suffix(self):
@@ -959,52 +952,46 @@ class Dcs(adapter.Proposer):
 
     @typing.override
     def sheet(self, layout):
-        """The kneeboard, in the core's shape, out of the RESULTS file.
+        """The kneeboard, in the core's shape, out of the PLAN.
 
-        `layout` is ignored on purpose, and it is the one real difference
-        between this sheet and the other five: half of what is bound by
-        the time you read a page is yours, confirmed at the stick, and the
-        proposal is only the other half. That is what `mark` is for.
-
-        It used to be a writer and a template of its own, which is how it
-        drifted: the shared sheet learned to put axes inside their device,
-        to split the free controls by device and to drop two paragraphs of
-        prose, and none of it reached here.
+        `mark` is `?` where nobody has confirmed it at the stick, which is
+        the one thing this page says that the other five do not: half of
+        what is bound by the time you read it is yours and half is the
+        planner's. It used to be read out of the wizard's own results file
+        -- the plan carries it now, because `Need.assignment` says who
+        decided and the store is the family's.
         """
-        rows, devs = bound_rows(self.module, self.aircraft, self.cmds,
-                                self.guide)
+        devs = layout.devices
         sh = csheet.Sheet(
             f'Kneeboard — {self.aircraft}',
-            # `#` because the column serves axes as well as buttons;
-            # the rows say `BTN12` themselves, which is the number DCS
-            # shows you.
+            # `#` because the column serves axes as well as buttons; the
+            # rows say `BTN12` themselves, which is the number DCS shows.
             f'DCS {self.aircraft}', ident='#',
             devices={r: d.product for r, d in devs.items()})
         sh.note('Button numbers',
                 'The ones DCS shows, one higher than the OS number the '
                 'device map uses.')
-        for role in devs:
-            for idx, label, part, name, mark in rows.get(role, []):
-                sh.add(csheet.Row(role, label, part=part,
-                                  ident=f'BTN{idx + 1}', does=name,
-                                  bindings={'': name}, mark=mark))
-        for role, idx, label, name, inv, mark in rows['axes']:
-            sh.add_axis(role, label, f'axis {idx}', f'{name}{inv}')
-            if mark:
-                sh.axes[-1].mark = mark
-        # Which controls nothing has taken. The other five get this from
-        # the allocator's own leftovers; here it is the results file read
-        # the other way round, because that is where the truth is.
-        with open(results_path(), encoding='utf-8') as f:
-            binds = json.load(f)['aircraft'].get(self.aircraft, {})
-        taken = {(r['role'], r['index']) for r in binds.values()
-                 if isinstance(r, dict) and r.get('type') != 'axis'
-                 and 'role' in r}
-        for role, dev in devs.items():
-            for ctrl in dev.groups(bindable=True):
-                if not any((role, b) in taken
-                           for b in ctrl.bindable_buttons):
-                    sh.add_free(role, ctrl.label)
+        for p in sorted(layout.placed, key=lambda p: (p.role, p.ctrl.label)):
+            mine = p.need.assignment or {}
+            mark = '' if (mine.get('how') == corneeds.ACCEPTED
+                          and mine.get('control') == p.ctrl.id) else '?'
+            for button, payload in sorted(p.slots):
+                for b in payload:
+                    name = self.cmds[b.action]['name']
+                    sh.add(csheet.Row(
+                        p.role, p.ctrl.label,
+                        part=p.ctrl.direction(button) or '',
+                        ident=f'BTN{button + 1}', does=name,
+                        bindings={'': name}, mark=mark))
+        for plan in layout.axes:
+            if plan.axis is None:
+                continue
+            g = devs[plan.role].axis_group(plan.axis.index)
+            sh.add_axis(plan.role, g.label if g else plan.axis.label,
+                        f'axis {plan.axis.index}',
+                        plan.does + (' (inverted)' if plan.invert else ''))
+        for role, ctrl in layout.free:
+            sh.add_free(role, ctrl.label)
         # Ordered by how many of the shipped profiles bind each one, so
         # the top of the list is the part worth reading. The count itself
         # stays off the page: `5 factory profiles` beside a command name
@@ -1018,9 +1005,6 @@ class Dcs(adapter.Proposer):
 
     @typing.override
     def arguments(self, parser):
-        parser.add_argument('--reseed', action='store_true',
-                            help="discard this module's bindings and lay it "
-                                 'out fresh')
         parser.add_argument('--audit', action='store_true',
                             help='list bindings that no longer match the '
                                  'hardware')
@@ -1035,10 +1019,6 @@ class Dcs(adapter.Proposer):
 
     @typing.override
     def extra(self, args, layout):
-        if args.reseed:
-            return self.write_seed(layout) + [
-                '  open the wizard and walk the list: c confirms one, '
-                'C the section']
         if args.audit:
             out = []
             for name, r, why in audit(self.module, self.aircraft,

@@ -667,5 +667,75 @@
 "urgency": 3,
 "suits": "view"
 }
+],
+"axes": [
+{
+"does": "AXIS_ROLL",
+"role": "stick",
+"on": {
+"kind": "stick",
+"axis": "x"
+}
+},
+{
+"does": "AXIS_PITCH",
+"role": "stick",
+"on": {
+"kind": "stick",
+"axis": "y"
+}
+},
+{
+"does": "AXIS_YAW",
+"role": "stick",
+"on": {
+"kind": "stick",
+"axis": "z"
+}
+},
+{
+"does": "AXIS_THROTTLE",
+"role": "throttle",
+"on": {
+"label": "left throttle lever"
+}
+},
+{
+"does": "AXIS_BRAKE_LEFT",
+"role": "stick",
+"on": {
+"kind": "lever"
+}
+},
+{
+"does": "AXIS_ANT_ELEV",
+"role": "throttle",
+"on": {
+"label": "side lever"
+}
+},
+{
+"does": "AXIS_CURSOR_X",
+"role": "throttle",
+"on": {
+"kind": "ministick",
+"axis": "x"
+}
+},
+{
+"does": "AXIS_CURSOR_Y",
+"role": "throttle",
+"on": {
+"kind": "ministick",
+"axis": "y"
+}
+},
+{
+"does": "AXIS_FOV",
+"role": "throttle",
+"on": {
+"kind": "dial"
+}
+}
 ]
 }

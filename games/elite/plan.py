@@ -142,22 +142,6 @@ def twinned(*ship):
 #: it, so guessing from the name reported them as clashing with the ship's
 #: roll, throttle and flight assist on the same control -- which is exactly
 #: what sharing a control between contexts is FOR.
-AXIS_NEEDS = [
-    ('RollAxisRaw',       'Ship', 'stick',    ('axis', 'stick', 'x'),      False),
-    ('PitchAxisRaw',      'Ship', 'stick',    ('axis', 'stick', 'y'),      True),
-    ('YawAxisRaw',        'Ship', 'stick',    ('axis', 'stick', 'z'),        False),
-    ('ThrottleAxis',      'Ship', 'throttle',
-     ('label', 'Left throttle lever'), False),
-    ('LateralThrustRaw',  'Ship', 'throttle', ('axis', 'ministick', 'x'), False),
-    ('VerticalThrustRaw', 'Ship', 'throttle', ('axis', 'ministick', 'y'), False),
-    ('BuggyRollAxisRaw',  'SRV',  'stick',    ('axis', 'stick', 'x'),      False),
-    ('BuggyPitchAxis',    'SRV',  'stick',    ('axis', 'stick', 'y'),      True),
-    ('SteeringAxis',      'SRV',  'stick',    ('axis', 'stick', 'x'),      False),
-    ('DriveSpeedAxis',    'SRV',  'throttle',
-     ('label', 'Left throttle lever'), False),
-    ('CamTranslateXAxis', 'Ship', 'stick',    ('axis', 'ministick', 'x'), False),
-    ('CamTranslateYAxis', 'Ship', 'stick',    ('axis', 'ministick', 'y'), False),
-]
 
 def _needs(described, placed):
     """[Need] -- the hand-written list, read rather than executed.
@@ -178,8 +162,8 @@ def _needs(described, placed):
     return out
 
 
-def unknown(needs):
-    """Functions named in NEEDS or AXIS_NEEDS that the game will not accept.
+def unknown(needs, axes=()):
+    """Functions named in the needs file that the game will not accept.
 
     The vocabulary comes out of the game's own base preset, so a typo or a
     function a patch renamed is an error here rather than a binding that
@@ -194,13 +178,13 @@ def unknown(needs):
                     bad.append((n.what, f))
         if n.push and n.push not in allf:
             bad.append((n.what, n.push))
-    for f, _ctx, _role, _how, _inv in AXIS_NEEDS:
-        if f not in AXES:
-            bad.append(('axis', f))
+    for row in axes:
+        if row['does'] not in AXES:
+            bad.append(('axis', row['does']))
     return bad
 
 
-def duplicates(needs):
+def duplicates(needs, axes=()):
     """Functions named by more than one need.
 
     Elite has one element per function, so two needs claiming one function
@@ -212,35 +196,22 @@ def duplicates(needs):
             for f in slot:
                 if f:
                     seen[f] += 1
-    axis = collections.Counter(f for f, *_ in AXIS_NEEDS)
+    axis = collections.Counter(row['does'] for row in axes)
     return ([f for f, c in seen.items() if c > 1]
             + [f for f, c in axis.items() if c > 1])
 
 
 # ------------------------------------------------------------ the hardware --
 
-def axis_of(devs, role, how):
-    dev = devs[role]
-    if how[0] == 'axis':
-        # The control's kind and which axis of it, said separately. One
-        # word for both -- `mini-stick-x` -- said the kind twice, and a
-        # stick is one control with three axes, not three controls.
-        return dev.axis_of(how[1], how[2])
-    return next((a for a in dev.axes()
-                 if dev.axis_label(a.index) == how[1]), None)
+def axis_plan(devs, rows):
+    """[corneeds.Axis] -- axes skip allocate().
 
-
-def axis_plan(devs):
-    """[(function, context, role, axis, invert)] -- axes skip allocate()."""
-    out = []
-    for func, ctx, role, how, invert in AXIS_NEEDS:
-        a = axis_of(devs, role, how)
-        if a is None:
-            print(f'!! no {how[1]!r} axis on the {role} for {func}',
-                  file=sys.stderr)
-            continue
-        out.append((func, ctx, role, a, invert))
-    return out
+    `rows` is the `axes` section of the needs file; `carries` is Elite's
+    context, which is a judgement like the rest of the row and so lives
+    beside it rather than in this file.
+    """
+    return corneeds.read_axes(rows, devs,
+                              carries=lambda row, _a: row.get('context', ''))
 
 
 # ----------------------------------------------------------------- writing --
@@ -260,7 +231,9 @@ def as_results(devs, placed, axes):
                 if func:
                     out[func] = {'role': p.role, 'type': 'button',
                                  'index': button, 'sign': 1}
-    for func, _ctx, role, a, invert in axes:
+    for plan in axes:
+        func, role, a, invert = (plan.does, plan.role, plan.axis,
+                                 plan.invert)
         out[func] = {'role': role, 'type': 'axis', 'index': a.index,
                      'sign': -1 if invert else 1}
     return out
@@ -348,7 +321,9 @@ def _sheet(layout):
                 ident=f'Joy_{button + 1}',
                 does=p.need.what, bindings=by_ctx))
 
-    for func, ctx, role, a, invert in axes:
+    for plan in axes:
+        func, ctx, role, a, invert = (plan.does, plan.carries, plan.role,
+                                      plan.axis, plan.invert)
         g = devs[role].axis_group(a.index)
         sh.add_axis(role, g.label if g else a.label, f'axis {a.index}',
                     harvest.readable(func)
@@ -411,7 +386,11 @@ class Elite(adapter.Planner):
         # claim does not clash -- the second simply wins, silently. The
         # adapter refuses to exist rather than write that.
         self._needs = _needs(self.NEEDS_FILE, self.BINDS)
-        dup = duplicates(self._needs)
+        # `list()` because `vocab.load` answers with whatever the
+        # file holds and `AXES` promises a list.
+        self._axes = list(vocab.load(HERE, self.NEEDS_FILE,
+                                     key='axes'))
+        dup = duplicates(self._needs, self._axes)
         if dup:
             raise SystemExit('claimed by more than one need: '
                              + ', '.join(dup))
@@ -421,6 +400,17 @@ class Elite(adapter.Planner):
     def NEEDS(self):
         """Derived from the game's own vocabulary, so it is a property."""
         return self._needs
+
+    @property
+    def AXES(self) -> list:
+        """The `axes` section of the needs file.
+
+        Axes never go through the allocator -- an aircraft's pitch axis is
+        the stick's pitch axis on every desk there is -- but which lever
+        is the throttle is a judgement like any other, and it used to be
+        a literal in this file.
+        """
+        return self._axes
 
     @typing.final
     def wizard(self):
@@ -435,12 +425,12 @@ class Elite(adapter.Planner):
         # nothing, and dropping it let a button need claim the click.
         return corneeds.Layout(devs, *corneeds.allocate(list(self.NEEDS),
                                                         devs),
-                               axes=axis_plan(devs))
+                               axes=axis_plan(devs, self.AXES))
 
     @typing.override
     def unknown(self):
         return [(what, 'function', func)
-                for what, func in unknown(self._needs)]
+                for what, func in unknown(self._needs, self._axes)]
 
     @typing.override
     def catalogue(self):
@@ -509,7 +499,9 @@ class Elite(adapter.Planner):
                 out.append('      ' + ' · '.join(
                     corneeds.why_bits(p_, out_of=13)))
         out.append('')
-        for func, ctx, role, a_, invert in axes:
+        for plan in axes:
+            func, ctx, role, a_, invert = (plan.does, plan.carries,
+                                           plan.role, plan.axis, plan.invert)
             out.append(f'  {harvest.readable(func):34} {ctx:5} {role:9} '
                        f'axis {a_.index} {a_.label}'
                        f'{"  inverted" if invert else ""}')

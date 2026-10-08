@@ -145,17 +145,6 @@ def needs(described, placed):
 
 
 #: in-game axis, which device, and how to find it in the map
-AXIS_NEEDS = [
-    ('AXIS_ROLL',       'stick',    'axis', ('stick', 'x')),
-    ('AXIS_PITCH',      'stick',    'axis', ('stick', 'y')),
-    ('AXIS_YAW',        'stick',    'axis', ('stick', 'z')),
-    ('AXIS_THROTTLE',   'throttle', 'label', 'left throttle lever'),
-    ('AXIS_BRAKE_LEFT', 'stick',    'axis', ('lever', '')),
-    ('AXIS_ANT_ELEV',   'throttle', 'label', 'side lever'),
-    ('AXIS_CURSOR_X',   'throttle', 'axis', ('ministick', 'x')),
-    ('AXIS_CURSOR_Y',   'throttle', 'axis', ('ministick', 'y')),
-    ('AXIS_FOV',        'throttle', 'axis', ('dial', '')),
-]
 
 AXIS_NOTE = {
     'AXIS_THROTTLE': 'the F-16 has one engine, so the right lever stays free',
@@ -280,32 +269,15 @@ def dinput_axis(dev, axis):
     return None
 
 
-def find_axis(dev, how, what):
-    """The axis a need names: by the control it is part of, or by label.
+def axis_plan(devs, rows):
+    """[corneeds.Axis] -- the axes BMS will be told about.
 
-    `('stick', 'x')` rather than `stick-x`. One word for both said the
-    control's kind and which axis of it at once, and so said the kind
-    twice -- and a stick is one control with three axes, not three
-    controls with one each.
+    `rows` is the `axes` section of the needs file. It was a literal here,
+    so changing which lever the throttle is on meant editing code.
     """
-    if how == 'axis':
-        return dev.axis_of(*what)
-    return next((a for a in dev.axes()
-                 if what in dev.axis_label(a.index).lower()), None)
-
-
-def axis_plan(devs):
-    """[(name, role, axis, dinput index)] -- the axes BMS will be told about."""
-    axes = []
-    for name, role, how, what in AXIS_NEEDS:
-        dev = devs[role]
-        a = find_axis(dev, how, what)
-        if a is None:
-            continue
-        di = dinput_axis(dev, a)
-        if di:
-            axes.append((name, role, a, di))
-    return axes
+    return [p for p in corneeds.read_axes(
+        rows, devs, carries=lambda row, a: dinput_axis(devs[row['role']], a))
+        if p.carries]
 
 
 def dx_binds(placed):
@@ -475,7 +447,8 @@ def axis_files(bms, axes):
     said = []
 
     per = {}
-    for name, role, a, di in axes:
+    for plan in axes:
+        name, role, a, di = plan.does, plan.role, plan.axis, plan.carries
         per.setdefault(role, []).append((name, di, a))
 
     block = ['', AXIS_HEADER]
@@ -548,59 +521,60 @@ def wrap(text, width, indent):
     return f'\n{indent}'.join(out)
 
 
-def show(layout, why=False, free_only=False):
+def show(layout, why=False):
     _devs, placed, unmet, free, axes = layout
     out = []
     binds = dx_binds(placed)
     off = dx_offsets()
 
-    if not free_only:
-        out.append('AXES')
-        for name, role, a, di in axes:
-            out.append(f'  {name:<16} {role:<9} {di:<8} {a.label}')
-            note = AXIS_NOTE.get(name)
-            if why and note:
-                out.append(f'{"":<19}{wrap(note, 56, " " * 19)}')
+    out.append('AXES')
+    for plan in axes:
+        name, role, a, di = (plan.does, plan.role, plan.axis,
+                             plan.carries)
+        out.append(f'  {name:<16} {role:<9} {di:<8} {a.label}')
+        note = AXIS_NOTE.get(name)
+        if why and note:
+            out.append(f'{"":<19}{wrap(note, 56, " " * 19)}')
+    out.append("")
+
+    by_need = {}
+    for b in binds:
+        by_need.setdefault(id(b['need']), []).append(b)
+    out.append('BUTTONS')
+    # The placement itself, not just four fields off it: the account
+    # of WHY it is here is a property of the placement, and unpacking
+    # it away left `show` reassembling one from the pieces.
+    for p_ in placed:
+        need, role, ctrl = p_.need, p_.role, p_.ctrl
+        mine = by_need.get(id(need), [])
+        if not mine:
+            out.append(f'  {need.what}')
+            out.append(f'!!    {ctrl.label} was chosen but carries nothing — '
+                  'a bug in slots_for')
+            continue
+        out.append(f'  {need.what}')
+        out.append(f'{"":<4}{ctrl.label}  ({role},'
+                   f' {corneeds.reach_said(ctrl)})')
+        for b in sorted(mine, key=lambda b: b['dx']):
+            d = ctrl.direction(b['local']) or 'press'
+            extra = f'   / release: {b["release"]}' if b['release'] else ''
+            out.append(f'      DX{b["dx"]:<4} {d:<8} {b["press"]}{extra}')
+        if why:
+            out.append('      why    '
+                       + '; '.join(corneeds.why_bits(p_, out_of=22)))
+            if need.device and need.device != role:
+                # BMS's own: the only game that calls a wrong device a
+                # compromise rather than a minus fifty.
+                out.append(f'             COMPROMISE: belongs on the '
+                           f'{need.device}, nothing of that shape was '
+                           f'left there')
         out.append("")
 
-        by_need = {}
-        for b in binds:
-            by_need.setdefault(id(b['need']), []).append(b)
-        out.append('BUTTONS')
-        # The placement itself, not just four fields off it: the account
-        # of WHY it is here is a property of the placement, and unpacking
-        # it away left `show` reassembling one from the pieces.
-        for p_ in placed:
-            need, role, ctrl = p_.need, p_.role, p_.ctrl
-            mine = by_need.get(id(need), [])
-            if not mine:
-                out.append(f'  {need.what}')
-                out.append(f'!!    {ctrl.label} was chosen but carries nothing — '
-                      'a bug in slots_for')
-                continue
-            out.append(f'  {need.what}')
-            out.append(f'{"":<4}{ctrl.label}  ({role},'
-                       f' {corneeds.reach_said(ctrl)})')
-            for b in sorted(mine, key=lambda b: b['dx']):
-                d = ctrl.direction(b['local']) or 'press'
-                extra = f'   / release: {b["release"]}' if b['release'] else ''
-                out.append(f'      DX{b["dx"]:<4} {d:<8} {b["press"]}{extra}')
-            if why:
-                out.append('      why    '
-                           + '; '.join(corneeds.why_bits(p_, out_of=22)))
-                if need.device and need.device != role:
-                    # BMS's own: the only game that calls a wrong device a
-                    # compromise rather than a minus fifty.
-                    out.append(f'             COMPROMISE: belongs on the '
-                               f'{need.device}, nothing of that shape was '
-                               f'left there')
-            out.append("")
-
-        if unmet:
-            out.append('NOT PLACED')
-            for n in unmet:
-                out.append(f'  {n.what:<28} wanted a {n.shape}')
-            out.append("")
+    if unmet:
+        out.append('NOT PLACED')
+        for n in unmet:
+            out.append(f'  {n.what:<28} wanted a {n.shape}')
+        out.append("")
 
     out.append('STILL FREE')
     for role, c in free:
@@ -700,9 +674,11 @@ def _sheet(layout):
         devices={r: f'{d.product}  (DX {off[r]}–{off[r] + 31})'
                  for r, d in devs.items()})
 
-    for name, role, a_, di in axes:
-        g = devs[role].axis_group(a_.index)
-        sh.add_axis(role, g.label if g else a_.label, di, name)
+    for plan in axes:
+        a_ = plan.axis
+        g = devs[plan.role].axis_group(a_.index)
+        sh.add_axis(plan.role, g.label if g else a_.label, plan.carries,
+                    plan.does)
 
     for b in sorted(binds, key=lambda x: x['dx']):
         sh.add(csheet.Row(
@@ -758,6 +734,17 @@ class FalconBms(adapter.Planner):
         """
         return self._needs
 
+    @property
+    def AXES(self) -> list:
+        """The `axes` section of the needs file.
+
+        Axes never go through the allocator -- an aircraft's pitch axis is
+        the stick's pitch axis on every desk there is -- but which lever
+        is the throttle is a judgement like any other, and it used to be
+        a literal in this file.
+        """
+        return self._axes
+
     def __init__(self, game_dir=None, backup_dir=None):
         if game_dir:
             os.environ['BMS_DIR'] = game_dir
@@ -770,12 +757,16 @@ class FalconBms(adapter.Planner):
         DEVICES[:] = self.cache('bms-actions.json', key='devices')
         VOTES.update(self.cache('bms-rank.json'))
         self._needs = needs(self.NEEDS_FILE, self.BINDS)
+        # `list()` because `vocab.load` answers with whatever the
+        # file holds and `AXES` promises a list.
+        self._axes = list(vocab.load(HERE, self.NEEDS_FILE,
+                                     key='axes'))
 
     @typing.override
     def build(self):
         devs, placed, unmet, free = assign(self.NEEDS)
         return corneeds.Layout(devs, placed, unmet, free,
-                               axes=axis_plan(devs))
+                               axes=axis_plan(devs, self.AXES))
 
     @typing.override
     def catalogue(self):
@@ -798,8 +789,9 @@ class FalconBms(adapter.Planner):
         return show(layout, why=why)
 
     @typing.override
-    def free(self, layout):
-        return show(layout, free_only=True)
+    def says_button(self, role, index):
+        """`DX17`: BMS numbers in one flat space, 32 per device."""
+        return f'DX{dx_offsets()[role] + index}'
 
     @typing.override
     def write_layout(self, layout):

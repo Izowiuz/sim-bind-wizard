@@ -1,21 +1,18 @@
 #!/usr/bin/env python3
-"""dcs-bind-wizard.py - capture DCS bindings, and write diff.lua
+"""dcs-bind-wizard.py - find the devices, pick a module, write diff.lua
 
 DESCRIPTION
-    Full-screen wizard by default: pick an aircraft, then bind each command by
-    pressing the control. Start with `Essential binds`, which is the module's
-    commands ranked by how many factory HOTAS profiles bind each one, grouped
-    in the order you learn an aircraft. Every change is saved at once, so
-    quitting is safe at any point.
-    With --generate, headless: build one diff.lua per device and exit.
+    Full-screen wizard by default: name which joystick DCS calls what, pick an
+    aircraft, and write one diff.lua per device.
+    With --generate, headless: build them and exit.
+
+    Binding is `./bind dcs tui` -- the review screen the other five games
+    open. It reads and writes the same results file and shows what you
+    confirmed here in green.
 
 KEYS
-    arrows  move between commands
-    RETURN  (re)bind the selected one, then press the button or move the axis
-    P       propose bindings for everything still unbound, marked ?
-    c / C   confirm the selected proposal / every proposal in the section
-    I       invert an axis
-    X       clear the binding, so the DCS default comes back
+    arrows  move between entries
+    RETURN  select
     ESC     back, cancel, redo
 
 FILES
@@ -1129,15 +1126,19 @@ def device_axis_keys(info):
     return {ABS_TO_DCS[c] for c in info["axmap"] if c in ABS_TO_DCS}
 
 
-def build_diffs(results, aircraft, devs):
+def build_diffs(bindings, snapshot, devs):
     """Modeled bindings overlaid on the last --sync snapshot (if any).
 
-    Returns {role: {'axisDiffs': ..., 'keyDiffs': ...}}."""
-    ac = results.get("aircraft", {}).get(aircraft, {})
-    bindings = {h: r for h, r in ac.items()
-                if r and not h.startswith("_")}
-    if not bindings and not ac.get("_snapshot"):
-        raise RuntimeError("nothing bound for %s yet" % aircraft)
+    `bindings` is {command hash: {name, role, type, index, invert}} -- what
+    `propose.seed` makes out of a layout. It used to read the wizard's own
+    results file and pick the aircraft out of it, which made the writer the
+    one thing in the family that could not be handed a plan: the review
+    screen narrowed a layout and this went to the file anyway.
+
+    Returns {role: {'axisDiffs': ..., 'keyDiffs': ...}}.
+    """
+    if not bindings and not snapshot:
+        raise RuntimeError("nothing bound yet")
     diffs = {role: {"axisDiffs": {}, "keyDiffs": {}} for role in devs}
 
     def other(role):
@@ -1187,7 +1188,7 @@ def build_diffs(results, aircraft, devs):
 
     # overlay onto the snapshot of the installed state (--sync), so
     # bindings made in the DCS UI survive regeneration
-    snapshot = ac.get("_snapshot") or {}
+    snapshot = snapshot or {}
     for role in diffs:
         if role not in snapshot:
             continue
@@ -1212,18 +1213,26 @@ def joystick_dir(cfg, aircraft):
                         input_id(cfg, aircraft), "joystick")
 
 
-def render_all(results, cfg, aircraft):
+def render_all(results, cfg, aircraft, bindings=None):
     """({path: the diff.lua text}, summary lines). Writes nothing.
 
     Split out of `generate()` so `propose.py` can hand the text to
     `core.adapter`, which owns the backing up and the writing for every game
     in the family. `generate()` remains the wizard's own path.
+
+    `bindings` is the plan to write, as `propose.seed` makes it. Without
+    one the results file is read, which is what `generate()` wants: the
+    wizard has no reviewer to ask.
     """
     if dcs_running():
         raise RuntimeError("DCS is running — quit the game first "
                            "(it overwrites Config/Input on exit)")
     devs = resolve_devices(results)
-    diffs = build_diffs(results, aircraft, devs)
+    ac = results.get("aircraft", {}).get(aircraft, {})
+    if bindings is None:
+        bindings = {h: r for h, r in ac.items()
+                    if r and not h.startswith("_")}
+    diffs = build_diffs(bindings, ac.get("_snapshot"), devs)
     out_dir = joystick_dir(cfg, aircraft)
     files, lines = {}, []
     for role, info in devs.items():
@@ -1320,7 +1329,9 @@ def sync(results, cfg, aircraft):
     new["_snapshot"] = snapshot
 
     # round-trip check: regenerating now must reproduce the files exactly
-    diffs = build_diffs(results, aircraft, devs)
+    diffs = build_diffs({h: r for h, r in new.items()
+                         if r and not h.startswith("_")},
+                        new.get("_snapshot"), devs)
     for role, info in devs.items():
         if role not in snapshot:
             continue
@@ -1427,213 +1438,6 @@ def progress_label(title, bound, total):
     return "%s  [%d/%d]" % (title, bound, total)
 
 
-def propose_into(bindings, results, path, commands, guide, used, tui):
-    """Fill every unbound command from the hardware map.
-
-    propose.py knows the shape of each control on the devices -- which buttons
-    are one hat, which trigger stages are cumulative, what a little finger
-    reaches -- and the module already says what each command wants. Seeding
-    turns this screen from twenty-six presses into twenty-six confirmations.
-    Anything already bound is left alone, and a proposal is marked `?` until
-    you press a button over it.
-    """
-    if commands is None:
-        return "propose: no commands loaded"
-    try:
-        import sys as _sys
-        mod = adapter.from_file(
-            "dcspropose",
-            os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                         "propose.py"))
-        recs = mod.seed(_sys.modules[__name__], commands, guide)
-    except SystemExit as e:
-        return "propose: %s" % e
-    except Exception as e:
-        return "propose: %s (is sim-device-map there?)" % e
-
-    added = 0
-    for h, r in recs.items():
-        if h in bindings:
-            continue                      # never overwrite what you chose
-        key = (r["role"], r["type"], r["index"])
-        if r["type"] == "button" and key in used:
-            continue                      # that button already carries something
-        bindings[h] = r
-        used.setdefault(key, r["name"])
-        added += 1
-    save(results, path)
-    return ("proposed %d binding%s from the device map — marked ?, press a "
-            "button over any you disagree with" % (added, "" if added == 1
-                                                   else "s"))
-
-
-def run_table(tui, devices, results, bindings, used, sections, path,
-              heading, guide=None, commands=None):
-    """Arrow-key table over all commands of the given sections."""
-    rows = []                             # ("header", ...) / ("item", ...)
-    for sec_title, items in sections:
-        rows.append(("header", sec_title, None, None))
-        for h, name, kind in items:
-            rows.append(("item", h, name, kind))
-    item_rows = [i for i, r in enumerate(rows) if r[0] == "item"]
-    if not item_rows:
-        return
-    sel = item_rows[0]
-    state = {"top": 0}
-
-    def move(step):
-        nonlocal sel
-        pos = item_rows.index(sel)
-        pos = max(0, min(len(item_rows) - 1, pos + step))
-        sel = item_rows[pos]
-
-    def draw(status=""):
-        h, _ = tui.scr.getmaxyx()
-        visible = max(4, h - 8)
-        top = state["top"]
-        if sel < top:
-            top = sel
-        elif sel >= top + visible:
-            top = sel - visible + 1
-        state["top"] = top
-        tui.scr.erase()
-        tui._put(0, 0, heading, curses.A_BOLD)
-        for row, i in enumerate(range(top, min(len(rows), top + visible))):
-            what, a, b, _ = rows[i]
-            y = 2 + row
-            if what == "header":
-                tui._put(y, 0, "--- %s ---" % a, curses.A_BOLD)
-            else:
-                current = describe(results, bindings.get(a))
-                attr = curses.A_REVERSE if i == sel else curses.A_NORMAL
-                note = (guide or {}).get(a, {}).get("note", "")
-                tui._put(y, 2, "%-44s %-13s %s" % (b[:44], note, current),
-                         attr)
-        # three rows that belong to the selected command and nothing
-        # else — what it does, where it sits in the real aircraft, which
-        # of your devices the factory profiles put it on. They stay put
-        # while you are capturing a button, which is exactly when you are
-        # staring at the stick wondering which switch this was.
-        g = (guide or {}).get(rows[sel][1], {})
-        for j, line in enumerate([g.get("hint", ""), g.get("place", ""),
-                                  g.get("where", "")]):
-            tui._put(h - 5 + j, 0, line)
-        tui._put(h - 2, 0, status)          # prompt / result of the last key
-        tui._put(h - 1, 0, "arrows = move, RETURN = bind, P = propose, "
-                           "c/C = confirm one/all, I = invert, X = clear, "
-                           "ESC = back")
-        tui.scr.refresh()
-
-    status = ""
-    while True:
-        draw(status)
-        k = tui.key(0.5)
-        if k is None:
-            continue
-        if k == "esc":
-            return
-        if k == "up":
-            move(-1)
-            status = ""
-        elif k == "down":
-            move(+1)
-            status = ""
-        elif k in ("p", "P"):
-            status = propose_into(bindings, results, path, commands, guide,
-                                  used, tui)
-        elif k == "c":
-            # accepting a proposal is a decision, not a capture: pressing the
-            # button again just to agree with it would be the whole point lost
-            _, h_, name, _ = rows[sel]
-            r = bindings.get(h_)
-            if not r:
-                status = "%s: nothing to confirm" % name
-            elif not r.get("proposed"):
-                status = "%s: already yours" % name
-            else:
-                r.pop("proposed")
-                save(results, path)
-                status = "%s: confirmed — %s" % (name, describe(results, r))
-                move(+1)
-        elif k == "C":
-            n = 0
-            for _what, h_, _n, _k in [r for r in rows if r[0] == "item"]:
-                r = bindings.get(h_)
-                if r and r.get("proposed"):
-                    r.pop("proposed")
-                    n += 1
-            if n:
-                save(results, path)
-            status = ("confirmed %d proposal%s in this section"
-                      % (n, "" if n == 1 else "s")) if n else \
-                     "nothing left to confirm here"
-        elif k in ("x", "X"):
-            _, h_, name, _ = rows[sel]
-            bindings.pop(h_, None)
-            for snap in (bindings.get("_snapshot") or {}).values():
-                for table in ("axisDiffs", "keyDiffs"):
-                    snap.get(table, {}).pop(h_, None)
-            save(results, path)
-            status = "%s: cleared (DCS default, if any, comes back)" % name
-        elif k in ("i", "I"):
-            _, h_, name, _ = rows[sel]
-            r = bindings.get(h_)
-            if r and r["type"] == "axis":
-                r["invert"] = not r.get("invert")
-                save(results, path)
-                status = "%s: %s" % (name, describe(results, r))
-        elif k == "enter":
-            _, h_, name, kind = rows[sel]
-            while True:
-                prompt = ("move the axis you want for: %s"
-                          if kind == "axis"
-                          else "press the button you want for: %s") % name
-                draw("-> %s   (ESC = cancel)" % prompt)
-                got = wait_input(devices, want_axis=(kind == "axis"),
-                                 tui=tui)
-                if got == "skip":
-                    status = "%s: unchanged" % name
-                    break
-                d, etype, number, _sign = got
-                invert = bool(bindings.get(h_, {}).get("invert")) \
-                    if kind == "axis" else False
-                key_ = (d.role, etype, number)
-                dup = ("  WARNING: same as %s!" % used[key_]
-                       if key_ in used and used[key_] != name
-                       and etype == "button" else "")
-                drain(devices, tui)
-                accept = None
-                while accept is None:
-                    label = ("BTN%d" % (number + 1) if etype == "button"
-                             else "axis %d%s" % (number,
-                                                 " (inverted)" if invert
-                                                 else ""))
-                    opts = ("[RETURN = accept, ESC = redo, I = invert]"
-                            if etype == "axis"
-                            else "[RETURN = accept, ESC = redo]")
-                    draw("-> captured: %s %s%s  %s"
-                         % (d.role, label, dup, opts))
-                    kk = tui.key(0.5)
-                    if kk == "enter":
-                        accept = True
-                    elif kk == "esc":
-                        accept = False
-                    elif kk in ("i", "I") and etype == "axis":
-                        invert = not invert
-                if accept:
-                    used[key_] = name
-                    r = {"name": name, "role": d.role, "type": etype,
-                         "index": number}      # no `proposed`: you pressed it
-                    if etype == "axis":
-                        r["invert"] = invert
-                    bindings[h_] = r
-                    save(results, path)
-                    status = "%s: %s" % (name, describe(results, r))
-                    move(+1)                       # the NEXT command
-                    break
-            drain(devices, tui)
-
-
 def tui_main(scr, args, results, cfg):
     tui = ctui.setup(scr)
 
@@ -1684,49 +1488,38 @@ def tui_main(scr, args, results, cfg):
         guide = build_guide(commands)
         ess_sections = essentials(commands, guide)
         choice = tui.menu("dcs-bind-wizard — %s" % display, [
-            progress_label("Essential binds — start here",
+            progress_label("Bound so far",
                            *aircraft_stats(bindings_clean, ess_sections)),
-            progress_label("All controls, by section",
-                           *aircraft_stats(bindings_clean, sections)),
             "Generate diff.lua files",
             "Change aircraft",
             "Quit",
         ])
-        if choice in (None, 4):
+        if choice in (None, 3):
             return
-        if choice == 3:
+        if choice == 2:
             aircraft = None
             continue
         if choice == 0:
-            run_table(tui, active, results, bindings, used, ess_sections,
-                      args.results, "%s — essential binds" % display,
-                      guide=guide, commands=commands)
-            continue
-        if choice == 2:
-            tui.page("Generate — %s" % display)
-            try:
-                for line in generate(results, cfg, aircraft,
-                                     args.backup_dir):
-                    tui.log(line)
-            except (RuntimeError, OSError) as e:
-                tui.log("ERROR: %s" % e)
+            # The table that used to be here is `./bind dcs tui` now --
+            # the same screen the other five open, with the same keys on
+            # it. This wizard is what is left: find the devices, pick the
+            # module, write the diff.lua.
+            tui.page("Binding — %s" % display)
+            tui.log("  the review screen does this now:")
+            tui.log("")
+            tui.log("      ./bind dcs tui")
+            tui.log("")
+            tui.log("  it reads and writes this same results file, and")
+            tui.log("  shows what you confirmed here in green.")
             tui.wait_any_key()
             continue
-        while True:
-            labels = ([progress_label("ALL sections",
-                                      *aircraft_stats(bindings, sections))]
-                      + [progress_label(title,
-                                        *section_stats(bindings, items))
-                         for title, items in sections]
-                      + ["<- back"])
-            sc = tui.menu("%s — mapping sections" % display, labels)
-            if sc is None or sc == len(labels) - 1:
-                break
-            chosen = sections if sc == 0 else [sections[sc - 1]]
-            heading = "%s — %s" % (display, "all sections" if sc == 0
-                                   else chosen[0][0])
-            run_table(tui, active, results, bindings, used, chosen,
-                      args.results, heading, guide=guide, commands=commands)
+        tui.page("Generate — %s" % display)
+        try:
+            for line in generate(results, cfg, aircraft, args.backup_dir):
+                tui.log(line)
+        except (RuntimeError, OSError) as e:
+            tui.log("ERROR: %s" % e)
+        tui.wait_any_key()
 
 
 # -------------------------------------------------------------------- main --

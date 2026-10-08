@@ -3,11 +3,11 @@
 Two tools on one writer:
 
     plan.py             lays a layout out from NEEDS and the device map
-    ed-bind-wizard.py   a curses TUI that captures bindings off the devices
+    ed-bind-wizard.py   picks a preset, names the devices, writes the .binds
 
-The plan hands its result to the TUI's own `generate()`, so there is one
-implementation of the `.binds` format. They write different presets —
-`Izowiuz-PLAN` and whatever you captured — so neither overwrites the other
+The plan hands its result to the wizard's own `generate()`, so there is one
+implementation of the `.binds` format. Binding itself is `./bind elite tui`,
+the screen the other five games open
 and both can be selected in the game to compare.
 
 ## Where it lives
@@ -46,7 +46,7 @@ into the prefix:
     ./plan.py --tui           walk the layout and write what you keep
     ./plan.py --write         all of it, into the Bindings folder
 
-    ./ed-bind-wizard.py             the capture TUI
+    ./ed-bind-wizard.py             preset, devices, write
     ./ed-bind-wizard.py --reset     discard the results file
     ./ed-bind-wizard.py --generate  headless: write the captured preset
 

@@ -109,6 +109,8 @@ falcon-bms launcher → Keyfile → "BMS - VIRPIL". Regenerate with ./plan.py --
 
 ## Not placed
 
+Nothing on the desk for these.
+
 - AVTR (wanted `button`)
 - JFS — engine start (wanted `hat2`)
 - Throttle idle detent (wanted `hat2`)

@@ -1,0 +1,240 @@
+{
+"binds": [
+{
+"what": "Trim Hat",
+"role": "stick",
+"control": "top-thumb-hat",
+"buttons": [
+8,
+10,
+9,
+11
+],
+"how": "solver"
+},
+{
+"what": "(1) Navigation Modes",
+"role": "stick",
+"control": "bottom-thumb-hat",
+"buttons": [
+13
+],
+"how": "solver"
+},
+{
+"what": "(7) Air-To-Ground Mode",
+"role": "stick",
+"control": "grip-thumb-hat",
+"buttons": [
+22
+],
+"how": "solver"
+},
+{
+"what": "Cannon",
+"role": "stick",
+"control": "main-trigger",
+"buttons": [
+2
+],
+"how": "solver"
+},
+{
+"what": "Weapon Change",
+"role": "throttle",
+"control": "middle-finger-hat",
+"buttons": [
+3
+],
+"how": "solver"
+},
+{
+"what": "Target Lock",
+"role": "stick",
+"control": "thumb-top-button",
+"buttons": [
+6
+],
+"how": "solver"
+},
+{
+"what": "(6) Longitudinal Missile Aiming Mode",
+"role": "throttle",
+"control": "thumb-hat",
+"buttons": [
+17
+],
+"how": "solver"
+},
+{
+"what": "(8) Gunsight Reticle Switch",
+"role": "stick",
+"control": "top-thumb-hat",
+"buttons": [
+7
+],
+"how": "solver"
+},
+{
+"what": "Countermeasures Chaff Dispense",
+"role": "throttle",
+"control": "middle-finger-hat",
+"buttons": [
+4
+],
+"how": "solver"
+},
+{
+"what": "Countermeasures Flares Dispense",
+"role": "throttle",
+"control": "middle-finger-hat",
+"buttons": [
+5
+],
+"how": "solver"
+},
+{
+"what": "Weapon Fire",
+"role": "stick",
+"control": "main-trigger",
+"buttons": [
+3
+],
+"how": "solver"
+},
+{
+"what": "Flaps Up",
+"role": "throttle",
+"control": "t1-rocker",
+"buttons": [
+29
+],
+"how": "solver"
+},
+{
+"what": "Flaps Up/Down",
+"role": "throttle",
+"control": "t2-rocker",
+"buttons": [
+31
+],
+"how": "solver"
+},
+{
+"what": "Landing Gear",
+"role": "throttle",
+"control": "mode-selector",
+"buttons": [
+50,
+49,
+48
+],
+"how": "solver"
+},
+{
+"what": "Wheel Brake On",
+"role": "stick",
+"control": "grip-pinky-button",
+"buttons": [
+30
+],
+"how": "solver"
+},
+{
+"what": "Airbrake",
+"role": "throttle",
+"control": "t3-rocker",
+"buttons": [
+33
+],
+"how": "solver"
+},
+{
+"what": "Airbrake Off",
+"role": "throttle",
+"control": "t4-rocker",
+"buttons": [
+35
+],
+"how": "solver"
+},
+{
+"what": "Airbrake On",
+"role": "throttle",
+"control": "t5-rocker",
+"buttons": [
+37
+],
+"how": "solver"
+},
+{
+"what": "Laser Ranger On/Off",
+"role": "stick",
+"control": "thumb-bottom-button",
+"buttons": [
+12
+],
+"how": "solver"
+},
+{
+"what": "Radar | Display Zoom",
+"role": "stick",
+"control": "analogue-brake-lever-on-the-grip",
+"how": "solver"
+},
+{
+"what": "Target Unlock",
+"role": "throttle",
+"control": "middle-finger-button",
+"buttons": [
+2
+],
+"how": "solver"
+},
+{
+"what": "Communication menu",
+"role": "throttle",
+"control": "thumb-button",
+"buttons": [
+15
+],
+"how": "solver"
+},
+{
+"what": "ELINT Pod On/Off",
+"role": "throttle",
+"control": "keyboard-b1-button",
+"buttons": [
+22
+],
+"how": "solver"
+},
+{
+"what": "Audible Warning Reset",
+"role": "throttle",
+"control": "keyboard-b2-button",
+"buttons": [
+23
+],
+"how": "solver"
+},
+{
+"what": "Target Size / Gunpod Elevation Decrease",
+"role": "throttle",
+"control": "keyboard-b3-button",
+"buttons": [
+24
+],
+"how": "solver"
+},
+{
+"what": "Target Size / Gunpod Elevation Increase",
+"role": "throttle",
+"control": "keyboard-b4-button",
+"buttons": [
+25
+],
+"how": "solver"
+}
+]
+}

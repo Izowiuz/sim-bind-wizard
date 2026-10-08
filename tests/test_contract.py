@@ -410,6 +410,73 @@ class TheJudgementsHaveAHome(unittest.TestCase):
                 self.assertTrue(os.path.exists(where),
                                 f'{game} names {cls.BINDS} and it is not there')
 
+    def test_every_axis_a_game_plans_is_the_shared_shape(self):
+        # Five games each handed over a tuple of its own -- `(ident, role,
+        # axis)`, `(name, role, index, inverse, props)`, four more -- so
+        # nothing could draw them on a screen or hold them to a rule.
+        for game, cls in self.planners():
+            with self.subTest(game=game):
+                try:
+                    layout = cls().build()
+                except SystemExit:
+                    continue        # nothing harvested on this machine
+                for plan in layout.axes:
+                    self.assertIsInstance(plan, corneeds.Axis)
+                    # `does` and nothing else: DCS keeps a row for its
+                    # combined Thrust with no role and no axis, because
+                    # the two engines are bound separately and the sheet
+                    # says so rather than leaving a silent gap.
+                    self.assertTrue(plan.does)
+
+    def test_a_kind_the_map_has_no_word_for_is_an_error(self):
+        # The guard the rename never got. There used to be a kind per
+        # axis -- `stick-x`, `stick-y`, `twist` -- and when that went,
+        # three of the six games went on asking for it, got an empty list
+        # and dropped the axis without a word. MSFS and War Thunder each
+        # planned a layout with no aileron, elevator or rudder in it.
+        import fake
+        dev = fake.device('stick', [fake.button('B', 0)])
+        self.assertEqual([], dev.axes(kind='dial'))   # fair question
+        with self.assertRaises(ValueError) as caught:
+            dev.axes(kind='stick-x')
+        self.assertIn('stick-x', str(caught.exception))
+
+    def test_every_game_lists_what_is_free_the_same_way(self):
+        # One question, three layouts: the same four facts in a different
+        # order with different brackets round them, because `free` was
+        # overridable and two games overrode it rather than ask for the
+        # one thing the shared one lacked -- their own numbering for a
+        # spare button. `says_button` is that one thing.
+        for game, cls in self.planners():
+            with self.subTest(game=game):
+                self.assertFalse('free' in vars(cls),
+                                 f'{game} lists free controls its own way')
+
+    def test_no_sidecar_keeps_a_screen_of_its_own(self):
+        # Two of them had a binding table with the same keys over the
+        # same three states, because nothing offered them the family's
+        # one. What is left in a sidecar is the game's own format and the
+        # things only it does -- naming devices, picking a preset.
+        import glob
+        for path in glob.glob(os.path.join(REPO, 'games', '*', '*.py')):
+            if os.path.basename(path) in ('plan.py', 'harvest.py',
+                                          'propose.py'):
+                continue
+            with self.subTest(file=os.path.basename(path)):
+                with open(path, encoding='utf-8') as f:
+                    body = f.read()
+                self.assertNotIn('def run_table(', body,
+                                 'a second binding screen')
+
+    def test_every_game_opens_the_core_review(self):
+        # DCS had a screen of its own with the same keys over the same
+        # three states, because `review` sat on `Planner` and DCS is a
+        # `Proposer`. Nothing offered it the family's one.
+        for game, cls in self.planners():
+            with self.subTest(game=game):
+                self.assertFalse('review' in vars(cls),
+                                 f'{game} opens a screen of its own again')
+
     def test_every_game_builds_the_core_sheet(self):
         # DCS wrote its own, with its own template, and that is how its
         # kneeboard drifted: the shared one learned to put axes inside
@@ -606,12 +673,15 @@ class TheDefaultVerb(unittest.TestCase):
     def test_a_bare_game_opens_the_review(self):
         self.assertEqual('tui', self.bind.default_verb('x4'))
 
-    def test_a_game_with_no_review_falls_back_to_the_plan(self):
-        # DCS has none: its capture wizard already is one, which `GAPS`
-        # says in those words. Falling through to an error would make the
-        # shortest command in the family fail for one of six games.
-        self.assertNotIn('tui', self.bind.GAMES['dcs'])
-        self.assertEqual('plan', self.bind.default_verb('dcs'))
+    def test_every_game_opens_the_same_review(self):
+        # DCS used to have none, because it had a screen of its own with
+        # the same keys on it -- `c C x X ↵` over the same three states.
+        # The fallback to `plan` stays written down for a game that one
+        # day has no screen; nothing is in that state now.
+        for game in self.bind.GAMES:
+            with self.subTest(game=game):
+                self.assertIn('tui', self.bind.GAMES[game])
+                self.assertEqual('tui', self.bind.default_verb(game))
 
     def test_every_game_has_a_default_it_can_run(self):
         for game in self.bind.GAMES:

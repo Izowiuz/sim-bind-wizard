@@ -105,27 +105,6 @@ def needs(described, placed):
 
 
 # name in WT, the control kind it belongs on, and which of its axes
-AXIS_NEEDS = [
-    ('ailerons',                'stick-x',      False),
-    ('elevator',                'stick-y',      True),
-    ('rudder',                  'twist',        False),
-    ('helicopter_cyclic_roll',  'stick-x',      False),
-    ('helicopter_cyclic_pitch', 'stick-y',      True),
-    ('helicopter_pedals',       'twist',        False),
-    ('throttle',                'throttle-lever', False),
-    ('helicopter_collective',   'throttle-lever', False),
-    ('camx',                    'view-x',       False),
-    ('camy',                    'view-y',       False),
-    ('helicopter_camx',         'view-x',       False),
-    ('helicopter_camy',         'view-y',       False),
-    ('sensor_cue_x',            'cue-x',        False),
-    ('sensor_cue_y',            'cue-y',        False),
-    ('helicopter_atgm_aim_x',   'cue-x',        False),
-    ('helicopter_atgm_aim_y',   'cue-y',        False),
-    ('brake_left',              'brake',        False),
-    ('brake_right',             'brake',        False),
-    ('zoom',                    'zoom',         False),
-]
 
 
 #: Extra deadzone for a named axis, overriding the rule in build().
@@ -169,65 +148,51 @@ def devices():
     return devmap.by_role('stick', 'throttle')
 
 
-def axis_of(devs, want):
-    """Find the axis a need names, by what the map says it is."""
+def deadzones(row, a):
+    """The properties wt-bind-preset writes beside an axis.
+
+    Computed, not judged: a ministick needs more slack than a lever, and
+    a lever none at all. `AXIS_DEADZONE` overrides where somebody has an
+    opinion about one.
+    """
+    dead = AXIS_DEADZONE.get(row['does'])
+    if dead is None:
+        dead = 0.06 if a.kind == 'ministick' else (
+            0 if a.kind == 'lever' else 0.02)
+    props = {'innerDeadzone': dead}
+    props.update(AXIS_PROPS.get(row['does'], {}))
+    return props
+
+
+def search(what, devs):
+    """An axis that is a search rather than a name.
+
+    Two of War Thunder's are: the brake is "a slider or lever on the stick
+    you can read absolutely", and no vocabulary makes that a label.
+    """
     stick, thr = devs['stick'], devs['throttle']
-    def by_kind(dev, kind):
-        return next(iter(dev.axes(kind=kind)), None)
-    if want == 'stick-x':
-        return 'stick', by_kind(stick, 'stick-x')
-    if want == 'stick-y':
-        return 'stick', by_kind(stick, 'stick-y')
-    if want == 'twist':
-        return 'stick', by_kind(stick, 'twist')
-    if want == 'throttle-lever':
-        a = next((x for x in thr.axes()
-                  if 'left' in thr.axis_label(x.index).lower()), None)
-        return 'throttle', a or by_kind(thr, 'lever')
-    if want in ('view-x', 'view-y'):
-        g = next((g for g in thr.groups('ministick')), None)
-        if not g or len(g.axes) < 2:
-            return 'throttle', None
-        return 'throttle', thr.axis(g.axes[0 if want == 'view-x' else 1])
-    if want in ('cue-x', 'cue-y'):
-        g = next((g for g in stick.groups('ministick')), None)
-        if not g or len(g.axes) < 2:
-            return 'stick', None
-        return 'stick', stick.axis(g.axes[0 if want == 'cue-x' else 1])
-    if want == 'brake':
-        return 'stick', next((a for a in stick.axes()
-                              if a.kind in ('slider', 'lever')
-                              and a.safe_for_absolute), None)
-    if want == 'zoom':
-        # A dial first, to match DCS: the same hand does the same thing in both
-        # sims, which is worth more than either sim's local optimum. It rests
-        # centred rather than at zero, so the view starts part-zoomed -- live
-        # with it, or fall back to a slider that rests at its minimum.
-        dial = next((a for a in thr.axes(kind='dial') if a.proportional), None)
-        if dial:
-            return 'throttle', dial
-        return 'throttle', next((a for a in thr.axes()
-                                 if a.kind == 'slider'
-                                 and a.safe_for_absolute
-                                 and a.proportional), None)
-    return None, None
+    if what == 'brake':
+        return next((a for a in stick.axes()
+                     if a.kind in ('slider', 'lever')
+                     and a.safe_for_absolute), None)
+    # A dial first, to match DCS: the same hand does the same thing in both
+    # sims, which is worth more than either sim's local optimum. It rests
+    # centred rather than at zero, so the view starts part-zoomed -- live
+    # with it, or fall back to a slider that rests at its minimum.
+    dial = next((a for a in thr.axes(kind='dial') if a.proportional), None)
+    return dial or next((a for a in thr.axes()
+                         if a.kind == 'slider' and a.safe_for_absolute
+                         and a.proportional), None)
 
 
-def axis_plan(devs):
-    """[(name, role, index, inverse, props)] -- what wt-bind-preset writes."""
-    axes = []
-    for name, want, inverse in AXIS_NEEDS:
-        role, a = axis_of(devs, want)
-        if a is None:
-            continue
-        dead = AXIS_DEADZONE.get(name)
-        if dead is None:
-            dead = 0.06 if a.kind == 'ministick' else (
-                0 if a.kind == 'lever' else 0.02)
-        props = {'innerDeadzone': dead}
-        props.update(AXIS_PROPS.get(name, {}))
-        axes.append((name, role, a.index, inverse, props))
-    return axes
+def axis_plan(devs, rows):
+    """[corneeds.Axis] -- what wt-bind-preset writes.
+
+    `rows` is the `axes` section of the needs file. It was a literal here
+    with a private vocabulary -- `stick-x`, `view-y`, `cue-x` -- which is
+    the map's two words said as one, plus two that are really searches.
+    """
+    return corneeds.read_axes(rows, devs, carries=deadzones, finds=search)
 
 
 def button_table(placed):
@@ -337,9 +302,10 @@ def _sheet(layout):
                           bindings=cell))
 
     seen = {}
-    for name, role, idx, inverse, _props in axes:
+    for plan in axes:
+        name, role, idx = plan.does, plan.role, plan.axis.index
         cell = seen.setdefault((role, idx), {'Air': [], 'Helicopter': [],
-                                             'inv': inverse})
+                                             'inv': plan.invert})
         cell['Helicopter' if name.startswith('helicopter_')
              else 'Air'].append(name)
     for (role, idx), cell in sorted(seen.items()):
@@ -424,6 +390,17 @@ class WarThunder(adapter.Planner):
         """
         return self._needs
 
+    @property
+    def AXES(self) -> list:
+        """The `axes` section of the needs file.
+
+        Axes never go through the allocator -- an aircraft's pitch axis is
+        the stick's pitch axis on every desk there is -- but which lever
+        is the throttle is a judgement like any other, and it used to be
+        a literal in this file.
+        """
+        return self._axes
+
     def __init__(self, game_dir=None, saves=None, backup_dir=None):
         self.backup_dir = backup_dir
         CAT[:] = cactions.read(self.cache('wt-actions.json'))
@@ -433,6 +410,10 @@ class WarThunder(adapter.Planner):
         except vocab.Missing:
             pass          # only annotates --why, so it may be absent
         self._needs = needs(self.NEEDS_FILE, self.BINDS)
+        # `list()` because `vocab.load` answers with whatever the
+        # file holds and `AXES` promises a list.
+        self._axes = list(vocab.load(HERE, self.NEEDS_FILE,
+                                     key='axes'))
         # The writer owns machine.blk and where the install is; these were
         # module constants in it with no override at all.
         self.writer = typing.cast(Preset,
@@ -447,7 +428,7 @@ class WarThunder(adapter.Planner):
         devs = devmap.by_role('stick', 'throttle')
         flat = [n for n in self.NEEDS if n.first_shape != 'axis']
         return corneeds.Layout(devs, *corneeds.allocate(flat, devs),
-                               axes=axis_plan(devs))
+                               axes=axis_plan(devs, self.AXES))
 
     @typing.override
     def catalogue(self):
@@ -534,12 +515,11 @@ class WarThunder(adapter.Planner):
         return out
 
     @typing.override
-    def free(self, layout):
-        out = [f'{len(layout.free)} controls left free:']
-        for role, c in layout.free:
-            out.append(f'  {role:8s} {c.kind:9s} {str(c.buttons):18s} '
-                       f'{c.label}   [{corneeds.reach_said(c)}]')
-        return out
+    def says_button(self, role, index):
+        """War Thunder numbers globally across devices, in the order they
+        appear in machine.blk -- so the number you see in its menu is not
+        the map's."""
+        return str(wt_offsets()[role][1] + index)
 
 
 if __name__ == '__main__':

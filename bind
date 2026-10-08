@@ -114,6 +114,7 @@ VERB_ROWS = {
         'why':     ('propose.py', ('--why',)),
         'free':    ('propose.py', ('--free',)),
         'sheet':   ('propose.py', ('--sheet', '--html')),
+        'tui':     ('propose.py', ('--tui',)),
         'write':   ('propose.py', ('--write',)),
         'capture': ('dcs-bind-wizard.py', ()),
     },
@@ -164,7 +165,6 @@ GAMES = {g: dict(VERB_ROWS.get(g, {}), title=t) for g, t in TITLES.items()}
 #: Where a verb is missing, why -- printed in the table so a gap reads as a
 #: fact about the game rather than as an omission here.
 GAPS = {
-    ('dcs', 'tui'): 'its capture wizard already is one — ./bind dcs capture',
     ('falconbms', 'capture'): 'no capture wizard',
     ('warthunder', 'capture'): 'no capture wizard',
     ('msfs', 'capture'): 'no capture wizard',
@@ -211,9 +211,10 @@ def default_verb(game):
     layout -- the thing you read once to see whether the allocator got it
     right, rather than the thing you come back to.
 
-    DCS has no `tui`: its capture wizard already is one, which `GAPS` says
-    in those words. Falling through to an error there would make the
-    shortest command in the family fail for one game in six.
+    All six have one now. DCS had a screen of its own with the same keys
+    on it -- `c C x X ↵` over the same three states -- because nothing
+    offered it this one; `./bind dcs capture` is what is left of that
+    wizard, and it captures and writes rather than reviewing.
     """
     return 'tui' if 'tui' in GAMES.get(game, {}) else 'plan'
 

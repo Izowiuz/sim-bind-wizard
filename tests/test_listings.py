@@ -114,9 +114,14 @@ class DcsSeed(unittest.TestCase):
     """
 
     def recs(self, layout):
-        written = DCS.seed(layout)
-        (text,) = written.values()
-        return json.loads(text)['aircraft'][DCS.aircraft]
+        # Through the writer, which is where the question lives now: what
+        # the screen kept is what reaches the game.
+        import games.dcs.propose as propose        # noqa: F401
+        from core import adapter
+        mod = adapter.from_file('dcs_for_test',
+                                os.path.join(REPO, 'games', 'dcs',
+                                             'propose.py'))
+        return mod.seed(DCS.module, DCS.cmds, DCS.guide, layout=layout)
 
     def test_clearing_every_binding_leaves_only_the_axes(self):
         # The starkest form: accept nothing at all. Axes never went through
