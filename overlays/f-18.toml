@@ -7,7 +7,7 @@ says = "the Hornet's HOTAS: trigger shoots, castle picks the sensor, the left ha
 # grip and lands on whatever your desk has in that place.
 #
 # So this works on anything whose needs file names the job. X4 laid out like
-# a Hornet is `./bind x4 plan --overlay f-18`.
+# a Hornet is `./bind-wizard.py x4 plan --overlay f-18`.
 #
 # It is a LEAN, not a law. `place_right` is +15 against `device_right`'s +40,
 # so a wish here tips a close call and loses to reach and to what is already

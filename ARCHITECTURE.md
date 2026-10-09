@@ -11,8 +11,8 @@
 ## Files
 
     sim-device-map/
-      devicemap.py            Axis, Group, Device; load_all, by_usb, probe, find_connected
-      capture.py              curses TUI; writes captures/
+      devicemap/__init__.py   Axis, Group, Device; load_all, by_usb, probe, find_connected
+      devicemap/capture.py    curses TUI; writes captures/ (python -m devicemap)
       probe.py                live event monitor; what moves together
       captures/<maker>/*.toml
 
@@ -42,7 +42,7 @@
       core/tui.py             the curses shell every screen draws in,
                               and Theme, which is what colour it draws in
       games/<game>/harvest.py     a Harvest subclass
-      games/<game>/plan.py        an Adapter subclass (DCS: propose.py)
+      games/<game>/plan.py        an Adapter subclass (DCS: plan.py)
       games/<game>/<game>-needs.json   what each function is, and how you
                               use it. In the repo: nothing derives it
       games/<game>/<game>-binds.json   what sits where, and who decided.
@@ -77,11 +77,11 @@ palettes coloured two static header cells rather than any row. `tests/
 test_contract.py` now refuses a game that writes its own kneeboard.
 
 DCS does still pass its own `reach` table to `allocate()`, and
-`games/dcs/dcs-bind-wizard.py` is a curses capture TUI rather than a planner:
-it writes the vocabulary `propose.py` reads, and of the core it uses only
+`games/dcs/capture.py` is a curses capture TUI rather than a planner:
+it writes the vocabulary `plan.py` reads, and of the core it uses only
 `capture`, `game`, `tui` and `backup`.
 
-Its binding table is gone -- `./bind dcs tui` is `core/review.py`, the screen
+Its binding table is gone -- `./bind-wizard.py dcs tui` is `core/review.py`, the screen
 the other five open. It had the same keys over the same three states (`c C x X
 ↵` against proposed / confirmed / nothing) because nothing offered it this one;
 `Adapter.review` is where that now lives, rather than `Planner.review`. What is
@@ -99,9 +99,9 @@ rather than DCS's private trick. The hand-placed pass reserves BUTTONS rather
 than whole controls for the same reason -- four of DCS's commands share a hat,
 and refusing the control to the second comer left three of them orphaned.
 
-`games/elite` keeps `ed-bind-wizard.py` for what only it does: picking a base
+`games/elite` keeps `capture.py` for what only it does: picking a base
 preset, naming which joystick is which, and writing the `.binds` format.
-Binding is `./bind elite tui`, the screen the other five open -- it had a table
+Binding is `./bind-wizard.py elite tui`, the screen the other five open -- it had a table
 of its own with the same keys on it, and that went the way DCS's did.
 
 Both wizards read `/dev/input/js*` themselves rather than asking the game what
@@ -408,7 +408,7 @@ which is the point: MSFS finds its profiles by globbing `inputprofile_*` and
 used to find its own backups that way too.
 
 Pass one `when` to group several calls into one run — BMS writes two files
-under `./bind bms write`, DCS's `--reseed` rewrites one file once per aircraft.
+under `./bind-wizard.py bms write`, DCS's `--reseed` rewrites one file once per aircraft.
 A name already stored under that stamp is kept, so a run folder holds the state
 from before the run rather than a half-written intermediate.
 
@@ -455,14 +455,14 @@ A game whose vocabulary has not been harvested cannot have its planner
 imported, so those tests skip with the harvest command in the reason. Everything
 in `test_needs` and `test_backup` runs on a fresh clone.
 
-**Both ways in are covered, and they need different tests.** `./bind <game>
+**Both ways in are covered, and they need different tests.** `./bind-wizard.py <game>
 <verb>` is a table and is checked as one. A script run directly is a
 *process*, so `RunDirectly` starts each planner and War Thunder's writer as
 `__main__` in its own interpreter. Nothing else reaches that: `adapter.load`
 imports a module and never runs its `main()`, so a script calling something
 the core has moved is invisible to every other test here. The two capture
 wizards open curses and read `/dev/input`, so only their import is covered --
-which is all `harvest.wizard()` and `propose.wizard()` ever do with them.
+which is all `harvest.wizard()` and `plan.wizard()` ever do with them.
 
 **What is tested is what has a story.** Nearly every rule in `core/needs.py`
 carries a comment saying what went wrong before it existed — the airbrake that
@@ -477,7 +477,7 @@ ramp need avoided the thumb by scoring, not by the floor; the capacity check
 was shadowed by the shape check — and each was rewritten until it failed for
 the right reason.
 
-`RunDirectly` was held to the same bar. `wt-bind-preset.py` called
+`RunDirectly` was held to the same bar. `write.py` called
 `plan.build()` after `build()` had become a method; the ABC commit converted
 the second of the two call sites in that file and missed the one in `main()`,
 which left the script dead on its first line that needed a plan while all 168

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""bind - run one game's binding tools
+"""bind-wizard.py - run one game's binding tools
 
 SYNOPSIS
-    ./bind
-    ./bind GAME [VERB] [ARG...]
+    ./bind-wizard.py
+    ./bind-wizard.py GAME [VERB] [ARG...]
 
 DESCRIPTION
-    With no arguments, print which verbs each game answers.
+    With no arguments, print which verbs each game answers. Then
+    pick a game from the list.
     VERB defaults to `tui`, or `plan` where a game has no review
     screen. Anything after it is passed to the script.
 
@@ -35,12 +36,13 @@ GAMES
     dcs  elite (ed)  falconbms (bms)  msfs  warthunder (wt)  x4
 
 EXAMPLES
-    ./bind wt why --desk IzoDesk
-    ./bind x4 sheet
-    ./bind bms plan --audit
+    ./bind-wizard.py wt why --desk IzoDesk
+    ./bind-wizard.py x4 sheet
+    ./bind-wizard.py bms plan --audit
 
 NOTES
-    A verb a game does not answer is omitted; `./bind` prints the reason.
+    A verb a game does not answer is omitted; `./bind-wizard.py` prints
+    the reason.
     Every planner owns --write. War Thunder and DCS delegate it to the
     script that owns their file format.
 """
@@ -58,8 +60,8 @@ VERBS = ('harvest', 'plan', 'why', 'free', 'sheet', 'tui', 'write', 'capture')
 #: not listed here: `discover()` reads `games/` for those, so a new folder is
 #: visible without anybody editing this file. What stays written out is which
 #: flags a verb maps to, because asking an adapter would mean constructing
-#: one, and constructing reads caches and the device map -- `./bind` with no
-#: arguments has to stay instant on a clone where nothing is harvested.
+#: one, and constructing reads caches and the device map -- `./bind-wizard.py`
+#: with no arguments has to stay instant on a clone where nothing is harvested.
 #:
 #: `tests/test_contract.py` checks every row against the adapter's real
 #: parser, and checks that every verb withheld has a reason in GAPS. The
@@ -110,13 +112,13 @@ VERB_ROWS = {
     'dcs': {
         'alias': (),
         'harvest': ('harvest.py', ('--json',)),
-        'plan':    ('propose.py', ()),
-        'why':     ('propose.py', ('--why',)),
-        'free':    ('propose.py', ('--free',)),
-        'sheet':   ('propose.py', ('--sheet', '--html')),
-        'tui':     ('propose.py', ('--tui',)),
-        'write':   ('propose.py', ('--write',)),
-        'capture': ('dcs-bind-wizard.py', ()),
+        'plan':    ('plan.py', ()),
+        'why':     ('plan.py', ('--why',)),
+        'free':    ('plan.py', ('--free',)),
+        'sheet':   ('plan.py', ('--sheet', '--html')),
+        'tui':     ('plan.py', ('--tui',)),
+        'write':   ('plan.py', ('--write',)),
+        'capture': ('capture.py', ()),
     },
     'elite': {
         'alias': ('ed',),
@@ -127,7 +129,7 @@ VERB_ROWS = {
         'sheet':   ('plan.py', ('--sheet', '--html')),
         'tui':     ('plan.py', ('--tui',)),
         'write':   ('plan.py', ('--write',)),
-        'capture': ('ed-bind-wizard.py', ()),
+        'capture': ('capture.py', ()),
     },
 }
 
@@ -205,7 +207,7 @@ def table():
 
 
 def default_verb(game):
-    """The verb a bare `./bind <game>` runs.
+    """The verb a bare `./bind-wizard.py <game>` runs.
 
     The screen, where there is one. It used to be `plan`, which prints the
     layout -- the thing you read once to see whether the allocator got it
@@ -213,7 +215,7 @@ def default_verb(game):
 
     All six have one now. DCS had a screen of its own with the same keys
     on it -- `c C x X ↵` over the same three states -- because nothing
-    offered it this one; `./bind dcs capture` is what is left of that
+    offered it this one; `./bind-wizard.py dcs capture` is what is left of that
     wizard, and it captures and writes rather than reviewing.
     """
     return 'tui' if 'tui' in GAMES.get(game, {}) else 'plan'
@@ -335,19 +337,69 @@ def pick_desk(rigs, where):
     return rigs[got].name if got is not None else None
 
 
+def game_items():
+    """One line per game: the word you type and what it is.
+
+    The word first, because that is the half you reuse: every other
+    command in this family starts with it.
+    """
+    wide = max(len(g) for g in GAMES)
+    return [f'{game:<{wide}}   {GAMES[game]["title"]}'
+            for game in sorted(GAMES)]
+
+
+def pick_game():
+    """Which game to work on, or None when nobody picked one.
+
+    The screen the desk list already uses, asked the same way, because
+    the two questions come one after the other: which game, then which
+    desk it is for.
+
+    Only at a terminal. Piped, the table is the whole answer -- it is
+    what the contract suite reads, and a screen there would have nothing
+    to draw on.
+    """
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        return None
+    if HERE not in sys.path:
+        sys.path.insert(0, HERE)
+    import curses
+    from core import tui as ctui
+
+    games = sorted(GAMES)
+
+    def run(scr):
+        tui = ctui.setup(scr)
+        return tui.choose('Which game?',
+                          [('plain', t) for t in game_items()])
+
+    try:
+        got = curses.wrapper(run)
+    except curses.error:
+        # The same narrow catch as `pick_desk`: a terminal that cannot
+        # draw this, rather than anything that went wrong inside `run`.
+        return None
+    return games[got] if got is not None else None
+
+
 def main():
     args = sys.argv[1:]
     if not args or args[0] in ('-h', '--help'):
-        if not args:
-            table()
-        else:
+        if args:
             print(__doc__)
-        return 0
+            return 0
+        table()
+        picked = pick_game()
+        if picked is None:
+            return 0
+        # Straight on into the dispatch below, as though it had been
+        # typed: the verb, the desk and the subprocess are one path.
+        args = [picked]
 
     game = resolve(args[0])
     if game is None:
-        print(f'no game called {args[0]!r}. Try ./bind with no arguments.',
-              file=sys.stderr)
+        print(f'no game called {args[0]!r}. '
+              'Try ./bind-wizard.py with no arguments.', file=sys.stderr)
         return 2
 
     spec = GAMES[game]
@@ -360,7 +412,7 @@ def main():
         why = GAPS.get((game, verb))
         print(f'{game} has no {verb!r}'
               + (f': {why}' if why else '')
-              + '. Try ./bind with no arguments.', file=sys.stderr)
+              + '. Try ./bind-wizard.py with no arguments.', file=sys.stderr)
         return 2
 
     script, fixed = spec[verb]

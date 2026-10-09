@@ -6,7 +6,7 @@ DESCRIPTION
     with its menu name.
 
 FILES
-    wt-actions.json        written: every action and axis, with its menu name
+    warthunder-actions.json  written: every action and axis, with its menu name
 
 OPTIONS
     --game-dir PATH        the War Thunder install (auto-detected otherwise)
@@ -21,9 +21,10 @@ NOTES
 # One file comes out, and it does not belong in version control -- it is
 # Gaijin's own localisation:
 #
-#   wt-actions.json      every bindable action and axis, with its menu name.
-#                        plan.py refuses to write an action that is not in here,
-#                        because War Thunder drops an unknown id in silence.
+#   warthunder-actions.json   every bindable action and axis, with its menu
+#                             name. plan.py refuses to write an action that
+#                             is not in here, because War Thunder drops an
+#                             unknown id in silence.
 #
 # The joystick profiles the game ships used to be counted as well -- how many
 # of them bound each action, decoded out of the binary .blk presets. Those
@@ -206,7 +207,7 @@ class WarThunderHarvest(adapter.Harvest):
     """War Thunder's vocabulary."""
 
     game = 'warthunder'
-    files = {'wt-actions.json': ('actions', 'local', 'controls')}
+    files = {'warthunder-actions.json': ('actions', 'local', 'controls')}
 
     @typing.override
     def arguments(self, parser):
@@ -228,13 +229,13 @@ class WarThunderHarvest(adapter.Harvest):
         # record and is not written twice.
         local = {i: names[1] for i, names in actions.items()
                  if len(names) > 1 and names[1]}
-        return {'wt-actions.json': {'actions': action_rows(actions),
+        return {'warthunder-actions.json': {'actions': action_rows(actions),
                                     'local': local,
                                     'controls': controls}}
 
     @typing.override
     def summary(self, data):
-        vocab = data['wt-actions.json']
+        vocab = data['warthunder-actions.json']
         return [f'game: {self.where}',
                 f"{len(vocab['actions'])} actions, "
                 f"{len(vocab['controls'])} axis names"]

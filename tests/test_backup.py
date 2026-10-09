@@ -94,7 +94,7 @@ class Names(Temp):
 
 class Runs(Temp):
     def test_one_stamp_groups_several_calls_into_one_run(self):
-        # BMS writes two files under `./bind bms write`.
+        # BMS writes two files under `./bind-wizard.py bms write`.
         a = self.file('a.cfg', 'A')
         b = self.file('b.cfg', 'B')
         when = backup.stamp()

@@ -3,7 +3,7 @@
     "core",
     "games",
     "tests",
-    "bind"
+    "bind-wizard.py"
   ],
   "exclude": [
     "**/__pycache__",

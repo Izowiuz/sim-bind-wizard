@@ -117,8 +117,8 @@ class Review:
                  harvest=None, drop=None, rules=None, rebuild=None,
                  game='', offers=()):
         self.title = title
-        #: `bind`'s own word for this game. Only the overlay needs it: a
-        #: rule naming `what` belongs to one game, and two games can have
+        #: `bind-wizard.py`'s own word for this game. Only the overlay needs
+        #: it: a rule naming `what` belongs to one game, and two games can have
         #: a function of the same name wanting different things.
         self.game = game
         self.subtitle = subtitle
@@ -149,8 +149,8 @@ class Review:
         #: What that something was, for the box that asks about it.
         self.since = ''
         #: Reading the game again, and forgetting what was read. Both are
-        #: `bind`'s own verbs run as subprocesses; neither can touch the
-        #: judgements, because `drop` walks `CACHE` and the judgements are
+        #: `bind-wizard.py`'s own verbs run as subprocesses; neither can touch
+        #: the judgements, because `drop` walks `CACHE` and the judgements are
         #: deliberately not in it.
         self.harvest = harvest
         self.drop = drop

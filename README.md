@@ -20,10 +20,10 @@ describes devices, not games, and is useful with no game installed.
 
 ## Layout
 
-    bind        one front door: ./bind <game> <verb>
-    core/       matching, device roles, game locations, kneeboards,
-                reading the sticks directly and the curses shell for it
-    games/      one folder per game
+    bind-wizard.py   one front door: ./bind-wizard.py <game> <verb>
+    core/            matching, device roles, game locations, kneeboards,
+                     reading the sticks directly and the curses shell for it
+    games/           one folder per game
 
 ## Games
 
@@ -38,16 +38,16 @@ describes devices, not games, and is useful with no game installed.
 
 ## Quick start
 
-    ./bind                   the games, and what each one can do
-    ./bind bms why           the layout, with the evidence for each choice
-    ./bind bms sheet         the kneeboard
-    ./bind bms write         into the game (close the game first)
+    ./bind-wizard.py                   the games, and what each one can do
+    ./bind-wizard.py bms why           the layout, with the evidence for each choice
+    ./bind-wizard.py bms sheet         the kneeboard
+    ./bind-wizard.py bms write         into the game (close the game first)
 
     aliases   bms = falconbms   wt = warthunder   ed = elite
 
 The verb is canonical, what it runs is not — a game may answer it with a
 separate script, or need two writes for one layout. Anything after the verb is
-forwarded, so `./bind dcs plan -a su-25T` works.
+forwarded, so `./bind-wizard.py dcs plan -a su-25T` works.
 
 The scripts are still there to be run directly:
 

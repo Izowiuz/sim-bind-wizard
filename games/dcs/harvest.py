@@ -14,16 +14,16 @@ OPTIONS
     -a, --aircraft KEY  one module only (default: every one installed)
 
 NOTES
-    The reading itself lives in dcs-bind-wizard.py, which owns the format:
+    The reading itself lives in capture.py, which owns the format:
     a module's default.lua goes through a `lua` or `luajit` binary with the
     game's globals stubbed out. This caches what that produces.
 """
 
-# Why this exists at all, when propose.py could read the install directly --
+# Why this exists at all, when plan.py could read the install directly --
 # and did until now:
 #
 # Running the vocabulary through a Lua interpreter costs a second or two per
-# module and needs DCS on the machine. Cached, `propose.py` opens on a clone
+# module and needs DCS on the machine. Cached, `plan.py` opens on a clone
 # with no game installed, which is what every other game in the family
 # already offered and what makes `tests/test_contract.py` able to check DCS's
 # cache against its planner instead of skipping it.
@@ -50,16 +50,16 @@ from core import adapter                                    # noqa: E402
 
 
 #: The wizard's own results file, which is also where it wrote down where
-#: the game is. Read directly rather than through `propose.py`: a harvest
+#: the game is. Read directly rather than through `plan.py`: a harvest
 #: that imports the planner it feeds is a loop nobody needs.
-RESULTS = os.path.join(HERE, 'dcs-bind-wizard-results.json')
+RESULTS = os.path.join(HERE, 'dcs-results.json')
 
 
 def wizard():
     """The capture wizard, which owns the reading of a module."""
     return adapter.from_file('dcs_harvest_wizard',
-                             os.path.join(HERE, 'dcs-bind-wizard.py'),
-                             argv=['dcs-bind-wizard'])
+                             os.path.join(HERE, 'capture.py'),
+                             argv=['capture.py'])
 
 
 def where_is_the_game(game_dir=None):
@@ -84,7 +84,7 @@ def read_module(mod, cfg, key, factory_dir):
 
     The guide used to be written here beside the commands. It is the
     wizard's own table applied to the command names, so a cached copy
-    would keep an edit to that table out of the next plan; `propose.py`
+    would keep an edit to that table out of the next plan; `plan.py`
     builds it on every run instead.
     """
     return {'commands': mod.harvest_commands(cfg, key, factory_dir)}

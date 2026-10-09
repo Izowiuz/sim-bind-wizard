@@ -1792,11 +1792,14 @@ class Layout:
         if not left or not every:
             return ''
         if left == every:
-            return ('no control on this desk has a measured reach, so'
-                    ' nothing here knows what is near your hand'
-                    ' — sim-device-map/capture.py, then `r`')
-        return (f'{left} of {every} controls have no measured reach, so'
-                ' they sort below every control that has')
+            # Asked here rather than held as a literal: the map may be
+            # anywhere, and a command nobody can type is not an answer.
+            from core import devmap
+            return ('No control on this desk has a measured reach, so '
+                    'nothing here knows what is near your hand. Run '
+                    f'{devmap.capture_command()}, then press r.')
+        return (f'{left} of {every} controls have no measured reach. They '
+                'sort below every control that has one.')
 
     def but(self, placed):
         """The same layout with a different set of placements.

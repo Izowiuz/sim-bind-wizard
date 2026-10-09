@@ -2,16 +2,16 @@
 
 Two tools, on the core for everything but the format:
 
-    dcs-bind-wizard.py   harvests the module's vocabulary, names which
+    capture.py   harvests the module's vocabulary, names which
                          joystick DCS calls what, writes the diff.lua
-    propose.py           derives needs from the module's own commands and
+    plan.py           derives needs from the module's own commands and
                          hands them to core.needs.allocate
 
-`propose.py`'s kneeboard carries `?` where nobody has confirmed a row at the
+`plan.py`'s kneeboard carries `?` where nobody has confirmed a row at the
 stick — the one thing this page says that the other five do not. The page
 itself is the core's — see `ARCHITECTURE.md`.
 
-`./bind dcs tui` is the family's review screen. `./bind dcs capture` is what is
+`./bind-wizard.py dcs tui` is the family's review screen. `./bind-wizard.py dcs capture` is what is
 left of the wizard: find the devices, pick the module, write the diff.lua.
 
 ## Where it lives
@@ -29,8 +29,8 @@ Steam app 223750, Proton. The install can sit in any library:
       Logs/dcs.log                   device GUIDs are read from here
 
     --game-dir      the install; --saved-games derives from it unless given
-    -r FILE         dcs-bind-wizard-results.json, which remembers both paths
-                    after the first run. propose.py takes --game-dir only and
+    -r FILE         dcs-results.json, which remembers both paths
+                    after the first run. plan.py takes --game-dir only and
                     reads the rest from that file
 
 The current install is `/mnt/steam-library-b/SteamLibrary/steamapps`, a second
@@ -38,21 +38,21 @@ library — not the default one under `~/.local/share/Steam`.
 
 ## How to run it
 
-    ./propose.py --write -a su-25T       into the game, via the wizard
-    ./dcs-bind-wizard.py                 the TUI: pick an aircraft, then bind
-    ./dcs-bind-wizard.py -g -a su-25T    the same write, from the wizard
-    ./dcs-bind-wizard.py -s -a su-25T    sync: absorb changes made in DCS's UI
-    ./dcs-bind-wizard.py --reset         discard the results file
+    ./plan.py --write -a su-25T       into the game, via the wizard
+    ./capture.py                 the TUI: pick an aircraft, then bind
+    ./capture.py -g -a su-25T    the same write, from the wizard
+    ./capture.py -s -a su-25T    sync: absorb changes made in DCS's UI
+    ./capture.py --reset         discard the results file
 
-    ./propose.py -a FA-18C                the layout
-    ./propose.py -a FA-18C --why          and the evidence for each choice
-    ./propose.py -a FA-18C --check        the layout against what is bound
-    ./propose.py -a FA-18C --audit        bindings that no longer fit the
+    ./plan.py -a FA-18C                the layout
+    ./plan.py -a FA-18C --why          and the evidence for each choice
+    ./plan.py -a FA-18C --check        the layout against what is bound
+    ./plan.py -a FA-18C --audit        bindings that no longer fit the
                                           hardware
-    ./propose.py -a '' --audit            ...across every module
-    ./propose.py -a FA-18C --sheet --html the kneeboard
+    ./plan.py -a '' --audit            ...across every module
+    ./plan.py -a FA-18C --sheet --html the kneeboard
 
-Binding is `./bind dcs tui`, the family's review screen — `./bind` and
+Binding is `./bind-wizard.py dcs tui`, the family's review screen — `./bind-wizard.py` and
 `USING.md` have its keys. The wizard's own results file holds where the game
 is and which joystick DCS calls what, and is saved after every change.
 
@@ -110,7 +110,7 @@ thrust, views, pitch. Their hashes cannot be computed, so they are read out of
 a factory profile that binds them, matched back by normalised name.
 
 **What belongs on a HOTAS is written down, not counted.** `HINTS` in
-`dcs-bind-wizard.py` says, per command, which device it lives on in the real
+`capture.py` says, per command, which device it lives on in the real
 aircraft and when you touch it; a command it puts nowhere is a cockpit switch
 the keyboard can have. That is what opens the Hornet on trigger, trim, sensor
 control, TDC and gear rather than on 849 cockpit switches.
@@ -139,7 +139,7 @@ profile: pitch and roll curvature 0.12, deadzone 0.03; rudder 0.15/0.05;
 thrust as a slider.
 
 **A tighter reach ceiling than the rest of the family.** `REACH` puts
-`in the air` at tier 1 where the core's default is 3, and `propose.py` passes
+`in the air` at tier 1 where the core's default is 3, and `plan.py` passes
 it to `allocate()`. On this hardware it moved the Hornet's five COMM switches
 and the Su-25T's chaff and flares from the middle-finger hat to the thumb hats.
 Only DCS may do this — `ALLOCATION.md` has the reason.

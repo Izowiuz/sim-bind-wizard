@@ -3,11 +3,11 @@
 
 DESCRIPTION
     Match what a pilot must be able to do against the controls in the device
-    map. --write hands the result to wt-bind-preset.py, which owns machine.blk.
+    map. --write hands the result to write.py, which owns machine.blk.
 
 FILES
     harvest.py          the action vocabulary
-    wt-bind-preset.py   the writer; it also has --dry-run, --render, --restore
+    write.py   the writer; it also has --dry-run, --render, --restore
     machine.blk         written by --write, one per account under Saves/
     KNEEBOARD.md, kneeboard.html   written by --sheet and --html
 
@@ -121,7 +121,7 @@ def needs(described, placed):
 # WT's own `nonlinearity: 2.5` already softens the centre, so the felt dead
 # region is wider than the number. The other half of this -- capping authority
 # with `rudderMultiplier` -- lives OUTSIDE the controls{} block that
-# wt-bind-preset.py rewrites, so it is a slider in the game's own UI, not ours.
+# write.py rewrites, so it is a slider in the game's own UI, not ours.
 #
 # A stopgap: VIRPIL pedals are on order. Delete this when they arrive.
 AXIS_DEADZONE = {'rudder': 0.10}
@@ -147,7 +147,7 @@ def devices():
 
 
 def deadzones(name, a):
-    """The properties wt-bind-preset writes beside an axis.
+    """The properties write.py writes beside an axis.
 
     Computed, not judged: a ministick needs more slack than a lever, and
     a lever none at all. `AXIS_DEADZONE` overrides where somebody has an
@@ -165,7 +165,7 @@ def deadzones(name, a):
 def axis_rows(devs, axes):
     """[(name, role, axis index, invert, props)] -- what the preset writes.
 
-    One shape, computed here: `wt-bind-preset.py` used to reach into the
+    One shape, computed here: `write.py` used to reach into the
     plan objects for five fields, which is the only reason that script
     knew what a Placement was.
     """
@@ -311,7 +311,7 @@ def _sheet(layout):
                  'start part-zoomed.'),
         ('View mini-stick', 'Your head must go where your thumb goes.'),
     ])
-    sh.note('Undo', 'Close the game. Then run ./wt-bind-preset.py '
+    sh.note('Undo', 'Close the game. Then run ./write.py '
                     '--restore.')
     for n in unmet:
         sh.add_unplaced(n.what, n.shape if isinstance(n.shape, str)
@@ -326,7 +326,7 @@ def _sheet(layout):
 # -------------------------------------------------------------- the adapter --
 
 class Preset(typing.Protocol):
-    """What this planner calls on `wt-bind-preset.py`.
+    """What this planner calls on `write.py`.
 
     A sidecar is loaded by path, so its name is not importable and everything
     across that seam is `Any` -- a typo in a function name or a swapped
@@ -360,10 +360,10 @@ class WarThunder(adapter.Planner):
     OVERLAY = 'by-hand'
     NEEDS_FILE = 'warthunder-needs.json'
     BINDS = 'warthunder-binds.json'
-    CATALOGUE = 'wt-actions.json'
+    CATALOGUE = 'warthunder-actions.json'
     SAYS = {'game_dir': 'the War Thunder install',
             'saves': 'where its config lives, if not beside the install'}
-    CACHE = {'wt-actions.json': 'actions'}
+    CACHE = {'warthunder-actions.json': 'actions'}
 
 
     @property
@@ -380,14 +380,14 @@ class WarThunder(adapter.Planner):
 
     def __init__(self, game_dir=None, saves=None, backup_dir=None):
         self.backup_dir = backup_dir
-        CAT[:] = cactions.read(self.cache('wt-actions.json'))
+        CAT[:] = cactions.read(self.cache('warthunder-actions.json'))
         BY_ID.update(cactions.by_id(CAT))
         self._needs = needs(self.NEEDS_FILE, self.BINDS)
 
         # The writer owns machine.blk and where the install is; these were
         # module constants in it with no override at all.
         self.writer = typing.cast(Preset,
-                                  self.sidecar('wt-bind-preset.py'))
+                                  self.sidecar('write.py'))
         if game_dir:
             self.writer.GAME_DIR = game_dir
         if saves:

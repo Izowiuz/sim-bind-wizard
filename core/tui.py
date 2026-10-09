@@ -5,7 +5,7 @@ appends a line and repaints the tail. Every prompt in a capture wizard is a
 line, including the ones `core/capture.py` writes from inside the event loop,
 which is why the capture helpers take a `Tui`.
 
-`sim-device-map/capture.py` has a Tui of its own and keeps it. That one is
+The device map's capture tool has a Tui of its own and keeps it. That one is
 stateless -- every screen erases and repaints itself -- with a fixed chrome, a
 multi-select menu, free-text entry and a three-state confirm, and no
 transcript at all. Only `key()` and `_put()` are the same code, and the

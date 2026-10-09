@@ -13,7 +13,7 @@ only ever indexes that list.
 
 **Needs** come from the game's adapter, either written by hand (`NEEDS` in
 `games/*/plan.py`) or derived from the game's own vocabulary (`families()` in
-`games/dcs/propose.py`). Each carries:
+`games/dcs/plan.py`). Each carries:
 
 | field | means |
 |---|---|

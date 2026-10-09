@@ -1,7 +1,7 @@
 """Reading the sticks directly: the Linux joystick protocol and the prompts.
 
-Both capture wizards -- `games/dcs/dcs-bind-wizard.py` and
-`games/elite/ed-bind-wizard.py` -- open `/dev/input/js*` themselves rather than
+Both capture wizards -- `games/dcs/capture.py` and
+`games/elite/capture.py` -- open `/dev/input/js*` themselves rather than
 asking the game what it saw, because a binding has to be captured before the
 game has one. This is the half of that they had byte for byte in common.
 

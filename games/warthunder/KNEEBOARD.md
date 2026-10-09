@@ -92,7 +92,7 @@ War Thunder · air simulator + helicopters · VIRPIL · IzoDesk · By hand. Gene
 
 ## Undo
 
-Run ./wt-bind-preset.py --restore with the game closed.
+Run ./write.py --restore with the game closed.
 
 ## Still free
 

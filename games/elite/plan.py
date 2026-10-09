@@ -3,11 +3,11 @@
 
 DESCRIPTION
     Match what a pilot must be able to do against the controls in the device
-    map, then write a .binds preset through ed-bind-wizard.py.
+    map, then write a .binds preset through capture.py.
 
 FILES
     harvest.py                  the function vocabulary
-    ed-bind-wizard-results.json device ids and axis maps, from the capture TUI
+    elite-results.json device ids and axis maps, from the capture TUI
     <preset>.4.2.binds          written by --write, in the game's Bindings dir
     KNEEBOARD.md, kneeboard.html   written by --sheet and --html
 
@@ -54,7 +54,7 @@ harvest = adapter.from_file('edharvest', os.path.join(HERE, 'harvest.py'))
 
 #: The capture wizard's own file: device ids, axis maps, and whatever was
 #: confirmed at the stick. The plan reads it and never writes it.
-RESULTS = 'ed-bind-wizard-results.json'
+RESULTS = 'elite-results.json'
 
 #: Where the judgements live. Source, not cache -- nothing derives them.
 #: Deliberately not in `CACHE`: that names what the harvest wrote, and a
@@ -189,7 +189,7 @@ def duplicates(needs):
 # ----------------------------------------------------------------- writing --
 
 def as_results(devs, placed, axes):
-    """The plan in the shape `ed-bind-wizard.py`'s generate() consumes.
+    """The plan in the shape `capture.py`'s generate() consumes.
 
     `{function: {'role', 'type', 'index', 'sign'}}` plus `_devices`. Going
     through the capture TUI's own writer means one implementation of the
@@ -322,7 +322,7 @@ def _sheet(layout):
 # -------------------------------------------------------------- the adapter --
 
 class Wizard(typing.Protocol):
-    """What this planner calls on `ed-bind-wizard.py`.
+    """What this planner calls on `capture.py`.
 
     See the note on `Preset` in games/warthunder/plan.py: this gets the call
     sites checked, not the promise that the script has them.
@@ -339,7 +339,7 @@ class Wizard(typing.Protocol):
 class Elite(adapter.Planner):
     """Elite Dangerous, on the VIRPIL pair.
 
-    Two tools on one writer: this lays a layout out, `ed-bind-wizard.py`
+    Two tools on one writer: this lays a layout out, `capture.py`
     captures bindings off the devices, and both go through the wizard's
     `render()` so there is one implementation of the `.binds` format. They
     write different presets, so neither overwrites the other.
@@ -350,15 +350,15 @@ class Elite(adapter.Planner):
     OVERLAY = 'by-hand'
     NEEDS_FILE = 'elite-needs.json'
     BINDS = 'elite-binds.json'
-    CATALOGUE = 'ed-actions.json'
-    CACHE = {'ed-actions.json': 'actions'}
+    CATALOGUE = 'elite-actions.json'
+    CACHE = {'elite-actions.json': 'actions'}
 
 
     def __init__(self, preset=None, backup_dir=None):
         self.preset = preset or os.environ.get('ED_PRESET', PRESET)
         self.backup_dir = backup_dir
         self.subtitle = f'VIRPIL · {self.preset}'
-        CAT[:] = cactions.read(self.cache('ed-actions.json',
+        CAT[:] = cactions.read(self.cache('elite-actions.json',
                                           build=harvest.action_rows))
         AXES.update(a.id for a in CAT if a.kind == 'axis')
         # Elite has one element per function, so a function two needs both
@@ -378,7 +378,7 @@ class Elite(adapter.Planner):
 
     @typing.final
     def wizard(self):
-        return typing.cast(Wizard, self.sidecar('ed-bind-wizard.py'))
+        return typing.cast(Wizard, self.sidecar('capture.py'))
 
     @typing.override
     def build(self):

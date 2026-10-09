@@ -45,8 +45,8 @@ in it are recorded here:
                                 not be cloned. A missing source there is a
                                 fact about the machine, not about this code.
 
-The sidecar seam is typed, as far as it can be. `wt-bind-preset.py`,
-`ed-bind-wizard.py` and `dcs-bind-wizard.py` are loaded by path, so their
+The sidecar seam is typed, as far as it can be. `write.py`,
+`capture.py` and `capture.py` are loaded by path, so their
 names are not importable and everything across that seam used to be `Any`.
 Each planner now declares a `Protocol` naming what it calls and casts the
 module to it, which gets the CALL SITES checked -- a typo in a function name

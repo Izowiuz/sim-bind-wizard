@@ -1072,7 +1072,7 @@ class SayingWhatWasNotMeasured(unittest.TestCase):
     def test_nothing_measured_says_so(self):
         got = self.layout(fake.button('One', 0), fake.button('Two', 1))
         self.assertEqual((2, 2), got.unmeasured())
-        self.assertIn('no control', got.reach_note())
+        self.assertIn('No control', got.reach_note())
 
     def test_some_measured_counts_the_rest(self):
         got = self.layout(fake.button('One', 0, reach=fake.THUMB),
@@ -1152,15 +1152,36 @@ class WhichDeviceIsWhich(unittest.TestCase):
                 with self.assertRaises(SystemExit) as caught:
                     devmap.by_role('stick')
             with self.subTest(devices=len(devices)):
-                self.assertIn('capture.py', str(caught.exception))
+                self.assertIn(devmap.capture_command(), str(caught.exception))
                 self.assertIn('--desk', str(caught.exception))
 
     def test_no_desk_at_all_says_to_make_one(self):
+        # `profile()` answers None for two different states, and this is
+        # the one where nothing is on file at all -- so the profiles have
+        # to be empty as well, or the test reads the other state.
         dm = devmap.load()
-        with mock.patch.object(dm, 'profile', lambda name=None: None):
+        with mock.patch.object(dm, 'profile', lambda name=None: None), \
+                mock.patch.object(dm, 'load_profiles', lambda: []):
             with self.assertRaises(SystemExit) as caught:
                 devmap.by_role()
-        self.assertIn('capture.py', str(caught.exception))
+        said = str(caught.exception)
+        self.assertIn('No desk is on file', said)
+        self.assertIn(devmap.capture_command(), said)
+
+    def test_several_desks_and_no_choice_names_them(self):
+        # The other None. It used to say `No desk is on file` here, which
+        # sent you to make a desk you had already made twice over.
+        dm = devmap.load()
+        desks = [self.desk(name='Biurko'), self.desk(name='Fotel')]
+        with mock.patch.object(dm, 'profile', lambda name=None: None), \
+                mock.patch.object(dm, 'load_profiles', lambda: desks):
+            with self.assertRaises(SystemExit) as caught:
+                devmap.by_role()
+        said = str(caught.exception)
+        self.assertIn('Biurko', said)
+        self.assertIn('Fotel', said)
+        self.assertIn('--desk', said)
+        self.assertNotIn('No desk', said)
 
 
 class EveryAxisAGamesNamesExists(unittest.TestCase):
@@ -1211,7 +1232,7 @@ class EveryAxisAGamesNamesExists(unittest.TestCase):
 
 
 def _plan_module(game):
-    """A game's planner, imported the way `bind` imports it."""
+    """A game's planner, imported the way `bind-wizard.py` imports it."""
     import importlib.util
     import os
     import sys
@@ -1611,8 +1632,8 @@ class WhichSolverRunsIsAsked(unittest.TestCase):
     """Not guessed. It was guessed, and that was the bug.
 
     `ortools` imported meant the model, and not importing meant walking
-    the list, with nothing said either way. So `./bind x4 sheet` under a
-    python that had it and the same command under one that did not
+    the list, with nothing said either way. So `./bind-wizard.py x4 sheet`
+    under a python that had it and the same command under one that did not
     produced two different kneeboards for the same desk, 77 lines apart.
     Nobody had changed anything; the interpreter on PATH had.
 

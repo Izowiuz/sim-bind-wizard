@@ -19,7 +19,7 @@ is left byte-identical.
 
 ## How to run it
 
-`plan.py` owns the verbs, `wt-bind-preset.py` owns `machine.blk` and the
+`plan.py` owns the verbs, `write.py` owns `machine.blk` and the
 verbs only a writer has use for.
 
     ./harvest.py                    the action vocabulary
@@ -30,11 +30,11 @@ verbs only a writer has use for.
     ./plan.py --tui                 walk the layout, write what you keep
     ./plan.py --write               all of it, into the game
 
-    ./wt-bind-preset.py             the same write, no arguments needed
-    ./wt-bind-preset.py --dry-run   resolved ids, writes nothing
-    ./wt-bind-preset.py --render PATH             a copy for review
-    ./wt-bind-preset.py --restore                 put the newest run back
-    ./wt-bind-preset.py --restore --restore-from 20260918-2149   an older one
+    ./write.py             the same write, no arguments needed
+    ./write.py --dry-run   resolved ids, writes nothing
+    ./write.py --render PATH             a copy for review
+    ./write.py --restore                 put the newest run back
+    ./write.py --restore --restore-from 20260918-2149   an older one
 
 Every `machine.blk` a write touches is copied into
 `<repo>/backups/warthunder/<stamp>/` first — one folder per run, so a restore

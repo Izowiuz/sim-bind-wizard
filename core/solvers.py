@@ -9,8 +9,8 @@ the answers differ in exactly one way: whether a choice can be undone.
 
 They were not selectable, and that is the bug this is the fix for. The
 model was used when `ortools` imported and the list-walk when it did not,
-silently, with nothing said either way -- so `./bind x4 sheet` under a
-python with ortools and the same command under one without produced two
+silently, with nothing said either way -- so `./bind-wizard.py x4 sheet` under
+a python with ortools and the same command under one without produced two
 different kneeboards for the same desk, 77 lines apart, and neither
 mentioned the other existed.
 

@@ -38,14 +38,14 @@ def planner(game, script=None) -> typing.Any:
 
     Three jobs once: chdir into the game directory, put it on `sys.path`,
     and swallow the exit an import took when no harvest had been run here.
-    The first two moved to `core.adapter.load`, which `bind` and the contract
-    test want as well; the third is simply gone -- importing an adapter
-    defines classes and reads nothing now, so the only thing left to catch is
-    a game whose planner is not there at all.
+    The first two moved to `core.adapter.load`, which `bind-wizard.py` and the
+    contract test want as well; the third is simply gone -- importing an
+    adapter defines classes and reads nothing now, so the only thing left to
+    catch is a game whose planner is not there at all.
 
     It also stops guessing filenames. `core.adapter.planner` reads the
     directory for the file that defines the adapter, so `games/dcs` being
-    `propose.py` is not a special case anybody has to remember.
+    `plan.py` is not a special case anybody has to remember.
     """
     try:
         return adapter.load(game, script)
@@ -56,13 +56,13 @@ def planner(game, script=None) -> typing.Any:
 X4 = planner('x4')
 MSFS = planner('msfs')
 BMS = planner('falconbms')
-ED = planner('elite', 'ed-bind-wizard.py')
+ED = planner('elite', 'capture.py')
 #: the planner itself, not the writer -- `context_of` lives there
 EDPLAN = planner('elite')
-WT = planner('warthunder', 'wt-bind-preset.py')
+WT = planner('warthunder', 'write.py')
 
 
-@unittest.skipUnless(X4, 'x4: run ./bind x4 harvest first')
+@unittest.skipUnless(X4, 'x4: run ./bind-wizard.py x4 harvest first')
 class X4Rewrite(unittest.TestCase):
     """`rewrite()` has to remove as well as add, without touching anything
     that is not ours."""
@@ -129,7 +129,7 @@ class X4Rewrite(unittest.TestCase):
         self.assertEqual('INPUT_SOURCE_JOYAXES_3', X4.source(3, axis=True))
 
 
-@unittest.skipUnless(MSFS, 'msfs: run ./bind msfs harvest first')
+@unittest.skipUnless(MSFS, 'msfs: run ./bind-wizard.py msfs harvest first')
 class MsfsProfiles(unittest.TestCase):
 
     #: One joystick binding, one keyboard binding, one unbound action.
@@ -245,8 +245,8 @@ class MsfsProfiles(unittest.TestCase):
         self.assertIn('<Footer>and me</Footer>', out)
 
 
-@unittest.skipUnless(WT, 'warthunder: run ./bind wt harvest first')
-@unittest.skipUnless(EDPLAN, 'elite: run ./bind elite harvest first')
+@unittest.skipUnless(WT, 'warthunder: run ./bind-wizard.py wt harvest first')
+@unittest.skipUnless(EDPLAN, 'elite: run ./bind-wizard.py elite harvest first')
 class EliteContexts(unittest.TestCase):
     """Which context a function answers in, read off its name.
 
@@ -330,7 +330,8 @@ class RebuiltFromScratch(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
 
-    @unittest.skipUnless(BMS, 'falconbms: run ./bind bms harvest first')
+    @unittest.skipUnless(
+        BMS, 'falconbms: run ./bind-wizard.py bms harvest first')
     def test_bms_writes_only_what_the_plan_asks_for(self):
         import pathlib as pl
         cfg = pl.Path(self.tmp) / 'User' / 'Config'
@@ -343,7 +344,7 @@ class RebuiltFromScratch(unittest.TestCase):
         # read when an adapter is built, not when the module is imported.
         BMS.DEVICES[:] = vocab.load(
             os.path.join(REPO, 'games', 'falconbms'),
-            'bms-actions.json', key='devices')
+            'falconbms-actions.json', key='devices')
         dst, text, _said = BMS.key_file(pl.Path(self.tmp), [])
         self.assertIn('SimDoNothing', text, 'the shipped file survives')
         self.assertEqual(1, text.count('SimStale'),
@@ -357,7 +358,7 @@ class RebuiltFromScratch(unittest.TestCase):
                               and not ln.lstrip().startswith('#')],
                          'an empty plan still wrote a binding')
 
-    @unittest.skipUnless(ED, 'elite: run ./bind ed harvest first')
+    @unittest.skipUnless(ED, 'elite: run ./bind-wizard.py ed harvest first')
     def test_elite_reverts_to_the_base_preset(self):
         base = os.path.join(self.tmp, 'base.binds')
         with open(base, 'w', encoding='utf-8') as f:
@@ -372,7 +373,7 @@ class RebuiltFromScratch(unittest.TestCase):
         self.assertIn('Key_Tab', text, 'the base binding is the fallback')
 
 
-@unittest.skipUnless(BMS, 'falconbms: run ./bind bms harvest first')
+@unittest.skipUnless(BMS, 'falconbms: run ./bind-wizard.py bms harvest first')
 class BmsText(unittest.TestCase):
     """BMS config files are latin-1 and CRLF, and both matter."""
 

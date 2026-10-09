@@ -355,7 +355,7 @@ class Msfs(adapter.Planner):
     #: `msfs-actions.json` gained its "actions" envelope when the harvest
     #: moved to core.vocab.save. A working copy harvested before that has a
     #: cache with no envelope, and core.vocab raises Stale for it rather
-    #: than KeyError: run ./bind msfs harvest.
+    #: than KeyError: run ./bind-wizard.py msfs harvest.
     OVERLAY = 'by-hand'
     NEEDS_FILE = 'msfs-needs.json'
     BINDS = 'msfs-binds.json'

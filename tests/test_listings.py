@@ -116,11 +116,11 @@ class DcsSeed(unittest.TestCase):
     def recs(self, layout):
         # Through the writer, which is where the question lives now: what
         # the screen kept is what reaches the game.
-        import games.dcs.propose as propose        # noqa: F401
+        import games.dcs.plan as dcsplan           # noqa: F401
         from core import adapter
         mod = adapter.from_file('dcs_for_test',
                                 os.path.join(REPO, 'games', 'dcs',
-                                             'propose.py'))
+                                             'plan.py'))
         return mod.seed(DCS.module, DCS.cmds, DCS.guide, layout=layout)
 
     def test_the_screen_and_the_writer_agree_on_every_button(self):

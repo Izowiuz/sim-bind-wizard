@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""dcs-bind-wizard.py - find the devices, pick a module, write diff.lua
+"""capture.py - find the devices, pick a module, write diff.lua
 
 DESCRIPTION
     Full-screen wizard by default: name which joystick DCS calls what, pick an
     aircraft, and write one diff.lua per device.
     With --generate, headless: build them and exit.
 
-    Binding is `./bind dcs tui` -- the review screen the other five games
-    open. It reads and writes the same results file and shows what you
+    Binding is `./bind-wizard.py dcs tui` -- the review screen the other five
+    games open. It reads and writes the same results file and shows what you
     confirmed here in green.
 
 KEYS
@@ -16,7 +16,7 @@ KEYS
     ESC     back, cancel, redo
 
 FILES
-    dcs-bind-wizard-results.json    the bindings, and where the game is (-r)
+    dcs-results.json    the bindings, and where the game is (-r)
     <module>/default.lua            read: the command list, via a lua binary
     Config/Input/<aircraft>/joystick/<device>.diff.lua   written by --generate
 
@@ -82,10 +82,10 @@ NOTES
 # device), so a stick and a throttle never fight over the same axis.
 #
 # Usage:
-#     dcs-bind-wizard.py                      # TUI wizard
-#     dcs-bind-wizard.py --reset              # wizard from scratch
-#     dcs-bind-wizard.py -r other.json        # use a different results file
-#     dcs-bind-wizard.py -g -a su-25T         # write the diff.lua files
+#     capture.py                      # TUI wizard
+#     capture.py --reset              # wizard from scratch
+#     capture.py -r other.json        # use a different results file
+#     capture.py -g -a su-25T         # write the diff.lua files
 
 import argparse
 import collections
@@ -101,7 +101,7 @@ import sys
 import tempfile
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_RESULTS = os.path.join(SCRIPT_DIR, "dcs-bind-wizard-results.json")
+DEFAULT_RESULTS = os.path.join(SCRIPT_DIR, "dcs-results.json")
 
 CORE = os.environ.get("SIM_BIND_WIZARD") or os.path.normpath(
     os.path.join(SCRIPT_DIR, "..", ".."))
@@ -530,7 +530,7 @@ def catalogue(cmds):
     Unlike the other five, nothing of this is written to the cache. A DCS
     command record already carries `ways`, `dir` and `family` -- how a
     switch moves, which way, and what it groups with -- which the shared
-    record has no room for and seven places in `propose.py` read. Writing
+    record has no room for and seven places in `plan.py` read. Writing
     the shared spelling beside it would put name, kind and category twice
     in every one of ~2500 records, for no reader. The record stays one
     record; only the reading of it is settled here.
@@ -1188,7 +1188,7 @@ def build_diffs(bindings, snapshot, devs):
     """Modeled bindings overlaid on the last --sync snapshot (if any).
 
     `bindings` is {command hash: {name, role, type, index, invert}} -- what
-    `propose.seed` makes out of a layout. It used to read the wizard's own
+    `plan.seed` makes out of a layout. It used to read the wizard's own
     results file and pick the aircraft out of it, which made the writer the
     one thing in the family that could not be handed a plan: the review
     screen narrowed a layout and this went to the file anyway.
@@ -1275,11 +1275,11 @@ def joystick_dir(cfg, aircraft):
 def render_all(results, cfg, aircraft, bindings=None):
     """({path: the diff.lua text}, summary lines). Writes nothing.
 
-    Split out of `generate()` so `propose.py` can hand the text to
+    Split out of `generate()` so `plan.py` can hand the text to
     `core.adapter`, which owns the backing up and the writing for every game
     in the family. `generate()` remains the wizard's own path.
 
-    `bindings` is the plan to write, as `propose.seed` makes it. Without
+    `bindings` is the plan to write, as `plan.seed` makes it. Without
     one the results file is read, which is what `generate()` wants: the
     wizard has no reviewer to ask.
     """
@@ -1550,7 +1550,7 @@ def tui_main(scr, args, results, cfg):
 
         guide = build_guide(commands)
         ess_sections = essentials(commands, guide)
-        choice = tui.menu("dcs-bind-wizard — %s" % display, [
+        choice = tui.menu("DCS %s" % display, [
             progress_label("Bound so far",
                            *aircraft_stats(bindings_clean, ess_sections)),
             "Generate diff.lua files",
@@ -1563,14 +1563,14 @@ def tui_main(scr, args, results, cfg):
             aircraft = None
             continue
         if choice == 0:
-            # The table that used to be here is `./bind dcs tui` now --
-            # the same screen the other five open, with the same keys on
+            # The table that used to be here is `./bind-wizard.py dcs tui` now
+            # -- the same screen the other five open, with the same keys on
             # it. This wizard is what is left: find the devices, pick the
             # module, write the diff.lua.
             tui.page("Binding — %s" % display)
             tui.log("  The review screen does this now:")
             tui.log("")
-            tui.log("      ./bind dcs tui")
+            tui.log("      ./bind-wizard.py dcs tui")
             tui.log("")
             tui.log("  It reads and writes this same results file. It")
             tui.log("  shows what you confirmed here in green.")

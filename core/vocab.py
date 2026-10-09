@@ -7,7 +7,7 @@ exited if it was missing. X4 has no such file at all, because reparsing four
 BMS a 100 KB key file. Both are right; the difference should not reach
 `plan.py`.
 
-    ACTIONS = vocab.load(HERE, 'wt-actions.json', key='actions')
+    ACTIONS = vocab.load(HERE, 'warthunder-actions.json', key='actions')
     ACTIONS = vocab.load(HERE, None, build=harvest.vocabulary)
 
 The output of a harvest is derived from the installed game, not source, so it
@@ -49,9 +49,9 @@ class Stale(SystemExit):
 def _game(directory):
     """Which game a cache belongs to, for the message.
 
-    The directory is always `games/<game>/`, and `<game>` is the word `bind`
-    dispatches on, so the reader gets a command they can paste rather than a
-    path they have to translate.
+    The directory is always `games/<game>/`, and `<game>` is the word
+    `bind-wizard.py` dispatches on, so the reader gets a command they can paste
+    rather than a path they have to translate.
     """
     return os.path.basename(os.path.normpath(directory)) or '<game>'
 
@@ -73,7 +73,7 @@ def load(directory, filename, key=None, build=None):
             # A harvest interrupted part-way leaves a truncated file behind,
             # and the next run reads it rather than the game.
             raise Stale(f'{filename} does not parse: {e}\n'
-                        f'Run ./bind {game} harvest.') from e
+                        f'Run ./bind-wizard.py {game} harvest.') from e
         if key is None:
             return data
         if not isinstance(data, dict) or key not in data:
@@ -89,7 +89,8 @@ def load(directory, filename, key=None, build=None):
                 held = ', '.join(sorted(data))
             raise Stale(f'{filename} has no "{key}" section. It holds '
                         f'{held}.\nThe cache and the planner do not agree '
-                        f'about its shape.\nRun ./bind {game} harvest.')
+                        f'about its shape.\nRun ./bind-wizard.py {game} '
+                        'harvest.')
         return data[key]
     if build is not None:
         # `key` is applied only if the built data happens to carry it: a cache
@@ -99,8 +100,8 @@ def load(directory, filename, key=None, build=None):
         return data[key] if key and isinstance(data, dict) and key in data \
             else data
     raise Missing(f'{filename} is missing. It is built from the installed '
-                  f'game. The repo does not keep it.\nRun ./bind {game} '
-                  'harvest.')
+                  'game. The repo does not keep it.\n'
+                  f'Run ./bind-wizard.py {game} harvest.')
 
 
 def save(directory, filename, **sections):

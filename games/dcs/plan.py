@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""propose.py - lay out one DCS module on the HOTAS
+"""plan.py - lay out one DCS module on the HOTAS
 
 DESCRIPTION
     Propose a binding for every command the module puts on a HOTAS, from
     the shape of the controls in the device map.
     Proposals land in the wizard's results file marked `?` until confirmed.
-    --write hands the result to dcs-bind-wizard.py, which owns diff.lua.
+    --write hands the result to capture.py, which owns diff.lua.
 
 FILES
-    dcs-bind-wizard.py             device detection and the diff.lua writer
-    dcs-bind-wizard-results.json   the bindings, and where the game is
+    capture.py             device detection and the diff.lua writer
+    dcs-results.json   the bindings, and where the game is
     jobs.toml                      what each command is for, by name
     <device>.diff.lua              written by --write, per aircraft
 
@@ -55,8 +55,8 @@ def wizard():
     """The wizard itself, imported for its harvest -- it is the thing that
     knows how to read a module's commands and profiles."""
     return adapter.from_file('dcswiz',
-                             os.path.join(HERE, 'dcs-bind-wizard.py'),
-                             argv=['dcs-bind-wizard'])
+                             os.path.join(HERE, 'capture.py'),
+                             argv=['capture.py'])
 
 
 #: What the module's own prose is asking for. Ordered: first match wins, so
@@ -504,7 +504,7 @@ score = corneeds.score
 
 
 def results_path():
-    return os.path.join(HERE, 'dcs-bind-wizard-results.json')
+    return os.path.join(HERE, 'dcs-results.json')
 
 
 def load_cfg(module, game_dir=None):
@@ -826,7 +826,7 @@ def audit(module, key, cmds, guide):
 # -------------------------------------------------------------- the adapter --
 
 class Wizard(typing.Protocol):
-    """What this proposer calls on `dcs-bind-wizard.py`.
+    """What this proposer calls on `capture.py`.
 
     See the note on `Preset` in games/warthunder/plan.py: this gets the call
     sites checked, not the promise that the script has them.
@@ -862,15 +862,15 @@ class Dcs(adapter.Planner):
     which is also why the adapters had to become classes, since `NEEDS` as
     a module constant could never mean both the Hornet's and the Su-25T's.
     The `diff.lua` format and naming the devices by DCS's own GUIDs live in
-    `dcs-bind-wizard.py`.
+    `capture.py`.
     """
 
     game = 'dcs'
     title = 'DCS World'
     CATALOGUE = 'dcs-actions.json'
     CACHE = {'dcs-actions.json': 'aircraft'}
-    #: `-a` is what this has always been typed as, and `./bind dcs plan
-    #: -a su-25T` is in the top-level README.
+    #: `-a` is what this has always been typed as, and
+    #: `./bind-wizard.py dcs plan -a su-25T` is in the top-level README.
     ALIASES = {'aircraft': ('-a',)}
     SAYS = {'aircraft': 'which module to lay out (default: FA-18C)',
             'game_dir': 'the DCS install, if it is not where the results '
@@ -881,7 +881,7 @@ class Dcs(adapter.Planner):
         self.backup_dir = backup_dir
         self.subtitle = self.aircraft
         self.module = typing.cast(Wizard,
-                                  self.sidecar('dcs-bind-wizard.py'))
+                                  self.sidecar('capture.py'))
         self.cfg = load_cfg(self.module, game_dir)
         # The cache first, the install only if it has nothing for this
         # module. Running a module's default.lua through a Lua interpreter

@@ -528,7 +528,7 @@ class DcsWorksOutItsOwnJobs(unittest.TestCase):
         return adapter.from_file(
             'dcs_propose_for_test',
             os.path.join(os.path.dirname(os.path.dirname(
-                os.path.abspath(__file__))), 'games', 'dcs', 'propose.py'))
+                os.path.abspath(__file__))), 'games', 'dcs', 'plan.py'))
 
     def test_every_phrase_names_a_job_the_rules_define(self):
         m = self.propose()

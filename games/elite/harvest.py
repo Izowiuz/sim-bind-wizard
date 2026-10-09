@@ -6,7 +6,7 @@ DESCRIPTION
     function.
 
 FILES
-    ed-actions.json     written by --json: every function
+    elite-actions.json     written by --json: every function
 
 OPTIONS
     --schemes-dir PATH  the ControlSchemes directory
@@ -221,7 +221,7 @@ class EliteHarvest(adapter.Harvest):
     """Elite's function vocabulary."""
 
     game = 'elite'
-    files = {'ed-actions.json': ('actions',)}
+    files = {'elite-actions.json': ('actions',)}
 
     @typing.override
     def arguments(self, parser):
@@ -238,7 +238,7 @@ class EliteHarvest(adapter.Harvest):
         path = args.schemes_dir
         self.where = schemes_dir(path)
         self.v = vocabulary(path)
-        return {'ed-actions.json': {'actions': action_rows(self.v)}}
+        return {'elite-actions.json': {'actions': action_rows(self.v)}}
 
     @typing.override
     def summary(self, data):

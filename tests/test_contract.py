@@ -52,11 +52,11 @@ from core import vocab                                      # noqa: E402
 
 
 #: Games with no `Adapter` subclass yet, and why. The debt lives in code the
-#: suite reads, the way `bind`'s own `GAPS` does, so it cannot quietly stop
-#: being true the way a paragraph can. Empty this and the entry goes.
-#: Empty. It held every game once; the last entry was DCS, whose needs are a
-#: function of the aircraft and so could never be a module-level constant --
-#: which is the reason the adapters became classes.
+#: suite reads, the way `bind-wizard.py`'s own `GAPS` does, so it cannot
+#: quietly stop being true the way a paragraph can. Empty this and the entry
+#: goes. Empty. It held every game once; the last entry was DCS, whose needs
+#: are a function of the aircraft and so could never be a module-level constant
+#: -- which is the reason the adapters became classes.
 PENDING = {}
 
 #: The six headings a game's README carries, in this order. They are a
@@ -65,14 +65,16 @@ PENDING = {}
 HEADINGS = ('Where it lives', 'How to run it', 'The format',
             'Measured', 'Still a guess', 'Gotchas')
 
-#: What `Adapter.parser()` gives every game, so `bind` may rely on it.
+#: What `Adapter.parser()` gives every game, so `bind-wizard.py` may rely on
+#: it.
 COMMON = ('--why', '--free', '--sheet', '--html', '--tui', '--write',
           '--backup-dir')
 
 
 def bind():
     """The front door, imported. It has no `.py`, hence the loader."""
-    return adapter.from_file('bindscript', os.path.join(REPO, 'bind'))
+    return adapter.from_file('bindscript',
+                             os.path.join(REPO, 'bind-wizard.py'))
 
 
 def reaches(fn, name, mod, seen=None):
@@ -414,8 +416,8 @@ class TheCacheBothSidesName(unittest.TestCase):
                 where = os.path.join(REPO, 'games', game, 'harvest.py')
                 if not os.path.exists(where):
                     # DCS harvests inside its capture wizard, which is what
-                    # `bind`'s own GAPS says. A game with no harvest file has
-                    # no cache for a planner to disagree with.
+                    # `bind-wizard.py`'s own GAPS says. A game with no harvest
+                    # file has no cache for a planner to disagree with.
                     self.assertEqual({}, cls.CACHE,
                                      f'{game} loads a cache but has no '
                                      'harvest.py to write it')
@@ -438,14 +440,14 @@ class TheCacheBothSidesName(unittest.TestCase):
 
 
 class TheFrontDoorTellsTheTruth(unittest.TestCase):
-    """`bind`'s table says which game answers which verb, and nothing kept
-    it honest.
+    """`bind-wizard.py`'s table says which game answers which verb, and nothing
+    kept it honest.
 
     Availability is decided purely by a key being present in a literal dict,
     and `GAPS` -- the prose explaining a missing verb -- is never consulted
     for it, so the two could contradict each other with nobody the wiser.
-    `bind`'s own docstring states a clause ("Every planner owns --write")
-    that has never been checked against an adapter.
+    `bind-wizard.py`'s own docstring states a clause ("Every planner owns
+    --write") that has never been checked against an adapter.
     """
 
     def setUp(self):
@@ -509,8 +511,8 @@ class TheJudgementsHaveAHome(unittest.TestCase):
             with self.subTest(game=game):
                 if not cls.BINDS:
                     # DCS derives its needs from the aircraft, so there is
-                    # no list of judgements to keep. `bind`'s own GAPS
-                    # says the same about its review screen.
+                    # no list of judgements to keep. `bind-wizard.py`'s own
+                    # GAPS says the same about its review screen.
                     continue
                 where = os.path.join(REPO, 'games', game, cls.BINDS)
                 self.assertTrue(os.path.exists(where),
@@ -569,7 +571,7 @@ class TheJudgementsHaveAHome(unittest.TestCase):
         import glob
         for path in glob.glob(os.path.join(REPO, 'games', '*', '*.py')):
             if os.path.basename(path) in ('plan.py', 'harvest.py',
-                                          'propose.py'):
+                                          'plan.py'):
                 continue
             with self.subTest(file=os.path.basename(path)):
                 with open(path, encoding='utf-8') as f:
@@ -770,7 +772,7 @@ class EveryGameHasACatalogue(unittest.TestCase):
 
 
 class TheDefaultVerb(unittest.TestCase):
-    """`./bind x4` with no verb opens the screen.
+    """`./bind-wizard.py x4` with no verb opens the screen.
 
     It printed the plan, which is the thing you read once to see whether
     the allocator got it right. The screen is the thing you come back to.
@@ -809,10 +811,10 @@ class RunDirectly(unittest.TestCase):
 
     That is not hypothetical. `build()` went from a function in
     `games/warthunder/plan.py` to a method on `WarThunder`, and
-    `wt-bind-preset.py` kept calling `plan.build()`: the script was dead on
-    the first line that needed a plan, `./bind wt write` was fine because it
-    hands the writer a layout, and 168 tests stayed green. A type checker
-    found it months later; this is what should have.
+    `write.py` kept calling `plan.build()`: the script was dead on
+    the first line that needed a plan, `./bind-wizard.py wt write` was fine
+    because it hands the writer a layout, and 168 tests stayed green. A type
+    checker found it months later; this is what should have.
 
     `test_no_writer_reaches_build` is the opposite rule and they do not
     overlap. A *writer* may never fetch a plan of its own, because the
@@ -822,7 +824,7 @@ class RunDirectly(unittest.TestCase):
     The two capture wizards are not run here: both open curses and read
     `/dev/input`, so there is no read-only way to start one. Only their
     import is covered, which is all `harvest.wizard()` and
-    `propose.wizard()` ever do with them.
+    `plan.wizard()` ever do with them.
     """
 
     def ran(self, game, script, *args):
@@ -849,7 +851,7 @@ class RunDirectly(unittest.TestCase):
         # only one of the three with a verb that writes nothing: the other
         # two own their format from inside a capture wizard.
         built(live('warthunder'))
-        done = self.ran('warthunder', 'wt-bind-preset.py', '--dry-run')
+        done = self.ran('warthunder', 'write.py', '--dry-run')
         said = done.stderr.strip() + done.stdout.strip()
         if 'machine.blk' in said and 'no controls' in said:
             # The same kind of skip as `live`: what the game wrote in its
@@ -861,8 +863,8 @@ class RunDirectly(unittest.TestCase):
         self.assertEqual(0, done.returncode, done.stderr.strip()[-500:])
 
     def test_a_capture_wizard_still_imports(self):
-        for game, script in (('dcs', 'dcs-bind-wizard.py'),
-                             ('elite', 'ed-bind-wizard.py')):
+        for game, script in (('dcs', 'capture.py'),
+                             ('elite', 'capture.py')):
             with self.subTest(game=game):
                 adapter.from_file(f'{game}_wizard_under_test',
                                   os.path.join(REPO, 'games', game, script),
@@ -928,12 +930,13 @@ class WhichDeskAPlannerIsFor(unittest.TestCase):
 
 
 class TheLauncherAsking(unittest.TestCase):
-    """`./bind` asks which desk, but only where there is somebody to ask."""
+    """`./bind-wizard.py` asks which desk, but only where there is somebody to
+    ask."""
 
     def setUp(self):
         self.bind = adapter.from_file('bind_under_test',
-                                      os.path.join(REPO, 'bind'),
-                                      argv=['bind'])
+                                      os.path.join(REPO, 'bind-wizard.py'),
+                                      argv=['bind-wizard.py'])
 
     def rigs(self, *names):
         dm = __import__('core.devmap', fromlist=['devmap']).load()
@@ -1013,14 +1016,69 @@ class TheLauncherAsking(unittest.TestCase):
         self.assertEqual(*[t.index('stick') for t in said])
 
 
+class TheGameList(unittest.TestCase):
+    """With no arguments the launcher ends in a game, or in nothing.
+
+    It used to end in the table and stop, so the next thing anybody did
+    was type the game they had just read.
+    """
+
+    def setUp(self):
+        self.bind = adapter.from_file('bind_under_test4',
+                                      os.path.join(REPO, 'bind-wizard.py'),
+                                      argv=['bind-wizard.py'])
+
+    def test_a_line_says_the_word_you_type_and_what_it_is(self):
+        said = self.bind.game_items()
+        self.assertEqual(len(self.bind.GAMES), len(said))
+        for line, game in zip(said, sorted(self.bind.GAMES)):
+            with self.subTest(game=game):
+                self.assertTrue(line.startswith(game))
+                self.assertIn(self.bind.GAMES[game]['title'], line)
+
+    def test_the_titles_line_up(self):
+        said = self.bind.game_items()
+        at = {line.index(self.bind.GAMES[game]['title'])
+              for line, game in zip(said, sorted(self.bind.GAMES))}
+        self.assertEqual(1, len(at))
+
+    def test_nothing_is_drawn_with_nobody_there(self):
+        # A pipe, a script, CI: the table is the whole answer, and this
+        # suite is one of the things that reads it.
+        for stdin, stdout in ((False, True), (True, False)):
+            with self.subTest(stdin=stdin, stdout=stdout):
+                with mock.patch.object(sys.stdin, 'isatty',
+                                       lambda: stdin), \
+                     mock.patch.object(sys.stdout, 'isatty',
+                                       lambda: stdout):
+                    self.assertIsNone(self.bind.pick_game())
+
+    def test_backing_out_picks_nothing(self):
+        # ESC means "I did not say", the way it does on the desk list.
+        self.assertIsNone(self.chose(None))
+
+    def test_what_it_picks_is_a_game_the_launcher_can_run(self):
+        for i, game in enumerate(sorted(self.bind.GAMES)):
+            with self.subTest(game=game):
+                self.assertEqual(game, self.chose(i))
+
+    def chose(self, row):
+        """What `pick_game` answers when that row is the one picked."""
+        with mock.patch.object(sys.stdin, 'isatty', lambda: True), \
+             mock.patch.object(sys.stdout, 'isatty', lambda: True), \
+             mock.patch.object(__import__('curses'), 'wrapper',
+                               lambda run: row):
+            return self.bind.pick_game()
+
+
 class WhereTheDesksWereRead(unittest.TestCase):
     """Shown, and changeable: a desk is a fact about a room, and somebody
     with these files kept somewhere synced has to be able to say where."""
 
     def setUp(self):
         self.bind = adapter.from_file('bind_under_test2',
-                                      os.path.join(REPO, 'bind'),
-                                      argv=['bind'])
+                                      os.path.join(REPO, 'bind-wizard.py'),
+                                      argv=['bind-wizard.py'])
 
     def test_a_path_under_home_is_said_the_way_you_would_say_it(self):
         home = os.path.expanduser('~')
@@ -1047,8 +1105,8 @@ class PointingAtAnotherDirectory(unittest.TestCase):
 
     def setUp(self):
         self.bind = adapter.from_file('bind_under_test3',
-                                      os.path.join(REPO, 'bind'),
-                                      argv=['bind'])
+                                      os.path.join(REPO, 'bind-wizard.py'),
+                                      argv=['bind-wizard.py'])
         self.dm = __import__('core.devmap', fromlist=['devmap']).load()
 
     def rigs(self, *names):
@@ -1158,7 +1216,7 @@ class PointingAtAnotherDirectory(unittest.TestCase):
              mock.patch.object(self.bind.subprocess, 'call',
                                lambda cmd, cwd=None, env=None:
                                said.update(env or {}) or 0), \
-             mock.patch.object(sys, 'argv', ['bind', 'x4', 'why']):
+             mock.patch.object(sys, 'argv', ['bind-wizard.py', 'x4', 'why']):
             self.bind.main()
         self.assertEqual('Biurko', said.get('SIM_DEVICE_PROFILE'))
         self.assertEqual('/elsewhere', said.get('SIM_DEVICE_PROFILES'))

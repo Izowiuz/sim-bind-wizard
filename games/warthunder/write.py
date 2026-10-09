@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""wt-bind-preset.py - write War Thunder's control preset
+"""write.py - write War Thunder's control preset
 
 DESCRIPTION
     Resolve plan.py's layout onto War Thunder's global numbering and write the
     controls{} block of machine.blk. Every other block is left byte-identical.
-    `./bind wt write` calls this through plan.py --write.
+    `./bind-wizard.py wt write` calls this through plan.py --write.
 
 FILES
     ~/.config/WarThunder/Saves/*/production/machine.blk   written, one per
@@ -38,7 +38,7 @@ NOTES
 # resolved against the deviceMapping that the game itself recorded, so it stays
 # correct if the offsets ever change.
 #
-# Usage:  ./wt-bind-preset.py [--dry-run] [--restore]
+# Usage:  ./write.py [--dry-run] [--restore]
 
 import argparse
 import json
@@ -63,7 +63,7 @@ from core import backup                                     # noqa: E402
 HOME = os.path.expanduser('~')
 SAVES = os.path.join(HOME, '.config/WarThunder/Saves')
 GAME_DIR = os.path.join(HOME, '.local/share/Steam/steamapps/common/War Thunder')
-ACTIONS_JSON = os.path.join(HERE, 'wt-actions.json')
+ACTIONS_JSON = os.path.join(HERE, 'warthunder-actions.json')
 
 THR, STK = 'throttle', 'stick'
 
@@ -541,7 +541,7 @@ def main(argv=None, layout=None):
         return
 
     # This script's own entry point still needs a plan when nobody handed
-    # it one -- that is what `./wt-bind-preset.py` with no arguments means.
+    # it one -- that is what `./write.py` with no arguments means.
     # It asks the adapter for it rather than a module-level `build()`, which
     # no longer exists: the needs and the install are the adapter's.
     import plan

@@ -28,7 +28,7 @@ ENVIRONMENT
 # the throttle or the shifted layer. They are deprecated, and what they rank
 # is somebody else's Warthog. Gone from the whole family.
 #
-# Outputs bms-actions.json next to this file.
+# Outputs falconbms-actions.json next to this file.
 
 import argparse
 import json
@@ -168,7 +168,7 @@ class FalconBmsHarvest(adapter.Harvest):
     """BMS's callback vocabulary."""
 
     game = "falconbms"
-    files = {"bms-actions.json": ("devices", "actions")}
+    files = {"falconbms-actions.json": ("devices", "actions")}
 
     @typing.override
     def read(self, args):
@@ -184,7 +184,7 @@ class FalconBmsHarvest(adapter.Harvest):
         # Kept for `summary()`, which wants the full record the key file
         # gave; what reaches the cache is the shared one.
         self.actions = actions
-        return {"bms-actions.json": {"devices": harvest_devices(sorting),
+        return {"falconbms-actions.json": {"devices": harvest_devices(sorting),
                                      "actions": action_rows(actions)}}
 
     @typing.override
@@ -196,7 +196,7 @@ class FalconBmsHarvest(adapter.Harvest):
                f" / {len(set(a['subsection'] for a in actions.values()))}"
                " subsections",
                "devices"]
-        for d in data["bms-actions.json"]["devices"]:
+        for d in data["falconbms-actions.json"]["devices"]:
             out.append(f"  DX {d['dx_range'][0]:>3}-{d['dx_range'][1]:<3} "
                        f"{d['usb']}  {d['name']}")
         return out

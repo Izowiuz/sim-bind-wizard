@@ -8,13 +8,13 @@ Four tasks.
 
 Configs the game reads are **outputs**. Edit `NEEDS` and regenerate.
 
-    ./bind <game>              what it would bind, and where
-    ./bind <game> why          and why each control was chosen
-    ./bind <game> tui          walk it, keep what you want, write that
-    ./bind <game> write        all of it, into the game
-    ./bind <game> sheet        refresh the kneeboard
+    ./bind-wizard.py <game>              what it would bind, and where
+    ./bind-wizard.py <game> why          and why each control was chosen
+    ./bind-wizard.py <game> tui          walk it, keep what you want, write that
+    ./bind-wizard.py <game> write        all of it, into the game
+    ./bind-wizard.py <game> sheet        refresh the kneeboard
 
-`./bind` with no arguments lists the games and the verbs each answers to.
+`./bind-wizard.py` with no arguments lists the games and the verbs each answers to.
 Anything after the verb is forwarded to the script under `games/<game>/`,
 which does the same work and takes its own flags.
 
@@ -141,8 +141,8 @@ from. Nothing prunes them.
     --restore             put the newest run back
     --restore-from STAMP  an older one
 
-    ./bind <game> write --backup-dir ~/OneDrive/backups/<game>
-    ./bind wt write --restore --restore-from 20260918
+    ./bind-wizard.py <game> write --backup-dir ~/OneDrive/backups/<game>
+    ./bind-wizard.py wt write --restore --restore-from 20260918
 
 A cloud folder or an external disk is a reasonable choice for `--backup-dir`;
 the game's own directory is not.
@@ -174,7 +174,7 @@ Placed before urgency is considered, so it survives regeneration.
 
 ## 2. Your hardware changed
 
-    ../sim-device-map/capture.py
+    python -m devicemap        (in ../sim-device-map)
 
 The capture lands in `captures/<maker>/` with a `kind` — `stick`, `throttle`.
 Planners ask for a kind, so no game code changes. Matching is by USB id and
@@ -241,8 +241,8 @@ hint table.
    own text — above all that it **removes** as well as adds, which is the one
    clause no interface can state. Write the fixture, then break the writer and
    check the test notices.
-6. A row in `bind`, naming which script and flags each verb maps to. The game
-   itself needs no row: `bind` reads `games/` for that. A verb the game has no
+6. A row in `bind-wizard.py`, naming which script and flags each verb maps to. The game
+   itself needs no row: `bind-wizard.py` reads `games/` for that. A verb the game has no
    answer for is left out and the reason goes in `GAPS`, so a gap reads as a
    fact about the game rather than an omission.
 

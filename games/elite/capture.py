@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""ed-bind-wizard.py - pick a preset, find the devices, write the .binds
+"""capture.py - pick a preset, find the devices, write the .binds
 
 DESCRIPTION
     Full-screen wizard by default: pick a base preset, name which joystick is
     which, and write the .binds preset.
     With --generate, headless: build it and exit.
 
-    Binding is `./bind elite tui` -- the review screen the other five games
-    open. It reads and writes elite-binds.json, and this still turns that
+    Binding is `./bind-wizard.py elite tui` -- the review screen the other five
+    games open. It reads and writes elite-binds.json, and this still turns that
     into the preset.
 
 KEYS
@@ -16,7 +16,7 @@ KEYS
     ESC     back, cancel, redo
 
 FILES
-    ed-bind-wizard-results.json   where the game is, and which device is which
+    elite-results.json   where the game is, and which device is which
     <preset>.4.2.binds            written by --generate
 
 NOTES
@@ -51,10 +51,10 @@ NOTES
 # results file and writes it into the game's Bindings folder.
 #
 # Usage:
-#     ed-bind-wizard.py                       # TUI wizard
-#     ed-bind-wizard.py --reset               # wizard from scratch
-#     ed-bind-wizard.py -r other.json         # use a different results file
-#     ed-bind-wizard.py --generate            # write the .binds preset
+#     capture.py                       # TUI wizard
+#     capture.py --reset               # wizard from scratch
+#     capture.py -r other.json         # use a different results file
+#     capture.py --generate            # write the .binds preset
 
 import argparse
 import curses
@@ -65,7 +65,7 @@ import sys
 import xml.etree.ElementTree as ET
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_RESULTS = os.path.join(SCRIPT_DIR, "ed-bind-wizard-results.json")
+DEFAULT_RESULTS = os.path.join(SCRIPT_DIR, "elite-results.json")
 
 CORE = os.environ.get("SIM_BIND_WIZARD") or os.path.normpath(
     os.path.join(SCRIPT_DIR, "..", ".."))
@@ -504,7 +504,7 @@ def tui_main(scr, args, results, cfg):
             used.setdefault((r["role"], "button", r["index"]), func)
 
     while True:
-        choice = tui.menu("ed-bind-wizard — main menu", [
+        choice = tui.menu("Elite Dangerous", [
             progress_label("Bind SHIP controls",
                            *target_stats(results, "ship")),
             progress_label("Bind SRV controls",
@@ -525,14 +525,14 @@ def tui_main(scr, args, results, cfg):
                 tui.log(f"ERROR: {e}")
             tui.wait_any_key()
             continue
-        # The table that used to be here is `./bind elite tui` now -- the
-        # same screen the other five open, with the same keys on it. This
+        # The table that used to be here is `./bind-wizard.py elite tui` now --
+        # the same screen the other five open, with the same keys on it. This
         # wizard is what is left: pick the preset, find the devices,
         # write the .binds.
         tui.page("Binding")
         tui.log("  The review screen does this now:")
         tui.log("")
-        tui.log("      ./bind elite tui")
+        tui.log("      ./bind-wizard.py elite tui")
         tui.log("")
         tui.log("  It reads and writes elite-binds.json. This wizard")
         tui.log("  still writes the .binds preset from that file.")

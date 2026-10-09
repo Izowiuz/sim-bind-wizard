@@ -163,7 +163,7 @@ def from_file(name, path, argv=None):
     AttributeError on None rather than a sentence naming the file.
 
     A file with no `.py` has to be handed its loader, which is the only way
-    `bind` can be imported at all.
+    `bind-wizard.py` can be imported at all.
 
     `argv` swaps `sys.argv` around the execution and swallows the SystemExit
     that a script with its own argument parsing raises on the way past. That
@@ -230,7 +230,8 @@ class Harvest(abc.ABC):
     anything. None of that is reachable from here.
     """
 
-    #: The game, as `bind` dispatches on it and as the directory is named.
+    #: The game, as `bind-wizard.py` dispatches on it and as the directory is
+    #: named.
     game: str
 
     #: filename -> the section names `core.vocab.save` will write under.
@@ -469,12 +470,12 @@ class Adapter(abc.ABC):
 
     @typing.final
     def reharvest(self) -> list[str]:
-        """Read the game again, as `bind` would: a subprocess.
+        """Read the game again, as `bind-wizard.py` would: a subprocess.
 
-        The same script `./bind <game> harvest` runs, for the same reason
-        `bind` shells out rather than importing -- a harvest reads a game
-        directory, unpacks archives and writes files, and none of that
-        wants to happen inside a curses loop with a half-drawn screen.
+        The same script `./bind-wizard.py <game> harvest` runs, for the same
+        reason `bind-wizard.py` shells out rather than importing -- a harvest
+        reads a game directory, unpacks archives and writes files, and none of
+        that wants to happen inside a curses loop with a half-drawn screen.
 
         What comes back is what it printed. The catalogue on screen is
         still the one loaded at start: picking the new one up means
@@ -636,9 +637,9 @@ class Adapter(abc.ABC):
     def parser(self):
         """The one surface every planner answers.
 
-        Every planner owns `--write` because this adds it. Before, `bind`'s
-        dispatch table absorbed the difference, which made a gap in two
-        adapters read as a fact about two games.
+        Every planner owns `--write` because this adds it. Before,
+        `bind-wizard.py`'s dispatch table absorbed the difference, which made a
+        gap in two adapters read as a fact about two games.
         """
         p = argparse.ArgumentParser(
             description=sys.modules[type(self).__module__].__doc__,
@@ -677,8 +678,9 @@ class Adapter(abc.ABC):
         # The constructor's own flags, so `--help` lists them. They are
         # PARSED before this parser exists -- `run()` takes them off the
         # command line to build the adapter at all -- and so were missing
-        # from every help text in the family: `./bind dcs plan -a su-25T`
-        # is in the top-level README and `--help` had never heard of it.
+        # from every help text in the family: `./bind-wizard.py dcs plan
+        # -a su-25T` is in the top-level README and `--help` had never
+        # heard of it.
         self.arguments(p)
         for names, name in _flags(type(self)):
             if any(n in p._option_string_actions for n in names):
@@ -800,7 +802,7 @@ class Adapter(abc.ABC):
                       f'{ident}.', file=sys.stderr)
             raise SystemExit(
                 'The vocabulary does not agree with the list. Run '
-                f'./bind {self.game} harvest.')
+                f'./bind-wizard.py {self.game} harvest.')
 
         layout = self.build()
         asked = False
@@ -1068,8 +1070,8 @@ def run(cls, argv=None):
 def games():
     """[game] -- every directory under games/ that holds an adapter.
 
-    From the filesystem, because a game that exists only in a table in `bind`
-    is a game the table can be wrong about.
+    From the filesystem, because a game that exists only in a table in
+    `bind-wizard.py` is a game the table can be wrong about.
     """
     root = os.path.join(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))), 'games')
@@ -1081,7 +1083,7 @@ def games():
 def planner(game):
     """Which file in this game's directory defines its adapter.
 
-    `plan.py` in five games and `propose.py` in DCS, whose planner derives
+    `plan.py` in five games and `plan.py` in DCS, whose planner derives
     its needs from a module's own commands and was named for that. Found
     rather than tabulated, for the same reason `games()` reads the
     filesystem: a table is a second place for the truth to be wrong.
@@ -1103,12 +1105,14 @@ def planner(game):
 
 
 def load(game, script=None):
-    """The module for a game's planner, imported the way `bind` runs it.
+    """The module for a game's planner, imported the way `bind-wizard.py` runs
+    it.
 
     `os.chdir` because an adapter resolves its data files against `HERE` and
-    `bind` runs it with `cwd=games/<game>`. Nothing is swallowed: after this
-    work an import defines classes and reads nothing, so a failure here is a
-    failure of the contract rather than a fact about what is installed.
+    `bind-wizard.py` runs it with `cwd=games/<game>`. Nothing is swallowed:
+    after this work an import defines classes and reads nothing, so a failure
+    here is a failure of the contract rather than a fact about what is
+    installed.
     """
     script = script or planner(game)
     root = os.path.join(os.path.dirname(os.path.dirname(

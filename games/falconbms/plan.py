@@ -714,9 +714,9 @@ class FalconBms(adapter.Planner):
     OVERLAY = 'by-hand'
     NEEDS_FILE = 'falconbms-needs.json'
     BINDS = 'falconbms-binds.json'
-    CATALOGUE = 'bms-actions.json'
+    CATALOGUE = 'falconbms-actions.json'
     SAYS = {'game_dir': 'the BMS install, if it is not where the cache says'}
-    CACHE = {'bms-actions.json': ('actions', 'devices')}
+    CACHE = {'falconbms-actions.json': ('actions', 'devices')}
     #: BMS's own word for the install predates the family's. Both spellings
     #: reach the same constructor parameter rather than one of them being
     #: laundered through os.environ, which is what used to happen.
@@ -741,10 +741,10 @@ class FalconBms(adapter.Planner):
         self.bms = harvest.bms_dir()
         self.backup_dir = backup_dir
         self.subtitle = f'VIRPIL · {KEYFILE_OUT}'
-        CAT[:] = cactions.read(self.cache('bms-actions.json',
+        CAT[:] = cactions.read(self.cache('falconbms-actions.json',
                                           key='actions'))
         ACTIONS.update(cactions.by_id(CAT))
-        DEVICES[:] = self.cache('bms-actions.json', key='devices')
+        DEVICES[:] = self.cache('falconbms-actions.json', key='devices')
         self._needs = needs(self.NEEDS_FILE, self.BINDS)
 
 
@@ -784,9 +784,9 @@ class FalconBms(adapter.Planner):
         """The key file and the axis defaults, in one run.
 
         BMS needed two writes for one layout: `--write` did the key file and
-        `--write-axes` the rest, and `./bind bms write` passed both to hide
-        it. One layout is one write now, and `--write-axes` remains for the
-        axis half on its own.
+        `--write-axes` the rest, and `./bind-wizard.py bms write` passed both
+        to hide it. One layout is one write now, and `--write-axes` remains for
+        the axis half on its own.
         """
         dst, text, said = key_file(self.bms, layout.on_buttons)
         files, more = axis_files(self.bms, layout.on_axes)

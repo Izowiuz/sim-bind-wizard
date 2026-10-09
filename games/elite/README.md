@@ -3,10 +3,10 @@
 Two tools on one writer:
 
     plan.py             lays a layout out from NEEDS and the device map
-    ed-bind-wizard.py   picks a preset, names the devices, writes the .binds
+    capture.py   picks a preset, names the devices, writes the .binds
 
 The plan hands its result to the wizard's own `generate()`, so there is one
-implementation of the `.binds` format. Binding itself is `./bind elite tui`,
+implementation of the `.binds` format. Binding itself is `./bind-wizard.py elite tui`,
 the screen the other five games open
 and both can be selected in the game to compare.
 
@@ -29,7 +29,7 @@ into the prefix:
     ED_DIR, --game-dir, --schemes-dir   the install; the Bindings folder is
                                         derived from it
     ED_PRESET, --preset                 which preset the plan writes
-    -r FILE                             ed-bind-wizard-results.json, which
+    -r FILE                             elite-results.json, which
                                         remembers both paths after the first
                                         run
 
@@ -46,9 +46,9 @@ into the prefix:
     ./plan.py --tui           walk the layout and write what you keep
     ./plan.py --write         all of it, into the Bindings folder
 
-    ./ed-bind-wizard.py             preset, devices, write
-    ./ed-bind-wizard.py --reset     discard the results file
-    ./ed-bind-wizard.py --generate  headless: write the captured preset
+    ./capture.py             preset, devices, write
+    ./capture.py --reset     discard the results file
+    ./capture.py --generate  headless: write the captured preset
 
 In the TUI: pick the base preset, then SHIP or SRV, then a mapping section or
 ALL.

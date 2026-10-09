@@ -15,9 +15,24 @@ DEFAULT = os.path.normpath(
                  'sim-device-map'))
 
 
+def where():
+    """The map's own directory, wherever it is."""
+    return os.environ.get('SIM_DEVICE_MAP') or DEFAULT
+
+
+def capture_command():
+    """How to run the capture tool, as a reader can type it.
+
+    The path rather than the bare name: the tool is a command once
+    `bin` is on your PATH, and a message that says `devicemap` to
+    somebody who has not done that names nothing they can run.
+    """
+    return os.path.join(where(), 'bin', 'devicemap')
+
+
 def load():
     """The devicemap module, or exit saying where it should have been."""
-    path = os.environ.get('SIM_DEVICE_MAP') or DEFAULT
+    path = where()
     if not os.path.isdir(path):
         sys.exit(f'There is no device map at {path}.\n'
                  'Clone sim-device-map next to this repo, or set '
@@ -62,8 +77,17 @@ def by_role(*required, desk=None):
         # running a planner has in front of them.
         raise SystemExit(f'{e}\n  Or name one: --desk <name>') from None
     if rig is None:
+        # Two states, and this answered with one of them. `profile()`
+        # returns None both when nothing is on file and when SEVERAL are
+        # and nothing says which -- so a desk you had made read as a desk
+        # you had not, and the fix it named was the wrong one.
+        have = dm.load_profiles()
+        if have:
+            sys.exit('More than one desk is on file: '
+                     + ', '.join(p.name for p in have)
+                     + '.\n  Name one: --desk <name>')
         sys.exit('No desk is on file. Nothing says where your hardware '
-                 'sits.\n  Make a desk with sim-device-map/capture.py')
+                 f'sits.\n  Make a desk: {capture_command()}')
     out = {}
     for dev in dm.load_all(rig=rig):
         if rig.entry(dev.slug) is not None:
@@ -84,11 +108,11 @@ def _nothing_to_bind(rig, have, missing):
     if not have:
         return (f'{rig.name} has nothing on it, so nothing here knows what'
                 ' to bind.\n'
-                '  say what is on it:  sim-device-map/capture.py\n'
+                f'  Say what is on it: {capture_command()}\n'
                 '  or work at another desk:  --desk <name>')
     return (f'{rig.name} does not say which of its devices does the job of'
             f' {", ".join(sorted(missing))}.\n'
             f'  it names: {", ".join(sorted(have))}\n'
-            '  change what it says:  sim-device-map/capture.py\n'
+            f'  Change what it says: {capture_command()}\n'
             '  or work at another desk:  --desk <name>')
 
