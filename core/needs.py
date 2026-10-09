@@ -385,10 +385,10 @@ class Need:
         #: like `on` is an attribute of a hat binding, and the one thing
         #: about an axis you change from the screen.
         self.invert = invert
-        #: What the game's own FILE asked for, by field -- as opposed to
-        #: what an overlay wished. `device` and `prefer` are a wish when
-        #: an overlay sets them and the game's ASK when the file does:
-        #: `device throttle, prefer left throttle lever` is the file
+        #: What the GAME asked for, by field -- as opposed to what an
+        #: overlay wished. `device` and `prefer` are a wish when an
+        #: overlay sets them and the game's ASK when the game does:
+        #: `device throttle, prefer left throttle lever` is the game
         #: saying which lever the throttle is.
         #:
         #: Kept as the VALUES, because taking an overlay off has to put
@@ -397,7 +397,14 @@ class Need:
         #: the ask and survived `--overlay none`: `f-18.toml` put the
         #: Hornet's pitch on the throttle, and the next save would have
         #: written that into the needs file as the game's own ask.
-        self.from_file = {}
+        #:
+        #: None until somebody says, which is not the same as an empty
+        #: one: `forget_wishes` fills it on first sight for a game with
+        #: no needs file to read it out of. It was called `from_file`,
+        #: and that name was the bug -- DCS derives its needs from the
+        #: module on every run, so the file could never hold them and
+        #: every `--overlay` run wiped the Hornet's own cockpit.
+        self.ask: dict[str, str] | None = None
         #: A search only the game can answer, carried and not read: War
         #: Thunder's brake is "a slider or lever on the stick you can
         #: read absolutely", and no vocabulary of kinds and labels says
@@ -679,17 +686,28 @@ def forget_wishes(needs):
     It walks `WISHES` rather than a list of its own, so a seventh wish is
     cleared by the fact of being in that tuple.
 
-    What the game's own file asked for comes BACK rather than going with
-    them: `device throttle, prefer left throttle lever` is the file
-    saying which lever the throttle is, and a need cleared of it asks for
-    nothing. `from_file` holds those values, so this reads the same for
-    either kind of need -- and a button need whose file names a device
+    What the game asked for comes BACK rather than going with them:
+    `device throttle, prefer left throttle lever` is the game saying
+    which lever the throttle is, and a need cleared of it asks for
+    nothing. `need.ask` holds those values, so this reads the same for
+    either kind of need -- and a button need whose game names a device
     keeps it too, which it did not before.
+
+    A need nobody has said the asks for is wearing them: this is the
+    first time an overlay has come off, so no overlay has gone on, and
+    whatever is there came from the game. Five games read theirs out of
+    a needs file; DCS builds its needs from the module's own command
+    table, where `device` is the real cockpit -- and wiping that is how
+    `--overlay f-18` put the Hornet's pitch, roll and rudder on the
+    throttle, where no axis could answer them.
     """
     found = 0
     for need in needs:
+        if need.ask is None:
+            need.ask = {w: getattr(need, w, None) for w in WISHES
+                        if getattr(need, w, None)}
         for wish in WISHES:
-            was = need.from_file.get(wish)
+            was = need.ask.get(wish)
             got = getattr(need, wish, None)
             # Truthy AND not what the file said. A flag nobody set is
             # False while the file says nothing (None), and counting that
@@ -745,8 +763,8 @@ def dump_needs(needs):
         # an overlay sets `device` and `prefer` too, and saving those
         # would write a wish into the file as the game's own ask.
         for field in ('device', 'prefer', 'find'):
-            if n.from_file.get(field):
-                row[field] = n.from_file[field]
+            if (n.ask or {}).get(field):
+                row[field] = n.ask[field]
         out.append(row)
     return out
 
@@ -811,8 +829,8 @@ def read_needs(rows, make=None):
             # written down: `forget_wishes` has to tell them apart and
             # `takes` is not the difference.
             device=r.get('device'), prefer=r.get('prefer'))
-        need.from_file = {f: r[f] for f in ('device', 'prefer', 'find')
-                          if r.get(f)}
+        need.ask = {f: r[f] for f in ('device', 'prefer', 'find')
+                    if r.get(f)}
         for flag in TOLD:
             setattr(need, flag, r.get(flag, False))
         out.append(need)

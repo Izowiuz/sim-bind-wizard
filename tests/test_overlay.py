@@ -20,6 +20,7 @@ writes it. A file that could define rules would need an expression language.
 
 import os
 import tempfile
+import typing
 import unittest
 
 import fake
@@ -460,24 +461,49 @@ class LayingOneOnReplacesTheLast(unittest.TestCase):
         self.assertEqual(2, corneeds.forget_wishes(got))
         self.assertEqual(0, corneeds.forget_wishes(got))
 
-    def test_the_game_s_own_ask_comes_back_rather_than_going_with_them(self):
-        # `device` and `prefer` are a wish when an overlay sets them and
-        # the game's ASK when the file does. Told apart by `takes`, an
-        # overlay rule that matched an axis need overwrote the ask and
-        # survived the overlay coming off: `f-18.toml` put the Hornet's
-        # pitch on the throttle, and the next save would have written
-        # that into the needs file as the game's own ask.
+    def test_a_device_the_game_asked_for_stands(self):
+        # The one wish naming a field the game names too, and the game
+        # knows the thing: DCS reads the device off its own command
+        # table, which is written from the aircraft. A template says the
+        # hand one job at a time, and `suits = "flight"` is one word
+        # over the flight axes AND the speedbrake -- so overwriting with
+        # it put the Hornet's pitch on the throttle, where no axis
+        # answered it, and moved five more commands off the device the
+        # real jet keeps them on.
         (pitch,) = corneeds.read_needs([
             {'what': 'Pitch', 'shape': 'stick', 'takes': corneeds.AXIS,
              'device': 'stick', 'on': ['y'], 'bindings': [[]]}])
         written('[[want]]\nwhat = "Pitch"\ndevice = "throttle"\n').apply(
             [pitch])
-        self.assertEqual('throttle', pitch.device, 'an overlay may ask')
+        self.assertEqual('stick', pitch.device)
+
+    def test_a_game_with_no_needs_file_keeps_its_ask_too(self):
+        # DCS builds its needs from the module on every run, so there is
+        # no file for the ask to come out of. `ask` was called
+        # `from_file` and only a file ever filled it, so `forget_wishes`
+        # wiped the Hornet's own device before any scoring -- which is
+        # the other half of pitch, roll and rudder going to the throttle.
+        pitch = Need('Pitch', 'stick', [[Bind('PITCH')]], suits='flight',
+                     takes=corneeds.AXIS, device='stick')
+        written('[[want]]\nsuits = "flight"\ndevice = "throttle"\n').apply(
+            [pitch])
+        self.assertEqual('stick', pitch.device, 'the ask survives the wish')
         corneeds.forget_wishes([pitch])
-        self.assertEqual('stick', pitch.device, 'and the ask comes back')
-        self.assertEqual('stick',
-                         corneeds.dump_needs([pitch])[0].get('device'),
-                         'a save writes the ask, never the wish')
+        self.assertEqual('stick', pitch.device, 'and the overlay coming off')
+
+    def test_a_device_it_said_nothing_about_is_a_wish_and_comes_off(self):
+        # Where the game has no opinion the template places it, and
+        # taking the template off leaves the need asking for nothing: a
+        # save would otherwise write the wish as the game's own ask.
+        (gear,) = corneeds.read_needs([
+            {'what': 'Gear', 'shape': 'button', 'bindings': [[]]}])
+        written('[[want]]\nwhat = "Gear"\ndevice = "throttle"\n').apply(
+            [gear])
+        self.assertEqual('throttle', gear.device, 'an overlay may ask')
+        corneeds.forget_wishes([gear])
+        self.assertIsNone(gear.device, 'and the wish comes off')
+        self.assertIsNone(corneeds.dump_needs([gear])[0].get('device'),
+                          'a save writes the ask, never the wish')
 
     def test_a_button_need_keeps_a_device_its_file_named_too(self):
         # One rule for either kind, which is the point: it read `takes`.
@@ -502,6 +528,10 @@ class LayingOneOnReplacesTheLast(unittest.TestCase):
     def test_it_walks_the_wish_list_rather_than_one_of_its_own(self):
         # So a seventh wish is cleared by the fact of being in `WISHES`.
         got = self.needs()
+        # Seen once first, which is what `apply` does before it wishes
+        # anything: what a need wears the first time an overlay comes
+        # off is the game's own ask, and these are set here by hand.
+        corneeds.forget_wishes(got)
         for wish in corneeds.WISHES:
             setattr(got[0], wish, 'thumb' if wish == 'finger' else True)
         corneeds.forget_wishes(got)
@@ -660,6 +690,82 @@ class TheOverlaysOnFile(unittest.TestCase):
                 for row in rows:
                     self.assertIn(row.get('suits'), corneeds.JOBS,
                                   row['what'])
+
+
+def hornet() -> typing.Any:
+    """The Hornet's adapter, or None where DCS is not harvested here.
+
+    `Any`, the way `tests/fake.py` and `test_listings` take a game: the
+    adapter is loaded by path, so nothing here can be typed against it.
+    """
+    from core import adapter
+    from core import vocab
+    # `--aircraft` is this adapter's own argument, declared in its `SAYS`
+    # rather than on the base class, so the class comes through untyped.
+    make: typing.Any = adapter.adapters('dcs')[0]
+    try:
+        return make(aircraft='FA-18C')
+    except (FileNotFoundError, vocab.Missing, SystemExit):
+        return None
+
+
+@unittest.skipUnless(hornet(), 'dcs is not harvested here')
+class TheHornetStaysInItsOwnCockpit(unittest.TestCase):
+    """What a cockpit template is measured against: the real aircraft.
+
+    Not the factory profiles. Those are Eagle Dynamics' bindings for
+    particular HOTAS hardware, so a Warthog profile says `throttle`
+    because a Warthog has buttons there, not because the jet does. The
+    aircraft itself is the `device` column of DCS's own hint table,
+    written by hand from the cockpit, one row per concept.
+
+    `--overlay f-18` has to move the layout TOWARDS that. It used to do
+    the opposite: `suits = "flight"` is one word over the flight axes
+    AND the speedbrake, and it overwrote the table on all of them -- so
+    pitch, roll and rudder asked for a stick on the throttle, where no
+    axis answered, and five more commands crossed to the wrong hand.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.a = hornet()
+        cls.plain = cls.a.build()
+        corneeds.OVERLAY = coverlay.named('f-18', 'dcs')
+        corneeds.OVERLAY.apply(cls.a.NEEDS)
+        cls.laid = cls.a.build()
+
+    @classmethod
+    def tearDownClass(cls):
+        corneeds.OVERLAY = None
+        corneeds.forget_wishes(cls.a.NEEDS)
+
+    def jet(self, layout):
+        """{command: (where the jet keeps it, where this layout put it)}."""
+        out = {}
+        for p in layout.placed:
+            for grp in p.need.bindings:
+                for b in grp:
+                    said = (self.a.guide.get(b.action) or {}).get('device')
+                    if said:
+                        out[self.a.cmds[b.action]['name']] = (said, p.role)
+        return out
+
+    def elsewhere(self, layout):
+        """The commands sitting on a device the jet does not use for them."""
+        return sorted(cmd for cmd, (jet, got) in self.jet(layout).items()
+                      if jet != got)
+
+    def test_the_template_moves_nothing_off_the_jets_own_device(self):
+        self.assertEqual(self.elsewhere(self.plain),
+                         self.elsewhere(self.laid))
+
+    def test_and_every_need_still_finds_a_control(self):
+        self.assertEqual([], [n.what for n in self.laid.unplaced])
+
+    def test_it_holds_some_of_the_template_all_the_same(self):
+        # Otherwise the answer above is only "the overlay does nothing".
+        kept, broken, _lost = corneeds.OVERLAY.kept(self.laid)
+        self.assertGreater(kept, broken)
 
 
 if __name__ == '__main__':

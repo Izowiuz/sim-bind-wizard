@@ -151,6 +151,20 @@ class Overlay:
 
         Later rules win, so a file may state the broad wish first and the
         exception after it, which is the order you would say them in.
+
+        A `device` the GAME asked for stands. This is the one wish that
+        names the same field a game names, and the game knows the thing:
+        DCS reads the device off its own command table, which is written
+        from the aircraft -- `Pitch` is the stick because the Hornet's
+        pitch is the stick. A template says the hand, one job at a time,
+        and `suits = "flight"` is one word over the flight axes AND the
+        speedbrake. Overwriting with it put the Hornet's pitch, roll and
+        rudder on the throttle, where no axis answered them, and moved
+        five more commands off the device the real jet keeps them on.
+
+        So the template stays what its own file calls itself, a lean: it
+        places a need the game said nothing about, and leans on finger
+        and level for the rest, at +15 against `device_right`'s +40.
         """
         corneeds.forget_wishes(needs)
         touched = set()
@@ -159,9 +173,12 @@ class Overlay:
                 if not _matches(need, rule):
                     continue
                 for key in SETS:
-                    if key in rule:
-                        setattr(need, key, rule[key])
-                        touched.add(n)
+                    if key not in rule:
+                        continue
+                    if key == 'device' and (need.ask or {}).get('device'):
+                        continue
+                    setattr(need, key, rule[key])
+                    touched.add(n)
         return len(touched)
 
     def partners(self, needs):
