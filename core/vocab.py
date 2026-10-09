@@ -1,17 +1,15 @@
-"""Load what a harvest produced, without the planner caring whether it is
-cached on disk or reparsed on the spot.
+"""Load what a harvest produced.
 
-Three adapters had a near-identical `_built()` that opened a JSON file and
-exited if it was missing. X4 has no such file at all, because reparsing four
-46 KB XML files costs nothing where War Thunder has to unpack zstd archives and
-BMS a 100 KB key file. Both are right; the difference should not reach
-`plan.py`.
+A planner does not care whether the vocabulary sits in a cache on disk or
+is reparsed on the spot. Each game is right about its own cost. Reparsing
+X4's four 46 KB XML files costs nothing. War Thunder has to unpack zstd
+archives and Falcon BMS a 100 KB key file, so those cache.
 
     ACTIONS = vocab.load(HERE, 'warthunder-actions.json', key='actions')
     ACTIONS = vocab.load(HERE, None, build=harvest.vocabulary)
 
-The output of a harvest is derived from the installed game, not source, so it
-belongs in `.gitignore`.
+A harvest's output is derived from the installed game. It is not source,
+so it belongs in `.gitignore`.
 """
 
 import json
@@ -21,47 +19,44 @@ import os
 class Missing(SystemExit):
     """There is no cache, and no `build` to make one on the spot.
 
-    A fact about this machine -- nobody has run the harvest here -- and not
-    about the code. The distinction is the whole reason this is a class:
-    `tests/test_contract.py` skips on this and fails on `Stale`, where before
-    both arrived as the same bare `SystemExit` and a contract violation was
-    indistinguishable from a clone nobody had harvested on.
+    This is a fact about the machine: nobody has run the harvest here. It
+    is not a fault in the code. `tests/test_contract.py` skips on this and
+    fails on `Stale`, so the two need separate classes.
 
-    It subclasses `SystemExit` so that every `except SystemExit` already
-    written against this module keeps working, and so an uncaught one still
-    prints its message and exits 1 exactly as `sys.exit` did.
+    It subclasses `SystemExit`, so every `except SystemExit` written
+    against this module keeps working. An uncaught one prints its message
+    and exits 1.
     """
 
 
 class Stale(SystemExit):
-    """A cache is there, and it is not the shape the planner asked for.
+    """A cache is there, and its shape is not the one the planner asked for.
 
-    Always a fault: either someone's working copy predates a change to the
+    This is always a fault. Either a working copy predates a change to the
     harvest, or a harvest and a planner disagree about what they call a
-    section. Both are worth stopping for, which is why this is not `Missing`.
+    section. Both are worth a stop, so this is not `Missing`.
 
-    It used to surface as a bare `KeyError` from the subscript below, which
-    named the key and nothing else -- not the file, not the game, and not what
-    to do about it.
+    The message names the file, the game and the fix. A bare `KeyError`
+    from the subscript below names the key only.
     """
 
 
 def _game(directory):
     """Which game a cache belongs to, for the message.
 
-    The directory is always `games/<game>/`, and `<game>` is the word
-    `bind-wizard.py` dispatches on, so the reader gets a command they can paste
-    rather than a path they have to translate.
+    The directory is always `games/<game>/`. `<game>` is the word
+    `bind-wizard.py` dispatches on, so the reader gets a command to paste
+    rather than a path to translate.
     """
     return os.path.basename(os.path.normpath(directory)) or '<game>'
 
 
 def load(directory, filename, key=None, build=None):
-    """A harvest's output: from the cache if there is one, else rebuilt.
+    """A harvest's output, from the cache or rebuilt.
 
-    `build` is a zero-argument callable that reads the game directly. Give it
-    for a game cheap enough to reparse; leave it out and a missing cache is an
-    error telling you to run the harvest.
+    `build` is a callable that takes no argument and reads the game
+    directly. Give it for a game cheap enough to reparse. Leave it out and
+    a missing cache is an error that tells you to run the harvest.
     """
     game = _game(directory)
     path = os.path.join(directory, filename) if filename else None
@@ -70,16 +65,16 @@ def load(directory, filename, key=None, build=None):
             with open(path, encoding='utf-8') as f:
                 data = json.load(f)
         except json.JSONDecodeError as e:
-            # A harvest interrupted part-way leaves a truncated file behind,
-            # and the next run reads it rather than the game.
+            # A harvest stopped part way leaves a truncated file behind.
+            # The next run reads that file instead of the game.
             raise Stale(f'{filename} does not parse: {e}\n'
                         f'Run ./bind-wizard.py {game} harvest.') from e
         if key is None:
             return data
         if not isinstance(data, dict) or key not in data:
-            # Named, not listed: a cache with no envelope has its whole
-            # vocabulary at the top level, and printing three thousand keys
-            # buries the one sentence that says what to do.
+            # Name what the file holds. Do not list it. A cache with no
+            # envelope holds its whole vocabulary at the top level, and
+            # three thousand keys bury the sentence that says what to do.
             if not isinstance(data, dict):
                 held = f'a {type(data).__name__}'
             elif len(data) > 6:
@@ -93,9 +88,9 @@ def load(directory, filename, key=None, build=None):
                         'harvest.')
         return data[key]
     if build is not None:
-        # `key` is applied only if the built data happens to carry it: a cache
-        # wraps its sections in an envelope and a live `build()` return does
-        # not, so the same call has to yield the same shape either way.
+        # Apply `key` only where the built data carries it. A cache wraps
+        # its sections in an envelope. A live `build()` return does not.
+        # The same call has to give the same shape either way.
         data = build()
         return data[key] if key and isinstance(data, dict) and key in data \
             else data
@@ -104,22 +99,48 @@ def load(directory, filename, key=None, build=None):
                   f'Run ./bind-wizard.py {game} harvest.')
 
 
-def save(directory, filename, **sections):
+def _written(value, depth, inline):
+    """`value` as JSON text, one thing per line down to `inline` deep.
+
+    The depth is said rather than left to `json.dump`. `indent=0` writes
+    every bracket on a line of its own, so one need with a five-way hat
+    takes thirty-five lines, and thirty of those are punctuation around
+    five identifiers. `indent=None` puts a 2500-row cache on one line.
+
+    A row of a cache is one line, so `inline=1`. A need is a line per
+    judgement with its identifiers and directions on that line, so
+    `inline=2`. You read and edit the judgements. You skip the
+    identifiers.
+    """
+    if depth > inline or not isinstance(value, (dict, list)) or not value:
+        return json.dumps(value, ensure_ascii=False)
+    lead, inner = '  ' * depth, '  ' * (depth + 1)
+    if isinstance(value, dict):
+        body = ',\n'.join(
+            f'{inner}{json.dumps(k, ensure_ascii=False)}: '
+            + _written(v, depth + 1, inline)
+            for k, v in value.items())
+        return '{\n' + body + f'\n{lead}}}'
+    body = ',\n'.join(inner + _written(v, depth + 1, inline)
+                       for v in value)
+    return '[\n' + body + f'\n{lead}]'
+
+
+def save(directory, filename, inline=1, **sections):
     """Write a harvest's output. Returns (path, what went where).
 
-    It used to print that second half. Every harvest had printed its own
-    variation and one wording is one thing to learn -- but printing it
-    here meant every caller printed, including the review screen, where
-    stdout is the inside of the curses window being drawn. The line
-    landed mid-status, glued to whatever was already there:
+    The second half is returned, not printed. A print here reaches every
+    caller, and one caller is the review screen, where stdout is the
+    inside of the curses window being drawn. The line then lands mid
+    status, glued to whatever is already there:
 
         10 assigned by youwrote x4-binds.json: 32 needs
 
-    So it is returned, and the caller with a terminal prints it.
+    The caller with a terminal prints it.
     """
     path = os.path.join(directory, filename)
     with open(path, 'w', encoding='utf-8') as f:
-        json.dump(sections, f, ensure_ascii=False, indent=0)
+        f.write(_written(sections, 0, inline) + '\n')
     sizes = ', '.join(f'{len(v)} {k}' for k, v in sections.items()
                       if hasattr(v, '__len__'))
     return path, f'wrote {filename}: {sizes}'

@@ -1,23 +1,17 @@
-"""Which need takes which control, once the scoring has said what each is worth.
+"""Which need takes which control, once the scoring says what each is worth.
 
-`allocate` does the hard part: what a control is worth to a need, which
-passes run, what a gate refuses outright, what you chose by hand. By the
-time a solver is asked, the question is already arithmetic -- here are the
-things to place, here is what each may take and what each would be worth,
-choose. That is a small enough job to have more than one answer for, and
-the answers differ in exactly one way: whether a choice can be undone.
+`allocate` does the judgement. It says what a control is worth to a need,
+which passes run, what a gate refuses, and what you chose by hand. By the
+time a solver is asked, the question is arithmetic: here are the things to
+place, here is what each may take and what each is worth, choose.
 
-They were not selectable, and that is the bug this is the fix for. The
-model was used when `ortools` imported and the list-walk when it did not,
-silently, with nothing said either way -- so `./bind-wizard.py x4 sheet` under
-a python with ortools and the same command under one without produced two
-different kneeboards for the same desk, 77 lines apart, and neither
-mentioned the other existed.
+The solvers differ in one way. One can undo a choice. The other cannot.
 
-A solver is a class so that adding one is adding a file's worth of code
-and a line in `SOLVERS`, rather than another branch in `allocate`. The
-next one is already described in `device-map-v2.md`: the Hungarian
-algorithm, as a fast first answer to hand the model as a hint.
+`--solver` names one, and every run prints the name it used. Without that
+flag the program takes the first solver that runs here.
+
+A solver is a class, so another one is a file's worth of code and a line in
+`SOLVERS`. It is not another branch in `allocate`.
 """
 
 import sys
@@ -26,16 +20,16 @@ import sys
 class Solver:
     """Given what each need may take, choose who gets what.
 
-    `wants` is [(want, {room: points})]: for each thing to place, where it
-    may go and what each would be worth. `room` is everything that can
-    take one, and each takes at most one.
+    `wants` is [(want, {room: points})]. For each thing to place it gives
+    where that thing may go and what each place is worth. `room` is
+    everything that can take one. Each room takes one thing at most.
 
-    `best` returns [(want, room)] -- pairs rather than a mapping, so a
-    want that came back twice is visible. As a dict it was not: the second
-    quietly replaced the first, and the constraint saying a want takes one
-    room could be removed without anything looking different.
+    `best` returns [(want, room)]. Pairs, not a mapping: a want that comes
+    back twice is visible in a list. In a dict the second one replaces the
+    first, and the constraint that a want takes one room can then be
+    removed with nothing looking different.
 
-    None means this solver could not answer, and the caller falls back.
+    None means this solver could not answer. The caller then falls back.
     """
 
     #: What `--solver` calls it.
@@ -53,13 +47,14 @@ class Solver:
 
 
 class Greedy(Solver):
-    """The list in order, each taking the best still free.
+    """The list in order, each need taking the best control still free.
 
-    Cannot undo a choice, which is the whole of the difference: an early
-    urgent need takes a control a later one needed more, and the passes
-    named `relaxed` and `borrowed` are what this does instead of
-    backtracking. Always available, needs nothing, and a layout found by
-    walking the list is worse than the best one and much better than none.
+    This cannot undo a choice. That is the whole difference: an early
+    urgent need takes a control a later need wanted more. The `relaxed`
+    and `shared` passes are what this does in place of backtracking.
+
+    It needs nothing and it always runs. A layout found by walking the
+    list is worse than the best layout and much better than none.
     """
 
     name = 'greedy'
@@ -72,11 +67,10 @@ class Greedy(Solver):
             if not free:
                 continue
             # `-j` says the tie-break out loud. `max` keeps the first of
-            # equals, which is the first the dict was BUILT in -- true to
-            # the pool order only because the one caller happens to build
-            # it that way. A rule that holds by coincidence is one the
-            # other solver cannot be held to, and both of them now break
-            # a tie towards the earlier control.
+            # equals, which is the first key the dict was built with. That
+            # follows the pool order only because the one caller builds it
+            # that way. Both solvers break a tie towards the earlier
+            # control, and this is where one of them says so.
             j = max(free, key=lambda j: (free[j], -j))
             used.add(j)
             out.append((want, j))
@@ -86,19 +80,18 @@ class Greedy(Solver):
 class CpSat(Solver):
     """The whole assignment as one model, solved together.
 
-    The judgement is unchanged -- `score()` still says how well a control
-    plays a part, and its number is the objective coefficient -- and only
-    the search changes. So a difference in the output is a difference
-    `Greedy` could not reach, not a difference of opinion.
+    The judgement is the same one. `score()` says how well a control plays
+    a part, and its number is the objective coefficient. Only the search
+    changes. A difference in the output is therefore a difference `Greedy`
+    cannot reach, not a difference of opinion.
     """
 
     name = 'cp-sat'
     said = 'the whole assignment as one model (needs ortools)'
 
-    #: Placing a need at all beats improving one already placed. A need
-    #: left unplaced is a thing you cannot do in the aircraft; a need on a
-    #: slightly worse control is a stretch. The gap has to be wider than
-    #: any score.
+    #: Placing a need beats improving a need already placed. An unplaced
+    #: need is a thing you cannot do in the aircraft. A need on a slightly
+    #: worse control is a stretch. So the gap is wider than any score.
     PLACED = 10_000
 
     def __init__(self, seconds=10):
@@ -113,9 +106,9 @@ class CpSat(Solver):
         return ''
 
     def best(self, wants, room):
-        """Points are integers because the solver wants them so; `score()`
-        is already whole numbers, and rounding one that was not would
-        change the ranking rather than the arithmetic."""
+        """The solver takes integers. `score()` returns whole numbers, so
+        nothing is rounded here. Rounding a fraction would change the
+        ranking rather than the arithmetic."""
         from ortools.sat.python import cp_model
         room = list(room)
         model = cp_model.CpModel()
@@ -131,23 +124,21 @@ class CpSat(Solver):
                     if where in may]
             if mine:
                 model.add_at_most_one(mine)
-        # Scaled, so that the same sum can carry a tie-break underneath
-        # it. Without one the model has no preference between equally
-        # good answers -- and most of a layout is equally good answers,
-        # because a dozen thumb buttons are worth exactly the same to a
-        # binding asking for a button. So every change re-rolled every
-        # tie: moving ONE binding by hand moved 21 of X4's 32, and the
-        # twenty were not consequences, they were noise.
+        # The sum is scaled, so that it carries a tie-break underneath
+        # it. Without a tie-break the model has no preference between two
+        # equally good answers. Most of a layout is equally good answers,
+        # because a dozen thumb buttons are worth the same to a need that
+        # asks for a button. Every change then re-rolls every tie:
+        # moving ONE binding by hand moved 21 of X4's 32 bindings, and
+        # the twenty were noise.
         #
-        # `- where` under the scale breaks a tie towards the earlier
-        # control in the pool, which is what walking the list does
-        # already: `max` over a dict built in pool order keeps the first.
-        # So the two solvers now agree about ties and disagree only where
-        # the model can actually do better.
+        # `- where` breaks a tie towards the earlier control in the pool.
+        # That is what walking the list does already, because `max` over a
+        # dict built in pool order keeps the first key. The two solvers
+        # agree about ties and differ only where the model does better.
         #
         # `big` is wider than every index in the model added together, so
-        # the tie-break can never reach into a real difference of one
-        # point.
+        # the tie-break cannot reach into a real difference of one point.
         big = len(pick) * max(room, default=0) + 1
         model.maximize(sum(((self.PLACED + points) * big - where)
                            * pick[n, where]
@@ -155,20 +146,21 @@ class CpSat(Solver):
                            for where, points in may.items()))
         solver = cp_model.CpSolver()
         solver.parameters.max_time_in_seconds = self.seconds
-        # One worker, and a fixed seed. Eight workers race, and whichever
-        # reaches an optimum first is the one answered with -- so the SAME
-        # needs on the SAME desk came back differently run to run. Not by a
-        # better layout: the ties. Most of a layout is ties, because a dozen
-        # thumb buttons are worth exactly the same to a need that asks for a
-        # button, and the solver has no reason to prefer one. Three of the six
-        # games rebound 51 lines between two runs that differed in nothing.
+        # One worker and a fixed seed. Eight workers race each other, and
+        # the one that reaches an optimum first is the one answered with.
+        # The SAME needs on the SAME desk then come back differently from
+        # run to run. The difference is the ties, not a better layout.
+        # Measured: three of the six games rebound 51 lines between two
+        # runs that differed in nothing.
         #
-        # That is the muscle memory this tool exists to keep, and it also
-        # makes every before-and-after comparison worthless -- a change cannot
-        # be told from the weather. These models are tens of needs against
-        # tens of controls and solve in milliseconds, so the parallel search
-        # was buying nothing: timed over the three largest games, one worker
-        # and eight are the same 0.3s, which is the interpreter starting.
+        # Those lines are the muscle memory this program exists to keep.
+        # They also make a before-and-after comparison worthless, because
+        # a change cannot be told from the weather.
+        #
+        # The parallel search buys nothing here. These models are tens of
+        # needs against tens of controls and solve in milliseconds. Timed
+        # over the three largest games, one worker and eight workers both
+        # take 0.3s, which is the interpreter starting.
         solver.parameters.num_workers = 1
         solver.parameters.random_seed = 0
         got = solver.solve(model)
@@ -183,21 +175,21 @@ class CpSat(Solver):
                 for where in may if solver.value(pick[n, where])]
 
 
-#: Every solver there is, best first. `best()` walks this, so the order is
-#: which one a run gets when nobody named one.
+#: Every solver there is, best first. `best()` walks this list, so the
+#: order decides which solver a run gets when nobody names one.
 SOLVERS = (CpSat, Greedy)
 
-#: The one every desk can run, whatever is installed. Never `why_not`.
+#: The solver every desk can run, whatever is installed. It never answers
+#: `why_not`.
 FALLBACK = Greedy
 
 
 def named(name):
     """The class `--solver NAME` means.
 
-    Raises rather than answering None. Its one caller has already had the
-    name checked by argparse against `choices()`, so None there is not a
-    state to handle -- and a signature that admits it makes every caller
-    write a branch for something that cannot happen.
+    This raises. It does not answer None. Argparse has already checked the
+    name against `choices()`, so None is not a state the caller can reach.
+    A signature that admits None makes every caller write a branch for it.
     """
     for one in SOLVERS:
         if one.name == name:
@@ -207,9 +199,9 @@ def named(name):
 
 
 def best():
-    """The best solver this python can actually run.
+    """The best solver this python can run.
 
-    Greedy is last in `SOLVERS` and needs nothing, so this always answers.
+    `Greedy` is last in `SOLVERS` and needs nothing, so this answers.
     """
     for one in SOLVERS:
         if not one.why_not():

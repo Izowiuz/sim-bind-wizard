@@ -1,325 +1,257 @@
-# How the allocator works
+# Allocation
 
-`core/needs.py`. It answers one question: given a list of things a pilot has
-to be able to do, and a description of the hardware, which control gets
-which.
+How the program decides which control takes which need. The weights, the
+bands and the vocabularies are in `core/scoring.toml`. The code is
+`core/needs.py` and `core/solvers.py`.
 
-It knows nothing about any game. A need's payload is opaque to it — Falcon BMS
-puts a callback there, War Thunder a `(air, heli)` pair, MSFS a
-`(plane, heli, global)` triple, X4 a `(kind, id)` per context. The allocator
-only ever indexes that list.
+## What the two sides are
 
-## What goes in
+A **need** is one thing a pilot must be able to do. It names the game's
+actions, the shape of control it wants, when you reach for it, and what it
+is for.
 
-**Needs** come from the game's adapter, either written by hand (`NEEDS` in
-`games/*/plan.py`) or derived from the game's own vocabulary (`families()` in
-`games/dcs/plan.py`). Each carries:
+A **control** is one physical thing on a device, as the device map
+describes it. The map gives its shape, its directions, how far your hand
+travels to it, and whether you can hold it, tap it, find it by feel or hit
+it by accident.
 
-| field | means |
+A **slot** is one bindable input of a control. A hat has four directions
+and a press, so a hat is five slots.
+
+## Reach
+
+The device map measures how far the hand travels to each control. The
+program reads five tiers.
+
+| tier | what it means |
 |---|---|
-| `what` | the human name, for the sheet and `--why` |
-| `shape` | `button`, `hat2`, `hat4`, `trigger`, `latch`, `encoder`, `selector`, `ministick`, `lever`… widened through `FITS` |
-| `bindings` | one payload per slot, in the control's own press order; `None` leaves that direction alone |
-| `push` | payload for a control that also clicks; `None` leaves the click free |
-| `urgency` | `IN_A_TURN` 0, `ON_APPROACH` 1, `IN_THE_AIR` 2, `ON_THE_RAMP` 3 |
-| `suits` | one word matched against the map's own `suits` list |
-| `dev` | which device kind it belongs on |
-| `prefer` | pin to a control by its label in the map |
-| `on` | the directions it physically moves in |
+| 0 | your hand where it lives |
+| 1 | one finger, the hand still on the grip |
+| 2 | the hand off the grip, still on the device |
+| 3 | the hand off the device |
+| 4 | nobody measured it |
 
-**Devices** come from `core/devmap.py` → `sim-device-map`, keyed by the map's
-own `kind`. The allocator sees each device as a flat list of `groups` —
-physical controls, each with `kind`, `label`, `reach`, `suits`, `buttons`,
-`push` and `bindable_buttons`.
+An unmeasured control counts as tier 4.
 
-## Reach: how precious a control is
+## The bands
 
-Read out of the map's own English about how you get to it.
+A need's `urgency` says when you reach for it. The band gives a floor and
+a ceiling on reach.
 
-    thumb / index finger                 tier 0    without letting go of anything
-    without releasing (grip)             tier 1    a finger stretches
-    needs letting go                     tier 3    hand leaves the grip
+| band | takes tiers |
+|---|---|
+| in a turn | 0 to 1 |
+| on approach | 0 to 3 |
+| in the air | 0 to 3 |
+| on the ramp | 2 to 3 |
 
-On this hardware that is 14 controls at tier 0, 4 at tier 1, 19 at tier 3 and
-none at tier 2.
+The floor is what keeps something you do on the ramp off the control under
+your thumb. The ceiling is what keeps something you do in a turn within
+reach.
 
-Each urgency declares the band it may take:
+## The five passes
 
-    MAX_REACH = {0: 1, 1: 3, 2: 3, 3: 3}    the worst it can live with
-    MIN_REACH = {0: 0, 1: 0, 2: 0, 3: 2}    the best it may take
+The program places a need in the first pass that takes it.
 
-The floor is what stops a canopy switch grabbing a thumb position the moment
-one is free. Both are **preferences**, not laws: the relaxed pass lifts them.
+| pass | what it does |
+|---|---|
+| `yours` | you put it here. Nothing asks and nothing argues. |
+| `pinned` | a control you named. It is taken before anything else. |
+| `floored` | the ordinary try. Both limits hold. |
+| `relaxed` | nothing was left inside the limits, so the far end opens. |
+| `shared` | a spare button on a control that another function owns. |
 
-## Scoring
+Axes go first, best fit before the rest. Zoom wants a dial that rests at
+zero. The antenna only wants one that stays put. So zoom has the better
+claim on the one dial that rests at zero.
 
-`score(ctrl, need, role)` returns `None` when a control cannot do the job at
-all — wrong shape, too few buttons, outside the reach band, vetoed by the
-game's `usable()`, or refused by a fact — and otherwise a sum of terms.
+The result goes back into the needs file's own order. The order a pass
+visits things in does not reach the layout.
 
-**The weights are not written here.** They live in `core/scoring.toml`, and
-`y` on the review screen reads them out of it rather than out of a
-transcription. A table in this document is a second copy that nobody edits
-when the first one moves: this one said `+ 25 the map says this control suits
-it` for months after that term was deleted, and omitted the two direction
-penalties entirely.
+`relaxed` runs over what `floored` left. A need placed in `relaxed`
+reached past its floor, and the screen says so.
 
-Each weight carries a `note` in the file saying why it is what it is. Those
-stay in the file. They were drawn on the `y` screen once and they read as
-somebody else's working — half a page about a retune, under some rows and not
-others — so the screen carries the numbers and the words they stand for, and
-nothing else. Whoever is about to change a number is looking at the file.
+`shared` takes a spare button off a control another need already owns. A
+hat's fourth direction and a rocker's spare half are the cases. Four
+mechanisms lend nothing: a trigger, a selector, an encoder and a latch.
+Each one's positions are one switch. Their click is a real button and is
+fair game.
 
-Two halves. **Terms** — `[[term]]` — are named predicates over a control and a
-need, written in `core/needs.py` because a file that could define one would
-need an expression language. **Facts** — `[[fact]]` — are what the device map
-measured about a control, weighed against what a need asks of it: can you hold
-it down, tap it quickly, find it by feel, hit it by mistake, hold it as a
-modifier. A fact counts only for a need marked as asking for it, and not at
-all for a control nobody answered — an unanswered control is an unwalked desk,
-not a middling one. Adding a sixth is a block in the file and nothing else.
+## The gates
 
-`100 + 12 × tier` rewarding the *worse* reach is deliberate: needs are placed
-most-urgent-first, so anything still waiting is less urgent than what has
-already chosen, and taking the cheapest adequate control leaves the good ones
-for whatever is still coming.
+A gate refuses a control outright.
 
-A pin short-circuits everything except shape and capacity. It used to be a
-+500 bonus applied after the reach checks, which meant a pinned control the
-ceiling excluded scored `None` and the bonus never ran — BMS's pinky shift
-scored 721 with a loose ceiling and nothing with a tight one, and moved
-silently to the thumb mini-stick. A pin is a decision, so it outranks the
-tables and not just the scoring.
+| gate | why |
+|---|---|
+| `unusable` | the game cannot address it |
+| `wrong_shape` | it is the wrong shape |
+| `too_few` | it has too few bindable buttons |
+| `stepped` | it reports its two extremes and nothing in between |
+| `out_of_reach` | its reach is outside the band's limits |
 
-## Five passes
+`wrong_shape` does not apply in the `shared` pass. What a shared button
+comes off is a control something else owns, and the shape of that control
+is not the shape of the button.
 
-Needs are ordered `(pinned first, then urgency, then the name)` and walked
-five times. There used to be a step between the band and the name: how many
-of the game's own factory profiles bound the thing. It decided ties inside a
-band, which is real work, and it decided them by what somebody else bound on
-somebody else's hardware — so it is gone, and the name, which decides
-nothing, breaks what the band leaves. Each pass takes whole controls out of the pool as it places them.
+One measured fact also refuses: a control the map marks as impossible to
+hold cannot carry a modifier. Five of 41 controls qualify as a modifier,
+so this is a constraint on where a shift can live.
 
-**1 — yours.** Anything carrying `Need.yours` with `how: chose` — a control
-you put it on yourself, from the review screen. Placed before anything is
-scored, and its control leaves the pool.
+## The score
 
-This is not `prefer`, and the difference is the point. A pin is an opinion: it
-outranks the ordering, and the scoring still has to agree with it, so a gate
-can refuse a pinned control — one did, and BMS's pinky shift left the button
-it was pinned to. Nothing refuses this one. You sat at the desk with the stick
-in your hand and put the thing where you wanted it; there is no opinion here
-to overrule.
+Every candidate that passes the gates gets a number. The highest wins.
+`--why` prints the parts.
 
-If the control is no longer on the desk, the need comes back **empty** and is
-not offered to pass 5 either: borrowing it a spare button somewhere else is
-moving it, which is the one thing writing the choice down was for. The review
-screen says which kind of empty it is.
+| term | weight | when |
+|---|---|---|
+| `pinned` | 1000 | you named this control. It stops the scoring. |
+| `fits` | 100 | the shape and the count fit |
+| `lent` | 60 | still free in the last try (shared pass) |
+| `device_right` | 40 | on the device it asked for |
+| `exact_shape` | 20 | exactly the shape it asked for |
+| `stayed` | 20 | where you left it |
+| `click` | 15 | it has a click |
+| `place_right` | 15 | for each of the overlay's place words it answers |
+| `reach` | 12 | for each tier further from your hand |
+| `left_over` | 12 | the best of what was left (shared pass) |
+| `spare` | -4 | for each spare button it does not need |
+| `directions_differ` | -8 | the directions differ |
+| `opens` | -15 | it opens a control nothing has touched (shared pass) |
+| `place_wrong` | -20 | for each of the overlay's place words it contradicts |
+| `coupled` | -25 | this axis moves with another lever |
+| `device_wrong` | -50 | on a different device |
+| `no_directions` | -60 | no directions |
 
-`how: accepted` — what `c` writes, when you look at where the allocator put
-something and say yes — is deliberately *not* here. It records which control
-you agreed to and changes no allocation, so if the desk or the needs change
-and it lands elsewhere the row goes back to `?` and tells you. `c` over a full
-list is one keystroke, and if it froze every row the allocator would never
-speak again.
+`reach` pays for distance. A control further from the hand scores higher,
+so the closer controls stay free for the needs that must have them. The
+band's floor and ceiling are what stop that running away.
 
-**2 — pinned.** Anything with `prefer` goes before urgency is consulted at
-all. `prefer` used only to tip the scales, which is no use once something more
-urgent has already taken the control.
+## The measured facts
 
-**3 — floored.** Everything else, honouring both floor and ceiling. Most of a
-layout lands here.
+The device map answers five questions about each control. Four of them
+move the score. The fifth refuses.
 
-**4 — relaxed.** Whatever is left, with the floor dropped — an unbound engine
-start is worse than a canopy switch under the thumb, and by now everything
-urgent has chosen. The **ceiling** lifts here too, but *only for a need that
-wants more than one button*, because:
+| question | yes | no |
+|---|---|---|
+| you can hold it down | 25 | -45 |
+| you can tap it quickly | 25 | -45 |
+| you can find it by feel | 0 | -20 a step |
+| you can hit it by accident | 0 | -30 a step |
+| you can hold it as a modifier | nothing | it refuses |
 
-- a multi-button need has no other fallback, and every encoder and selector on
-  this hardware needs letting go of the grip, so without the lift BMS's MAN
-  RANGE knob, radar gain, ICP master mode and IFF MASTER had nowhere to go at
-  all;
-- a single-button need *does* have one — pass 5 — and a borrowed thumb press
-  beats a whole control you must let go of the grip to reach. Lifting the
-  ceiling for those made it lose: War Thunder's radar ACM and sight
-  stabilisation, both `in a turn`, left the thumb for the side dials.
+The first two are asymmetric on purpose. "You cannot hold this one" is a
+fault, not the absence of a virtue.
 
-**5 — borrowed.** A control carries more than the need that took it: a hat has
-four directions *and* a press, a rocker nobody claimed has two positions. What
-counts as spare is tracked per `(device, button)`, not per control. A
-single-slot need with nowhere else to go takes one spare button, scored
+The last two are charged as a shortfall, not paid as a bonus. 20 of the 22
+controls a hand reaches without moving answer "find it by feel" at the
+top. A bonus would pay nearly every candidate the same and decide nothing.
+The information is in the minority answer.
 
-    60 + 12 × (3 − tier) + 30 if the right device − 15 if the control is untouched
+A need gates the accident question. A control you can knock is a problem
+only under something that hurts when you knock it.
 
-Two things to notice. The tier polarity is **flipped** against the main passes:
-nothing is coming after this pass, so a leftover need should get the best
-leftover rather than the cheapest. And opening a control nothing has touched is
-penalised, so four idle two-way rockers do not sit there while a cold-start
-switch goes homeless — but neither is one broken open while a real spare
-exists.
+An axis asks a sixth question. `rests` says where the axis sits when you
+let go. The map's words are `centred`, `min`, `mid` and `max`. The same
+word on the axis and the need pays 40. A different word costs 40. Pitch
+has to spring back or the aircraft will not fly level. A throttle has to
+stay or it returns to half power. A brake has to rest at the minimum or it
+is part on from the moment the game starts.
 
-It honours the band's **floor** as well as its ceiling, which it used not to.
-Only `on the ramp` has a floor above 0 — `takes = [2, 3]` — and the band's own
-note says what for: *without it, something you do once with the canopy open
-grabs a thumb position the moment one is free*. Every other pass obeyed that;
-this one checked the ceiling only, and then paid the flipped tier bonus for
-being **close**. So X4's `Pause` and `Cockpit menu` sat on the hat that cycles
-weapon groups, and Elite's galaxy and system maps on a thumb hat. The trade is
-explicit: two of the 147 — X4's `Player ship info` and Falcon's `AVTR`, both
-ramp switches — now go unplaced rather than under a thumb.
+## The solvers
 
-Controls in `ONE_MECHANISM` — `latch`, `trigger`, `selector`, `encoder` — lend
-their **click only**. Their buttons are one physical thing rather than
-independent positions: a trigger's stages are the gun, a selector's positions
-are one switch, an encoder's two contacts are one more/less pair, and a latch
-*holds* whichever position it is in, so a press action borrowed from one fires
-for as long as the lever sits there. Bomb release landed on the master-arm
-latch exactly that way.
+| solver | what it does |
+|---|---|
+| `cp-sat` | the whole assignment as one model. It needs `ortools`. |
+| `greedy` | walk the list. Each need takes the best control still free. |
 
-## Who gets what, once the scores are in
+`greedy` cannot take a control back. An early urgent need therefore keeps
+a control a later need wanted more. `cp-sat` sees the whole assignment at
+once and finds that trade.
 
-By the time a solver is asked the question is arithmetic: here are the things
-to place, here is where each may go and what each would be worth, choose.
-`core/solvers.py` has two answers to it and `--solver NAME` picks one.
+`--solver NAME` names one. Without the flag the program takes the best
+solver that runs. Every run prints the name. Name a solver that cannot run
+and the program stops.
 
-**`greedy`** walks the list, each taking the best still free. It cannot undo a
-choice, which is the whole of the difference: an early urgent need takes the
-control a later one needed more, and passes 4 and 5 are what it does instead
-of backtracking. Needs nothing, so every clone has it.
+`cp-sat` can also run out of time with nothing feasible. Then the program
+walks the list instead.
 
-**`cp-sat`** states the whole assignment as one model and solves it together,
-so it can give up a better control for one need to place two. The judgement is
-unchanged — `score()` still says how well a control plays a part, and its
-number is the objective coefficient — and only the search changes. So a
-difference in the output is one greedy could not reach, not a difference of
-opinion. Needs `ortools`.
+## The closed vocabularies
 
-It picks the best one that runs, and every run prints which. It used to pick
-silently on whether the import worked, so the same command under two pythons
-produced two different kneeboards for one desk, 77 lines apart, with nothing
-on either saying so. Naming one that cannot run stops the run rather than
-handing back the other.
+### Shapes
 
-The model runs one worker with a fixed seed. Eight workers race and whichever
-reaches an optimum first is the answer — and most of a layout is ties, because
-a dozen thumb buttons are worth exactly the same to a need asking for a
-button. Three of the six games rebound 51 lines between two runs that differed
-in nothing at all. These models solve in milliseconds, so the parallel search
-was buying nothing.
+A need asks for a shape. The table says which kinds of control answer it.
 
-Adding a third is a class and a line in `SOLVERS`. `device-map-v2.md` already
-names the next one: the Hungarian algorithm, as a fast first answer to hand
-the model as a hint.
+| the need asks | a control of this kind answers |
+|---|---|
+| `axis` | axis, lever, slider, dial, pedal, wheel |
+| `lever` | lever, slider |
+| `button` | button, paddle, dial |
+| `paddle` | paddle, button |
+| `hat2` | hat2, switch2, switch3, hat4, selector |
+| `hat4` | hat4, hat8, selector |
+| `trigger` | trigger |
+| `ministick` | ministick |
+| `encoder` | encoder, dial |
+| `dial` | dial, encoder |
+| `latch` | latch |
+| `selector` | selector |
 
-## Which button each binding lands on
+### Directions
 
-`slots_for(need, ctrl)` decides, in this order:
+A need can name the directions a switch moves in. The map's words:
 
-1. **One binding on a multi-button control goes on the click.** A lone action
-   on `buttons[0]` reads as "push the hat left" when the obvious gesture is to
-   press the hat, and it leaves the click idle.
-2. **`need.on` is honoured when every direction can be found.** A speedbrake
-   switch is fore/aft whatever hat it lands on, and putting it on "up" and
-   "right" because those came first would be a lie about the hardware.
-   `SAME_WAY` widens the match, because hats were captured with whichever word
-   fitted at the time: a need asking for `forward` accepts `up` or `fwd`.
+| the need says | the map says |
+|---|---|
+| `forward`, `up` | up, fwd |
+| `back`, `down` | down, aft |
+| `left` | left |
+| `right` | right |
+| `push` | push |
 
-   `score()` knows about this rather than letting the fallback happen
-   silently: a control whose directions merely differ loses 8, and one with no
-   directions at all loses 60. The second test is against the direction
-   vocabulary and not "has any label", because a selector answers `1`..`5` and
-   an encoder `ccw`/`cw` — positions, not directions. Reading those as
-   directions put Elite's four panel-focus actions on a five-position switch
-   that holds whichever position it is in.
-3. **Otherwise the first N in the control's own press order**, with the click
-   appended to the pool when the need has nothing of its own for it.
+A pair of opposite actions belongs on a pair of opposite directions. Zoom
+in and zoom out go on one hat, not on two buttons.
 
-## What comes out
+### Jobs
 
-    placed, unplaced, free = allocate(needs, devices, usable=None, reach=None)
+`suits` says what a function is for. The ten jobs:
 
-`placed` is a list of `Placement(need, role, ctrl, slots, points)`, where
-`slots` is `[(button index, payload)]` with the click appended when both sides
-have one. That is what a writer iterates; it is the only place the button
-arithmetic is done, and an adapter re-deriving it by hand loses `need.on`.
+| job | what it covers |
+|---|---|
+| `fire` | trigger, cannon, missiles, what is armed |
+| `lock` | picking a target and holding it |
+| `sensor` | radar, scan, sensor modes and cursors |
+| `view` | looking around: cameras, head, sights |
+| `trim` | trim and fine correction |
+| `flight` | how the aircraft flies: modes, brakes, flaps, thrust |
+| `systems` | gear, lights, power, the aircraft's own machinery |
+| `defence` | flares, chaff, jammer, armour |
+| `comms` | radio, missions, menus, panels |
+| `nav` | maps, jumps, docking, course |
 
-`unplaced` is the needs with no home. For a hand-written `NEEDS` that means a
-function you asked for has nowhere to go. For a derived list like DCS's, which
-offers everything its own table puts on a HOTAS, it means the desk ran out of
-that shape — and that is normal.
+An overlay matches on the job. One line of a template therefore speaks for
+a whole family of functions.
 
-`free` is `[(role, ctrl)]` for controls with **every** button still free, not
-merely the ones no need chose.
+## Contexts
 
-`usable(role, ctrl)` is the game's hard veto, for a control the hardware has
-but the game cannot address: BMS sees only a device's first 32 buttons, so the
-VMAX's last nineteen are real to your hand and invisible to the sim.
+Two needs can hold the same axis when you are never doing both at once.
+X4 steers with the stick's y axis and walks with it. Elite flies and
+drives with the same lever. The context, not the axis, is what a need is
+exclusive within.
 
-`reach` replaces `MAX_REACH` for one run, because the same ceiling means
-different things depending on where the needs came from. A hand-written list
-saturates the good controls, so tightening displaces something more urgent.
-A list derived from the game's own vocabulary and cut at a vote threshold has
-room to spare. DCS passes `{0: 1, 1: 3, 2: 1, 3: 3}` and its sensor and radio
-switches reach the borrow pass and get finger positions; the same table applied
-globally took War Thunder's airbrake off the thumb.
+The program counts a coupling group, not an axis. Two axes that travel
+together are one input. The VMAX's throttle levers move as a pair until
+you release the catch, so a function on the second lever moves with
+whatever is on the first.
 
-## Reading a decision
+## What an overlay does
 
-`./plan.py --why` prints the urgency band, the score, whether the need was
-relaxed, whether `suits` was hit, and the reach of the control it got. It is
-more sensitive than the kneeboard: it catches a change that happened to land
-on the same layout.
+An overlay is a cockpit template in `overlays/`. It says where a family of
+functions belongs, by job and by place on the hand. It wishes. It does not
+decide.
 
-## Changing the policy
+`place_right` and `place_wrong` are how a wish reaches the score. The
+screen says how many of a template's wishes got through. That number is
+what two templates are compared on.
 
-Three layers, and two of them are global:
-
-- **`core/needs.py`** — `REACH_TIER`, `MAX_REACH`, `MIN_REACH`, `FITS`,
-  `SAME_WAY`, `ONE_MECHANISM`, the score weights, the pass order. One edit
-  moves every game.
-- **`sim-device-map`** — `reach`, `suits`, `kind`, `moves_with`,
-  `travel_contact`. One TOML edit moves every game. The WarBRD's "paddle"
-  turned out to be the brake lever's travel contact; one correction there and
-  three games stopped binding it, with no game code touched.
-- **`games/*/<game>-needs.json`** — `urgency`, `on`, `suits` and the ergonomic
-  flags. `suits` is the **job**: the one word a game and an overlay can both
-  say, from the closed `[jobs]` table in `core/scoring.toml`, and the thing
-  that lets one template lay out six games. It was free text with eleven words
-  on two different axes — `fire` and `view` saying what the job is, `toggle`
-  and `reflex` saying how the control behaves — and 65 of the 147 functions
-  said nothing at all, so a template had nothing to match for nearly half the
-  list. These are claims about *a game's functions*. "Airbrake is used in a
-  turn" is a statement about War Thunder and cannot be hoisted.
-- **`overlays/*.toml`** — `device`, `finger`, `level`, `prefer`, `shift`,
-  `modifier`, and the `[[pair]]` rules. These are claims about *how you like a
-  cockpit laid out*, not about any game: "weapons on the stick" is the same
-  wish in all six. One rule over a family replaces a field repeated per
-  function — there were 86 such fields, which is one opinion written 86 times.
-
-  `finger` and `level` are what make an overlay a **template** rather than a
-  device preference. The Hornet's castle switch said as `finger = "thumb"`,
-  `level = "HOME"` lands on whatever the desk in front of you has in that
-  place, so `overlays/f-18.toml` works on hardware that is not a Hornet grip
-  and in games that are not DCS. Both words are checked against the map's own
-  `devicemap.FINGERS` and `devicemap.LEVELS` when the file loads.
-
-  Scored, not pinned: `place_right` is +15 and `place_wrong` −20, per word, so
-  a template tips a close call and loses to reach and to what is already
-  taken. One that refused every control it had not named would place half an
-  aircraft on a desk it was not drawn for. The layout prints how much got
-  through — `Generic spaceship: 33 of 46 place wishes kept` — which is the
-  number two overlays are compared on, and `--why` lists what broke.
-
-`games/*/<game>-binds.json` is in neither list: it is the answer, not a
-policy. It holds what sits where and who decided.
-
-So a new trait keyed on vocabulary that already exists costs one edit and no
-per-game work; one that needs a new `Need` field costs an edit in every game
-that has an opinion about it.
-
-A global knob moves six layouts at once, which is why every change here is
-measured rather than argued. Regenerate the kneeboards and diff them: they
-carry no timestamp, so any non-empty diff is a real move. Then classify the
-moves by reach tier and urgency — `MAX_REACH[2] = 1` read like an obvious
-improvement and measured as a five-for-five swap that put War Thunder's
-airbrake on a dial you have to let go of the grip to reach.
+What you chose, accepted, filed and named survives an overlay. The overlay
+decides where the program leans. It does not decide what you decided.

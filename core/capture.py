@@ -1,14 +1,15 @@
-"""Reading the sticks directly: the Linux joystick protocol and the prompts.
+"""Read the sticks directly: the Linux joystick protocol and the prompts.
 
-Both capture wizards -- `games/dcs/capture.py` and
-`games/elite/capture.py` -- open `/dev/input/js*` themselves rather than
-asking the game what it saw, because a binding has to be captured before the
-game has one. This is the half of that they had byte for byte in common.
+`core/review.py` opens `/dev/input/js*` itself. It does not ask the game
+what it saw, because a binding has to be captured before the game holds
+one.
 
-The device model here is the raw kernel one: a `js` node, its axis map and its
-current axis values. It is unrelated to `sim-device-map`'s `Device`, which
-describes what a control physically IS; these wizards use both, and one is
-named `Device` while the other arrives as `devicemap.Device`.
+The device model here is the raw kernel one: a `js` node, its axis map and
+its current axis values.
+
+This `Device` is not `sim-device-map`'s `Device`. That one describes what a
+control physically is. Both are in scope in the files that read sticks, and
+the other one arrives as `devicemap.Device`.
 """
 
 import fcntl
@@ -44,7 +45,7 @@ class Device:
         self.n_axes = struct.unpack("B", fcntl.ioctl(self.fd, JSIOCGAXES, b"\0"))[0]
         self.n_buttons = struct.unpack("B", fcntl.ioctl(self.fd, JSIOCGBUTTONS, b"\0"))[0]
         self.axis_vals = {}
-        self.role = None           # assigned during detection
+        self.role = None           # detection fills this in
 
     def read_events(self):
         events = []
@@ -78,9 +79,9 @@ def axis_map(fd, n_axes):
 def open_all(pattern="/dev/input/js*"):
     """Every joystick node that opens, in node order.
 
-    A node that refuses to open is skipped rather than fatal: a stale
-    `/dev/input/js3` from a device unplugged mid-session should not stop the
-    wizard from seeing the two that are there.
+    A node that refuses to open is skipped. A stale `/dev/input/js3` from a
+    device unplugged during the session must not hide the two nodes that
+    are there.
     """
     out = []
     for path in sorted(glob.glob(pattern)):
@@ -118,9 +119,9 @@ def proc_joysticks():
 def refresh_axmap(name, pattern="/dev/input/js*"):
     """The axis map of the live device with this name, or None.
 
-    A results file remembers the axis map so a layout can be regenerated with
-    nothing plugged in, but it has to be filled the first time and refilled
-    after a firmware update renumbers the axes.
+    A results file remembers the axis map, so a layout is regenerated with
+    nothing plugged in. The file has to be filled the first time. It has to
+    be filled again after a firmware update renumbers the axes.
     """
     for path in sorted(glob.glob(pattern)):
         try:
@@ -138,10 +139,11 @@ def refresh_axmap(name, pattern="/dev/input/js*"):
 def drain(devices, tui, seconds=DEBOUNCE):
     """Wait out the debounce and drop stray keypresses.
 
-    A fixed wall clock, not "until quiet": the point is that letting go of a
-    button must not read as the next answer. Events go through `read_events`
-    rather than being discarded, so `axis_vals` stays current for the next
-    `wait_input` baseline.
+    A fixed wall clock, not "until quiet". Letting go of a button must not
+    read as the next answer.
+
+    The events go through `read_events` rather than into nothing, so
+    `axis_vals` stays current for the next `wait_input` baseline.
     """
     end = time.monotonic() + seconds
     while time.monotonic() < end:
@@ -154,17 +156,17 @@ def drain(devices, tui, seconds=DEBOUNCE):
 
 
 def wait_input(devices, want_axis, tui):
-    """Wait for a joystick press / axis move, or ESC. No time limit.
+    """Wait for a joystick press, an axis move, or ESC. There is no limit.
 
-    Returns `(dev, kind, index, sign)` or `"skip"`. `sign` is +1 for a button
-    and the direction an axis moved in, which Elite writes into its `.binds`;
-    DCS carries inversion as a separate flag and ignores it.
+    Returns `(dev, kind, index, sign)` or `"skip"`. `sign` is +1 for a
+    button. For an axis it is the direction the axis moved in, which Elite
+    writes into its `.binds`. DCS carries inversion as its own flag and
+    ignores this.
 
-    `and not want_axis` gates the button arm. Elite's copy had lost it, so a
-    button pressed while the wizard was asking for an axis was stored as a
-    button against an axis-kind function -- and the generator then wrote
-    `<Primary Key="Joy_N">` under an axis element, which the game silently
-    ignores.
+    `and not want_axis` gates the button arm. Without that gate, a button
+    pressed while the screen asks for an axis is stored as a button against
+    an axis function. The writer then puts `<Primary Key="Joy_N">` under an
+    axis element, and the game ignores it.
     """
     for d in devices:
         d.read_events()
@@ -184,44 +186,6 @@ def wait_input(devices, want_axis, tui):
                     delta = value - base
                     if abs(delta) > AXIS_THRESHOLD:
                         return d, "axis", number, (1 if delta > 0 else -1)
-
-
-def detect_device(devices, label, tui):
-    tui.log(f"--> Press any button on your {label}.")
-    while True:
-        got = wait_input(devices, want_axis=False, tui=tui)
-        if got == "skip":
-            continue                       # ESC is meaningless here
-        d = got[0]
-        if d.role is not None:
-            tui.log(f"    That came from the {d.role}. Try again on "
-                    f"the {label}.")
-            drain(devices, tui)
-            continue
-        tui.log(f"    OK: {d.name}")
-        tui.log("")
-        drain(devices, tui)
-        return d
-
-
-def detect_roles(tui, roles=("stick", "throttle"), pattern="/dev/input/js*"):
-    """Open every joystick, ask which is which, stamp `role` on each.
-
-    Returns the full device list, or None when fewer than `len(roles)` nodes
-    exist -- the caller says what to do about that, because the wizards word
-    it differently.
-    """
-    devices = open_all(pattern)
-    for d in devices:
-        tui.log(f"  {d.path}  {d.name}  "
-                f"({d.n_axes} axes, {d.n_buttons} buttons)")
-    tui.log("")
-    if len(devices) < len(roles):
-        return None
-    for role in roles:
-        d = detect_device(devices, role.upper(), tui)
-        d.role = role
-    return devices
 
 
 def save(results, path):

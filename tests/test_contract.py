@@ -1,69 +1,63 @@
 """The adapter contract, checked rather than described.
 
-`ARCHITECTURE.md` used to carry the contract as prose and a paragraph
-recording which adapters did not meet it. A document cannot fail, so the debt
-sat there across releases. Everything here is what that paragraph used to say,
-in a form that goes red.
+A document cannot fail, so a contract carried as prose carries its debt
+across releases. Everything here is that prose in a form that goes red.
 
-Three properties this file is built around, and each cost something to get:
+Three properties this file is built around, and each one cost something.
 
 **It runs on a clone with nothing installed.** No device map, no harvested
 cache, no game. `core.adapter` is imported for its classes and an adapter
-module is imported for its class definitions, and neither reads data any
-more -- the `vocab.load` calls that used to sit at module scope moved into
-`__init__`. So a failure here is a failure of the contract rather than a fact
-about what happens to be on this machine.
+module for its class definitions, and neither reads data: a `vocab.load`
+call belongs in `__init__` and not at module scope. So a failure here is a
+failure of the contract, and not a fact about this machine.
 
-**Absent data and broken data are not the same answer.** A missing cache is
-a skip, because nobody has run the harvest here and that is honest. A cache
-that is present and the wrong shape is a failure, because either a working
-copy is stale or a harvest and a planner disagree about a section name. Both
-used to arrive as the same bare `SystemExit`, and `tests/test_formats.py`
-turned both into a skip -- which is how a violated contract could look exactly
+**Absent data and broken data are not the same answer.** A missing cache
+is a skip, because nobody has run the harvest here and that is honest. A
+cache that is present and the wrong shape is a failure, because a working
+copy is stale or a harvest and a planner disagree about a section name.
+Both arriving as the same bare `SystemExit`, a violated contract looks
 like an unharvested clone.
 
 **A missing member is caught before any of that.** `abc` raises from
-`ABCMeta.__call__`, strictly before `__init__` runs, so an incomplete class
-fails even on a machine that has never seen the game.
+`ABCMeta.__call__`, before `__init__` runs, so an incomplete class fails
+on a machine that has never seen the game.
 """
 
 import inspect
 import json
+import io
 import os
 import re
 import subprocess
 import sys
 import tempfile
+import typing
 import unittest
 from unittest import mock
 
-#: Deliberately not `import fake`: that loads the device map at import, and
-#: the point of this file is that it says something on a clone which has none.
+#: Not `import fake`. That loads the device map at import, and the point
+#: of this file is that it says something on a clone with no map.
 REPO = os.environ.get('SIM_BIND_WIZARD') or os.path.dirname(
     os.path.dirname(os.path.abspath(__file__)))
 if REPO not in sys.path:
     sys.path.insert(0, REPO)
 
 from core import actions as cactions                        # noqa: E402
-from core import adapter                                    # noqa: E402
+from core import adapter
+from core import guess as cguess                                    # noqa: E402
 from core import needs as corneeds                          # noqa: E402
 from core import sheet as csheet                            # noqa: E402
 from core import vocab                                      # noqa: E402
 
 
-#: Games with no `Adapter` subclass yet, and why. The debt lives in code the
-#: suite reads, the way `bind-wizard.py`'s own `GAPS` does, so it cannot
-#: quietly stop being true the way a paragraph can. Empty this and the entry
-#: goes. Empty. It held every game once; the last entry was DCS, whose needs
-#: are a function of the aircraft and so could never be a module-level constant
-#: -- which is the reason the adapters became classes.
+#: Games with no `Adapter` subclass yet, and why. The debt lives in code
+#: the suite reads, so it cannot quietly stop being true the way a
+#: paragraph can.
+#:
+#: Empty. It held every game once. The last entry was DCS, whose needs are
+#: a function of the aircraft and so could never be a module-level
+#: constant. That is why the adapters are classes.
 PENDING = {}
-
-#: The six headings a game's README carries, in this order. They are a
-#: contract clause because `measured` and `still a guess` being separate is
-#: what tells a reader which claims are load-bearing.
-HEADINGS = ('Where it lives', 'How to run it', 'The format',
-            'Measured', 'Still a guess', 'Gotchas')
 
 #: What `Adapter.parser()` gives every game, so `bind-wizard.py` may rely on
 #: it.
@@ -80,11 +74,13 @@ def bind():
 def reaches(fn, name, mod, seen=None):
     """Does `fn` name that global or attribute, directly or one call away?
 
-    `name in fn.__code__.co_names` is a fact about the compiled function -- a
-    LOAD_GLOBAL or a LOAD_ATTR -- so a docstring or a comment mentioning
-    `build()` does not trip it, which a grep over the source would. It cannot
-    see through `getattr` or a dispatch dict; no adapter uses either to reach
-    a method, and if one ever does this stops being able to tell.
+    `name in fn.__code__.co_names` is a fact about the compiled function.
+    It is a LOAD_GLOBAL or a LOAD_ATTR, so a docstring or a comment that
+    mentions `build()` does not trip it. A grep over the source does.
+
+    It cannot see through `getattr` or a dispatch dict. No adapter uses
+    either to reach a method, and one that does stops being visible
+    here.
     """
     seen = seen if seen is not None else set()
     if fn in seen or not hasattr(fn, '__code__'):
@@ -103,7 +99,7 @@ def reaches(fn, name, mod, seen=None):
 def live(game):
     """The one concrete Adapter subclass a game's planner defines.
 
-    Raises `unittest.SkipTest` only for the two things that are facts about
+    Raises `unittest.SkipTest` for the two things that are facts about
     this machine: a cache nobody has built, and a device map nobody has
     cloned. Everything else is allowed to fail.
     """
@@ -115,8 +111,8 @@ def live(game):
         return found[0]
     if not found:
         # An incomplete subclass is abstract, so `adapters()` filtered it
-        # out. Say which member is missing rather than that nothing was
-        # found -- `abc` already knows, and its message is the better one.
+        # out. Say which member is missing, rather than that nothing was
+        # found. `abc` knows, and its message is the better one.
         mod = adapter.load(game, script)
         for v in vars(mod).values():
             if (inspect.isclass(v) and issubclass(v, adapter.Adapter)
@@ -132,34 +128,203 @@ def live(game):
 
 
 def built(cls):
-    """An instance, or a skip if this machine lacks what it reads."""
+    """An instance, or a skip where this machine lacks what it reads."""
     try:
         return cls()
     except vocab.Missing as e:
         raise unittest.SkipTest(str(e).splitlines()[-1])
     except SystemExit as e:
-        # core.devmap exits when sim-device-map is not beside the repo.
-        # vocab.Stale is a SystemExit too and is deliberately NOT caught.
+        # `core.devmap` exits where sim-device-map is not beside the
+        # repository. `vocab.Stale` is a SystemExit too, and it is NOT
+        # caught here.
         if isinstance(e, vocab.Stale):
             raise
         raise unittest.SkipTest(f'not on this machine: {e}')
 
 
-class Readmes(unittest.TestCase):
-    """Every game documents itself under the same six headings.
+class TheInterfaceStaysSmall(unittest.TestCase):
+    """What a game may supply, counted.
 
-    Checkable on any clone, with nothing installed, which is why it is the
-    one clause that was true for all six before any of this started.
+    A hook is an invitation. `says_slot` as a hook is four games writing
+    the same body over the same eight-name axis table with a different
+    spelling. `paths` as a hook is six games writing `getattr`.
+    `arguments` as a hook is six games adding a flag the constructor
+    declares.
+
+    A declaration cannot be written four ways, because there is nowhere in
+    it to put code. So the count is the clause. Anything a game would
+    IMPLEMENT the same way as another game is a declaration, and what is
+    left is its own format.
     """
 
-    def test_every_game_carries_the_six_headings_in_order(self):
+    def hooks(self, cls):
+        """Every member of `cls` a subclass is allowed to override."""
+        out = []
+        for name, member in vars(cls).items():
+            if name.startswith('_'):
+                continue
+            fn = member.fget if isinstance(member, property) else member
+            if not (inspect.isfunction(fn) or isinstance(member, property)):
+                continue
+            if name in cls.__abstractmethods__:
+                continue
+            if not getattr(fn, '__final__', False):
+                out.append(name)
+        return sorted(out)
+
+    def test_a_game_supplies_its_format_and_nothing_else(self):
+        self.assertEqual(['read', 'summary'],
+                         sorted(adapter.Harvest.__abstractmethods__))
+        self.assertEqual(['write_layout'],
+                         sorted(adapter.Planner.__abstractmethods__))
+
+    def test_there_is_one_hook_on_each_side(self):
+        # `Harvest.arguments`. A harvest has no constructor to read flags
+        # off, and a declaration carrying argparse's types is an argument
+        # spec in data.
+        self.assertEqual(['arguments'], self.hooks(adapter.Harvest))
+        # One on `Adapter`. Which variants are INSTALLED is read out of
+        # the game directory, so it cannot be declared.
+        #
+        # A second hook that asks which actions you already had bound
+        # opens the game's files again to learn what the harvest just
+        # read. That belongs in the cache, like everything else a harvest
+        # finds out.
+        self.assertEqual(['variants'], self.hooks(adapter.Adapter))
+        self.assertEqual([], self.hooks(adapter.Planner))
+
+    def test_no_game_adds_a_method_of_its_own(self):
+        """A game is declarations plus its writer.
+
+        Public members, because a private helper of a format writer is
+        that writer's business. What a game may not do is offer a method
+        the interface does not declare. Such a method makes a caller
+        upstairs know which game it is holding.
+        """
+        allowed = {'write_layout', 'variants'}
         for game in adapter.games():
-            path = os.path.join(REPO, 'games', game, 'README.md')
             with self.subTest(game=game):
-                self.assertTrue(os.path.exists(path), path)
-                with open(path, encoding='utf-8') as f:
-                    found = re.findall(r'^## (.+)$', f.read(), re.M)
-                self.assertEqual(list(HEADINGS), found)
+                (cls,) = adapter.adapters(game)
+                mine = {n for n, v in vars(cls).items()
+                        if not n.startswith('_')
+                        and (inspect.isfunction(v)
+                             or isinstance(v, property))}
+                self.assertEqual(set(), mine - allowed)
+
+
+class WhatTheProgramProposesIsMarked(unittest.TestCase):
+    """`Z` proposes and you decide. The difference is written down.
+
+    A description derived from command names on every run has four faults,
+    and the guessing is not one of them:
+
+        it runs every time        so the layout depends on the table
+        it is in the path         `allocate` can see it
+        it leaves no mark         a derived field reads like one you wrote
+        it cannot be corrected    the table overwrites the file next run
+
+    `core/guess.py` runs on one key, writes into `Need.guessed`, and skips
+    a field that is NOT in there. A field's absence from that set means
+    you decided it.
+    """
+
+    def toy(self, **said):
+        """A need carrying what `said` says, and nothing marked."""
+        need = corneeds.Need('Trim Hat', 'hat',
+                             [[cactions.Bind('TRIM_UP')]])
+        for field, value in said.items():
+            setattr(need, field, value)
+        return need
+
+    def test_a_word_names_one_job_and_every_job_is_a_job(self):
+        # The same clause `needs.check_rules` holds over the scoring
+        # file. A job nothing knows is a proposal no overlay matches, and
+        # a word in two jobs is a vote that depends on dict order.
+        self.assertEqual([], cguess.check_table())
+
+    def test_it_says_nothing_rather_than_guessing_wildly(self):
+        # A quarter of a hand-written list reads as nothing here. Those
+        # filed under a default are a judgement with no evidence. None is
+        # the honest answer.
+        self.assertIsNone(cguess.job_of('Zzz Qqq'))
+        self.assertEqual('trim', cguess.job_of('Trim Hat - NOSE UP'))
+
+    def test_a_name_nobody_put_spaces_in_still_reads(self):
+        # Elite writes `RollAxisRaw` and X4 writes
+        # `INPUT_RANGE_MAP_ZOOM_IN`. The name lowered before it is split
+        # gives ONE token, and every word inside it is invisible: 17 of 50
+        # silent names hold a word the table knows.
+        self.assertEqual('flight', cguess.job_of('RollAxisRaw'))
+        self.assertEqual('flight', cguess.job_of('KEY_BRAKES'))
+        self.assertEqual('comms', cguess.job_of('Comms'))
+
+    def test_what_it_fills_it_marks(self):
+        maker = cguess.Guess(job_by_category={'Weapons': 'fire'},
+                             device_by_category={'Stick': 'stick'})
+        said = maker.about(cactions.Action('X', 'Master Arm',
+                                           category='Stick'))
+        self.assertEqual('stick', said.get('device'))
+
+    def test_it_never_proposes_a_band(self):
+        # No game's files record WHEN you reach for a thing, so a band
+        # here invents the judgement the scorer leans on hardest.
+        maker = cguess.Guess()
+        for name in ('Master Arm', 'Gear', 'Trim Hat', 'Chaff'):
+            said = maker.about(cactions.Action('X', name))
+            with self.subTest(name=name):
+                self.assertNotIn('urgency', said)
+
+    def test_nothing_in_the_allocator_can_see_it(self):
+        """The planner reads the needs FILE and never the classifier.
+
+        Read over the source and not over the behaviour. A layout that
+        happens to match proves nothing about what can be reached.
+        """
+        for name in ('needs', 'overlay', 'solvers'):
+            path = os.path.join(REPO, 'core', f'{name}.py')
+            with open(path, encoding='utf-8') as f:
+                text = f.read()
+            with self.subTest(module=name):
+                # The import and the call, and not the word.
+                # `core/needs.py` names `core/guess.py` in a comment,
+                # which is how a reader finds out the mark exists.
+                self.assertNotIn('import guess', text)
+                self.assertNotIn('cguess.', text)
+                self.assertNotIn('guess.Guess', text)
+
+
+class NoGameCarriesAMechanism(unittest.TestCase):
+    """The same work, written once.
+
+    A table keyed by the map's HID axis names, and a body to look a slot
+    up in it, is four copies across four games. One of the four disagreed
+    with the review screen about which button a hat direction sat on,
+    because the loop that found out was written four times.
+    """
+
+    def source(self, game):
+        where = os.path.join(REPO, 'games', game, 'plan.py')
+        with open(where, encoding='utf-8') as f:
+            return f.read()
+
+    def test_no_planner_keys_anything_on_a_map_axis_name(self):
+        # The map's own words for an axis. A planner that names one as a
+        # key holds its own copy of `HID_AXES`, and the position in
+        # `AXES` is the whole mapping.
+        for game in adapter.games():
+            text = self.source(game)
+            for hid in adapter.HID_AXES:
+                with self.subTest(game=game, axis=hid):
+                    self.assertNotIn(f"'{hid}':", text)
+                    self.assertNotIn(f'"{hid}":', text)
+
+    def test_no_planner_walks_the_placements(self):
+        # `Adapter.rows` is that walk, once. Four writers otherwise hold
+        # the same three nested loops down `placed`, `slots` and the
+        # payload.
+        for game in adapter.games():
+            with self.subTest(game=game):
+                self.assertNotIn('layout.placed', self.source(game))
 
 
 class Shape(unittest.TestCase):
@@ -175,7 +340,11 @@ class Shape(unittest.TestCase):
             with self.subTest(game=game):
                 obj = built(live(game))
                 self.assertIsInstance(obj.NEEDS, list)
-                self.assertTrue(obj.NEEDS, 'a planner with no needs')
+                # Empty is a state and not a fault. A needs file is
+                # written by `J` on the review screen, so every game
+                # starts with none and `undescribed_note` says so in
+                # words. An assertion that the list is non-empty asserts
+                # that the list ships with the planner.
                 for need in obj.NEEDS:
                     self.assertIsInstance(need, corneeds.Need)
 
@@ -196,16 +365,14 @@ class Shape(unittest.TestCase):
 
 
 class TheWriterTakesWhatItIsGiven(unittest.TestCase):
-    """A writer may not go and fetch a plan of its own.
+    """A writer may not fetch a plan of its own.
 
-    The review screen's entire job is to write some of a plan and not the
-    rest, so a writer that calls `build()` silently undoes the reviewer's
-    decisions -- it writes everything, including what was cleared. Two of them
-    did exactly that, and one still took `placed=None` as a signal to.
+    The review screen's whole job is to write some of a plan and not the
+    rest. A writer that calls `build()` undoes the reviewer's decisions
+    and says nothing: it writes everything, including what was cleared.
 
-    Not expressible as a signature, and Python has no `private` to stop the
-    call, so this reads the compiled function instead. That is as close to
-    the compiler's job as this gets.
+    No signature says that, and Python has no `private` to stop the call.
+    So this reads the compiled function.
     """
 
     def test_no_writer_reaches_build(self):
@@ -224,17 +391,18 @@ class TheWriterTakesWhatItIsGiven(unittest.TestCase):
 class NothingIsLeftBehind(unittest.TestCase):
     """A writer may not leave a stray in the game's own directory.
 
-    `core.backup`'s docstring records four of the six carrying a scar from
-    it: a `.bak` beside the original is a file the game can find, and MSFS
-    went one better by globbing its own backups back in as profiles.
+    A `.bak` beside the original is a file the game can find, and MSFS
+    globs its own backups back in as profiles. `core.backup`'s docstring
+    records four of the six carrying a scar from that.
 
-    Structural now, as far as it goes -- a writer returns contents and has no
-    file handle to leave anything with. What is left is the case where a
-    writer delegates to a script of its own, which War Thunder and DCS both
-    do, and that is what this holds. `lay_down` takes its reference point
-    before the writer runs, so a file that appeared DURING it is caught;
-    comparing directory listings afterwards would not, because by then the
-    stray is already in the "before".
+    This is structural as far as it goes: a writer returns contents and
+    has no file handle to leave anything with. What is left is a writer
+    that delegates to a script of its own, which War Thunder and DCS both
+    do, and this test holds that case.
+
+    `lay_down` takes its reference point before the writer runs, so a file
+    that appeared DURING the run is caught. Two directory listings
+    compared afterwards hold the stray in the "before".
     """
 
     def setUp(self):
@@ -249,25 +417,17 @@ class NothingIsLeftBehind(unittest.TestCase):
         target = self.target
         backups = os.path.join(self.tmp, 'backups')
 
+        # The whole of a game, as the interface leaves it: what it is
+        # called, and how its own file is written. Everything else is
+        # final on `Adapter`, and this fixture being six lines says so.
         class Toy(adapter.Planner):
             game = 'toy'
             title = 'Toy'
 
             def __init__(self):
                 self.backup_dir = backups
-            # A property, not a class attribute: pyright rejects the second
-            # as an override of an abstract property, and a fixture that
-            # breaks the rule it is testing is not much of a fixture.
-            @property
-            def NEEDS(self): return ['one']
-            def build(self): return corneeds.Layout({}, [], [], [])
-            def catalogue(self): return []
 
-            def describe(self, placement): return []
-            def show(self, layout, why=False): return []
-            def sheet(self, layout):
-                return csheet.Sheet('Toy', '', devices={})
-            def write_layout(self, layout):
+            def write_layout(self, rows, layout):
                 if stray:
                     with open(target + '.bak', 'w') as f:
                         f.write('oops')
@@ -275,15 +435,20 @@ class NothingIsLeftBehind(unittest.TestCase):
 
         return Toy()
 
+    #: An empty plan. This is about laying a declared file down, so what
+    #: the layout holds is beside the point. It has to BE a layout,
+    #: because `rows()` walks it on the way to the writer.
+    NOTHING = corneeds.Layout({}, [], [], [])
+
     def test_a_clean_write_lays_down_what_it_declared(self):
-        said = self.writer().write_all(None)
+        said = self.writer().write_all(self.NOTHING)
         with open(self.target) as f:
             self.assertEqual('NEW\n', f.read())
         self.assertTrue(any('profile.cfg' in ln for ln in said))
 
     def test_the_copy_goes_through_core_backup(self):
-        """Nothing obliged a writer to back up before; the base calls it."""
-        self.writer().write_all(None)
+        """The base calls `core.backup`, so no writer has to."""
+        self.writer().write_all(self.NOTHING)
         kept = [f for _r, _d, fs in os.walk(os.path.join(self.tmp, 'backups'))
                 for f in fs]
         self.assertIn('profile.cfg', kept)
@@ -291,24 +456,23 @@ class NothingIsLeftBehind(unittest.TestCase):
 
     def test_a_stray_in_the_game_directory_stops_the_write(self):
         with self.assertRaises(RuntimeError) as caught:
-            self.writer(stray=True).write_all(None)
+            self.writer(stray=True).write_all(self.NOTHING)
         self.assertIn('profile.cfg.bak', str(caught.exception))
         self.assertIn('core.backup', str(caught.exception))
 
 
 class WhatYouClearedStaysCleared(unittest.TestCase):
-    """The answers file is read once, not on every replan.
+    """The answers file is read once, and not on every replan.
 
-    `build` runs again every time the screen replans -- a key, an
-    overlay, another aircraft -- and every game read its answers file
-    there. So a row you cleared came back carrying the `chose` you had
-    just taken off it: the `chose` pass put it back on the control, the
-    mark went green again, and the next save wrote the resurrected row
-    to the file. Clearing a hand-placed binding was not possible at all.
+    `build` runs again every time the screen replans: a key, an overlay,
+    another aircraft. A game that reads its answers file there brings a
+    row you cleared back carrying the `chose` you took off it. The `chose`
+    pass puts it on the control, the mark goes green, and the next save
+    writes the resurrected row. Clearing a hand-placed binding is then
+    impossible.
 
-    Measured on this desk when it was found: 32 of DCS's 32 rows and 32
-    of X4's 32 came back from one replan. The other four had no answers
-    file yet, so they had nothing to resurrect and read the same way.
+    Measured on this desk: 32 of DCS's 32 rows and 32 of X4's 32 came
+    back from one replan.
     """
 
     def setUp(self):
@@ -317,32 +481,32 @@ class WhatYouClearedStaysCleared(unittest.TestCase):
         with open(self.file, 'w') as f:
             json.dump({'binds': [{'what': 'Gear', 'role': 'stick',
                                   'control': 'a-button', 'how': 'chose'}]}, f)
+        self.list = os.path.join(self.tmp, 'toy-needs.json')
+        with open(self.list, 'w') as f:
+            json.dump({'needs': [{'what': 'Gear', 'shape': 'button',
+                                  'bindings': [[]]}]}, f)
 
-    def toy(self, *needs):
-        binds = self.file
-        kept = list(needs) or [corneeds.Need('Gear', 'button', [[]])]
+    def toy(self, *rows):
+        """A game whose two files are the temporary ones.
+
+        `rows` replaces what the needs file holds, as the file holds it.
+        The list is read from disk, so a fixture that handed over `Need`
+        objects would test a path nothing uses.
+        """
+        if rows:
+            with open(self.list, 'w') as f:
+                json.dump({'needs': list(rows)}, f)
+        binds, described = self.file, self.list
 
         class Toy(adapter.Planner):
             game = 'toy'
             title = 'Toy'
-            # Absolute, so `here` -- which is this test file's directory
-            # -- joins to the temporary copy rather than to the repo.
+            # Absolute, so `here` joins to the temporary copy rather than
+            # to the repository. `here` is this test file's directory.
             BINDS = binds
+            NEEDS_FILE = described
 
-            def __init__(self):
-                self.kept = list(kept)
-
-            @property
-            def NEEDS(self): return self.kept
-            def build(self):
-                self.answers(self.NEEDS)
-                return corneeds.Layout({}, [], [], [])
-            def catalogue(self): return []
-            def describe(self, placement): return []
-            def show(self, layout, why=False): return []
-            def sheet(self, layout):
-                return csheet.Sheet('Toy', '', devices={})
-            def write_layout(self, layout): return {}
+            def write_layout(self, rows, layout): return {}
 
         return Toy()
 
@@ -359,8 +523,8 @@ class WhatYouClearedStaysCleared(unittest.TestCase):
         self.assertIsNone(obj.NEEDS[0].assignment)
 
     def test_another_adapter_reads_its_own(self):
-        # Switching aircraft builds a second one, and that one has
-        # decided nothing yet -- the file is all it knows.
+        # Switching aircraft builds a second adapter, and that one has
+        # decided nothing. The file is all it knows.
         was = self.toy()
         was.build()
         was.NEEDS[0].assignment = None
@@ -369,18 +533,17 @@ class WhatYouClearedStaysCleared(unittest.TestCase):
         self.assertEqual('chose', (now.NEEDS[0].assignment or {}).get('how'))
 
     def test_an_axis_answer_comes_back_on_its_need(self):
-        # An axis plan used to be built fresh from the devices on every
-        # build, so its answers had to be read again every time and
-        # anything the session had decided was overwritten. An axis is a
-        # need now: the same object all session, answered once, and a
-        # replan cannot blank it.
+        # An axis plan built fresh from the devices on every build has to
+        # read its answers again every time, and that overwrites what the
+        # session decided. An axis is a need: the same object all session,
+        # answered once, and a replan cannot blank it.
         with open(self.file, 'w') as f:
             json.dump({'binds': [{'what': 'Pitch', 'role': 'stick',
                                   'control': 'main-stick', 'axis': 1,
                                   'invert': True, 'how': 'accepted'}]}, f)
-        obj = self.toy(corneeds.Need('Pitch', 'stick', [[]],
-                                     takes=corneeds.AXIS, device='stick',
-                                     on=('y',)))
+        obj = self.toy({'what': 'Pitch', 'shape': 'stick', 'bindings': [[]],
+                        'takes': corneeds.AXIS, 'device': 'stick',
+                        'on': ['y']})
         obj.build()
         (need,) = obj.NEEDS
         self.assertEqual('accepted', (need.assignment or {}).get('how'))
@@ -402,11 +565,11 @@ class WhatYouClearedStaysCleared(unittest.TestCase):
 
 
 class TheCacheBothSidesName(unittest.TestCase):
-    """A harvest and a planner have to mean the same sections.
+    """A harvest and a planner mean the same sections.
 
-    They disagreed silently before: the planner exited saying a file was
-    missing when the file was there under another key, and the only way to
-    find out was to run the game.
+    They disagree in silence otherwise. The planner exits saying a file is
+    missing while the file is there under another key, and the only way to
+    find out is to run the game.
     """
 
     def test_every_key_a_planner_loads_is_one_the_harvest_writes(self):
@@ -415,9 +578,8 @@ class TheCacheBothSidesName(unittest.TestCase):
                 cls = live(game)
                 where = os.path.join(REPO, 'games', game, 'harvest.py')
                 if not os.path.exists(where):
-                    # DCS harvests inside its capture wizard, which is what
-                    # `bind-wizard.py`'s own GAPS says. A game with no harvest
-                    # file has no cache for a planner to disagree with.
+                    # A game with no harvest file has no cache for a
+                    # planner to disagree with.
                     self.assertEqual({}, cls.CACHE,
                                      f'{game} loads a cache but has no '
                                      'harvest.py to write it')
@@ -432,75 +594,174 @@ class TheCacheBothSidesName(unittest.TestCase):
                 written = {f: set(s) for f, s in harvests[0].files.items()}
                 for filename, key in cls.CACHE.items():
                     self.assertIn(filename, written)
-                    # One file may hold several sections -- BMS's does.
+                    # One file may hold several sections. Falcon BMS's
+                    # does.
                     wanted = key if isinstance(key, tuple) else (key,)
                     for one in wanted:
                         if one is not None:
                             self.assertIn(one, written[filename])
 
 
-class TheFrontDoorTellsTheTruth(unittest.TestCase):
-    """`bind-wizard.py`'s table says which game answers which verb, and nothing
-    kept it honest.
+class NoNameDecidesAnything(unittest.TestCase):
+    """An action's NAME has no influence on the layout.
 
-    Availability is decided purely by a key being present in a literal dict,
-    and `GAPS` -- the prose explaining a missing verb -- is never consulted
-    for it, so the two could contradict each other with nobody the wiser.
+    This is the premise, held to. The algorithm transforms discrete
+    measured values: the map says what a control IS, the harvest says
+    which actions exist, the needs file hangs judgements on those
+    identifiers, and the scorer lays one over the other.
+
+    A string comparison anywhere in that path is a judgement smuggled in
+    as a rule about spelling. Twelve of them lived across six games:
+    `HINTS` over 852 DCS command names, `jobs.toml` phrases, `AXIS_ASK`,
+    `MOVE_TO_DIR`, `STAGE_WORDS`, `context_of`, `'throttle' in name`,
+    `_tail`, `safe$`.
+
+    Measured by renaming. The same actions under different names land on
+    the same controls. Nothing here reads a planner's source, so a regex
+    moved somewhere this does not look does not satisfy it.
+    """
+
+    #: What a judgement is: which band, what shape, which device, which
+    #: finger, whether you hold it, and what it is for. Everything a need
+    #: carries that the catalogue cannot say.
+    #: `urgency` is not here. The core gives one default to anything
+    #: nobody has said anything about, and the test below holds it to
+    #: that. An empty band is not a thing a need can have.
+    JUDGEMENTS = (corneeds.WISHES + corneeds.TOLD
+                  + ('suits', 'on', 'rests', 'invert'))
+
+    def test_a_need_made_from_an_action_carries_no_judgement(self):
+        """`add_need` is the only way an action becomes a need.
+
+        So this is where a name could be read for a judgement, and where
+        it must not be. The catalogue says the identifier, the name, and
+        whether the action is an axis. That is the whole of what arrives.
+        An axis asks for any lever and a button for any button, and `J` on
+        the review screen is how one comes to say more.
+
+        A planner that derives `device` or `suits` from how a command is
+        spelled puts it on a need made here, and this fails.
+        """
+        for game in adapter.games():
+            with self.subTest(game=game):
+                obj = built(live(game))
+                picked = [a for a in obj.catalogue()][:40]
+                if not picked:
+                    self.skipTest(f'{game} has no catalogue here')
+                for action in picked:
+                    need = obj.add_need(action)
+                    self.assertEqual(action.name, need.what)
+                    self.assertEqual(
+                        'axis' if action.kind == 'axis' else 'button',
+                        need.shape,
+                        f'{action.id}: the shape came from somewhere else')
+                    for field in self.JUDGEMENTS:
+                        got = getattr(need, field, None)
+                        if got in (None, False, 0, '', ()):
+                            continue
+                        # It may arrive judged. The game's own category
+                        # says `Throttle Grip` is the throttle. It may not
+                        # arrive judged in SILENCE: an unmarked judgement
+                        # reads like one somebody wrote down, and
+                        # `Need.guessed` is what marks it.
+                        with self.subTest(field=field):
+                            self.assertIn(
+                                field, need.guessed,
+                                f'{action.id} arrived judged and unmarked: '
+                                f'{field} is {got!r}')
+
+    def test_the_urgency_is_the_one_the_core_defines(self):
+        # And not a band read off anything. No game's files record WHEN
+        # you reach for a thing, so a proposal here invents the judgement
+        # the scorer leans on hardest. `Guess.about` never returns
+        # one.
+        for game in adapter.games():
+            with self.subTest(game=game):
+                obj = built(live(game))
+                picked = next(iter(obj.catalogue()), None)
+                if picked is None:
+                    self.skipTest(f'{game} has no catalogue here')
+                self.assertEqual(corneeds.IN_THE_AIR,
+                                 obj.add_need(picked).urgency)
+
+
+class TheFrontDoorTellsTheTruth(unittest.TestCase):
+    """What `./bind-wizard.py` prints, against what the games answer.
+
     `bind-wizard.py`'s own docstring states a clause ("Every planner owns
-    --write") that has never been checked against an adapter.
+    --write") that nothing else checks against an adapter.
+
+    A verb matrix in the table is seven columns per game, each cell a dot
+    or a dash. Every cell comes from a key being in a dict that every game
+    gets a copy of, so the grid reads `·` always. `GAPS` is the prose that
+    explains a dash, and neither is here.
     """
 
     def setUp(self):
         self.bind = bind()
 
-    def test_the_verb_table_names_no_game_that_is_gone(self):
-        """The game list is read off the filesystem now, so that half cannot
-        drift. The verb rows are still written out, and a row for a folder
-        somebody deleted would print nothing and say nothing."""
-        self.assertEqual([], sorted(set(self.bind.VERB_ROWS)
-                                    - set(adapter.games())))
+    def test_an_alias_names_a_game_that_is_there(self):
+        """A name the table answers to and the filesystem does not is a
+        name you type and nothing runs."""
+        self.assertEqual([], sorted(set(self.bind.ALIASES)
+                                    - set(self.bind.TITLES)))
 
-    def test_every_game_is_titled_by_its_own_readme(self):
+    def test_the_table_lists_the_games_that_answer(self):
+        """And not every directory under `games/`.
+
+        `games/falconbms` and `games/warthunder` hold a needs list and a
+        binds file with no planner beside them. A row for one is a word
+        you type that reaches no script.
+        """
+        self.assertEqual(sorted(adapter.games()), sorted(self.bind.GAMES))
+        for game in self.bind.GAMES:
+            with self.subTest(game=game):
+                self.assertTrue(os.path.isfile(
+                    os.path.join(REPO, 'games', game, 'plan.py')))
+
+    def test_every_game_is_titled_by_its_own_adapter(self):
+        """And not by a file beside it.
+
+        A title read out of `games/<game>/README.md` makes a Python file
+        need a README to work, and it needs a test here to keep the
+        heading in place.
+
+        A README is documentation. The title is a fact the adapter states,
+        and `discover()` reads it off the class without constructing
+        one.
+        """
         for game, title in self.bind.TITLES.items():
             with self.subTest(game=game):
-                path = os.path.join(REPO, 'games', game, 'README.md')
-                with open(path, encoding='utf-8') as f:
-                    self.assertEqual(f'# {title}', f.readline().strip())
+                (cls,) = adapter.adapters(game)
+                self.assertEqual(cls.title, title)
 
-    def test_a_verb_the_table_offers_is_a_flag_the_adapter_has(self):
-        verbs = {'why': '--why', 'free': '--free', 'sheet': '--sheet',
-                 'tui': '--tui', 'write': '--write'}
-        for game, spec in self.bind.GAMES.items():
+    def test_every_verb_is_a_flag_every_adapter_has(self):
+        """One verb table for every game, so every game answers all of it.
+
+        `VERB_FLAGS` turns a verb into a script and a flag. `plan` passes
+        none and `harvest` runs the other script, so those two have nothing
+        to find on a planner's parser.
+        """
+        flags_for = {'why': '--why', 'free': '--free', 'sheet': '--sheet',
+                     'tui': '--tui', 'write': '--write'}
+        self.assertEqual(sorted(set(self.bind.VERB_FLAGS)
+                                - {'harvest', 'plan'}),
+                         sorted(flags_for))
+        for game in self.bind.GAMES:
             with self.subTest(game=game):
                 obj = built(live(game))
                 flags = {s for a in obj.parser()._actions
                          for s in a.option_strings}
-                for verb, flag in verbs.items():
-                    if verb in spec:
-                        self.assertIn(flag, flags, f'{game} {verb}')
-
-    def test_a_verb_the_table_withholds_says_why(self):
-        for game in self.bind.GAMES:
-            for verb in self.bind.VERBS:
-                if verb == 'plan' or verb in self.bind.GAMES[game]:
-                    continue
-                with self.subTest(game=game, verb=verb):
-                    self.assertIn((game, verb), self.bind.GAPS,
-                                  'a gap with no reason reads as an omission')
-
-    def test_no_reason_is_given_for_a_verb_that_is_offered(self):
-        for (game, verb), why in self.bind.GAPS.items():
-            with self.subTest(game=game, verb=verb):
-                self.assertNotIn(verb, self.bind.GAMES[game],
-                                 f'GAPS says "{why}" but the table offers it')
+                for verb, flag in flags_for.items():
+                    self.assertIn(flag, flags, f'{game} {verb}')
 
 
 class TheJudgementsHaveAHome(unittest.TestCase):
     """Where a game keeps what somebody decided, and how it gets back.
 
-    A judgement is not derived from anything: delete it and it is gone.
-    So a screen that lets you make one has to be able to write it down,
-    and until it could, promoting an action lasted until you pressed `q`.
+    A judgement is derived from nothing. Delete it and it is gone. So a
+    screen that lets you make one has to be able to write it down.
+    Unwritten, a promoted action lasts until you press `q`.
     """
 
     def planners(self):
@@ -509,27 +770,39 @@ class TheJudgementsHaveAHome(unittest.TestCase):
     def test_a_game_with_a_hand_written_list_says_where_it_lives(self):
         for game, cls in self.planners():
             with self.subTest(game=game):
-                if not cls.BINDS:
-                    # DCS derives its needs from the aircraft, so there is
-                    # no list of judgements to keep. `bind-wizard.py`'s own
-                    # GAPS says the same about its review screen.
-                    continue
-                where = os.path.join(REPO, 'games', game, cls.BINDS)
-                self.assertTrue(os.path.exists(where),
-                                f'{game} names {cls.BINDS} and it is not there')
+                # Named, and not present. `s` on the review screen writes
+                # both files, so a game nobody has described has neither.
+                # An assertion that they are on disk asserts that the
+                # judgements ship with the code.
+                self.assertTrue(cls.NEEDS_FILE,
+                                f'{game} says nowhere to keep what a '
+                                'function is')
+                self.assertTrue(cls.BINDS,
+                                f'{game} says nowhere to keep where things '
+                                'sit')
 
     def test_every_axis_a_game_plans_is_a_need_like_any_other(self):
-        # Five games each handed over a tuple of its own -- `(ident, role,
-        # axis)`, `(name, role, index, inverse, props)`, four more -- so
-        # nothing could draw them on a screen or hold them to a rule.
+        # A tuple per game is `(ident, role, axis)` here and `(name,
+        # role, index, inverse, props)` there, and four more shapes. Then
+        # nothing draws them on a screen or holds them to a rule.
         for game, cls in self.planners():
             with self.subTest(game=game):
                 try:
-                    layout = cls().build()
+                    obj = cls()
+                    # An axis need out of the game's OWN vocabulary, so
+                    # this cannot pass over nothing. Read off whatever
+                    # the planner ships, it is vacuous for a game with an
+                    # empty needs file.
+                    axis = next((a for a in obj.catalogue()
+                                 if a.kind == corneeds.AXIS), None)
+                    self.assertTrue(axis, f'{game} has no axis to bind')
+                    obj.add_need(axis)
+                    layout = obj.build()
                 except SystemExit:
-                    continue        # nothing harvested on this machine
+                    continue        # Nothing harvested on this
+                                    # machine.
                 # And it is a Placement on a Need, in the one list, with
-                # an `OnAxis` slot saying which axis of the control it
+                # an `OnAxis` slot that says which axis of the control it
                 # took. There is no second kind of thing to check.
                 self.assertTrue(layout.on_axes, f'{game} plans no axis')
                 for p in layout.on_axes:
@@ -540,34 +813,36 @@ class TheJudgementsHaveAHome(unittest.TestCase):
                     self.assertTrue(p.need.what)
 
     def test_a_kind_the_map_has_no_word_for_is_an_error(self):
-        # The guard the rename never got. There used to be a kind per
-        # axis -- `stick-x`, `stick-y`, `twist` -- and when that went,
-        # three of the six games went on asking for it, got an empty list
-        # and dropped the axis without a word. MSFS and War Thunder each
-        # planned a layout with no aileron, elevator or rudder in it.
+        # The guard a rename needs. A kind per axis, as `stick-x`,
+        # `stick-y` and `twist`, leaves three of the six games asking for
+        # a word the map dropped. Each one gets an empty list and drops
+        # the axis without a word: MSFS and War Thunder each planned a
+        # layout with no aileron, elevator or rudder in it.
         import fake
         dev = fake.device('stick', [fake.button('B', 0)])
-        self.assertEqual([], dev.axes(kind='dial'))   # fair question
+        self.assertEqual([], dev.axes(kind='dial'))   # A fair
+                                                      # question.
         with self.assertRaises(ValueError) as caught:
             dev.axes(kind='stick-x')
         self.assertIn('stick-x', str(caught.exception))
 
     def test_every_game_lists_what_is_free_the_same_way(self):
-        # One question, three layouts: the same four facts in a different
-        # order with different brackets round them, because `free` was
-        # overridable and two games overrode it rather than ask for the
-        # one thing the shared one lacked -- their own numbering for a
-        # spare button. `says_button` is that one thing.
+        # One question and three layouts: the same four facts in a
+        # different order with different brackets round them. An
+        # overridable `free` is what lets two games override it, rather
+        # than ask for the one thing the shared one lacks. That one thing
+        # is their own numbering for a spare button, and `says_button` is
+        # it.
         for game, cls in self.planners():
             with self.subTest(game=game):
                 self.assertFalse('free' in vars(cls),
                                  f'{game} lists free controls its own way')
 
     def test_no_sidecar_keeps_a_screen_of_its_own(self):
-        # Two of them had a binding table with the same keys over the
-        # same three states, because nothing offered them the family's
-        # one. What is left in a sidecar is the game's own format and the
-        # things only it does -- naming devices, picking a preset.
+        # A sidecar holds the game's own format and the things only that
+        # game does, such as naming devices and picking a preset. Offered
+        # no shared screen, a sidecar grows a binding table with the same
+        # keys over the same three states.
         import glob
         for path in glob.glob(os.path.join(REPO, 'games', '*', '*.py')):
             if os.path.basename(path) in ('plan.py', 'harvest.py',
@@ -580,19 +855,19 @@ class TheJudgementsHaveAHome(unittest.TestCase):
                                  'a second binding screen')
 
     def test_every_game_opens_the_core_review(self):
-        # DCS had a screen of its own with the same keys over the same
-        # three states, because `review` sat on `Planner` and DCS is a
-        # `Proposer`. Nothing offered it the family's one.
+        # `review` sits on `Adapter` and not on `Planner`, so every kind
+        # of adapter is offered it. Offered none, a game grows a screen of
+        # its own with the same keys over the same three states.
         for game, cls in self.planners():
             with self.subTest(game=game):
                 self.assertFalse('review' in vars(cls),
                                  f'{game} opens a screen of its own again')
 
     def test_every_game_builds_the_core_sheet(self):
-        # DCS wrote its own, with its own template, and that is how its
-        # kneeboard drifted: the shared one learned to put axes inside
-        # their device, to split the free controls by device and to drop
-        # two paragraphs of prose, and none of it reached DCS.
+        # A game that writes its own sheet, with its own template,
+        # drifts. The shared one learned to put axes inside their device,
+        # to split the free controls by device, and to drop two
+        # paragraphs of prose. None of that reaches the copy.
         for game, cls in self.planners():
             with self.subTest(game=game):
                 self.assertTrue(hasattr(cls, 'sheet'))
@@ -600,14 +875,14 @@ class TheJudgementsHaveAHome(unittest.TestCase):
                                  f'{game} writes its own kneeboard again')
                 # And a game with several sheets of its own says so with
                 # a suffix, so both filenames keep the family's spelling.
-                # Called on the class, not an instance: DCS's reads the
-                # module it was constructed for.
+                # Called on the class and not on an instance: DCS's reads
+                # the module it was constructed for.
                 self.assertTrue(callable(cls.sheet_suffix))
 
     def test_the_description_and_the_answer_are_different_files(self):
-        # They were one, so a row said what the function is AND where the
-        # allocator had put it, and nothing in the file said which half
-        # was which.
+        # One file for both makes a row say what the function is AND
+        # where the allocator put it, with nothing to say which half is
+        # which.
         for game, cls in self.planners():
             with self.subTest(game=game):
                 if not cls.NEEDS_FILE:
@@ -621,9 +896,9 @@ class TheJudgementsHaveAHome(unittest.TestCase):
 class TheCatalogueSaysWhereItCameFrom(unittest.TestCase):
     """The vocabulary screen names the file it is reading.
 
-    It showed a count and nothing else, so the one question a stale
-    screen raises -- which file is this, and is it the one I just
-    re-harvested -- had no answer on it.
+    A count and nothing else leaves the one question a stale screen raises
+    unanswered: which file is this, and is it the one I just
+    re-harvested.
     """
 
     def test_every_game_names_it(self):
@@ -633,8 +908,8 @@ class TheCatalogueSaysWhereItCameFrom(unittest.TestCase):
                                 f'{game} builds a catalogue from nowhere')
 
     def test_it_is_a_file_the_planner_actually_reads(self):
-        # Against CACHE, not against the directory: a name that is not
-        # loaded would put a plausible, wrong file on the screen.
+        # Against CACHE and not against the directory. A name nothing
+        # loads puts a plausible, wrong file on the screen.
         for game in adapter.games():
             with self.subTest(game=game):
                 cls = live(game)
@@ -642,17 +917,17 @@ class TheCatalogueSaysWhereItCameFrom(unittest.TestCase):
 
 
 class DroppingTheCache(unittest.TestCase):
-    """The one destructive thing the screen can do, held to its blast
-    radius.
+    """The one destructive thing the screen does, held to what it may
+    reach.
 
-    A harvest is re-runnable: delete what it wrote and one command brings
-    it back. A judgement is not -- delete it and it is gone. They sit in
-    the same directory, named alike, and the button that removes the first
-    must not be able to reach the second.
+    A harvest runs again. Delete what it wrote and one command brings it
+    back. A judgement does not: delete it and it is gone. The two sit in
+    the same directory under alike names, and the key that removes the
+    first must not reach the second.
 
-    It is not a matter of being careful. `CACHE` names what the harvest
-    wrote and `BINDS` is deliberately not in it, so the list this walks
-    cannot contain the judgements however the walk is written.
+    Care is not the mechanism. `CACHE` names what the harvest wrote, and
+    `BINDS` is not in it, so the list this walks cannot hold the
+    judgements however the walk is written.
     """
 
     def test_it_never_names_the_judgements(self):
@@ -685,17 +960,16 @@ class DroppingTheCache(unittest.TestCase):
 
 
 class EveryPayloadIsASlot(unittest.TestCase):
-    """A control's click is a button like the others, and carries a slot
-    like the others.
+    """A control's click is a button like the others, and it carries a
+    slot like the others.
 
-    `Need.push` never agreed with itself: War Thunder put a list of Binds
-    there, MSFS a bare Bind, BMS a bare callback string. Every writer that
-    walks `p.slots` then had to ask what it was holding -- five
-    `isinstance` branches across two games, one of them commented "the
-    push, a bare callback".
+    A `push` field that each game fills its own way holds a list of Binds
+    in one game, a bare Bind in another, and a bare callback string in a
+    third. Every writer that walks `p.slots` then asks what it is
+    holding: five `isinstance` branches across two games.
 
-    Nothing was wrong with any of them on their own. They could not be
-    written down together, which is what a contract is for.
+    Nothing is wrong with any of the three on its own. They cannot be
+    written down together, and that is what a contract is for.
     """
 
     def needs(self, game):
@@ -721,12 +995,119 @@ class EveryPayloadIsASlot(unittest.TestCase):
                         self.assertIsInstance(b, cactions.Bind, n.what)
 
 
+class AGameNobodyHasDescribed(unittest.TestCase):
+    """A list with nothing on it says so, and says what to type.
+
+    `0 controls proposed, 0 unplaced` reads as a desk with no room on it,
+    and not as a game nobody has described. Every DCS module is in that
+    state until somebody walks it, and so is a seventh game on the day
+    its harvest lands.
+    """
+
+    def note(self, game):
+        # `Any`. `_needs` is each game's own field, so nothing types
+        # against the base class.
+        on: typing.Any = built(live(game))
+        on._needs = []
+        return '\n'.join(on.undescribed_note())
+
+    def test_it_says_nothing_describes_it_yet(self):
+        for game in adapter.games():
+            with self.subTest(game=game):
+                said = self.note(game)
+                self.assertIn('Nothing describes', said)
+                self.assertIn('no functions to place', said)
+
+    def test_and_names_the_command_that_describes_it(self):
+        for game in adapter.games():
+            with self.subTest(game=game):
+                said = self.note(game)
+                self.assertIn(f'./bind-wizard.py {game} tui', said)
+
+    def test_a_game_with_variants_names_the_one_it_is_for(self):
+        # DCS lays out one aircraft at a time, so `describe it` says
+        # which. No other game has a variant, and for those the game's own
+        # title is the thing being described.
+        on: typing.Any = built(live('dcs'))
+        on._needs = []
+        said = '\n'.join(on.undescribed_note())
+        self.assertIn(on.subtitle, said,
+                      'the sentence does not name the module')
+        self.assertIn(f'-a {on.aircraft}', said,
+                      'the command to paste does not name the module')
+        plain: typing.Any = built(live('x4'))
+        plain._needs = []
+        self.assertIn(plain.title, '\n'.join(plain.undescribed_note()))
+
+
+class WhatTheScreenKeptIsWhatReachesTheGame(unittest.TestCase):
+    """A writer takes the placements it is handed, and only those.
+
+    The review screen's whole job is to write some of a plan and not the
+    rest. A writer that calls `build()` for itself makes that screen
+    impossible, and a writer that recomputes the plan from its own results
+    file brings back anything you cleared.
+
+    `write_layout` returns the file's whole TEXT, and that is what makes
+    this checkable for every game at once. Narrow the layout, and the
+    identifier of what was dropped is gone from what would be written.
+    """
+
+    def written(self, obj, layout):
+        out = []
+        for body in obj.write_layout(obj.rows(layout), layout).values():
+            if body is adapter.MOVE:
+                continue
+            out.append(getattr(body, 'text', body))
+        return '\n'.join(out)
+
+    def test_a_binding_cleared_on_the_screen_does_not_reach_the_game(self):
+        for game in adapter.games():
+            with self.subTest(game=game):
+                obj = built(live(game))
+                for action in [a for a in obj.catalogue()
+                               if a.kind != corneeds.AXIS][:6]:
+                    obj.add_need(action)
+                full = obj.build()
+                if not full.on_buttons:
+                    self.skipTest(f'{game} placed no button here')
+                try:
+                    whole = self.written(obj, full)
+                except SystemExit as e:
+                    # The game is running, or its own file is not there.
+                    # A fact about this machine, like `built`'s skips.
+                    self.skipTest(f'{game}: {e}')
+                dropped = full.on_buttons[0]
+                # The game's own word for the control it sat on, which is
+                # what a binding writes. Not the action id: a format whose
+                # template lists every function, as Elite's base preset
+                # does, carries the id whether anything is bound to it or
+                # not. Counting ids proves nothing there.
+                says = [obj.says_slot(dropped.role, slot,
+                                      full.devices[dropped.role])
+                        for slot, _p in dropped.slots]
+                says = [one for one in says if one]
+                if not says:
+                    self.skipTest(f'{game} has no word for a button')
+                before = sum(whole.count(one) for one in says)
+                self.assertTrue(
+                    before, f'{game} wrote none of {says} even when it was '
+                            'placed, so clearing it proves nothing')
+                kept = self.written(
+                    obj, full.but([p for p in full.placed
+                                   if p is not dropped]))
+                self.assertLess(
+                    sum(kept.count(one) for one in says), before,
+                    f'{game} still writes {says} after the screen cleared '
+                    'the binding on it')
+
+
 class EveryGameHasACatalogue(unittest.TestCase):
     """The vocabulary, in one shape, from all six.
 
-    What it does NOT assert is that a game has categories, modes or ranks:
-    four of the six have no categories and X4 counts nothing, and a test
-    demanding them would push somebody into deriving one.
+    This does NOT assert that a game has categories, modes or ranks. Four
+    of the six have no categories and X4 counts nothing, and a test that
+    demanded them pushes somebody into deriving one.
     """
 
     def catalogue(self, game):
@@ -750,25 +1131,27 @@ class EveryGameHasACatalogue(unittest.TestCase):
                 self.assertLessEqual(kinds, {'button', 'axis'})
 
     def test_nothing_carries_an_empty_name(self):
-        # A blank row is unusable, and the fallback to the id exists so it
-        # cannot happen however thin a cache is.
+        # A blank row is unusable. The fallback to the id is why that
+        # cannot happen, however thin a cache is.
         for game in adapter.games():
             with self.subTest(game=game):
                 self.assertTrue(all(a.name for a in self.catalogue(game)))
 
     def test_it_holds_what_the_hand_written_list_binds(self):
-        # The point of the whole thing: the curated list is a slice of the
-        # catalogue. A miss means the translation dropped a section of the
-        # cache, which is exactly the bug this shape is meant to end.
-        for game in ('x4', 'elite', 'warthunder'):
+        # This is the point. The curated list is a slice of the
+        # catalogue, and a miss means the translation dropped a section of
+        # the cache.
+        # From the filesystem, and not from a list written here. A game
+        # that exists only in a table is a game the table can be wrong
+        # about, so `adapter.games()` reads the directory.
+        for game in adapter.games():
             with self.subTest(game=game):
                 obj = built(live(game))
-                known = {a.id for a in obj.catalogue()}
-                named = {x for n in obj.NEEDS for slot in n.bindings
-                         for x in (slot if isinstance(slot, tuple)
-                                   else (slot,))
-                         if isinstance(x, str) and x}
-                self.assertEqual(set(), named - known)
+                # `unknown()` is that comparison, in the core, and
+                # `main()` stops on it. A second copy here read a slot as
+                # a string, and a slot holds `Bind`, so it compared the
+                # empty set with the empty set and passed.
+                self.assertEqual([], obj.unknown())
 
 
 class TheDefaultVerb(unittest.TestCase):
@@ -782,54 +1165,56 @@ class TheDefaultVerb(unittest.TestCase):
         self.bind = bind()
 
     def test_a_bare_game_opens_the_review(self):
-        self.assertEqual('tui', self.bind.default_verb('x4'))
+        """`tui`, and nothing is asked to agree.
 
-    def test_every_game_opens_the_same_review(self):
-        # DCS used to have none, because it had a screen of its own with
-        # the same keys on it -- `c C x X ↵` over the same three states.
-        # The fallback to `plan` stays written down for a game that one
-        # day has no screen; nothing is in that state now.
+        A lookup in the game's own row, with a fallback to `plan`, has no
+        row to disagree with it: every game answers the same interface,
+        and no game is in the fallback's state. The verb is a constant in
+        `main`, and this checks that a bare game reaches the screen.
+        """
         for game in self.bind.GAMES:
             with self.subTest(game=game):
-                self.assertIn('tui', self.bind.GAMES[game])
-                self.assertEqual('tui', self.bind.default_verb(game))
-
-    def test_every_game_has_a_default_it_can_run(self):
-        for game in self.bind.GAMES:
-            with self.subTest(game=game):
-                self.assertIn(self.bind.default_verb(game),
-                              self.bind.GAMES[game])
+                ran = []
+                with mock.patch.object(self.bind, 'which_desk',
+                                       lambda rest: (None, None)), \
+                     mock.patch.object(self.bind.subprocess, 'call',
+                                       lambda cmd, cwd=None, env=None:
+                                       ran.append(cmd) or 0), \
+                     mock.patch.object(sys, 'argv',
+                                       ['bind-wizard.py', game]):
+                    self.bind.main()
+                (cmd,) = ran
+                self.assertIn('--tui', cmd)
+                self.assertTrue(cmd[1].endswith(
+                    os.path.join('games', game, 'plan.py')), cmd[1])
 
 
 class RunDirectly(unittest.TestCase):
-    """Every script the README offers as runnable on its own, run on its own.
+    """Every script with a `__main__`, run on its own.
 
     Nothing else here starts one as `__main__`. `adapter.load` imports the
-    module and never reaches its `main()`, and the front door is checked as
-    a verb table -- so a script calling something the core has since moved
+    module and never reaches its `main()`, and the front door is checked
+    as a verb table. So a script that calls something the core has moved
     is invisible to the whole suite.
 
-    That is not hypothetical. `build()` went from a function in
-    `games/warthunder/plan.py` to a method on `WarThunder`, and
-    `write.py` kept calling `plan.build()`: the script was dead on
-    the first line that needed a plan, `./bind-wizard.py wt write` was fine
-    because it hands the writer a layout, and 168 tests stayed green. A type
-    checker found it months later; this is what should have.
+    That has happened. `build()` moved from a function to a method, a
+    sidecar went on calling `plan.build()`, and the script was dead on
+    the first line that needed a plan. `--write` was fine, because it
+    hands the writer a layout, and 168 tests stayed green. A type checker
+    found it months later.
 
-    `test_no_writer_reaches_build` is the opposite rule and they do not
-    overlap. A *writer* may never fetch a plan of its own, because the
+    `test_no_writer_reaches_build` is the opposite rule, and the two do
+    not overlap. A WRITER may never fetch a plan of its own, because the
     review screen's whole job is to write some of one. A script started on
-    its own has nobody to be handed a plan by, and must.
+    its own has nobody to be handed a plan by, so it must.
 
-    The two capture wizards are not run here: both open curses and read
-    `/dev/input`, so there is no read-only way to start one. Only their
-    import is covered, which is all `harvest.wizard()` and
-    `plan.wizard()` ever do with them.
+    A game is two scripts, `harvest.py` and `plan.py`, and both answer on
+    their own. This starts both.
     """
 
     def ran(self, game, script, *args):
-        """The script, in its own interpreter, from its own directory --
-        which is how the README says to run it."""
+        """The script, in its own interpreter, from its own directory.
+        That is how `bind-wizard.py` runs it."""
         where = os.path.join(REPO, 'games', game)
         return subprocess.run([sys.executable, script, *args],
                               cwd=where, capture_output=True, text=True,
@@ -839,36 +1224,30 @@ class RunDirectly(unittest.TestCase):
         for game in adapter.games():
             with self.subTest(game=game):
                 # The same skip the rest of this file takes on a bare
-                # clone: no harvest, or no device map, is a fact about this
-                # machine and not about the code.
+                # clone. No harvest, or no device map, is a fact about
+                # this machine and not about the code.
                 built(live(game))
                 done = self.ran(game, adapter.planner(game), '--why')
                 self.assertEqual(0, done.returncode,
                                  done.stderr.strip()[-500:])
 
+    @unittest.skipUnless('warthunder' in adapter.games(),
+                         'war thunder is not in games/ yet')
     def test_the_sidecar_that_owns_a_format_runs_as_its_own_script(self):
-        # War Thunder's, because it is the one that broke. It is also the
-        # only one of the three with a verb that writes nothing: the other
-        # two own their format from inside a capture wizard.
+        # War Thunder's, because it is the one that broke, and the one
+        # game left with a sidecar. Every other game's format is read by
+        # its `harvest.py` and written by its `plan.py`.
         built(live('warthunder'))
         done = self.ran('warthunder', 'write.py', '--dry-run')
         said = done.stderr.strip() + done.stdout.strip()
         if 'machine.blk' in said and 'no controls' in said:
-            # The same kind of skip as `live`: what the game wrote in its
-            # own config is a fact about this machine. The sidecar reads
-            # that file to know which joystick slot is which, so without
-            # it there is nothing for a dry run to be dry about.
+            # The same kind of skip as `live`. What the game wrote in its
+            # own configuration is a fact about this machine. The sidecar
+            # reads that file to know which joystick slot is which, so
+            # without it a dry run has nothing to be dry about.
             raise unittest.SkipTest('the installed machine.blk has no '
                                     'controls{} block')
         self.assertEqual(0, done.returncode, done.stderr.strip()[-500:])
-
-    def test_a_capture_wizard_still_imports(self):
-        for game, script in (('dcs', 'capture.py'),
-                             ('elite', 'capture.py')):
-            with self.subTest(game=game):
-                adapter.from_file(f'{game}_wizard_under_test',
-                                  os.path.join(REPO, 'games', game, script),
-                                  argv=[script])
 
 
 if __name__ == '__main__':
@@ -876,8 +1255,9 @@ if __name__ == '__main__':
 
 
 class WhichDeskAPlannerIsFor(unittest.TestCase):
-    """Every planner takes it, because every planner needs it: which desk
-    decides which device is the stick and how far each control is."""
+    """Every planner takes it, because every planner needs it. Which desk
+    this is decides which device is the stick, and how far each control
+    is."""
 
     def test_every_planner_takes_the_flag(self):
         for game in adapter.games():
@@ -900,8 +1280,8 @@ class WhichDeskAPlannerIsFor(unittest.TestCase):
 
     def test_saying_it_on_the_command_line_is_enough(self):
         # With nothing in the environment and more than one desk on file,
-        # the flag is the only thing standing between a planner and the
-        # map's refusal to guess.
+        # the flag is the only thing between a planner and the map's
+        # refusal to guess.
         from core import devmap
         rigs = devmap.load().load_profiles()
         if len(rigs) < 2:
@@ -930,8 +1310,8 @@ class WhichDeskAPlannerIsFor(unittest.TestCase):
 
 
 class TheLauncherAsking(unittest.TestCase):
-    """`./bind-wizard.py` asks which desk, but only where there is somebody to
-    ask."""
+    """`./bind-wizard.py` asks which desk, and only where somebody is
+    there to answer."""
 
     def setUp(self):
         self.bind = adapter.from_file('bind_under_test',
@@ -946,8 +1326,8 @@ class TheLauncherAsking(unittest.TestCase):
     def asked(self, rest=(), env=None, names=('Biurko', 'Fotel')):
         """(did it put a menu up, what it answered).
 
-        With a terminal faked, because without one every one of these
-        returns None for the same reason and the test says nothing.
+        With a terminal faked. Without one, every call here returns None
+        for the same reason and the test says nothing.
         """
         dm = __import__('core.devmap', fromlist=['devmap']).load()
         put_up = []
@@ -977,8 +1357,8 @@ class TheLauncherAsking(unittest.TestCase):
         self.assertEqual((False, None), self.asked(names=('Biurko',)))
 
     def test_and_nothing_is_asked_with_nobody_there(self):
-        # A pipe, a script, CI. The planner's own message names the ways
-        # of saying it, and a prompt nobody can answer is a hang.
+        # A pipe, a script, or CI. The planner's own message names the
+        # ways of saying it, and a prompt nobody can answer is a hang.
         dm = __import__('core.devmap', fromlist=['devmap']).load()
         put_up = []
         with mock.patch.object(sys.stdin, 'isatty', lambda: False), \
@@ -992,9 +1372,9 @@ class TheLauncherAsking(unittest.TestCase):
 
 
     def test_backing_out_picks_nothing(self):
-        # ESC on that menu means "I did not say", not "the first one".
-        # Picking for you is what the old by_role did, and it is how a
-        # layout came out for the wrong stick.
+        # ESC on that menu means "I did not say". It does not mean "the
+        # first one". A menu that picks for you is how a layout comes out
+        # for the wrong stick.
         dm = __import__('core.devmap', fromlist=['devmap']).load()
         with mock.patch.object(__import__('curses'), 'wrapper',
                                lambda run: (None, None)):
@@ -1019,8 +1399,8 @@ class TheLauncherAsking(unittest.TestCase):
 class TheGameList(unittest.TestCase):
     """With no arguments the launcher ends in a game, or in nothing.
 
-    It used to end in the table and stop, so the next thing anybody did
-    was type the game they had just read.
+    A launcher that ends in the table and stops leaves you typing the
+    game you have just read.
     """
 
     def setUp(self):
@@ -1043,8 +1423,8 @@ class TheGameList(unittest.TestCase):
         self.assertEqual(1, len(at))
 
     def test_nothing_is_drawn_with_nobody_there(self):
-        # A pipe, a script, CI: the table is the whole answer, and this
-        # suite is one of the things that reads it.
+        # A pipe, a script, or CI. The table is the whole answer, and
+        # this suite is one of the things that reads it.
         for stdin, stdout in ((False, True), (True, False)):
             with self.subTest(stdin=stdin, stdout=stdout):
                 with mock.patch.object(sys.stdin, 'isatty',
@@ -1054,7 +1434,7 @@ class TheGameList(unittest.TestCase):
                     self.assertIsNone(self.bind.pick_game())
 
     def test_backing_out_picks_nothing(self):
-        # ESC means "I did not say", the way it does on the desk list.
+        # ESC means "I did not say", as it does on the desk list.
         self.assertIsNone(self.chose(None))
 
     def test_what_it_picks_is_a_game_the_launcher_can_run(self):
@@ -1072,8 +1452,8 @@ class TheGameList(unittest.TestCase):
 
 
 class WhereTheDesksWereRead(unittest.TestCase):
-    """Shown, and changeable: a desk is a fact about a room, and somebody
-    with these files kept somewhere synced has to be able to say where."""
+    """Shown, and changeable. A desk is a fact about a room, and somebody
+    who keeps these files somewhere synced says where they are."""
 
     def setUp(self):
         self.bind = adapter.from_file('bind_under_test2',
@@ -1114,7 +1494,7 @@ class PointingAtAnotherDirectory(unittest.TestCase):
                 for n in names]
 
     def run_picker(self, keys, rigs, where='/somewhere'):
-        # `setup` too: it asks curses to hide the cursor and start
+        # `setup` as well. It asks curses to hide the cursor and start
         # colour, and there is no terminal here to ask.
         import curses
         from core import tui as ctui
@@ -1126,8 +1506,8 @@ class PointingAtAnotherDirectory(unittest.TestCase):
             return self.bind.pick_desk(rigs, where), scr
 
     def test_the_blank_before_the_last_row_is_stepped_over(self):
-        # It is not a desk and not a place to read them from, so there
-        # is nothing for `↵ choose` to mean on it.
+        # It is not a desk, and not a place to read them from, so `↵
+        # choose` on it means nothing.
         said = {}
         from core import tui as ctui
         import curses
@@ -1156,17 +1536,20 @@ class PointingAtAnotherDirectory(unittest.TestCase):
         self.assertEqual((None, here), got)
 
     def test_return_on_the_path_you_came_in_with_changes_nothing(self):
-        # It reads as backing out of the question. Taken as an answer it
-        # dropped you into the planner with no desk chosen at all.
+        # It reads as backing out of the question. Taken as an answer, it
+        # drops you into the planner with no desk chosen.
         #
-        # Started from a directory that EXISTS on purpose: from one that
-        # does not, the `is it a directory` check catches it first and
-        # the test passes whatever this does.
+        # Started from a directory that EXISTS, on purpose. From one that
+        # does not, the `is it a directory` check catches it first and the
+        # test passes whatever this does.
         import curses
         here = os.path.dirname(os.path.abspath(__file__))
-        typed = [curses.KEY_DOWN] * 2 + [10]        # down to `somewhere else`
-        typed += [10]                                # RETURN, nothing typed
-        typed += [curses.KEY_UP] * 2 + [10]          # back up, pick the first
+        typed = [curses.KEY_DOWN] * 2 + [10]        # Down to `somewhere
+                                                    # else`.
+        typed += [10]                                # RETURN, nothing
+                                                     # typed.
+        typed += [curses.KEY_UP] * 2 + [10]          # Back up, pick the
+                                                     # first.
         got, _scr = self.run_picker(typed, self.rigs('A', 'B'), where=here)
         self.assertEqual(('A', here), got)
 
@@ -1174,14 +1557,15 @@ class PointingAtAnotherDirectory(unittest.TestCase):
         import curses
         typed = [curses.KEY_DOWN] * 2 + [10]
         typed += [8] * 40 + [ord(c) for c in '/no/such/place'] + [10]
-        typed += [27, 27]                    # dismiss the notice, then leave
+        typed += [27, 27]                    # Dismiss the notice, then
+                                             # leave.
         got, scr = self.run_picker(typed, self.rigs('A', 'B'))
         self.assertEqual((None, None), got)
         self.assertIn('/no/such/place', '\n'.join(scr.frames))
 
     def test_no_desks_at_all_is_a_question(self):
-        # One desk answers itself. None is not the same thing: the files
-        # may be somewhere this has not been told to look.
+        # One desk answers itself. None is not the same thing. The files
+        # may be somewhere nothing has told this to look.
         dm = self.dm
         put_up = []
         with mock.patch.object(sys.stdin, 'isatty', lambda: True), \
@@ -1208,8 +1592,8 @@ class PointingAtAnotherDirectory(unittest.TestCase):
         self.assertEqual([], put_up)
 
     def test_a_directory_you_picked_reaches_the_planner(self):
-        # Through the environment, because the planner is another
-        # process and the map reads it there.
+        # Through the environment, because the planner is another process
+        # and the map reads it there.
         said = {}
         with mock.patch.object(self.bind, 'which_desk',
                                lambda rest: ('Biurko', '/elsewhere')), \
@@ -1224,3 +1608,84 @@ class PointingAtAnotherDirectory(unittest.TestCase):
     def test_with_no_desks_at_all_it_still_offers_to_look_elsewhere(self):
         _got, scr = self.run_picker([27], [])
         self.assertIn(self.bind.ELSEWHERE, '\n'.join(scr.frames))
+
+
+class WhichTemplateAGameIsLaidOutTo(unittest.TestCase):
+    """Three places can say it, and they are read in one order.
+
+        --overlay NAME   this run, whatever is on file. `none` too.
+        the binds file   what `o` last kept, per game
+        `OVERLAY`        the planner's own declaration
+
+    The flag wins, so one run under another template costs nothing that
+    is written down. The file beats the declaration, because which
+    template you want is a judgement and the declaration is source.
+    """
+
+    def setUp(self):
+        corneeds.OVERLAY = None
+
+    def toy(self, declared):
+        @typing.final
+        class Toy(adapter.Planner):
+            game = 'x4'                 # a game `overlays/` has rules for
+            title = 'Toy'
+            OVERLAY = declared
+            BINDS = 'binds.json'
+            NEEDS_FILE = 'needs.json'
+
+            @typing.override
+            def write_layout(self, rows, layout):
+                return {}
+
+        return Toy()
+
+    def chosen(self, flag=None, declared='by-hand', filed=''):
+        """Which template `overlay()` settles on, by its file's stem.
+
+        `corneeds.filed_overlay` is patched rather than a file written,
+        because `Adapter.filed_overlay` is final and the thing under test
+        is the order the three sources are read in.
+        """
+        with mock.patch.object(adapter.corneeds, 'filed_overlay',
+                               lambda d, f: filed), \
+             mock.patch.object(sys, 'stderr', io.StringIO()):
+            got = self.toy(declared).overlay(flag)
+        return got.called if got is not None else ''
+
+    def test_the_file_beats_the_declaration(self):
+        self.assertEqual('f-18', self.chosen(filed='f-18'))
+
+    def test_the_declaration_answers_where_the_file_says_nothing(self):
+        self.assertEqual('by-hand', self.chosen())
+
+    def test_the_flag_beats_the_file(self):
+        # One run under another template, and nothing written down
+        # changes. `o` on the screen is how a lasting change is made.
+        self.assertEqual('by-hand', self.chosen('by-hand', filed='f-18'))
+
+    def test_the_flag_can_ask_for_no_template_over_a_file(self):
+        # `--overlay none` is an answer and not an absent one. Read as
+        # "ask the file", it could not be given at all.
+        self.assertEqual('', self.chosen('none', filed='f-18'))
+
+    def test_a_game_with_no_binds_file_asks_nothing(self):
+        @typing.final
+        class NoFile(adapter.Planner):
+            game = 'x4'
+            title = 'No file'
+            OVERLAY = 'by-hand'
+
+            @typing.override
+            def write_layout(self, rows, layout):
+                return {}
+
+        self.assertEqual('', NoFile().filed_overlay())
+
+    def test_every_game_on_disk_reads_its_own(self):
+        # '' for all four today, because none was saved with the field.
+        # Neither that nor a missing file is a fault, and both mean "ask
+        # the declaration".
+        for game in adapter.games():
+            with self.subTest(game=game):
+                self.assertIsInstance(built(live(game)).filed_overlay(), str)

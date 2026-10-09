@@ -1,119 +1,105 @@
 # X4 Foundations
 
-## Where it lives
+What is peculiar to this game.
 
-    ~/.local/share/Steam/steamapps/compatdata/392160/pfx/
-      drive_c/users/steamuser/Documents/Egosoft/X4/<player id>/
+## The id says what kind of binding it is
 
-    inputmap.xml     the working copy the game reads, and writes menu edits to
-    inputmap_1.xml   "Izowiuz"
-    inputmap_2.xml   "Izowiuz K&M"
-    inputmap_3.xml   "Izowiuz VIrpil"  — what plan.py writes
-
-Named profiles carry `name=` in their header; the working copy does not.
-
-    X4_DIR       the profile directory, instead of the Proton lookup
-    X4_PROFILE   which file plan.py writes
-    X4_SLOTS     "stick=2,throttle=3", instead of inferring the slots
-
-## How to run it
-
-In: the four `inputmap*.xml` files. Out: printed, or `inputmap_3.xml`. No
-cache.
-
-    ./harvest.py             profiles, vocabulary, device slots, button codes
-    ./harvest.py --vocab     everything X4 accepts a binding for
-    ./harvest.py --grep map  vocabulary entries matching a word
-    ./harvest.py --json      write the cache the other games keep
-
-    ./plan.py                the layout
-    ./plan.py --why          and the evidence for each choice
-    ./plan.py --free         what stays unbound
-    ./plan.py --sheet --html the kneeboard
-    ./plan.py --tui          walk the layout, keep what you want, write that
-    ./plan.py --write        all of it, into the game (close X4 first)
-
-    --profile FILE     write somewhere other than inputmap_3.xml
-    --backup-dir DIR   where the replaced profile is copied first
-                       (default <repo>/backups/x4/<stamp>/; SIM_BIND_BACKUPS
-                       does the same)
-
-Every id in `NEEDS` is checked against the harvested vocabulary before
-anything runs; an id the game does not know is an error, not a binding that
-silently does nothing.
-
-## The format
-
-Plain XML, one line per binding, three element types:
+X4 keeps its bindings in plain XML. One binding is one line.
 
     <action id="INPUT_ACTION_TOGGLE_TRAVEL_MODE"
             source="INPUT_SOURCE_JOYBUTTONS_3" code="INPUT_XBUTTON_16"/>
 
-    <action>  fires once on press     229 in the vocabulary
-    <state>   true while held         101
-    <range>   an axis                  29
+The element name says the kind. The id carries the same fact in its
+prefix.
 
-    source    the device, by slot
-    code      local to that device — no global numbering to undo
-    toggle    "1" on a latching <state>, between source and code
-    sgn       "±1" after code, a VR axis driving a button
-    <config>  per-axis invert flags, at the top of the file
+| element | what it does | ids |
+|---|---|---|
+| `<action>` | fires once on press | 229 |
+| `<state>` | true while held | 101 |
+| `<range>` | an axis | 29 |
 
-Axis codes are DirectInput names (`INPUT_JOYAXIS_RX`). Ids are
-self-describing, so there is no language archive to crack: `readable()` turns
-`INPUT_ACTION_TOGGLE_TRAVEL_MODE` into `Toggle travel mode`.
+So nothing has to carry the kind beside the id.
 
-## Measured
+Attributes are not always in the same order and not always only three.
+`toggle="1"` sits between `source` and `code` on a latching `<state>`.
+`sgn` sits after `code` on a VR axis used as a button. The reader matches
+the element first and the attributes second.
 
-Button codes are the index plus one, positions 1..11 named:
+## The context is in the id too
 
-    js 0..10   A B X Y LEFT_SHOULDER RIGHT_SHOULDER BACK START
-               LEFT_THUMB RIGHT_THUMB BIGBUTTON
-    js 11+     INPUT_XBUTTON_<index + 1>
+X4 puts no mode flag on a binding. A `MAP_` id answers in the map only. An
+`FP_` id answers on foot only. One control therefore carries three
+meanings. The harvest writes the context onto the action. The kneeboard
+reads it as a column.
 
-2026-09-17, by binding isolated buttons in the game's own menu:
+## A device is a slot number
 
-    js  6  ->  INPUT_XBUTTON_BACK          the name order
-    js  9  ->  INPUT_XBUTTON_RIGHT_THUMB   confirmed it
+`source="INPUT_SOURCE_JOYBUTTONS_3"` names the device by its position in
+enumeration order. `code` is local to that device.
+
+X4 keeps no device list anywhere in its configuration. The slot number
+therefore means nothing outside the profile that wrote it.
+
+`slots()` reads the slot back off an existing profile. The slot that
+carries THROTTLE on RX is the throttle. The slot whose codes are all Xbox
+names is a gamepad.
+
+    X4_SLOTS="stick=2,throttle=3"       say it outright
+
+## Button codes: eleven names, then numbers
+
+Measured on 2026-09-17. Three isolated buttons on the WarBRD, bound in
+X4's own menu, read back out of the file:
+
     js 12  ->  INPUT_XBUTTON_13
     js 30  ->  INPUT_XBUTTON_31
+    js  6  ->  INPUT_XBUTTON_BACK
 
-A bare number is not accepted where a name belongs: `INPUT_XBUTTON_7` in
-place of `INPUT_XBUTTON_BACK` leaves the binding blank in the game's own
-menu. The name table is required.
+The code is the index plus one. Two points agree. The names share that
+same numbering. `BACK` sits where `_7` would be.
 
-The trigger cannot be measured this way. It is cumulative, and X4 closes its
-binding dialog on the first input it catches.
+Positions 1 to 11 come out as an Xbox name. Position 12 and upward come
+out as a bare number.
 
-## Still a guess
+A bare number does not work where a name belongs. Measured: `OPEN_MAP`
+moved from `BACK` to `_7`. X4 parsed the file, failed to recognise the
+code, and left the binding blank in its own menu. So the name table is
+necessary.
 
-The eleven names, on two measured points, the absence of `_1`..`_11` in any
-profile file, and a name count of exactly eleven once the four `DPAD_*` POV
-directions are set aside. Nothing load-bearing. The derivation is in `CODES`
-in `harvest.py`.
+The eleven names in order:
+
+    A  B  X  Y  LEFT_SHOULDER  RIGHT_SHOULDER  BACK  START
+    LEFT_THUMB  RIGHT_THUMB  BIGBUTTON
+
+Confirmed: js 9 came back `RIGHT_THUMB`, which is where this order puts
+it.
+
+The trigger could not be used for any of this. The trigger is cumulative,
+so reaching the second detent means passing through the first. X4 closes
+its binding dialog on the first input it catches.
+
+## Two sources for the vocabulary
+
+The four `inputmap*.xml` files are layouts. Three of the four are the
+player's own saved profiles. They say what somebody once chose, not what
+the game accepts.
+
+The executable carries the names. The harvest reads both files and
+executable, because neither one is whole.
 
 ## Gotchas
 
-**Device slots are not stable.** `JOYBUTTONS` / `_2` / `_3` follow
-enumeration order and no device list exists in the config. `slots()` infers
-them from a profile's own bindings, per profile: a slot number means nothing
-outside the file that wrote it.
+X4 rewrites `inputmap.xml` when it stops. Close the game before a write. A
+named profile is the only place a generated layout survives an edit in
+X4's own menu.
 
-**X4 writes the working copy, not your named profile.** Menu edits land in
-`inputmap.xml`. Check which file changed before concluding anything.
+The profile must exist first. X4 creates a numbered profile when you save
+one in its own menu. A write to a name X4 has never written is refused.
 
-**Attribute order is not fixed, and there are more than three.** Match the
-element, then the attributes.
+One id appears on more than one line. `INPUT_ACTION_OPEN_MAP` is a
+keyboard line and a joystick line. The writer therefore removes lines by
+`source`. A writer that matched the id would take the keyboard binding
+away too.
 
-**One id, several lines; the key is `(id, source)`.** Up to three lines share
-an id, across keyboard and two joystick slots. The writer removes by `source`
-and inserts fresh.
-
-**The plan owns our slots completely.** Every line whose `source` is one of
-them is removed before ours go in, which is how a binding dropped from `NEEDS`
-stops answering. Keyboard, mouse, compass-menu and VR lines are never touched
-— 311 keyboard lines in, 311 out.
-
-**A third device is in the mix.** The Steam Controller puck enumerates as a
-pad and holds slot 1 in `inputmap_3.xml`, so the VIRPIL pair are slots 2 and
-3. Its 25 bindings are left alone.
+`plan.py` reparses the XML when the cache is missing. `--json` is
+optional here and required for every other game in this repository.

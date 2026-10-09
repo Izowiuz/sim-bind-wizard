@@ -1,9 +1,9 @@
 """What a backup has to guarantee before it counts as one.
 
-Every rule here exists because a writer in this repo got it wrong: copies that
-landed in the folder the game reads, a run folder that ate the state it was
-supposed to hold, a restore that only worked while the copy sat next to the
-original.
+Every rule here is one a writer in this repository got wrong: a copy that
+landed in the folder the game reads, a run folder that ate the state it
+was meant to hold, and a restore that worked only while the copy sat next
+to the original.
 """
 
 import os
@@ -52,8 +52,8 @@ class RoundTrip(Temp):
                          [f for f in os.listdir(self.tmp) if f != 'store'])
 
     def test_a_file_that_does_not_exist_yet_makes_no_run(self):
-        # A writer creating a file for the first time has nothing to back up,
-        # and an empty run folder would be a lie in `runs()`.
+        # A writer creating a file for the first time has nothing to back
+        # up, and an empty run folder is a lie in `runs()`.
         where, saved = backup.save(
             'g', os.path.join(self.tmp, 'never'), into=self.store)
         self.assertIsNone(where)
@@ -67,7 +67,8 @@ class RoundTrip(Temp):
 
 class Names(Temp):
     def test_two_files_of_the_same_name_are_told_apart(self):
-        # War Thunder writes several machine.blk, one per account directory.
+        # War Thunder writes several `machine.blk`, one per account
+        # directory.
         a = self.file('machine.blk', 'A', subdir='last/production')
         b = self.file('machine.blk', 'B', subdir='12345/production')
         _dir, saved = backup.save('wt', a, b, into=self.store)
@@ -84,8 +85,8 @@ class Names(Temp):
         self.assertEqual('B', self.read(b))
 
     def test_a_name_only_grows_as_far_as_it_has_to(self):
-        # Flattening the whole path would name every file after its absolute
-        # location and make the folder unreadable.
+        # The whole path flattened names every file after its absolute
+        # location, and that makes the folder unreadable.
         a = self.file('one.cfg', 'A')
         b = self.file('two.cfg', 'B')
         _dir, saved = backup.save('g', a, b, into=self.store)
@@ -94,7 +95,8 @@ class Names(Temp):
 
 class Runs(Temp):
     def test_one_stamp_groups_several_calls_into_one_run(self):
-        # BMS writes two files under `./bind-wizard.py bms write`.
+        # Falcon BMS writes two files under `./bind-wizard.py bms
+        # write`.
         a = self.file('a.cfg', 'A')
         b = self.file('b.cfg', 'B')
         when = backup.stamp()
@@ -105,9 +107,9 @@ class Runs(Temp):
         self.assertEqual(2, len(runs[0][2]))
 
     def test_a_run_holds_the_state_from_before_the_run(self):
-        # DCS's --reseed rewrites one results file once per aircraft. Copying
-        # it again on the second aircraft overwrote the only copy of the state
-        # anybody wanted back.
+        # DCS's `--reseed` rewrites one results file once per aircraft. A
+        # second copy on the second aircraft overwrites the only copy of
+        # the state anybody wants back.
         p = self.file('results.json', 'pristine')
         when = backup.stamp()
         backup.save('dcs', p, into=self.store, when=when)
@@ -122,7 +124,7 @@ class Runs(Temp):
         p = self.file('thing.cfg', 'v1')
         backup.save('g', p, into=self.store)
         self.file('thing.cfg', 'v2')
-        time.sleep(1.1)                 # the stamp is second-resolution
+        time.sleep(1.1)                 # The stamp counts seconds.
         backup.save('g', p, into=self.store)
         runs = backup.runs('g', into=self.store)
         self.assertEqual(2, len(runs))
@@ -157,7 +159,8 @@ class Runs(Temp):
 
 class Moving(Temp):
     def test_a_moved_file_leaves_the_game_folder(self):
-        # BMS's axismapping.dat has to be GONE for the game to rebuild it.
+        # Falcon BMS's `axismapping.dat` has to be GONE before the game
+        # rebuilds it.
         p = self.file('axismapping.dat', 'binary')
         _dir, saved = backup.save('bms', p, into=self.store, move=True)
         self.assertFalse(os.path.exists(p))
@@ -171,8 +174,8 @@ class Moving(Temp):
         where, saved = backup.save('bms', p, into=self.store, move=True,
                                    when=when)
         self.assertFalse(os.path.exists(p), 'it still had to leave')
-        # save() answers None for a run it never had to make; this one moved
-        # a file, so there is a directory.
+        # `save()` answers None for a run it never had to make. This one
+        # moved a file, so there is a directory.
         assert where is not None
         self.assertEqual('first',
                          self.read(os.path.join(where, 'axismapping.dat')))
@@ -204,9 +207,9 @@ class Where(Temp):
             os.path.expanduser('~')))
 
     def test_the_flag_lands_on_the_name_every_writer_reads(self):
-        # Six writers pass `args.backup_dir` straight through. Renaming the
-        # flag here breaks all of them at once, with an AttributeError a long
-        # way from the cause.
+        # Six writers pass `args.backup_dir` straight through. The flag
+        # renamed here breaks all six at once, with an AttributeError a
+        # long way from the cause.
         import argparse
         p = argparse.ArgumentParser()
         action = backup.add_argument(p, 'x4')

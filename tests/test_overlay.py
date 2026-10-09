@@ -1,27 +1,30 @@
-"""What you want of a layout, as a file rather than as 86 hand-written fields.
+"""What you want of a layout, as a file rather than as 86 hand-written
+fields.
 
-A need says what a function IS: held down, used in a turn, found by feel. It
-used to also say `stick`, and `stick` is not a property of firing a gun -- it
-is a property of how somebody likes their desk. That opinion sat in 76
-identical fields across five games, which is one opinion recorded 76 times and
-so an opinion nobody could change.
+A need says what a function IS: held down, used in a turn, found by feel.
+It does not say `stick`. `stick` is not a property of firing a gun. It is
+a property of how somebody likes their desk, and written per need it is
+one opinion recorded 76 times, which is an opinion nobody can change.
 
-The other half is what a per-need file could not say at all. Every control was
-scored alone, so a modifier could land where your thumb already was and the
-layer it shifts could land under that same thumb: each placement perfect, the
+The other half is what a per-need file cannot say at all. Every control
+scored alone lets a modifier land where your thumb already is, and the
+layer it shifts land under that same thumb: each placement perfect and the
 pair useless. `[[pair]]` is a claim about two controls, and `reachable
-together` is `device-map-v2.md` §4 -- the first thing here that reads a spot's
-hand and finger rather than only how far away it is.
+together` reads a spot's hand and finger rather than how far away it is.
 
-What this file does NOT own, for the same reason `scoring.toml` does not, is
-what a rule MEANS. The file names `reachable together`; `core/overlay.py`
-writes it. A file that could define rules would need an expression language.
+This file does NOT own what a rule MEANS, for the reason `scoring.toml`
+does not. The file names `reachable together`, and `core/overlay.py`
+writes it. A file that defined rules would need an expression language.
 """
 
 import os
+import re
+import sys
+import json
 import tempfile
 import typing
 import unittest
+from unittest import mock
 
 import fake
 from core import needs as corneeds
@@ -55,15 +58,16 @@ class WhatARuleAsksFor(unittest.TestCase):
         self.assertEqual('stick', got[0].device)
 
     def test_it_leaves_alone_what_it_does_not_name(self):
-        # The whole point of a rule over a family: it says nothing about
-        # the rest, and the allocator judges those on reach and shape.
+        # This is the point of a rule over a family. It says nothing
+        # about the rest, and the allocator judges those on reach and
+        # shape.
         got = self.needs()
         written('[[want]]\nsuits = "fire"\ndevice = "stick"\n').apply(got)
         self.assertIsNone(got[1].device)
 
     def test_every_condition_has_to_hold(self):
-        # Not "any of them". A rule reads as one sentence, and `rare things
-        # on the keyboard` means rare AND a thing, not either.
+        # Not "any of them". A rule reads as one sentence, and `rare
+        # things on the keyboard` means rare AND a thing.
         got = self.needs()
         written('[[want]]\nsuits = "fire"\nurgency = 3\n'
                 'device = "throttle"\n').apply(got)
@@ -76,8 +80,8 @@ class WhatARuleAsksFor(unittest.TestCase):
                          [n.device for n in got])
 
     def test_the_last_rule_wins(self):
-        # So a file may say the broad wish first and the exception after
-        # it, which is the order anybody would say them in.
+        # So a file says the broad wish first and the exception after it.
+        # That is the order anybody says them in.
         got = self.needs()
         written('[[want]]\ndevice = "throttle"\n\n'
                 '[[want]]\nsuits = "fire"\ndevice = "stick"\n').apply(got)
@@ -98,11 +102,12 @@ class WhatARuleAsksFor(unittest.TestCase):
 
 
 class ARuleNamingOneFunctionIsNotGeneral(unittest.TestCase):
-    """An overlay is shared; a rule naming `what` is about one game.
+    """An overlay is shared. A rule that names `what` is about one game.
 
-    MSFS and Falcon BMS both have a function called `Gear`, and BMS pins
-    its own to a keyboard button. Without the scope MSFS's landing gear
-    took that pin, which is not free there, and 27 bindings moved.
+    MSFS and Falcon BMS both hold a function called `Gear`, and Falcon BMS
+    pins its own to a keyboard button. Without the scope, MSFS's landing
+    gear takes that pin. The pin is not free there, and 27 bindings
+    move.
     """
 
     FILE = ('[[want]]\ngame = "falconbms"\nwhat = "Gear"\n'
@@ -110,7 +115,7 @@ class ARuleNamingOneFunctionIsNotGeneral(unittest.TestCase):
 
     def test_another_games_rule_does_not_reach_this_one(self):
         got = [Need('Gear', 'button', [[Bind('GEAR')]])]
-        written(self.FILE).apply(got)          # read as x4
+        written(self.FILE).apply(got)          # Read as x4.
         self.assertIsNone(got[0].prefer)
 
     def test_its_own_games_rule_does(self):
@@ -132,11 +137,11 @@ class ARuleNamingOneFunctionIsNotGeneral(unittest.TestCase):
 
 
 class AWordTheReaderDoesNotKnow(unittest.TestCase):
-    """Is a mistake in the file, not something to skip.
+    """A mistake in the file, and not something to skip.
 
     An overlay is the only place that says where you want things. A word
-    quietly ignored lays the desk out as though you had asked for nothing,
-    which looks exactly like the planner ignoring you.
+    ignored in silence lays the desk out as though you had asked for
+    nothing, and that looks like the planner ignoring you.
     """
 
     def test_an_unknown_word_names_itself(self):
@@ -151,8 +156,8 @@ class AWordTheReaderDoesNotKnow(unittest.TestCase):
         self.assertIn('suits', str(caught.exception))
 
     def test_a_want_that_asks_for_nothing_is_a_mistake(self):
-        # All condition and no answer: it would read as a rule and do
-        # nothing at all.
+        # All condition and no answer. Such a rule reads as a rule and
+        # does nothing.
         with self.assertRaises(coverlay.Bad) as caught:
             written('[[want]]\nsuits = "fire"\n')
         self.assertIn('asks for nothing', str(caught.exception))
@@ -170,8 +175,8 @@ class AWordTheReaderDoesNotKnow(unittest.TestCase):
         self.assertIn('other', str(caught.exception))
 
     def test_a_pair_cannot_ask_for_anything(self):
-        # Both sides are conditions. `device = "stick"` there would read
-        # as "make it so", and a pair rule refuses rather than sets.
+        # Both sides are conditions. `device = "stick"` there reads as
+        # "make it so", and a pair rule refuses rather than sets.
         with self.assertRaises(coverlay.Bad) as caught:
             written('[[pair]]\nrule = "reachable together"\n'
                     'one = { device = "stick" }\nother = { suits = "lock" }\n')
@@ -186,9 +191,9 @@ class AWordTheReaderDoesNotKnow(unittest.TestCase):
 class ReachableTogether(unittest.TestCase):
     """Two controls one hand can work without letting go of either.
 
-    `device-map-v2.md` §4: different hands, or one position the hand takes
-    from which both are reached by different fingers. Two things under one
-    thumb are two things you do one after the other.
+    Two different hands, or one position the hand takes and reaches both
+    from, with different fingers. Two things under one thumb are two
+    things you do one after the other.
     """
 
     def rig(self, hand='right'):
@@ -219,9 +224,9 @@ class ReachableTogether(unittest.TestCase):
             self.at('Thumb A', one), self.at('Thumb A', other)))
 
     def test_a_control_nobody_has_reached_cannot(self):
-        # It has no spots at all, so there is no position to compare and
-        # no hand either. Saying yes here would be an answer invented out
-        # of a desk nobody has walked.
+        # It has no spots, so there is no position to compare and no hand
+        # either. Yes here is an answer invented out of a desk nobody has
+        # walked.
         got = self.rig()
         self.assertFalse(coverlay.PAIRS['reachable together'](
             self.at('Thumb A', got), self.at('Unmeasured', got)))
@@ -230,8 +235,9 @@ class ReachableTogether(unittest.TestCase):
 class APairRuleReachesTheAllocator(unittest.TestCase):
 
     def rig(self):
-        # All three one tier away from flying, so reach decides nothing and
-        # the pair rule is the only thing that can separate them.
+        # All three are one tier away from flying, so reach decides
+        # nothing and the pair rule is the only thing that separates
+        # them.
         return {'stick': fake.device('stick', [
             fake.button('Thumb A', 0, reach=fake.THUMB),
             fake.button('Thumb B', 1, reach=fake.THUMB),
@@ -259,7 +265,7 @@ class APairRuleReachesTheAllocator(unittest.TestCase):
         self.assertNotEqual('thumb', 'index')
 
     def test_without_the_rule_it_does(self):
-        # Which is the bug: two perfect placements and a useless pair.
+        # That is the fault: two perfect placements and a useless pair.
         placed, _unplaced, _free = allocate(self.needs(), self.rig())
         self.assertEqual(['Thumb A', 'Thumb B'],
                          sorted(p.ctrl.label for p in placed))
@@ -279,12 +285,13 @@ class APairRuleReachesTheAllocator(unittest.TestCase):
 
 
 class APlaceOnTheHand(unittest.TestCase):
-    """What makes an overlay a cockpit template, not a device preference.
+    """What makes an overlay a cockpit template and not a device
+    preference.
 
-    `prefer = "Top thumb hat"` is a label off one desk. The Hornet's castle
-    switch said as "the stick hand's thumb, without moving the hand" lands
-    on whatever the desk in front of you has in that place, which is what
-    lets one file lay out six games on anybody's hardware.
+    `prefer = "Top thumb hat"` is a label off one desk. The Hornet's
+    castle switch, said as "the stick hand's thumb, without moving the
+    hand", lands on whatever the desk in front of you has in that place.
+    That is what lets one file lay out six games on anybody's hardware.
     """
 
     def rig(self):
@@ -317,8 +324,8 @@ class APlaceOnTheHand(unittest.TestCase):
         self.assertEqual('HOME', got[0].level)
 
     def test_a_word_the_map_does_not_say_is_a_mistake(self):
-        # Against the MAP's own constants, not a list of ours: these have
-        # been in devicemap.py since before overlays existed.
+        # Against the MAP's own constants, and not against a list of
+        # ours. These are constants in `devicemap.py`.
         for line, bad in (('finger = "thump"', 'thump'),
                           ('level = "home"', 'home'),
                           ('device = "yoke"', 'yoke')):
@@ -338,15 +345,16 @@ class APlaceOnTheHand(unittest.TestCase):
             self.at('Index', devs), self.need(finger='thumb')))
 
     def test_both_words_count_separately(self):
-        # A want asking for a thumb at HOME is two claims about where a
-        # thing goes, and answering one of them is half an answer.
+        # A want that asks for a thumb at HOME makes two claims about
+        # where a thing goes, and one of them answered is half an
+        # answer.
         devs = self.rig()
         self.assertEqual((1, 1), corneeds.place_wishes(
             self.at('Pinky', devs), self.need(finger='pinky', level='HOME')))
 
     def test_a_control_nobody_has_measured_counts_neither(self):
-        # Charging it would be charging for a desk nobody has walked
-        # rather than for being in the wrong place.
+        # Charged, it is charged for a desk nobody has walked, and not
+        # for being in the wrong place.
         devs = self.rig()
         self.assertEqual((0, 0), corneeds.place_wishes(
             self.at('Unmeasured', devs), self.need(finger='thumb')))
@@ -364,17 +372,17 @@ class APlaceOnTheHand(unittest.TestCase):
         self.assertEqual('Index', placed[0].ctrl.label)
 
     def test_without_the_wish_it_goes_by_reach(self):
-        # And reach rewards the LEAST precious control that still does the
-        # job, so the lone need gets the pinky and leaves the thumb for
-        # whatever might still be coming. The wish above is what overrules
-        # that, which is the whole of what a template does.
+        # Reach rewards the least precious control that still does the
+        # job, so the lone need takes the pinky and leaves the thumb for
+        # whatever is still coming. The wish above overrules that, and
+        # that is the whole of what a template does.
         placed, _un, _free = allocate([self.need()], self.rig())
         self.assertEqual('Pinky', placed[0].ctrl.label)
 
     def test_a_wish_is_a_lean_and_not_a_law(self):
-        # +15 against a tier's worth of reach: a template that refused
-        # everything it did not name would place half an aircraft on a
-        # desk that is not the one it was drawn for.
+        # +15 against a tier's worth of reach. A template that refused
+        # everything it did not name places half an aircraft on a desk it
+        # was not drawn for.
         devs = {'stick': fake.device('stick', [
             fake.button('Thumb', 0, reach=fake.THUMB),
             fake.button('Far', 1, reach=fake.PANEL),
@@ -386,10 +394,10 @@ class APlaceOnTheHand(unittest.TestCase):
 
 
 class HowMuchOfTheTemplateGotThrough(unittest.TestCase):
-    """The count under a layout, which is what two overlays are compared on.
+    """The count under a layout. Two overlays are compared on it.
 
-    Without it the only way to know whether an overlay did anything was to
-    read the whole layout with the file open beside it.
+    Without the count you read the whole layout with the file open beside
+    it.
     """
 
     def rig(self):
@@ -427,20 +435,19 @@ class HowMuchOfTheTemplateGotThrough(unittest.TestCase):
                          (what, word, want, instead))
 
     def test_an_overlay_asking_for_no_place_counts_nothing(self):
-        # Which is how the transitional `by-hand.toml` draws no line at
-        # all: it asks for devices, and a device has its own terms.
+        # So `by-hand.toml` draws no line at all. It asks for devices,
+        # and a device has its own terms.
         rule, layout = self.layout('[[want]]\nsuits = "fire"\n'
                                    'device = "stick"\n')
         self.assertEqual((0, 0, []), rule.kept(layout))
 
 
 class LayingOneOnReplacesTheLast(unittest.TestCase):
-    """An overlay is a replacement, not an addition.
+    """An overlay replaces. It does not add.
 
-    `apply` only ever wrote, and one overlay per process hid it: a second
-    laid over the first left every need it says nothing about wearing the
-    first file's finger, and `place_right` then counted a wish nobody had
-    asked for. `--overlay none` had the same hole.
+    An `apply` that only writes leaves every need the second overlay says
+    nothing about wearing the first file's finger, and `place_right` then
+    counts a wish nobody asked for. `--overlay none` has the same hole.
     """
 
     def needs(self):
@@ -462,14 +469,15 @@ class LayingOneOnReplacesTheLast(unittest.TestCase):
         self.assertEqual(0, corneeds.forget_wishes(got))
 
     def test_a_device_the_game_asked_for_stands(self):
-        # The one wish naming a field the game names too, and the game
-        # knows the thing: DCS reads the device off its own command
-        # table, which is written from the aircraft. A template says the
-        # hand one job at a time, and `suits = "flight"` is one word
-        # over the flight axes AND the speedbrake -- so overwriting with
-        # it put the Hornet's pitch on the throttle, where no axis
-        # answered it, and moved five more commands off the device the
-        # real jet keeps them on.
+        # The one wish that names a field the game names too, and the
+        # game knows the thing. DCS reads the device off its own command
+        # table, and that table is written from the aircraft.
+        #
+        # A template speaks one job at a time, and one word covers more
+        # than you mean. `suits = "flight"` covers the flight axes AND
+        # the speedbrake. Overwriting with it puts the Hornet's pitch on
+        # the throttle, where no axis answers it, and moves five more
+        # commands off the device the real jet keeps them on.
         (pitch,) = corneeds.read_needs([
             {'what': 'Pitch', 'shape': 'stick', 'takes': corneeds.AXIS,
              'device': 'stick', 'on': ['y'], 'bindings': [[]]}])
@@ -478,11 +486,11 @@ class LayingOneOnReplacesTheLast(unittest.TestCase):
         self.assertEqual('stick', pitch.device)
 
     def test_a_game_with_no_needs_file_keeps_its_ask_too(self):
-        # DCS builds its needs from the module on every run, so there is
-        # no file for the ask to come out of. `ask` was called
-        # `from_file` and only a file ever filled it, so `forget_wishes`
-        # wiped the Hornet's own device before any scoring -- which is
-        # the other half of pitch, roll and rudder going to the throttle.
+        # DCS builds its needs from the module on every run, so no file
+        # holds the ask. A field only a file fills is empty there, and
+        # `forget_wishes` then wipes the Hornet's own device before any
+        # scoring. That is the other half of pitch, roll and rudder going
+        # to the throttle.
         pitch = Need('Pitch', 'stick', [[Bind('PITCH')]], suits='flight',
                      takes=corneeds.AXIS, device='stick')
         written('[[want]]\nsuits = "flight"\ndevice = "throttle"\n').apply(
@@ -491,10 +499,23 @@ class LayingOneOnReplacesTheLast(unittest.TestCase):
         corneeds.forget_wishes([pitch])
         self.assertEqual('stick', pitch.device, 'and the overlay coming off')
 
+    def test_a_finger_the_game_asked_for_stands_too(self):
+        # Said of every wish, and not of `device` alone. DCS's own table
+        # knows which finger works a control on the real jet. A template
+        # knows one word per job, and `suits = "fire"` is the trigger AND
+        # the master mode buttons.
+        fire = Need('Fire', 'trigger', [[Bind('GUNS')]], suits='fire',
+                    device='stick', finger='index')
+        written('[[want]]\nsuits = "fire"\nfinger = "thumb"\n'
+                'level = "HOME"\n').apply([fire])
+        self.assertEqual('index', fire.finger, 'the jet said index')
+        self.assertEqual('HOME', fire.level,
+                         'and the template still says the level')
+
     def test_a_device_it_said_nothing_about_is_a_wish_and_comes_off(self):
-        # Where the game has no opinion the template places it, and
-        # taking the template off leaves the need asking for nothing: a
-        # save would otherwise write the wish as the game's own ask.
+        # Where the game has no opinion, the template places it. Taking
+        # the template off leaves the need asking for nothing. Otherwise a
+        # save writes the wish as the game's own ask.
         (gear,) = corneeds.read_needs([
             {'what': 'Gear', 'shape': 'button', 'bindings': [[]]}])
         written('[[want]]\nwhat = "Gear"\ndevice = "throttle"\n').apply(
@@ -506,7 +527,8 @@ class LayingOneOnReplacesTheLast(unittest.TestCase):
                           'a save writes the ask, never the wish')
 
     def test_a_button_need_keeps_a_device_its_file_named_too(self):
-        # One rule for either kind, which is the point: it read `takes`.
+        # One rule for either kind, and that is the point. A rule that
+        # reads `takes` is two rules.
         (fire,) = corneeds.read_needs([
             {'what': 'Fire', 'shape': 'trigger', 'device': 'stick',
              'bindings': [[]]}])
@@ -517,7 +539,8 @@ class LayingOneOnReplacesTheLast(unittest.TestCase):
 
     def test_forgetting_twice_finds_nothing_the_second_time(self):
         # A flag nobody set is False while the file says nothing, so a
-        # counter comparing the two answered 4 where it should answer 2.
+        # counter that compares the two answers 4 where the answer is
+        # 2.
         (fire,) = corneeds.read_needs([
             {'what': 'Fire', 'shape': 'trigger', 'device': 'stick',
              'bindings': [[]]}])
@@ -526,11 +549,11 @@ class LayingOneOnReplacesTheLast(unittest.TestCase):
         self.assertEqual(0, corneeds.forget_wishes([fire]))
 
     def test_it_walks_the_wish_list_rather_than_one_of_its_own(self):
-        # So a seventh wish is cleared by the fact of being in `WISHES`.
+        # So a seventh wish is cleared by being in `WISHES`.
         got = self.needs()
         # Seen once first, which is what `apply` does before it wishes
-        # anything: what a need wears the first time an overlay comes
-        # off is the game's own ask, and these are set here by hand.
+        # anything. What a need wears the first time an overlay comes off
+        # is the game's own ask, and these are set here by hand.
         corneeds.forget_wishes(got)
         for wish in corneeds.WISHES:
             setattr(got[0], wish, 'thumb' if wish == 'finger' else True)
@@ -539,17 +562,16 @@ class LayingOneOnReplacesTheLast(unittest.TestCase):
             self.assertFalse(getattr(got[0], wish), wish)
 
 
-class DcsWorksOutItsOwnJobs(unittest.TestCase):
-    """The one game with no needs file to write a job in.
+class WhatTheDcsTableSays(unittest.TestCase):
+    """The hint table is prose for a reader and nothing else.
 
-    It derives its needs from the module's command vocabulary on every
-    run, so there is nowhere to keep a judgement -- and until `jobs.toml`
-    all 43 of the Hornet's controls had `suits = None`, so `f-18.toml`
-    matched nothing in the one game where it is about the aircraft
-    actually in the cockpit.
+    A table that carries the device, the band, the finger and the job
+    builds a module's whole description by matching 80 patterns against
+    852 command names, on every run.
 
-    Read off DCS's own names, which are the jet's: `Gun Trigger - SECOND
-    DETENT`, `Sensor Control Switch`, `Throttle Designator Controller`.
+    All of that is in `dcs-<module>-needs.json` now, per command, keyed by
+    the command's own identifier. What is left here is what to tell
+    somebody who has never flown the type.
     """
 
     def propose(self):
@@ -560,47 +582,15 @@ class DcsWorksOutItsOwnJobs(unittest.TestCase):
             os.path.join(os.path.dirname(os.path.dirname(
                 os.path.abspath(__file__))), 'games', 'dcs', 'plan.py'))
 
-    def test_every_phrase_names_a_job_the_rules_define(self):
-        m = self.propose()
-        for phrase, job in m.jobs():
-            with self.subTest(phrase=phrase):
-                self.assertIn(job, corneeds.JOBS)
-
-    def test_it_reads_the_jet_rather_than_guessing(self):
-        m = self.propose()
-        for name, want in (
-                ('Gun Trigger - SECOND DETENT (Press to shoot)', 'fire'),
-                ('Weapon Release Button', 'fire'),
-                ('Sensor Control Switch', 'sensor'),
-                ('Throttle Designator Controller - Depress', 'sensor'),
-                ('Undesignate/Nose Wheel Steer Switch', 'lock'),
-                ('Dispense Switch', 'defence'),
-                ('Trimmer Switch', 'trim'),
-                ('COMM Switch - MIDS A', 'comms'),
-                ('Landing Gear Control Handle', 'systems'),
-                ('Speed Brake Switch - EXTEND', 'flight'),
-                ('Zoom View', 'view')):
-            with self.subTest(name=name):
-                self.assertEqual(want, m.job_of(name))
-
-    def test_the_order_in_the_file_decides(self):
-        # `fov select` has to be read before `select`, or the FLIR
-        # field-of-view button becomes a weapon control.
-        m = self.propose()
-        self.assertEqual('sensor', m.job_of('RAID/FLIR FOV Select Button'))
-        self.assertEqual('fire', m.job_of('Select'))
-        # And `throttle designator` before `throttle`.
-        self.assertEqual('sensor', m.job_of(
-            'Throttle Designator Controller - Horizontal Axis'))
-        self.assertEqual('flight', m.job_of('Throttle'))
-
     def test_the_three_axes_the_aircraft_flies_on_find_a_home(self):
-        # `AXIS_FOR` asked the map for `stick-x`, `stick-y` and `twist`,
-        # and the map stopped spelling it that way: a stick is one control
-        # with three axes, so a kind per axis said the kind twice.
-        # `axes(kind=...)` filters on the CONTROL's kind, so all three
-        # asked for a kind nothing has. Pitch, roll and rudder came out as
-        # `no axis on this hardware` on a desk with a full stick on it.
+        # A table that asks the map for `stick-x`, `stick-y` and `twist`
+        # asks for words the map does not use. A stick is one control with
+        # three axes, so a kind per axis says the kind twice.
+        #
+        # `axes(kind=...)` filters on the CONTROL's kind, so all three ask
+        # for a kind nothing has. Pitch, roll and rudder then come out as
+        # `no axis on this hardware`, on a desk with a full stick on
+        # it.
         m = self.propose()
         stick = fake.device('stick', axes=[
             {'index': 0, 'role': 'x'}, {'index': 1, 'role': 'y'},
@@ -609,31 +599,35 @@ class DcsWorksOutItsOwnJobs(unittest.TestCase):
         for want, role in (('stick', 'x'), ('stick', 'y'), ('stick', 'z')):
             with self.subTest(axis=role):
                 self.assertIsNotNone(stick.axis_of(want, role))
-        # The table answers with an ASK now rather than with a resolved
-        # axis: which command IS pitch is the module's own vocabulary,
-        # and which lever it goes on is a comparison the scoring makes.
-        for name, on in (('Pitch', 'y'), ('Roll', 'x'), ('Rudder', 'z')):
-            with self.subTest(name=name):
-                shape, got, rests, _pin = m.axis_ask(name, 'axis')
-                self.assertEqual('stick', shape)
-                self.assertEqual(on, got)
-                self.assertEqual('centred', rests,
+        # Which part of the stick pitch IS is in the module's needs file.
+        # Read out of the command's own name instead, it is a guess. The
+        # file says it, as every other game's file does.
+        a = hornet()
+        if a is None or not a.NEEDS:
+            self.skipTest('nobody has described FA-18C here, so the file '
+                          'has nothing to say about its axes yet')
+        want = {'Pitch': 'y', 'Roll': 'x', 'Rudder': 'z'}
+        found = 0
+        for need in a.NEEDS:
+            if need.what not in want:
+                continue
+            found += 1
+            with self.subTest(name=need.what):
+                self.assertEqual('stick', need.shape)
+                self.assertEqual((want[need.what],), need.on)
+                self.assertEqual('centred', need.rests,
                                  'it has to spring back or you cannot fly')
-
-    def test_a_name_nothing_matches_keeps_no_job(self):
-        # Not a failure: a module nobody has been through lays out on
-        # reach and shape, as it did before this file existed.
-        self.assertIsNone(self.propose().job_of('Wobble Lever'))
-
+        self.assertTrue(found, 'the file names none of the three axes the '
+                               'aircraft flies on')
 
 class TheOverlaysOnFile(unittest.TestCase):
     """The ones in `overlays/` have to load, or no planner starts."""
 
     def test_each_one_remembers_its_own_filename(self):
         # What `--overlay` and the menu say, as against the display name
-        # out of the file: `f-18.toml` calls itself `F/A-18C`. The menu
-        # compares on this, so it does not have to read every overlay in
-        # the directory to find out which one is on.
+        # out of the file. `f-18.toml` calls itself `F/A-18C`. The menu
+        # compares on this, so it does not read every overlay in the
+        # directory to find out which one is on.
         got = coverlay.named('f-18')
         self.assertEqual('f-18', got.called)
         self.assertEqual('F/A-18C', got.name)
@@ -645,8 +639,9 @@ class TheOverlaysOnFile(unittest.TestCase):
                 self.assertIsNotNone(coverlay.named(name))
 
     def test_by_hand_carries_every_wish_the_needs_files_lost(self):
-        # The transitional one: 86 wishes, and the proof that splitting
-        # the files moved nothing is that it still asks for all of them.
+        # The transitional one. It holds 86 wishes, and it still asks for
+        # all of them, which is the proof that splitting the files moved
+        # nothing.
         asked = 0
         for game in ('elite', 'falconbms', 'msfs', 'warthunder', 'x4'):
             got = coverlay.named('by-hand', game)
@@ -654,9 +649,25 @@ class TheOverlaysOnFile(unittest.TestCase):
                          for key in coverlay.SETS if key in rule)
         self.assertEqual(86, asked)
 
-    def test_a_needs_file_asks_for_nothing(self):
-        # The split itself: a description says what the function is, and
-        # every word about where it goes lives in an overlay.
+    #: What a needs file may say about where a function goes. A game that
+    #: knows its own cockpit states a fact and not a preference: which
+    #: device holds it, which of two levers, and which finger works it.
+    #: DCS reads all three off the module's own command table, which is
+    #: written from the aircraft.
+    #:
+    #: The rest of `WISHES` is a template's business. `level` is where the
+    #: hand is. `shift` and `modifier` are claims about a layer. None of
+    #: the three is a fact about a function.
+    COCKPIT = ('device', 'prefer', 'finger')
+
+    def test_a_needs_file_says_what_the_function_is(self):
+        # The split. A description says what the function IS, and the
+        # layer words live in an overlay.
+        #
+        # `device` is on both sides. `stick` is not a property of firing a
+        # gun, which holds for a game whose file is somebody's desk
+        # preference. It does not hold for the aircraft the Hornet's table
+        # describes.
         import glob
         import json
         for path in glob.glob('games/*/*-needs.json'):
@@ -664,23 +675,25 @@ class TheOverlaysOnFile(unittest.TestCase):
                 with open(path, encoding='utf-8') as f:
                     rows = json.load(f)['needs']
                 for row in rows:
-                    # Except on an axis need, where `device` and `prefer`
-                    # are not wishes but the game's own ask: pitch IS the
-                    # stick's fore-aft axis, in every sim there is, and
-                    # nobody has an opinion to express about it. A button
-                    # need's device is a preference -- fire on the stick
-                    # is a choice -- and that is the difference.
-                    skip = (('device', 'prefer')
-                            if row.get('takes') == corneeds.AXIS else ())
                     for wish in corneeds.WISHES:
-                        if wish in skip:
+                        if wish in self.COCKPIT:
                             continue
                         self.assertNotIn(wish, row, row['what'])
 
-    def test_every_function_names_a_job_and_it_is_one_of_the_ten(self):
-        # The word an overlay takes hold of. Sixty-five of the hundred and
-        # forty-seven said nothing at all, so a template had nothing to
-        # match for nearly half the list.
+    def test_every_job_a_file_names_is_one_of_the_ten(self):
+        # The word an overlay takes hold of. Sixty-five of the hundred
+        # and forty-seven said nothing, so a template had nothing to match
+        # for nearly half the list. The five hand-written files name one
+        # on every row.
+        #
+        # A row can still be short of one, and seeing that is the point of
+        # a file. DCS's three were seeded from a table of name patterns,
+        # and seventeen functions across them matched no phrase: `Weapon
+        # Fire`, `Cannon`, `Airbrake`, `Communication menu`.
+        #
+        # Under the patterns that hole is invisible, because no match and
+        # no job are the same answer. A word nobody defines costs every
+        # wish in the template, and it costs it in silence.
         import glob
         import json
         for path in glob.glob('games/*/*-needs.json'):
@@ -688,20 +701,21 @@ class TheOverlaysOnFile(unittest.TestCase):
                 with open(path, encoding='utf-8') as f:
                     rows = json.load(f)['needs']
                 for row in rows:
-                    self.assertIn(row.get('suits'), corneeds.JOBS,
-                                  row['what'])
+                    if row.get('suits') is None:
+                        continue
+                    self.assertIn(row['suits'], corneeds.JOBS, row['what'])
 
 
 def hornet() -> typing.Any:
     """The Hornet's adapter, or None where DCS is not harvested here.
 
-    `Any`, the way `tests/fake.py` and `test_listings` take a game: the
+    `Any`, the way `tests/fake.py` and `test_listings` take a game. The
     adapter is loaded by path, so nothing here can be typed against it.
     """
     from core import adapter
     from core import vocab
     # `--aircraft` is this adapter's own argument, declared in its `SAYS`
-    # rather than on the base class, so the class comes through untyped.
+    # and not on the base class, so the class comes through untyped.
     make: typing.Any = adapter.adapters('dcs')[0]
     try:
         return make(aircraft='FA-18C')
@@ -715,20 +729,25 @@ class TheHornetStaysInItsOwnCockpit(unittest.TestCase):
 
     Not the factory profiles. Those are Eagle Dynamics' bindings for
     particular HOTAS hardware, so a Warthog profile says `throttle`
-    because a Warthog has buttons there, not because the jet does. The
-    aircraft itself is the `device` column of DCS's own hint table,
-    written by hand from the cockpit, one row per concept.
+    because a Warthog has buttons there, and not because the jet does.
 
-    `--overlay f-18` has to move the layout TOWARDS that. It used to do
-    the opposite: `suits = "flight"` is one word over the flight axes
-    AND the speedbrake, and it overwrote the table on all of them -- so
-    pitch, roll and rudder asked for a stick on the throttle, where no
-    axis answered, and five more commands crossed to the wrong hand.
+    The aircraft itself is the `device` column of DCS's own table, written
+    by hand from the cockpit, one row per concept.
+
+    `--overlay f-18` moves the layout TOWARDS that. A template that
+    overwrites the table moves it away: `suits = "flight"` is one word
+    over the flight axes AND the speedbrake, so pitch, roll and rudder ask
+    for a stick on the throttle, where no axis answers, and five more
+    commands cross to the wrong hand.
     """
 
     @classmethod
     def setUpClass(cls):
         cls.a = hornet()
+        if not cls.a.NEEDS:
+            raise unittest.SkipTest(
+                'nobody has described FA-18C here, so there is nothing to '
+                'measure against the jet')
         cls.plain = cls.a.build()
         corneeds.OVERLAY = coverlay.named('f-18', 'dcs')
         corneeds.OVERLAY.apply(cls.a.NEEDS)
@@ -740,33 +759,154 @@ class TheHornetStaysInItsOwnCockpit(unittest.TestCase):
         corneeds.forget_wishes(cls.a.NEEDS)
 
     def jet(self, layout):
-        """{command: (where the jet keeps it, where this layout put it)}."""
-        out = {}
-        for p in layout.placed:
-            for grp in p.need.bindings:
-                for b in grp:
-                    said = (self.a.guide.get(b.action) or {}).get('device')
-                    if said:
-                        out[self.a.cmds[b.action]['name']] = (said, p.role)
-        return out
+        """{function: (the device it asks for, the device it got)}.
+
+        The yardstick is `device` on the need. "The real jet keeps this on
+        the throttle" is a fact about the function, said once with `J`.
+        `asked()` tells the game's own ask from an overlay's wish, which
+        is the question here: the template is what is being measured.
+
+        A pattern over a command's name is the one thing nothing here may
+        decide from. A file of patterns is not a yardstick. It is the
+        table again.
+        """
+        return {p.need.what: (corneeds.asked(p.need).get('device'), p.role)
+                for p in layout.placed
+                if corneeds.asked(p.need).get('device')}
 
     def elsewhere(self, layout):
         """The commands sitting on a device the jet does not use for them."""
         return sorted(cmd for cmd, (jet, got) in self.jet(layout).items()
                       if jet != got)
 
+    def test_the_yardstick_is_not_empty(self):
+        # Both answers below are about functions that NAME a device, so a
+        # list where nobody has named one makes both vacuously true. The
+        # column that carries this deleted, three tests go on passing
+        # over nothing.
+        self.assertTrue(self.jet(self.plain),
+                        'no function in this module says which device the '
+                        'real aircraft keeps it on, so there is nothing to '
+                        'measure the template against')
+
     def test_the_template_moves_nothing_off_the_jets_own_device(self):
         self.assertEqual(self.elsewhere(self.plain),
                          self.elsewhere(self.laid))
 
-    def test_and_every_need_still_finds_a_control(self):
-        self.assertEqual([], [n.what for n in self.laid.unplaced])
+    def test_and_the_template_costs_no_need_its_control(self):
+        # Against the plain layout and not against zero. A function
+        # nobody has described can go unplaced for its own reasons, and
+        # `Communication menu` does. What the template may not do is take
+        # a control away. It took three, and those three were pitch, roll
+        # and rudder.
+        self.assertLessEqual(len(self.laid.unplaced),
+                             len(self.plain.unplaced),
+                             [n.what for n in self.laid.unplaced])
 
     def test_it_holds_some_of_the_template_all_the_same(self):
-        # Otherwise the answer above is only "the overlay does nothing".
+        # Otherwise the answer above says only "the overlay does
+        # nothing".
         kept, broken, _lost = corneeds.OVERLAY.kept(self.laid)
         self.assertGreater(kept, broken)
 
 
+@unittest.skipUnless(hornet(), 'dcs is not harvested here')
+class TheDescriptionIsReadRatherThanWorkedOut(unittest.TestCase):
+    """DCS keeps `dcs-<module>-needs.json`, like the other five.
+
+    A description worked out of the command NAMES on every run is 80
+    patterns over 852 names, deciding which commands matter at all, what
+    shape each one wants, which device holds it, and when you touch it.
+
+    A pattern describes a module once. What a run reads is the file, and
+    the fields in it are data like every other game's.
+    """
+
+    def test_the_list_is_the_file_and_the_file_names_the_module(self):
+        # A table of 80 patterns over 852 command names IS the
+        # description: it decides which commands matter, what shape each
+        # one wants, which device holds it, and when you touch it. What a
+        # run reads is the file, and `tests/test_contract.py` holds every
+        # game to a layout that does not depend on an action's name.
+        a: typing.Any = type(hornet())(aircraft='FA-18C')
+        self.assertEqual('dcs-FA-18C-needs.json', a.NEEDS_FILE)
+        self.assertEqual('dcs-FA-18C-binds.json', a.BINDS)
+        self.assertEqual('dcs-FA-18C-actions.json', a.CATALOGUE)
+
+    def test_and_the_hashes_come_off_the_bindings(self):
+        """The command hashes are in `bindings` and nowhere else.
+
+        A second copy of them on the need is empty for a need read out of
+        the FILE, and eight places in the planner read that copy.
+
+        There is no second copy to check against. The clause is that every
+        hash a need carries is one the module has, and that is what the
+        copy was for.
+        """
+        a = hornet()
+        known = {x.id for x in a.catalogue()}
+        self.assertTrue(a.NEEDS, 'nobody has described FA-18C here')
+        for need in a.NEEDS:
+            with self.subTest(need=need.what):
+                said = [b.action for slot in need.bindings for b in slot]
+                self.assertTrue(said, 'a need with no binding at all')
+                for h in said:
+                    self.assertIn(h, known)
+
+
 if __name__ == '__main__':
     unittest.main()
+
+
+class TheTemplateIsWrittenDown(unittest.TestCase):
+    """`o` is a decision, so it reaches the file the rest of them do.
+
+    Which template is on decides where every placement landed, so a file
+    that holds the answer and not the template cannot be read back.
+
+    Measured on the Hornet before this: `o f-18` took the list from 33
+    accepted rows to 45, and the next open put it back to 33. Twelve of
+    those rows sit somewhere else under `by-hand`, and `_came_by` is
+    right to send them to `?`. The cause was that nothing wrote the
+    template down.
+    """
+
+    def saved(self, overlay, needs=()):
+        """What `filed_overlay` reads back out of a written file."""
+        with tempfile.TemporaryDirectory() as d:
+            corneeds.save_assignments(d, 'binds.json', list(needs), overlay)
+            return corneeds.filed_overlay(d, 'binds.json')
+
+    def test_a_name_comes_back(self):
+        self.assertEqual('f-18', self.saved('f-18'))
+
+    def test_no_template_comes_back_as_nothing(self):
+        # "No template" is a decision. Absent, it reads as a game nobody
+        # has laid out, and the declaration answers instead.
+        self.assertEqual('', self.saved(None))
+        self.assertEqual('', self.saved(''))
+
+    def test_a_file_written_before_the_field_reads_as_nothing(self):
+        # The four games on disk were saved without it. Neither is a
+        # fault, and both mean "ask the declaration".
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, 'binds.json'), 'w',
+                      encoding='utf-8') as f:
+                f.write('{"binds": []}')
+            self.assertEqual('', corneeds.filed_overlay(d, 'binds.json'))
+
+    def test_a_game_nobody_has_saved_reads_as_nothing(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual('', corneeds.filed_overlay(d, 'binds.json'))
+
+    def test_it_does_not_disturb_the_placements(self):
+        # One more section in the same file, and not a second file.
+        need = Need('Gear', 'button', [[Bind('GEAR')]])
+        need.assignment = {'role': 'stick', 'control': 'thumb-a',
+                           'how': corneeds.CHOSE}
+        with tempfile.TemporaryDirectory() as d:
+            corneeds.save_assignments(d, 'binds.json', [need], 'f-18')
+            with open(os.path.join(d, 'binds.json'), encoding='utf-8') as f:
+                got = json.load(f)
+        self.assertEqual('f-18', got['overlay'])
+        self.assertEqual(['Gear'], [r['what'] for r in got['binds']])

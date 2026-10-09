@@ -1,12 +1,13 @@
-"""Hardware that does not exist, built out of the classes that describe the
-hardware that does.
+"""Hardware that does not exist, built out of the classes that describe
+the hardware that does.
 
-`devicemap.Device` takes a parsed TOML table, not a path, so a synthetic device
-is a dict away -- and it comes back a real `Device`, with the real `Group`, the
-real `bindable_buttons` and the real `direction()`. That matters more than it
-sounds: a hand-written stub of a control is a second opinion about what a
-control IS, and the moment it drifts the tests pass against a fiction. The only
-thing invented here is the hardware.
+`devicemap.Device` takes a parsed TOML table and not a path, so a
+synthetic device is a dict away. It comes back a real `Device`, with the
+real `Group`, the real `bindable_buttons` and the real `direction()`.
+
+That matters. A hand-written stub of a control is a second opinion about
+what a control IS, and the moment it drifts the tests pass against a
+fiction. The only thing invented here is the hardware.
 
     stick = device('stick', [
         hat4('Thumb hat', 0, reach=THUMB, push=4),
@@ -14,13 +15,11 @@ thing invented here is the hardware.
     ])
     placed, unplaced, free = allocate(NEEDS, {'stick': stick})
 
-Button numbers are given explicitly rather than counted for you, because a test
-about which button a binding landed on should say which buttons exist.
+The button numbers are given, not counted for you. A test about which
+button a binding landed on says which buttons exist.
 
-The reach strings are the map's own, copied from the captures: `reach_tier`
-matches on substrings ('thumb', 'index finger', 'without releasing', 'needs
-letting go'), so inventing new wording here would quietly test a tier nobody
-ships.
+The reaches are the map's own words, copied from the captures. New wording
+here tests a tier nobody ships.
 """
 
 import os
@@ -37,21 +36,21 @@ devicemap = devmap.load()
 
 # ---------------------------------------------------------------- the reaches
 #
-# A reach is now a place a hand can be, not a sentence: `(level, finger)`,
-# which the map turns into a tier by how far the level is from flying.
-# The wording used to be matched on substrings, so a typo here quietly
-# tested a tier nobody shipped.
+# A reach is a place a hand can be and not a sentence. It is `(level,
+# finger)`, and the map turns that into a tier by how far the level is
+# from flying. Matched on substrings instead, a typo here tests a tier
+# nobody ships.
 
-#: tier 0 -- the hand where it lives, thumb or index finger
+#: Tier 0. The hand where it lives, thumb or index finger.
 THUMB = ('HOME', 'thumb')
 INDEX = ('HOME', 'index')
-#: tier 1 -- another finger stretching, the hand still on the grip
+#: Tier 1. Another finger stretching, with the hand still on the grip.
 PINKY = ('EXTENDED', 'pinky')
 MIDDLE = ('EXTENDED', 'middle')
-#: tier 3 -- let go of the device to get there
+#: Tier 3. Let go of the device to get there.
 PANEL = ('OFF', '')
-#: nobody has measured it. Not tier 2: there is no answer at all, and a
-#: number here would be one nothing could tell from a measured one.
+#: Nobody has measured it. Not tier 2: there is no answer at all, and a
+#: number here is one nothing can tell from a measured one.
 UNSAID = None
 
 
@@ -60,8 +59,8 @@ UNSAID = None
 def unwired(label, buttons=(), **kw):
     """Buttons the firmware reports with nothing behind them.
 
-    A `status` and not a `kind`: a row that is not a control has no shape,
-    and the word used to sit in `kind` where nothing could check it.
+    A `status` and not a `kind`. A row that is not a control has no shape,
+    and the word in `kind` is one nothing can check.
     """
     return control('', label, buttons, status='unwired', **kw)
 
@@ -71,9 +70,9 @@ def control(kind, label, buttons=(), names=(), dirs=(), stages=(),
             transient=(), reach=UNSAID, **kw):
     """One entry for a device's `[[group]]` table.
 
-    `reach` is not a field on a control any more -- where a thing ended up
-    is a fact about the desk -- so it is carried here and `device` lays it
-    out as the desk's `access`.
+    `reach` is not a field on a control. Where a thing sits is a fact
+    about the desk, so it is carried here and `device` lays it out as the
+    desk's `access`.
     """
     said = list(names or dirs or stages or positions)
     latching = kind in devicemap.LATCHING
@@ -94,7 +93,7 @@ def control(kind, label, buttons=(), names=(), dirs=(), stages=(),
     g = {'kind': kind, 'label': label, 'id': devicemap.slug(label),
          'states': states}
     g.update(kw)
-    g['reach'] = reach                  # lifted out again by `device`
+    g['reach'] = reach                  # `device` lifts this out again.
     return g
 
 
@@ -142,10 +141,9 @@ def ministick(label, first_axis, push=None, **kw):
 def axis(index, hid='X', rest='centred', role='', **kw):
     """One axis, in the map's own fields.
 
-    `kind` and `label` are NOT among them: what an axis is and what it is
-    called belong to the control that carries it, and `Device.__init__`
-    fills them in from there. This helper took both and the map had
-    stopped accepting either.
+    `kind` and `label` are NOT among them. What an axis is, and what it is
+    called, belong to the control that carries it, and `Device.__init__`
+    fills them in from there.
     """
     a = {'index': index, 'hid': hid, 'rest': rest, 'role': role}
     a.update(kw)
@@ -182,7 +180,7 @@ def desk(hand='', *devices):
     """A `Profile` laying these controls out under one hand.
 
     A reach is a fact about the desk, so it cannot be built into the
-    device: two devices in one test have to be under the same desk or
+    device. Two devices in one test are under the same desk, or
     `compatible` has no pair of hands to compare.
     """
     said = []
@@ -192,8 +190,8 @@ def desk(hand='', *devices):
             if c.get('reach') is None:
                 continue
             level, finger = c['reach']
-            # No `part`: the map works out which piece of rig a hand is
-            # on from the device and the level.
+            # No `part`. The map works out which piece of the desk a
+            # hand is on, from the device and the level.
             access[c['id']] = [{'level': level, 'finger': finger}]
         said.append({'slug': slug, 'hand': hand, 'access': access})
     return devicemap.Profile({'name': 'a desk in a test', 'device': said},

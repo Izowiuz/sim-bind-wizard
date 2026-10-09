@@ -1,43 +1,40 @@
 """Walk the need list, fill it from the plan or by hand, then write it.
 
-Every planner could already print its layout and write all of it. Between
-those two there was nothing: no way to take most of a plan and not the rest,
-and nothing at all to do about a need the allocator could not place.
+A planner can print its layout and write all of it. This is the screen
+between those two: a way to take most of a plan and not the rest, and a
+way to answer a need the allocator could not place.
 
-DCS has had the answer since before this core existed -- `run_table` in its
-capture wizard -- and this is that table, generalised. Its shape is worth
-stating, because none of it is the obvious design:
+The table's shape, because none of it is the obvious design:
 
-    the rows are NEEDS, not bindings   a need with nothing on it is still a
-                                       row, and clearing one leaves it where
-                                       it was rather than making it vanish
+    the rows are NEEDS, not bindings   a need with nothing on it is still
+                                       a row. Clearing one leaves it
+                                       where it was.
     three states, not two              (unset) · proposed · yours
-    proposing fills the GAPS only      it never overwrites what you chose,
-                                       which is what makes "propose all" safe
-                                       to press at any moment
-    choosing it yourself means yours   no confirming a decision you just made
-    `?` is advisory, not a filter      a proposal you never looked at is still
-                                       written; the mark says you did not
-                                       check it, not that it is switched off
+    proposing fills the GAPS only      it never overwrites what you
+                                       chose, and that is what makes
+                                       "propose all" safe at any moment
+    choosing it yourself means yours   you do not confirm a decision you
+                                       just made
+    `?` is advisory, not a filter      a proposal you never looked at is
+                                       still written. The mark says you
+                                       did not check it.
 
-DCS keeps that state in a results file, one dict per binding with a `proposed`
-flag. Nothing else in the family has such a file, and inventing one per game
-to get a review screen would be five more formats to keep in step -- so here
-it lives for the length of the session, keyed by the need.
+The state lives for the length of the session, keyed by the need. A file
+per game to hold it instead is five more formats to keep in step.
 
-Rows group by urgency, not by device. Urgency belongs to the need, so a row
-keeps its place when you clear it or move it to another control; grouping by
-device made rows jump between sections while you worked.
+Rows group by urgency and not by device. Urgency belongs to the need, so
+a row keeps its place when you clear it or move it to another control.
+Grouped by device, rows jump between sections while you work.
 
-A game supplies only what the core cannot know: `describe(placement)` turning
-its own payload into `[(which part of the control, what it does)]`.
+A game supplies what the core cannot know: `describe(placement)`, which
+turns its own payload into `[(which part of the control, what it does)]`.
 
     review.run(layout, 'X4 Foundations', 'VIRPIL',
                describe=..., write=lambda layout: ...)
 
-`write` is handed a `Layout` narrowed to the needs that ended up with a
-control, which is why `Layout.but()` exists and why the two adapters that
-derived their writer's tables inside `build()` had to stop.
+`write` takes a `Layout` narrowed to the needs that ended up with a
+control. That is what `Layout.but()` is for, and it is why a writer
+cannot derive its tables inside `build()`.
 """
 
 import collections
@@ -50,30 +47,55 @@ import textwrap
 
 from core import actions as cactions
 from core import capture as ccapture
+from core import devmap
 from core import needs as corneeds
 from core import overlay as coverlay
 from core import solvers as csolvers
 from core import tui as ctui
 
-#: What a row can be. `MINE` covers both "I confirmed the proposal" and "I
-#: chose this myself": once you have looked at it, where it came from stops
-#: mattering.
+#: What a row can be. `MINE` covers "I confirmed the proposal" and "I
+#: chose this myself". Once you have looked at it, where it came from
+#: stops mattering.
 #:
-#: They are also tone names in `core.tui.Theme`, which is not a coincidence
-#: and is worth keeping: a state can be handed straight to the theme, so the
-#: row for a need and the control that need sits on cannot drift apart.
+#: These are also tone names in `core.tui.Theme`, and that is worth
+#: keeping: a state is handed straight to the theme, so the row for a
+#: need and the control that need sits on cannot drift apart.
 UNSET, PROPOSED, MINE = 'unset', 'proposed', 'mine'
 
 MARK = {UNSET: ' ', PROPOSED: '?', MINE: '+'}
 
-#: What each mark means, in words, once. Three screens name them -- the
-#: help, the map's legend and the detail panel -- and between them they had
-#: grown three phrasings of the same three states.
+#: Nothing said. One word for an empty field on the form and for a row
+#: with nothing on it, so the two read the same way.
+NOTHING = '(none)'
+
+#: Drawn on a row whose `suits` field is empty.
 #:
-#: "proposed, not accepted" rather than "not checked": `+` is reached by
-#: accepting (`c`) or by assigning it yourself, so `?` is the absence of a
-#: decision, not of a glance. Neither gates anything -- `placements()` hands
-#: a writer both -- so these say what you have not done, not what will not
+#: This is not a fourth placement state. A row carries two marks and they
+#: are independent of each other:
+#:
+#:     MARK[...]   where the row sits.  ' ' nothing, '?' proposed, '+' yours
+#:     BARE        what the function is.  drawn while `suits` is empty
+#:
+#: So a row can carry `+` and `·` at once. The control is settled and the
+#: job is not. `J` fills the job and `Z` proposes one. `p`, `P`, `c`, `C`,
+#: `↵`, `l` and `x` all work on the control, so none of them takes this
+#: mark off, and a row the plan just filled keeps it.
+#:
+#: `suits` is read by an overlay, which matches on the job. A bare row is
+#: therefore a row no `[[want]]` rule can reach, and it is placed on reach
+#: and shape alone.
+BARE = '·'
+
+#: What each mark means, in words, once. Three screens name them: the
+#: help, the map's legend and the detail panel. Three phrasings of the
+#: same three states is what they grow otherwise.
+#:
+#: "proposed, not accepted" rather than "not checked". `+` is reached by
+#: accepting with `c`, or by assigning the row yourself, so `?` is the
+#: absence of a decision and not of a glance.
+#:
+#: Neither mark gates anything. `placements()` hands a writer both. So
+#: these words say what you have not done. They do not say what will not
 #: happen.
 MARK_SAID = {
     MINE: 'assigned by you',
@@ -86,111 +108,124 @@ class Row:
     """One line of the table. `kind` decides what it answers to."""
 
     def __init__(self, kind, text, need=None, group=None):
-        self.kind = kind        # 'head' | 'need' | 'bind' | 'gap'
+        self.kind = kind        # 'head', 'need', 'bind' or 'gap'.
         self.text = text
         self.need = need
-        #: on a heading, the group's real name. `text` is upper-cased for
-        #: the screen and `rename` needs what the needs actually hold --
-        #: 'IN A TURN' is not it.
+        #: On a heading, the group's real name. `text` is raised to
+        #: capitals for the screen, and `rename` needs what the needs
+        #: hold. 'IN A TURN' is not it.
         self.group = group
 
     @property
     def selectable(self):
-        # A heading is a thing you act on: `R` renames it. It used to be
-        # the one thing on the screen you could read and not touch, so a
-        # category was renamed by standing on one of its members.
+        # A heading is a thing you act on: `R` renames it. Unreachable,
+        # it leaves a category renamed by standing on one of its
+        # members.
         #
-        # A `bind` is the answer to the row above it, not a thing you put
-        # anywhere, and a `gap` answers nothing -- moving skips both.
+        # A `bind` is the answer to the row above it and not a thing you
+        # put anywhere. A `gap` answers nothing. Moving skips both.
         return self.kind in ('need', 'head')
 
 
 class Review:
     """What the reviewer has decided so far.
 
-    All of it works without a terminal, and every key the screen answers to is
-    one call on this -- which is the point of keeping them apart.
+    All of this works without a terminal, and every key the screen
+    answers to is one call on this object. That is the point of keeping
+    the two apart.
     """
 
     def __init__(self, layout, title, subtitle='', describe=None,
                  paths=(), catalogue=(), source='', save=None,
                  harvest=None, drop=None, rules=None, rebuild=None,
-                 game='', offers=()):
+                 game='', offers=(), add=None, guess=None):
         self.title = title
-        #: `bind-wizard.py`'s own word for this game. Only the overlay needs
-        #: it: a rule naming `what` belongs to one game, and two games can have
-        #: a function of the same name wanting different things.
+        #: `bind-wizard.py`'s own word for this game. Only the overlay
+        #: needs it. A rule that names `what` belongs to one game, and two
+        #: games can hold a function of the same name that wants
+        #: different things.
         self.game = game
         self.subtitle = subtitle
         self.describe = describe or (lambda p: [])
-        #: [(label, path)] the game supplies: where it found the install, the
-        #: file it will write. The core cannot know these -- every game hides
-        #: its config somewhere else -- and a screen that will overwrite a
-        #: file should say which file.
+        #: [(label, path)] the game supplies: where it found the install,
+        #: and the file it writes. The core cannot know these, because
+        #: every game hides its configuration somewhere else. A screen
+        #: that overwrites a file says which file.
         self.paths = list(paths)
         #: Everything the game accepts a binding for. The list below is
-        #: what somebody asked for out of it -- 147 rows across the family
-        #: against 5856 actions -- and until this was passed in, nothing
-        #: on this screen knew the rest existed.
+        #: what somebody asked for out of it: 147 rows across the family
+        #: against 5856 actions. Without this, nothing on this screen
+        #: knows the rest is there.
         self.catalogue = list(catalogue)
-        #: Which file it was read out of. The vocabulary screen puts it on
-        #: its top bar: after `h` re-reads the game or `D` forgets it, the
-        #: question that screen raises is which file is in front of you.
+        #: Which file it was read out of. The vocabulary screen puts this
+        #: on its top bar. After `h` reads the game again, or `D` forgets
+        #: it, that screen has to say which file is in front of you.
         self.source = source
         #: How the judgements get written down. A game that derives its
-        #: needs has none, and the screen has to cope rather than raise:
-        #: it cannot help, and taking the review down over it would be
-        #: worse than saying so.
+        #: needs has none, and the screen copes rather than raises. It
+        #: cannot help, and taking the review down over it is worse than
+        #: saying so.
         self.save = save
         #: Something has changed and the files do not have it yet. The
-        #: frame says `unsaved` while this is true and `s` clears it, the
-        #: way the capture wizard in sim-device-map does.
+        #: frame says `unsaved` while this is true, and `s` clears it.
+        #: The capture wizard in sim-device-map works the same way.
         self.unsaved = False
         #: What that something was, for the box that asks about it.
         self.since = ''
-        #: Reading the game again, and forgetting what was read. Both are
-        #: `bind-wizard.py`'s own verbs run as subprocesses; neither can touch
-        #: the judgements, because `drop` walks `CACHE` and the judgements are
-        #: deliberately not in it.
+        #: Reading the game again, and forgetting what was read. Both run
+        #: `bind-wizard.py`'s own verbs as subprocesses. Neither can touch
+        #: the judgements: `drop` walks `CACHE`, and the judgements are
+        #: not in it.
         self.harvest = harvest
         self.drop = drop
         #: The scoring this game plays by: the core's, with the game's
-        #: over the top. The screen that explains the allocator has to
-        #: read the same set the allocator ran on, or it is explaining
-        #: somebody else's -- DCS tightens a band.
+        #: over the top. The screen that explains the allocator reads the
+        #: same set the allocator ran on. Any other set explains somebody
+        #: else's run, and DCS tightens a band.
         self.rules = rules or corneeds.RULES
         self.status = ''
-        #: what `f` narrowed the action level to. Matched against the
-        #: need's own name, not against what it binds: the question `f`
-        #: answers is "where is the row for X".
+        #: What `f` narrowed the action level to. Matched against the
+        #: need's own name and not against what it binds. `f` answers
+        #: "where is the row for X".
         self.filter = ''
-        #: whether `h` is showing what sits under each action. Off to
-        #: start with: the list of what a game can do is the thing you come
-        #: here to read, and a plan that binds two actions to a button puts
-        #: two lines under every row of it before you have asked.
+        #: Whether `h` is showing what sits under each action. Off to
+        #: start with. The list of what a game can do is what you come
+        #: here to read, and a plan that binds two actions to a button
+        #: puts two lines under every row before you have asked.
         self.show_binds = False
-        #: Laying the whole thing out again, for `o`. A game that cannot
-        #: -- there is none, but the argument is optional like `save` --
-        #: says so rather than raising: the screen cannot help, and taking
-        #: the review down over it would be worse than a sentence.
+        #: Laying the whole thing out again, for `o`. The argument is
+        #: optional, like `save`. A game that cannot do this says so
+        #: rather than raising: the screen cannot help, and taking the
+        #: review down over it is worse than a sentence.
         self.rebuild = rebuild
+        #: How a game puts one of its own actions on its own list. A
+        #: promoted need the screen holds and the adapter does not is a
+        #: need the next allocation drops. `o` is one such allocation,
+        #: and this screen asking for a plan again is another.
+        self.add = add
+        #: What the program proposes about a function, on `Z`.
+        #: `Adapter.guess` fills `device` and `suits`, and it marks both
+        #: in `Need.guessed`. So a second run leaves what you corrected
+        #: alone.
+        self.guess = guess
         #: [(key, word, what it does)] a game puts on this screen itself.
-        #: DCS lays out one aircraft module at a time and had a menu of
-        #: its own to change which; a game that needs a key of its own
-        #: asks for one rather than keeping a whole screen for it.
+        #: DCS lays out one aircraft module at a time, and `t` changes
+        #: which. A game that needs a key of its own asks for one here
+        #: rather than keeping a whole screen for it.
         #:
-        #: The callable is handed this Review and the `tui`, and answers
-        #: with a line for the status bar, or with an Adapter to reopen on --
-        #: changing module is a different list of needs, a different
-        #: store and a different kneeboard, so it is a new screen rather
-        #: than a redraw of this one.
+        #: The callable takes this Review and the `tui`. It answers with a
+        #: line for the status bar, or with an Adapter to reopen on.
+        #: Changing module means a different list of needs, a different
+        #: store and a different kneeboard, so that is a new screen and
+        #: not a redraw of this one.
         taken = set(''.join(re.findall(r"'([a-zA-Z])'", _loop_keys())))
         for key, word, _do in offers:
             if key in taken:
-                # Loudly, at construction: a game's key that the family
-                # already holds either shadows the family's or is dead,
-                # and which of the two depends on the order of an elif
-                # chain. Neither is a thing to find out at the keyboard.
+                # Loudly, at construction. A game's key that the family
+                # already holds either shadows the family's key or is
+                # dead, and which of the two depends on the order of an
+                # elif chain. Neither is a thing to find out at the
+                # keyboard.
                 raise ValueError(
                     f'{key!r} ({word}) is a key this screen already '
                     f'answers to. Taken: {", ".join(sorted(taken))}')
@@ -200,33 +235,34 @@ class Review:
     def relay(self, layout):
         """Take a freshly allocated layout and show that instead.
 
-        Four fields and nothing else, which is why this is small enough to
-        call from a keystroke: the `Need` objects are the same objects, so
-        everything you decided about them -- what you chose, what you
-        accepted, what you filed them under, what job they do -- is on
-        them already and comes through untouched.
-
+        Four fields and nothing else, which is why a keystroke can call
+        this. The `Need` objects are the same objects, so everything you
+        decided about them is on them already and comes through
+        untouched: what you chose, what you accepted, what you filed them
+        under, and what job they do.
         """
         self.layout = layout
-        #: what the planner worked out, per need. A need it could not place
-        #: has none, and `p` on that row has nothing to offer.
+        #: What the planner worked out, per need. A need it could not
+        #: place has none, and `p` on that row has nothing to offer.
         self.plan = {p.need: p for p in layout.placed}
-        #: every need the planner was asked about, placed or not --
-        #: axes among them, in the same list, because an axis is a
-        #: function wanting an input like every other row here.
+        #: Every need the planner was asked about, placed or not. The
+        #: axes are in the same list, because an axis is a function that
+        #: wants an input like every other row here.
         self.needs = ([p.need for p in layout.placed]
                       + list(layout.unplaced))
-        #: where each need sits now, and how it got there
+        #: Where each need sits now, and how it got there.
         self.at = {n: self.plan.get(n) for n in self.needs}
-        # Who put it there, not merely that something did. A placement
-        # the allocator made from `yours` carries `how == 'yours'`, so a
-        # choice you made last week opens green and the planner's opens
-        # purple -- which is what the mark was always for and what it
-        # could not do while it was rebuilt from nothing each time.
+        for n in self.needs:
+            self._recorded(n)
+        # Who put it there, and not merely that something did. A
+        # placement the allocator made from `yours` carries `how ==
+        # 'yours'`, so a choice you made last week opens green and the
+        # planner's opens purple. That is what the mark is for, and a
+        # mark rebuilt from nothing each time cannot do it.
         self.mark = {n: self._came_by(n) for n in self.needs}
 
     def desk(self):
-        """Which rig this layout is for, or '' if nothing says."""
+        """Which desk this layout is for, or '' where nothing says."""
         return corneeds.desk_of(self.layout)
 
     def overlay(self):
@@ -234,7 +270,8 @@ class Review:
         return corneeds.OVERLAY
 
     def wishes(self):
-        """(kept, of how many) for the overlay on, or None if none is."""
+        """(kept, of how many) for the overlay on, or None where none
+        is."""
         got = corneeds.OVERLAY
         if got is None:
             return None
@@ -242,11 +279,11 @@ class Review:
         return kept, kept + broken
 
     def lay_over(self, name):
-        """Put an overlay on -- or take every one off -- and plan again.
+        """Put an overlay on, or take every one off, and plan again.
 
-        Returns a line. The count comes with it, because "f-18 is on" and
-        "f-18 got 19 of its 34 wishes" are different facts and only the
-        second one tells you whether to keep it.
+        Returns a line. The count comes with it. "f-18 is on" and "f-18
+        got 19 of its 34 wishes" are different facts, and the second one
+        tells you whether to keep it.
         """
         if self.rebuild is None:
             return 'This game cannot make a layout again.'
@@ -258,6 +295,12 @@ class Review:
         if got is None:
             corneeds.forget_wishes(self.needs)
         self.relay(self.rebuild())
+        # Which template is on is a decision like any other on this
+        # screen, and `s` is what keeps one. Unmarked, the frame says
+        # nothing, `q` offers nothing, and the choice lasts until you
+        # quit.
+        self.touched(f'laid out to {got.called}' if got
+                     else 'laid out to no template')
         if got is None:
             return 'No overlay. The reach and the shape decide.'
         kept, of = self.wishes() or (0, 0)
@@ -285,19 +328,48 @@ class Review:
         return (f'You put this row on {pool[j][1].label}. '
                 'A different row has this control.')
 
+    def _recorded(self, need):
+        """Write down a placement the PROGRAM made, as `SOLVED`.
+
+        `dump_assignments` writes the rows a need carries an assignment
+        for, and nothing else. A proposal carried none, so a save after
+        `P` wrote a binds file with no rows in it while the screen held
+        42 placed. The file is supposed to answer "what is on my desk
+        right now", which is that function's own first line.
+
+        `SOLVED` is the word for it. `read_assignments` drops such a row,
+        so the next run scores from scratch rather than from wherever
+        this one stopped, and the `yours` pass takes `CHOSE` alone. What
+        the row buys is `stayed`, the term worth +20 that keeps a layout
+        from reshuffling, and a screen that can say what moved.
+
+        A decision of yours is never overwritten. `CHOSE`, `ACCEPTED` and
+        `CLEARED` are answers; this is a note about a proposal.
+        """
+        at = self.at[need]
+        if at is None:
+            return
+        if (need.assignment or {}).get('how') in (
+                corneeds.CHOSE, corneeds.ACCEPTED, corneeds.CLEARED):
+            return
+        need.assignment = {'role': at.role, 'control': at.ctrl.id,
+                           'how': corneeds.SOLVED}
+        if need.takes == corneeds.AXIS and at.slots:
+            need.assignment['axis'] = at.slots[0][0].index
+
     def _came_by(self, need):
         """Who put this where it is, as a mark.
 
-        The mark was rebuilt from nothing on every open -- anything placed
-        was `?` -- so an evening spent walking the list came back purple
-        and in the planner's order. It now reads what the placement says
-        about itself.
+        This reads what the placement says about itself. A mark rebuilt
+        from nothing on every open makes everything placed `?`, and an
+        evening spent walking the list comes back purple and in the
+        planner's order.
 
-        `accepted` is checked against WHERE it landed, not merely that it
-        landed: you said yes to a control, not to a row. If the desk or
-        the needs have changed since and the allocator has moved it, the
-        row goes back to `?`, which is the one moment the mark has
-        something to tell you.
+        `accepted` is checked against WHERE it landed, and not merely
+        that it landed. You said yes to a control, not to a row. Where
+        the desk or the needs have changed since and the allocator has
+        moved it, the row goes back to `?`. That is the one moment the
+        mark has something to tell you.
         """
         at = self.at[need]
         if at is None:
@@ -316,7 +388,7 @@ class Review:
     def counts(self):
         """(yours, proposed, unset), over every row that carries a mark.
 
-        The axes included, by being rows like any other.
+        The axes are included, by being rows like any other.
         """
         m = [self.mark[n] for n in self.needs]
         return m.count(MINE), m.count(PROPOSED), m.count(UNSET)
@@ -324,18 +396,17 @@ class Review:
     def binds(self, need):
         """[(part of the control, what it does)] -- the game's own answer.
 
-        `describe` is the adapter's hook and this is the only caller, so it
-        is also the only place that has to cope with a need sitting on
-        nothing.
+        `describe` is the adapter's hook and this is its only caller, so
+        this is the only place that copes with a need sitting on nothing.
         """
         p = self.at[need]
         return self.describe(p) if p is not None else []
 
     def where(self, need):
-        """The one-line answer to 'what is this on?'.
+        """The one-line answer to "what is this on?".
 
-        The lever's own label for an axis, not the control's: three of
-        the stick's axes are `Main stick` and only one of them is pitch.
+        The lever's own label for an axis, and not the control's. Three
+        of the stick's axes are `Main stick`, and one of them is pitch.
         """
         p = self.at[need]
         if p is None:
@@ -352,10 +423,9 @@ class Review:
     def turn_round(self, need):
         """Invert an axis, or stop. Returns a line.
 
-        The one thing about an axis you might want to change from a
-        screen: which end is which is a fact about your hardware and your
-        wrist, not about the game. DCS had this on its own screen and the
-        family had it nowhere.
+        This is the one thing about an axis you change from a screen.
+        Which end is which is a fact about your hardware and your wrist.
+        It is not a fact about the game.
         """
         if need.takes != corneeds.AXIS:
             return f'{need.what} is not an axis.'
@@ -377,9 +447,9 @@ class Review:
     def free(self):
         """[(role, control)] with every button still spare.
 
-        Worked out from what is assigned rather than read off the layout,
-        because clearing a need hands its control back and assigning one takes
-        a control the allocator had left over.
+        Worked out from what is assigned, and not read off the layout.
+        Clearing a need hands its control back, and assigning one takes a
+        control the allocator had left over.
         """
         busy = self.occupied()
         return [(role, ctrl)
@@ -391,9 +461,9 @@ class Review:
         """Free controls this need could live on.
 
         The shape and capacity tests `score()` makes, without the reach
-        tables: someone placing a thing by hand has already decided it is
-        worth the reach, and being told "nothing fits" when four controls do
-        would be the tool arguing with them.
+        tables. Somebody placing a thing by hand has decided it is worth
+        the reach. "Nothing fits" where four controls do is the tool
+        arguing with them.
         """
         return [(role, c) for role, c in self.free()
                 if c.kind in need.shapes
@@ -402,26 +472,27 @@ class Review:
     def who_has(self, role, ctrl):
         """Every need sitting on this control right now, in row order.
 
-        A list, and it answered with the first one it found. A control
-        carries more than the need that took it: the borrow pass hands a
-        leftover need one spare button of a control something else owns,
-        so X4's bottom thumb hat holds Weapon group AND three borrowed
-        needs. The map named one of the four and read as if the other
-        three were nowhere -- on the screen you open to find out what is
-        still spare. Thirteen controls across the five games are like
-        this.
+        A list, not the first one found. A control carries more than the
+        need that took it: the share pass hands a leftover need one spare
+        button of a control something else owns, so X4's bottom thumb hat
+        holds Weapon group AND three shared needs.
+
+        One name of the four reads as though the other three were
+        nowhere, on the screen you open to find out what is still spare.
+        Thirteen controls across the five games are like this.
         """
         return [need for need in self.needs
                 if (p := self.at[need]) is not None
                 and p.role == role and p.ctrl is ctrl]
 
     def why_not(self, need, role, ctrl):
-        """None if this need may go on this control, else the reason.
+        """None where this need may go on this control, else the reason.
 
-        The by-hand list can only offer what fits, so it never needs this.
-        Pressing a button can land anywhere -- on a lever, on a hat with too
-        few positions, on something another need already has -- and answering
-        "no" without saying why is the worst of the three.
+        The by-hand list offers only what fits, so it never needs this.
+
+        A press can land anywhere: on a lever, on a hat with too few
+        positions, or on something another need has. "No" with no reason
+        is the worst of the three answers.
         """
         if ctrl is None:
             return 'the device map does not have this button'
@@ -450,14 +521,13 @@ class Review:
     def took(self, need, role, button):
         """Assign from the input somebody moved, or say why not.
 
-        Everything that happens after `capture.wait_input` returns, in one
-        call with no terminal in it -- so the only part of pressing a control
-        that cannot be tested is reading the kernel, which two shipping
-        wizards already do with this same code.
+        Everything after `capture.wait_input` returns, in one call with no
+        terminal in it. So the only part of pressing a control that a test
+        cannot reach is reading the kernel.
 
-        `button` is an axis index where the need wants an axis: the
-        capture reads whichever kind the row is for, and one key means
-        one thing on every row.
+        `button` is an axis index where the need wants an axis. The
+        capture reads whichever kind the row is for, so one key means one
+        thing on every row.
         """
         if need.takes == corneeds.AXIS:
             dev = self.layout.devices.get(role)
@@ -472,23 +542,23 @@ class Review:
             if (self.mark[need] == MINE and (p := self.at[need]) is not None
                     and p.role == role and p.slots
                     and p.slots[0][0].index == button):
-                # Already yours and already this lever. Saying `unsaved`
-                # over a keystroke that changed nothing is how a save box
-                # comes up on the way out to somebody who has just saved
-                # -- and with a stick on the desk this is the easiest one
-                # to press by accident, because the lever you nudge is
-                # the one it is on.
+                # Already yours, and already this lever. `unsaved` over a
+                # keystroke that changed nothing brings a save box up on
+                # the way out, to somebody who has just saved. With a
+                # stick on the desk this is the easiest key to press by
+                # accident, because the lever you nudge is the one it is
+                # on.
                 return f'{need.what} is yours, and it is already here.'
             self.assign(need, role, ctrl, axis=button)
             return f'{need.what} -> {role}/{got.label}  (yours)'
         ctrl = self.control_at(role, button)
         no = self.why_not(need, role, ctrl)
         if no:
-            # `why_not` answers with a fragment: the control is the
-            # subject of it, and this puts the row's name in front.
+            # `why_not` answers with a fragment. The control is its
+            # subject, and this puts the row's name in front.
             return f'{need.what} cannot go there: {no}.'
-        # `why_not` answers 'not in the device map' first of all, so a
-        # control that got past it exists. Saying so is cheaper than
+        # `why_not` answers 'not in the device map' first, so a control
+        # that got past it exists. Saying so here is cheaper than
         # hoisting the check and keeping its sentence in two places.
         assert ctrl is not None
         p = self.assign(need, role, ctrl, button)
@@ -497,9 +567,9 @@ class Review:
             landed = p.slots[0][0]
             said += f' · {ctrl.direction(landed) or f"button {landed}"}'
             if landed != button:
-                said += (' — not where you pressed: that contact carries no '
-                         'binding' if button not in ctrl.bindable_buttons
-                         else ' — its own direction')
+                said += (', not where you pressed: that contact carries '
+                         'no binding' if button not in ctrl.bindable_buttons
+                         else ', its own direction')
         return f'{said}  (yours)'
 
     def devices(self):
@@ -509,36 +579,36 @@ class Review:
     def device_line(self):
         """`stick R-VPC Stick WarBRD-D · throttle L-VPC VMAX...`
 
-        A role is not a device. `devmap.by_role` keys on the map's `kind`, so
-        a second stick makes you choose between them with SIM_DEVICE_ROLES --
-        and once you have, a row reading "stick" no longer says which one you
-        chose. The header carries the answer so no row has to.
+        A role is not a device. `devmap.by_role` keys on the map's
+        `kind`, so a second stick makes you choose between the two with
+        SIM_DEVICE_ROLES. After that, a row reading "stick" does not say
+        which one you chose. The header carries the answer, so no row has
+        to.
         """
         return '   '.join(f'{role} {d.product}' for role, d in self.devices())
 
     def map_lines(self):
         """The device map as the review sees it, with what sits on each
-        control -- the answer to "is that really a hat, and what is on it".
+        control. It answers "is that really a hat, and what is on it".
 
-        `[(tone, text)]` rather than bare lines. The tone is the one thing
-        only this method knows, and naming it here is what keeps the two
-        screens honest: a control wears the state of the need on it, and
-        that state is the same word the table draws its row with.
+        `[(tone, text)]`, not bare lines. The tone is the one thing only
+        this method knows, and naming it here keeps the two screens
+        honest: a control wears the state of the need on it, and that
+        state is the word the table draws its row with.
 
-        Every control also carries the table's own `?`/`+` mark. Colour was
-        the only thing saying which controls were spoken for, and a colour
-        nobody has been taught is just some of the rows being a different
-        colour -- so the mark says it in text, the legend says what the mark
-        means, and the colour is left to do what it is good at.
+        Every control also carries the table's own `?` or `+` mark. An
+        unexplained colour is some of the rows being a different colour.
+        So the mark says it in text, the legend says what the mark means,
+        and the colour does what colour is good at.
 
-        The map comes first and the paths last. This is the screen you open
-        to find a spare control; nine lines of Proton prefix ahead of it is
-        what made it read like a newspaper.
+        The map comes first and the paths last. This is the screen you
+        open to find a spare control, and nine lines of Proton prefix
+        ahead of it make the screen read like a newspaper.
         """
         out = []
-        # What this layout is OF, before what is in it. The screen you
-        # open to ask "what am I actually working on" named neither the
-        # desk nor the overlay, and both decide where everything landed.
+        # What this layout is OF, before what is in it. You open this
+        # screen to ask what you are working on, and the desk and the
+        # overlay both decide where everything landed.
         out.append(('head', 'LAID OUT FOR'))
         said = [('desk', self.desk() or 'nothing says')]
         got = corneeds.OVERLAY
@@ -550,12 +620,12 @@ class Review:
                 said)
         out.append(('plain', ''))
         out.append(('head', 'MARKS'))
-        # The legend is three lines because a line carries one tone, and a
+        # The legend is three lines, because a line carries one tone. A
         # legend not drawn in the colours it explains explains nothing.
         for state in (MINE, PROPOSED, UNSET):
             out.append((state, f'  {MARK[state]} {MARK_SAID[state]}'))
-        # The number the REACH column prints. One line, because the column
-        # is ten characters and a phrase does not fit in ten characters.
+        # The number the REACH column prints. One line, because the
+        # column is ten characters wide and a phrase is longer.
         out.append(('plain', ''))
         out.append(('head', 'REACH'))
         for n in sorted(corneeds.REACH_MEANS):
@@ -572,9 +642,9 @@ class Review:
                                 f'{dev.n_axes} axes · {ids}'))
             out.append(('meta', f'    {_tilde(str(dev.path))}'))
             out.append(('plain', ''))
-            # Named columns. There were five of them and nothing saying
-            # which was which: `2,3,4` is a button list, and the only way
-            # to learn that was to work it out from the numbers.
+            # Named columns. Five unnamed ones say nothing about which is
+            # which: `2,3,4` is a button list, and the only way to learn
+            # that is to work it out from the numbers.
             out.append(('meta', f'    {"KIND":10} {"CONTROL":24} '
                                 f'{"BUTTONS":16} {"REACH":10} ON IT'))
             for ctrl in dev.groups():
@@ -585,14 +655,15 @@ class Review:
                 if ctrl.axes:
                     parts.append('ax' + ','.join(str(a) for a in ctrl.axes))
                 btns = ' '.join(x for x in parts if x)
-                # Carrying something -> that need's state, mark and colour
-                # alike, which is exactly how the table draws it. Free and
-                # bindable -> plain, because a spare control is the normal
-                # case and colouring the normal case says nothing. Bindable
-                # by nothing -> as dim as the ids above it.
-                # The first one's mark and colour. They can differ -- one
-                # accepted, one still proposed -- and a row carries one
-                # tone, so the names say the rest.
+                # Carrying something: that need's state, mark and colour
+                # alike, which is how the table draws it. Free and
+                # bindable: plain, because a spare control is the normal
+                # case and colouring the normal case says nothing.
+                # Bindable by nothing: as dim as the ids above it.
+                # The first one's mark and colour. Two needs on one
+                # control can differ, with one accepted and one still
+                # proposed, and a row carries one tone. The names say the
+                # rest.
                 state = self.mark[held[0]] if held else None
                 tone = state or ('plain' if ctrl.bindable else 'meta')
                 on = (' · '.join(n.what for n in held) if held
@@ -606,10 +677,10 @@ class Review:
         if self.paths:
             out.append(('plain', ''))
             out.append(('head', 'WHERE'))
-            # Each path on its own lines: a Proton prefix is 120 characters
-            # before it says anything, and a truncated path answers nothing.
-            # Shortened at the home directory, which is 14 of them and the
-            # one part a reader already knows.
+            # Each path on its own lines. A Proton prefix is 120
+            # characters before it says anything, and a truncated path
+            # answers nothing. Shortened at the home directory, which is
+            # 14 of those characters and the part a reader knows.
             for label, path in self.paths:
                 out.append(('subhead', f'  {label}'))
                 out.extend(('meta', f'    {ln}')
@@ -621,9 +692,8 @@ class Review:
     def placements(self):
         """Every need that ended up with a control.
 
-        Proposed and yours alike: the `?` says you did not check it, not that
-        it is off -- the same call DCS makes, whose generator has never
-        filtered on the flag either.
+        Proposed and yours alike. The `?` says you did not check it. It
+        does not say the row is off.
         """
         return [self.at[n] for n in self.needs if self.at[n] is not None]
 
@@ -636,12 +706,17 @@ class Review:
     def propose(self, need):
         """Put the planner's suggestion on this need.
 
-        A row you cleared has no suggestion to put back: the allocator is
-        told to leave it alone, so the last plan has nothing for it. So
-        the clear is forgotten first and the game lays itself out again --
-        otherwise `x` on a saved row could only be undone by assigning
-        the thing by hand, and the key that says it restores a proposal
-        would answer that there is none.
+        This moves the CONTROL. It does not describe the function: a row
+        with no `suits` keeps its `·` after this, because the plan has no
+        opinion about what a thing is for. `J` answers that, and `Z`
+        proposes an answer.
+
+        A row you cleared has no suggestion to put back. The allocator is
+        told to leave a cleared row alone, so the last plan holds nothing
+        for it. The clear is therefore forgotten first and the game lays
+        itself out again. Without that, `x` on a saved row could only be
+        undone by hand, and the key that restores a proposal would answer
+        that there is none.
         """
         if (need.assignment or {}).get('how') == corneeds.CLEARED:
             need.assignment = None
@@ -659,14 +734,17 @@ class Review:
                     'there.')
         self.at[need] = p
         self.mark[need] = PROPOSED
+        self._recorded(need)
         return f'{need.what} -> {self.where(need)}  (proposed)'
 
     def propose_all(self):
         """Fill the gaps from the plan, and only the gaps.
 
-        Never touching what you chose is what makes this safe to press at any
-        time -- the same rule as DCS's `propose_into`, which skips anything
-        already bound.
+        This touches nothing you chose, so it is safe to press at any
+        time. A gap is a row with no control on it.
+
+        A gap is not a row with no description. This fills the control and
+        leaves `suits` alone, so a row it fills can still carry `·`.
         """
         done = 0
         for need in self.needs:
@@ -689,22 +767,21 @@ class Review:
     def _accept(self, need, at):
         """Mark it yours, and write down WHICH control you said yes to.
 
-        The control, not just the fact: you said yes to a home, not to a
-        row, so the day the allocator moves it the mark has to stop
+        The control, and not only the fact. You said yes to a home and
+        not to a row, so the day the allocator moves it the mark stops
         claiming you agreed.
         """
         self.mark[need] = MINE
         need.assignment = {'role': at.role, 'control': at.ctrl.id,
                       'how': corneeds.ACCEPTED}
         if need.takes == corneeds.AXIS and at.slots:
-            # Which axis of it, so that saying yes to a lever is saying
-            # yes to THAT lever -- the same claim `button` makes for a
-            # press.
+            # Which axis of it, so saying yes to a lever says yes to
+            # THAT lever. `button` makes the same claim for a press.
             need.assignment['axis'] = at.slots[0][0].index
 
     def confirm_all(self):
-        # One mark for the lot rather than one per need: nothing is
-        # written here, and `unsaved` does not get truer forty-five times.
+        # One mark for the lot, not one per need. Nothing is written
+        # here, and `unsaved` does not get truer forty-five times.
         todo = [(n, self.at[n]) for n in self.needs
                 if self.mark[n] == PROPOSED and self.at[n] is not None]
         for need, at in todo:
@@ -718,17 +795,19 @@ class Review:
     def clear(self, need):
         """Take this row's control off it, and write that down.
 
-        `how: cleared` rather than no row at all. The file holds what
-        sits where, so a row with nothing on it used to be a row the file
-        did not mention -- and a fact the file cannot hold is a fact that
-        does not survive `s`: clearing a proposal reported `nothing has
-        changed since the last save`, truthfully, and the next open
-        proposed it straight back. An empty row you chose is a decision
-        and now has somewhere to live.
+        `how: cleared`, rather than no row at all. The file holds what
+        sits where, so a row with nothing on it is a row the file does
+        not mention. A fact the file cannot hold does not survive `s`:
+        clearing a proposal then reports `nothing has changed since the
+        last save`, truthfully, and the next open proposes it straight
+        back.
+
+        An empty row you chose is a decision, and it has somewhere to
+        live.
         """
-        # Nothing on it and nothing of yours to forget -- or already
-        # cleared. Either way there is nothing to do, and saying there is
-        # would mark the files out of date over a row that did not move.
+        # Nothing on it and nothing of yours to forget, or cleared
+        # already. Either way there is nothing to do. Saying otherwise
+        # marks the files out of date over a row that did not move.
         if self.at[need] is None and (
                 not need.assignment
                 or need.assignment.get('how') == corneeds.CLEARED):
@@ -742,13 +821,12 @@ class Review:
     def clear_all(self):
         """Take the control off every row.
 
-        It used to drop the proposals and nothing else, on the argument
-        that a key which could undo an hour of your own decisions is one
-        you would stop pressing. That left it doing nothing at all on a
-        screen you had just saved -- everything there is yours, so there
-        was never a proposal to drop -- while the help said `unassign
-        this / every proposal` and the pair read as one key with two
-        scopes. It clears the lot; `s` is still what writes it.
+        Every row, and not the proposals alone. On a screen you have just
+        saved, everything is yours and there is no proposal to drop, so a
+        key that dropped only those would do nothing there while the help
+        offered it.
+
+        `s` is still what writes this.
         """
         drop = [need for need in self.needs
                 if self.at[need] is not None
@@ -761,28 +839,30 @@ class Review:
                 'now.' if n else 'Nothing is bound.')
 
     def assign(self, need, role, ctrl, button=None, slot=None, axis=None):
-        """Give a need a control by hand. Yours at once, with no confirming
-        step: you just chose it.
+        """Give a need a control by hand. Yours at once, with no
+        confirming step, because you just chose it.
 
-        `button` is the one actually pressed, when a press is what did this.
+        `button` is the button actually pressed, where a press did this.
 
-        `slot` says WHICH of the need's bindings that press was for, when
-        you are taking one direction of a hat rather than the hat. The
-        rest keep whatever they had, so a trim hat whose directions the
-        game names in another order can be put right one at a time
-        instead of re-taken whole and scrambled the same way again.
+        `slot` says WHICH of the need's bindings that press was for,
+        where you are taking one direction of a hat rather than the hat.
+        The rest keep what they had. So a trim hat whose directions the
+        game names in another order is put right one at a time, rather
+        than re-taken whole and scrambled the same way again.
         """
         was = self.at[need]
-        # Putting it back where it already was is not an override, and a
-        # panel saying "moved from Thumb button" about a binding ON the
-        # thumb button would be the screen arguing with the person reading
-        # it. `is` on the control rather than the label: two controls can
-        # share a label across devices, and the role is checked anyway.
+        # Putting it back where it already was is not an override. A
+        # panel that says "moved from Thumb button" about a binding ON
+        # the thumb button argues with the person reading it.
+        #
+        # `is` on the control and not on the label. Two controls can
+        # share a label across devices, and the role is checked
+        # anyway.
         moved = was is not None and not (was.role == role
                                          and was.ctrl is ctrl)
         why = corneeds.Reason('yours', instead=was if moved else None)
         # What was already pinned per slot, kept across a re-take of the
-        # same control: taking one direction must not forget the three
+        # same control. Taking one direction must not forget the three
         # you took before it.
         pinned = list((need.assignment or {}).get('buttons') or ())
         if slot is not None and button is not None:
@@ -806,43 +886,44 @@ class Review:
         return placed
 
     def categories(self):
-        """Every group there is, so a menu can offer them before asking
-        for a new name. Bands included: filing something under `in a
-        turn` is a choice like any other, and refusing to offer it would
-        make the fallback a place you can leave but not return to."""
+        """Every group there is, so a menu offers them before it asks for
+        a new name.
+
+        The bands are included. Filing something under `in a turn` is a
+        choice like any other, and the fallback left out is a place you
+        leave and cannot return to.
+        """
         return sorted({self.group_of(n) for n in self.needs})
 
     def touched(self, what=''):
         """Say that something changed and the files no longer match.
 
-        It used to WRITE, here, on every decision -- eight call sites, a
-        whole-file rewrite each. The capture wizard in sim-device-map does
-        not: it marks the screen `unsaved` and `s` writes. One keystroke
-        means one thing in both tools now, which is worth more than the
-        saved keystroke.
+        This marks. It does not write. The capture wizard in
+        sim-device-map marks the screen `unsaved` and writes on `s`, and
+        one keystroke means one thing in both tools.
 
-        `what` is kept so the save box can name it. A box that comes up
-        on the way out saying only that something is unsaved, to somebody
-        who has just pressed `s`, is an argument the screen cannot win:
-        twelve keys mark this screen, one of them is a button read off
-        the stick, and the reader has no way to tell which fired.
+        `what` is kept so the save box names it. A box on the way out
+        that says only "something is unsaved", to somebody who has just
+        pressed `s`, is an argument the screen cannot win: twelve keys
+        mark this screen, one of them is a button read off the stick, and
+        the reader cannot tell which fired.
         """
         self.unsaved = True
-        #: the last decision the files do not have yet, in words
+        #: The last decision the files do not have yet, in words.
         self.since = what
         return ''
 
     def keep(self):
         """Write both files down. (what happened, is it still unsaved).
 
-        The whole list every time, because that is what the files hold --
-        a description per function and a row per placement, and a partial
-        write of either is a file that disagrees with the screen.
+        The whole list every time, because that is what the files hold: a
+        description per function and a row per placement. A partial write
+        of either leaves a file that disagrees with the screen.
         """
         if self.save is None:
-            # Still unsaved, and it will stay that way: there is nowhere
-            # to put it, so the frame goes on saying so rather than
-            # claiming a file has something no file does.
+            # Still unsaved, and it stays that way. There is nowhere to
+            # put it, so the frame goes on saying so rather than claiming
+            # a file holds something no file holds.
             return ('This game makes its own list. There is no file to '
                     'write it to.'), True
         try:
@@ -857,27 +938,63 @@ class Review:
         """Say what a function is FOR. Returns a line.
 
         Separate from `refile`, which is your own filing of the list.
-        This is the word an overlay matches on, so it comes from the
-        closed table rather than from a prompt -- a job nobody wrote
-        would cost this function every wish in every template, and look
-        exactly like a template that did not apply.
+
+        This is the word an overlay matches on, so it comes out of the
+        closed table and not out of a prompt. A job nobody wrote costs
+        this function every wish in every template, and it looks like a
+        template that did not apply.
         """
         if job not in corneeds.JOBS:
             return f'{job!r} is not a job.'
-        if need.suits == job:
-            # Picking the job it is already filed under changed nothing,
-            # and said `unsaved` for it.
+        if need.suits == job and 'suits' not in need.guessed:
+            # Picking the job it is filed under changes nothing, and
+            # `unsaved` for that is a lie. A PROPOSAL is the exception:
+            # agreeing with one is a decision, and the mark comes off.
             return f'{need.what} is already {job} work.'
         need.suits = job
+        need.guessed.discard('suits')
         self.touched('a job changed')
         return f'{need.what} is {job} work.'
+
+    def say(self, need, field, value):
+        """Say one thing about what a function IS.
+
+        A description is a judgement, and it is derived from nothing:
+        which band a function is in, what shape of control it wants, and
+        whether you hold it down. Every one of those is scored, and five
+        games keep them in a needs file written by hand.
+
+        The job goes through `refile_job`, which holds the word-list
+        check. One validation, not two spellings of it. The rest come off
+        a closed list the form read out of the scoring table, so there is
+        nothing left here to check.
+
+        The save box names the field, so `s` on the way out says which of
+        the nine you changed. A flag takes no article: `held changed`,
+        where a noun reads `a shape changed`.
+        """
+        if field == 'suits':
+            self.refile_job(need, value)
+            return
+        if getattr(need, field, None) == value:
+            # Answering a proposal with the value it proposed is still
+            # answering it. The mark comes off, and the count of
+            # functions that say nothing goes down by one.
+            need.guessed.discard(field)
+            return
+        setattr(need, field, value)
+        need.guessed.discard(field)
+        label, kind = next(((l, k) for f, l, k, _w in DESCRIBED
+                            if f == field), (field, ''))
+        self.touched(f'{label} changed' if kind == 'flag'
+                     else f'a {label} changed')
 
     def refile(self, need, category):
         """Move a need to another group. Returns a line.
 
-        Naming its own band puts it back on the fallback rather than
-        recording the band as a category: otherwise `in a turn` becomes a
-        place you can leave and not return to, and two things that look
+        Naming its own band puts the need back on the fallback. It does
+        not record the band as a category. Otherwise `in a turn` becomes
+        a place you leave and cannot return to, and two rows that look
         identical on screen differ in the file.
         """
         was = need.category
@@ -891,9 +1008,9 @@ class Review:
     def rename(self, old, new):
         """Call a group something else, without emptying it first.
 
-        A band is refused: there are four, they are the allocator's scale,
-        and renaming one here would say they are yours to name when they
-        are not. Refiling out of one is how you leave it.
+        A band is refused. There are four of them and they are the
+        allocator's scale, so they are not yours to name. Refiling out of
+        one is how you leave it.
         """
         if old in corneeds.URGENCY_NAME:
             return (f'{old!r} is a band, not a category. Press r to file '
@@ -907,9 +1024,8 @@ class Review:
     def promote(self, action, category):
         """Put an action from the vocabulary on the list. Returns a line.
 
-        It arrives carrying nothing. Promoting says "this matters", not
-        "put it here" -- where is the next question, and pressing RETURN
-        on the row already answers it.
+        Promoting says "this matters". It does not say "put it here".
+        Where is the next question, and RETURN on the row answers it.
         """
         already = next((n for n in self.needs
                         if any(b.action == action.id
@@ -919,42 +1035,56 @@ class Review:
             self.touched('a function added')
             return (f'{action.name} is on the list. It moved to '
                     f'{category}.')
-        if action.kind == 'axis':
-            # Axes never went through the allocator in any game in the
-            # family, so there is nothing for a promoted one to land on.
-            return (f'{action.name} is an axis. This screen cannot add '
-                    'an axis: an axis row needs a shape and a rest, and '
-                    'the vocabulary does not say either.')
-        need = corneeds.Need(action.name, 'button',
-                             [[cactions.Bind(action.id)]],
-                             category=category)
-        self.needs.append(need)
-        self.at[need] = None
-        self.mark[need] = UNSET
+        # An axis is a function that wants an input, like every other row
+        # here. An axis row needs a shape and a rest, and the vocabulary
+        # says neither. `J` says both.
+        if self.add is None:
+            # No adapter behind this screen, which is a test or a caller
+            # that keeps its own list. The same need, not planned for:
+            # `plan_again` has nothing to ask.
+            need = corneeds.from_action(action, category)
+            self.needs.append(need)
+            self.at[need] = None
+            self.mark[need] = UNSET
+        else:
+            need = self.add(action, category)
+            self.plan_again()
         self.touched('a function added')
         return f'{action.name} is on the list, under {category}.'
+
+    def plan_again(self):
+        """Ask the planner again, keeping every choice you made.
+
+        Thirteen milliseconds. Without it the screen's proposals answer a
+        description you have changed since: `J` sets the shape, the band,
+        the device and the hand, which are four of the things the
+        allocator scores on. A promoted need has no proposal at all, so
+        `p` on it says the planner has no control for it.
+
+        What you chose survives, because the allocator takes those
+        controls in its first pass. `o` works the same way.
+        """
+        if self.rebuild is not None:
+            self.relay(self.rebuild())
 
     def rules_lines(self, width=60):
         """How a control is chosen, read out of the tables that choose it.
 
-        In the order somebody asks, not the order the code runs. The first
-        version was seven tables with no thread: it never said what the
-        allocator was FOR, used `band`, `reach`, `floor` and `ceiling`
-        without defining any of them, and printed 0, 1 and 3 without
-        saying that lower means closer to your hand.
+        In the order somebody asks, and not the order the code runs.
+        Seven tables with no thread between them explain nothing: they
+        never say what the allocator is FOR, they use `band`, `reach`,
+        `floor` and `ceiling` without defining any of them, and they
+        print 0, 1 and 3 without saying that lower means closer to your
+        hand.
 
-        Every number is still read from the table the allocator itself
-        reads -- tune a limit and this rewrites itself -- but a number
-        with nothing around it explained nothing.
+        Every number is read from the table the allocator reads. Tune a
+        limit and this screen rewrites itself.
 
-        What is NOT here is the `note` each band, term and fact carries.
-        Those were drawn here once, on the argument that the reason a
-        limit is what it is was the most valuable text in the repo and
-        belonged beside the limit. On a screen they are somebody else's
-        working: half a page of why a weight was retuned, under some rows
-        and not others, so they read as noise that turns up at random.
-        They are in `scoring.toml`, where whoever is about to change a
-        number is already looking.
+        The `note` each band, term and fact carries is NOT here. A note
+        is somebody's working: half a page of why a weight was retuned,
+        under some rows and not others, which reads as noise that turns
+        up at random. The notes are in `scoring.toml`, where whoever is
+        about to change a number is already looking.
         """
         out = []
 
@@ -995,25 +1125,23 @@ class Review:
         say('plain')
 
         say('head', 'WHICH BINDING GOES FIRST')
-        # Written out from `allocate`'s sort key, in its order, because
-        # this paragraph was prose and prose does not move when the key
-        # does. It said pins went first -- they had not since what you
-        # choose by hand started outranking them -- and stopped at the
-        # factory count, which is no longer the last word.
+        # Written out from `allocate`'s sort key, in its order. Prose
+        # here does not move when the key does: it said pins went first
+        # long after what you choose by hand started outranking them.
         for n, (what, why) in enumerate(corneeds.ORDERED_BY, 1):
             say('plain', f'{_sentence(what)} {why}', lead=f'  {n}  ')
         say('plain')
 
         say('head', 'WHEN IT REFUSES A CONTROL')
-        # Read out, not written out. These four were transcribed here and
-        # the transcription was already the only thing on this screen that
-        # could disagree with the allocator -- which it then did, the day a
-        # fifth refusal arrived and nobody thought to come back here.
+        # Read out, not written out. A transcription here is the one
+        # thing on this screen that can disagree with the allocator, and
+        # it does so the day a fifth refusal arrives.
+        #
         # The table holds a fragment, because its own column is where
-        # most of these are read: `-60  it is the wrong shape` wants no
+        # most of these are read: `-60  it is the wrong shape` takes no
         # capital and no full stop. A bullet is a line of its own, so the
-        # screen makes it a sentence here rather than the file holding two
-        # spellings of each one.
+        # screen makes the fragment a sentence here. The file holds one
+        # spelling.
         for gate in self.rules['gate']:
             say('plain', _sentence(gate['says']), lead='  · ')
         for fact in self.rules['fact']:
@@ -1040,9 +1168,9 @@ class Review:
 
         say('head', 'WHAT MAKES ONE CONTROL BEAT ANOTHER')
         for term in self.rules['term']:
-            # `says` carries the run's own values -- `{role}`, `{label}` --
-            # and there is no run here, so a term that needs them says the
-            # same rule with nothing in the holes.
+            # `says` carries the run's own values, such as `{role}` and
+            # `{label}`. There is no run here, so a term that needs them
+            # says the same rule with nothing in the holes.
             say('plain', term.get('general', term['says']),
                 lead=f'  {term["weight"]:+5}  ')
         say('plain')
@@ -1063,9 +1191,9 @@ class Review:
                 say('plain', fact['says'], lead=f'    {fact["yes"]:+5}  ')
                 say('plain', fact['not'], lead=f'    {fact["no"]:+5}  ')
             elif 'same' in fact:
-                # The shape for a closed field the need names a value of:
-                # both answers are weighed, like a bool, and the words
-                # say which way round.
+                # The shape for a closed field the need names a value
+                # of. Both answers are weighed, like a bool, and the
+                # words say which way round.
                 say('plain', fact['says'], lead=f'    {fact["same"]:+5}  ')
                 say('plain', fact['not'], lead=f'    {fact["other"]:+5}  ')
             else:
@@ -1095,12 +1223,11 @@ class Review:
                 or self.filter.lower() in need.what.lower())
 
     def narrowed(self):
-        """What `f` is hiding, for the header. '' when it is hiding nothing.
+        """What `f` is hiding, for the header. '' where it hides nothing.
 
-        The status line said this once, on the keystroke, and the next
-        movement cleared it -- so a screen showing three rows of thirty-one
-        looked exactly like a game that has three. It has to stay up for as
-        long as it is true.
+        This stays up for as long as it is true. Said once on the
+        keystroke and cleared by the next movement, a screen showing
+        three rows of thirty-one looks like a game that has three.
         """
         if not self.filter:
             return ''
@@ -1110,29 +1237,28 @@ class Review:
     def group_of(self, need):
         """What this need is filed under.
 
-        Yours where you have said, the band where you have not. Nothing
-        carries a category on the day this lands, so falling back is what
-        keeps every screen in the family from emptying.
+        Yours where you have said. The band where you have not. Nothing
+        carries a category on the day this lands, so the fallback is what
+        keeps the screen from opening empty.
         """
         return need.category or corneeds.URGENCY_NAME[need.urgency]
 
     def groups(self):
         """[(name, [Need])] -- the list's shape, most urgent group first.
 
-        A group sorts by the most urgent thing in it, which for a band is
-        the band itself: the order the screen had, derived instead of
-        declared, so a category you invent lands where its contents say
-        rather than where you happened to make it.
+        A group sorts by the most urgent thing in it, and for a band that
+        is the band itself. So a category you invent lands where its
+        contents say, and not where you happened to make it.
 
-        Inside a group, the name. The rows came in the order the needs
-        list happens to be in, which is every placement followed by
-        everything unplaced -- so clearing a binding moved its row to the
-        bottom of the group on the next open, and a row you are walking
-        towards was not where you left it. The name is the one thing
-        about a row that does not change when you bind or clear it.
+        Inside a group, by the name. The needs list runs every placement
+        and then everything unplaced, so rows in that order move:
+        clearing a binding sends its row to the bottom of the group on
+        the next open, and a row you are walking towards is not where you
+        left it. The name is the one thing about a row that does not
+        change when you bind or clear it.
 
-        The list itself is NOT reordered: it is the order the needs file
-        is written in, and that file is edited by hand.
+        The list itself is NOT reordered. It keeps the order the needs
+        file is written in, and that file is edited by hand.
         """
         held = {}
         for need in self.needs:
@@ -1148,16 +1274,16 @@ class Review:
             band = [n for n in members if self.matches(n)]
             if not band:
                 # The heading stays for what is there, not for what the
-                # filter took away -- an empty group is a line you scroll
+                # filter took away. An empty group is a line you scroll
                 # past to reach the rows you asked for.
                 continue
             out.append(Row('head', name.upper(), group=name))
             for need in band:
                 out.append(Row('need', need.what, need=need))
-                # What it binds, under it. This was the footer's job, which
-                # meant moving onto a row to learn what it does and never
-                # seeing two at once -- and X4 puts six lines there for one
-                # hat, so the footer was the wrong size for the answer.
+                # What it binds, under it. In the footer instead, you
+                # move onto a row to learn what it does and never see two
+                # at once. X4 puts six lines there for one hat, so the
+                # footer is the wrong size for the answer.
                 for part, what in (self.binds(need)
                                    if self.show_binds else ()):
                     out.append(Row('bind', f'{part:10} {what}', need=need))
@@ -1167,25 +1293,24 @@ class Review:
 
 # ------------------------------------------------------------------- drawing
 
-#: Two lines, because one was 96 characters and a terminal is 80: `s write`
-#: and `q quit` fell off the end of the screen that documents them. Moving
-#: comes first -- it is what you need before any of the rest is reachable.
-#: The whole list, shown by `?`. The border carries the handful you reach
-#: for constantly; this carries everything, including the capital forms --
-#: which is most of what somebody presses `?` to find out.
-#: What `?` shows. Two things it did not before.
+#: Two lines. One line is 96 characters and a terminal is 80, so `s
+#: write` and `q quit` fall off the end of the screen that documents
+#: them. Moving comes first: you need it before the rest is reachable.
+#: The whole list, shown by `?`. The border carries the handful you
+#: reach for constantly. This carries everything, including the capital
+#: forms, and those are most of what somebody presses `?` to find out.
+#: What `?` shows.
 #:
 #: It says what the screen IS. A list of key names answers "which key"
-#: and never "what am I doing here", and the second is why somebody
-#: reaches for help in the first place.
+#: and never "what am I doing here", and the second question is why
+#: somebody reaches for help.
 #:
-#: And one entry per line. It used to put two on the first two rows and
-#: one on every other, and hang a keyless continuation under `a` for the
-#: browse screen's own keys -- which belong to that screen, and are in
-#: its own footer.
+#: One entry per line. Two entries on some rows and one on others is a
+#: table a reader cannot scan. The browse screen's own keys belong to
+#: that screen and sit in its own footer.
 KEYS = (
     ('head', 'NAME'),
-    ('plain', '  review — put a game\'s actions onto HOTAS controls'),
+    ('plain', '  review - put a game\'s actions onto HOTAS controls'),
     ('plain', ''),
     ('head', 'DESCRIPTION'),
     ('plain', "  A row is an entry. An entry is one or more of the game's"),
@@ -1197,6 +1322,7 @@ KEYS = (
     ('mine', f'  {MARK[MINE]}           {MARK_SAID[MINE]}'),
     ('proposed', f'  {MARK[PROPOSED]}           {MARK_SAID[PROPOSED]}'),
     ('unset', f'  (none)      {MARK_SAID[UNSET]}'),
+    ('plain', f'  {BARE}           This row has no job.'),
     ('plain', ''),
     ('head', 'MOVING'),
     ('plain', '  ↑↓  j k     Move to the previous or the next entry.'),
@@ -1215,7 +1341,8 @@ KEYS = (
     ('plain', ''),
     ('head', 'THE LIST'),
     ('plain', '  a           Browse the game\'s vocabulary. Add entries.'),
-    ('plain', '  J           Say what this function is FOR.'),
+    ('plain', '  J           Say what this function is.'),
+    ('plain', '  Z           Guess what every function is.'),
     ('plain', '  r           Move this entry to another category.'),
     ('plain', '  R           Rename the category.'),
     ('plain', ''),
@@ -1233,11 +1360,12 @@ KEYS = (
 def _sentence(said):
     """A fragment from a table, as a sentence.
 
-    The tables hold fragments: a term or a fact is read in a column of
+    The tables hold fragments. A term or a fact is read in a column of
     them, where `the shape and the count fit` is right and `The shape and
-    the count fit.` is a sentence pretending to be a label. A screen that
-    puts one at the start of a line wants the other spelling, and this is
-    the one place that makes it.
+    the count fit.` is a sentence pretending to be a label.
+
+    A screen that puts one at the start of a line wants the other
+    spelling. This is the one place that makes it.
     """
     said = said.strip()
     if not said:
@@ -1248,12 +1376,14 @@ def _sentence(said):
 def _hand(ctrl):
     """`0 thumb` -- how far, and what gets there, for a column.
 
-    It printed the words, cut to twenty: a control somebody reached with
-    a named finger came out as `thumb`, and one with no finger recorded
-    came out as `the hand off the dev`, which is not a word. Half a
-    sentence in a column is worse than a number, because a number can be
-    explained once at the top and a truncation cannot be explained at
-    all. The legend above says what 0 to 3 mean.
+    A number and a finger. The words cut to twenty characters give
+    `thumb` for a control reached with a named finger and `the hand off
+    the dev` for one with no finger recorded, and the second is not a
+    word.
+
+    Half a sentence in a column is worse than a number. A number is
+    explained once at the top. A truncation cannot be explained at all.
+    The legend above says what 0 to 3 mean.
     """
     tier = corneeds.reach_tier(ctrl)
     far = '-' if tier == corneeds.UNMEASURED else str(tier)
@@ -1261,7 +1391,7 @@ def _hand(ctrl):
 
 
 def _tilde(path):
-    """`/home/you/x` -> `~/x`. Fourteen characters a reader already knows."""
+    """`/home/you/x` -> `~/x`. Fourteen characters a reader knows."""
     home = os.path.expanduser('~')
     return '~' + path[len(home):] if path.startswith(home + os.sep) else path
 
@@ -1269,8 +1399,8 @@ def _tilde(path):
 def _fold(path, width=74):
     """A long path over several lines, broken at directory boundaries.
 
-    A Proton prefix is ninety characters before it says which game, so the
-    part that answers the question is the part a terminal cuts off.
+    A Proton prefix is ninety characters before it says which game, so a
+    terminal cuts off the part that answers the question.
     """
     if len(path) <= width:
         return [path]
@@ -1291,11 +1421,10 @@ def _fold(path, width=74):
 def _put(scr, y, x, text, attr=curses.A_NORMAL):
     """Draw, clipped to the screen.
 
-    Clipped to `w - x`, not `w - x - 1`. The spare column existed because
-    writing the bottom-right cell raises -- but that is one cell on one
-    row, and reserving a whole column for it ate the right-hand border of
-    every panel that reaches the screen edge. The `except` already covers
-    the cell it was guarding against.
+    Clipped to `w - x`, not `w - x - 1`. Writing the bottom-right cell
+    raises, and that is one cell on one row. A whole spare column for it
+    eats the right-hand border of every panel that reaches the screen
+    edge. The `except` covers that cell.
     """
     h, w = scr.getmaxyx()
     if 0 <= y < h:
@@ -1305,56 +1434,58 @@ def _put(scr, y, x, text, attr=curses.A_NORMAL):
             pass
 
 
-#: Below this the two panels stop fitting: the list needs about 52
-#: columns before `throttle · Middle finger hat` starts being cut, and the
-#: detail panel is unreadable under about 26.
+#: Below this width the two panels stop fitting. The list needs about 52
+#: columns before `throttle · Middle finger hat` is cut, and the detail
+#: panel is unreadable under about 26.
 SPLIT_AT = 90
 
-#: Where the divider sits in a list row: the mark, then the action
-#: name, then the line, then what it is bound to.
+#: Where the divider sits in a list row: the mark, then the action name,
+#: then the line, then what it is bound to.
 NAME_W = 29
 
 #: The detail panel never gets less than this, however wide the list
-#: wants to be -- under it the wrapping turns into one word per line.
+#: wants to be. Under this width the wrapping gives one word per line.
 DETAIL_MIN = 26
 
 
 def _layout(width, height, wants=None):
-    """((y, x, h, w) for the list, same for the detail) -- or stacked.
+    """((y, x, h, w) for the list, the same for the detail), or stacked.
 
     Side by side where there is room. `wants` is how wide the list would
-    like to be for the rows it actually has; the rest goes to the detail
-    panel rather than to blank space, which is what a fixed split left
-    between the two.
+    like to be for the rows it has, and the rest goes to the detail panel
+    rather than to blank space. A fixed split leaves that space between
+    the two.
 
-    Below `SPLIT_AT` they stack, because a list cut off mid-control-name
-    is worse than a shorter one.
+    Below `SPLIT_AT` they stack. A list cut off in the middle of a
+    control's name is worse than a shorter one.
     """
     if width >= SPLIT_AT:
         left = width - DETAIL_MIN
         if wants:
             left = max(SPLIT_AT - DETAIL_MIN, min(left, wants))
         return (0, 0, height, left), (0, left, height, width - left)
-    # Stacked: the list keeps what it needs and the detail takes the rest,
-    # never more than a third and never less than a frame plus two lines.
+    # Stacked. The list keeps what it needs and the detail takes the
+    # rest, never more than a third and never less than a frame plus two
+    # lines.
     tall = max(4, min(height // 3, 10))
     listed = max(6, height - tall)
     return (0, 0, listed, width), (listed, 0, height - listed, width)
 
 
-#: In the sill, most-needed first: what is dropped on a narrow panel is
+#: In the sill, most-needed first. What is dropped on a narrow panel is
 #: dropped from the end, and nothing else is reachable without moving.
 HINTS = ('↑↓ move', '↵ assign', 'l from free', 'c accept', 'x unassign',
-         'a add', 'J job', 'i invert', 'r category', 'f filter', 'h binds',
+         'a add', 'J what it is', 'Z guess', 'i invert', 'r category', 'f filter',
+         'h binds',
          'o overlay', 'y why', 'm map', 's save', 'w write')
 
 
 def _fit(width, text, lead=''):
     """`text` as lines no wider than `width`, hanging under `lead`.
 
-    The panel wraps its own. `_draw` wraps too, but flush left -- so a
-    ledger line it had to break landed under the `+40` rather than beside
-    it and stopped reading as a ledger.
+    The panel wraps its own lines. `_draw` wraps flush left, so a ledger
+    line it breaks lands under the `+40` rather than beside it, and stops
+    reading as a ledger.
     """
     room = max(6, width - len(lead))
     bits = textwrap.wrap(text, room) if text else ['']
@@ -1363,21 +1494,23 @@ def _fit(width, text, lead=''):
 
 
 def _side(rv, row, width=DETAIL_MIN - 4):
-    """The detail panel's body: where the row sits, what it fires, and why.
+    """The detail panel's body: where the row sits, what it fires, and
+    why.
 
-    Three questions, and they are not one question. The third had no answer
-    at all before: the panel named the control and its reach and stopped, so
-    the one thing a reader actually argues with -- the planner's choice --
-    was the one thing it would not account for.
+    Three questions, and they are not one question. A panel that names
+    the control and its reach and stops leaves the third unanswered, and
+    the planner's choice is the thing a reader argues with.
 
-    `Reason` is that account, written where the decision was made, and this
-    is its first human reader. The score is shown as the terms it was made
-    of rather than as its total: 137 tells nobody anything, and `+40 the
-    stick it asked for` is the sentence the number stood for.
+    `Reason` is the account of that choice, written where the decision
+    was made. This is its first human reader.
+
+    The score is shown as the terms it was made of, and not as its total.
+    137 says nothing. `+40 the stick it asked for` is the sentence the
+    number stood for.
 
     The device's full product name is here rather than in a header of its
-    own. A row saying "stick" does not say WHICH stick, and this is the
-    moment that question is being asked.
+    own. A row that says "stick" does not say WHICH stick, and this is
+    the moment that question is asked.
     """
     if row is not None and row.kind == 'head':
         return _group_side(rv, row.group, width)
@@ -1392,23 +1525,24 @@ def _side(rv, row, width=DETAIL_MIN - 4):
     if p is None:
         plan = rv.plan.get(need)
         say('head', 'NOWHERE')
-        # The count only where it says something the shape does not: `a
+        # The count only where it says something the shape does not. `a
         # button and 1 button` is one fact written twice.
         say('meta', f'This row needs a {need.first_shape}.'
             if need.wanted == 1 else
             f'This row needs a {need.first_shape} with '
             f'{ctui.plural(need.wanted, "button")}.')
         say('plain')
-        # First, because it is the only one of these you can act on, and
-        # because it is the reason the row is empty: the planner was not
-        # asked, so what the planner would have done is beside the point.
+        # First, because it is the only one of these you act on, and
+        # because it is the reason the row is empty. The planner was not
+        # asked, so what the planner would have done is beside the
+        # point.
         gone = rv.unhonoured(need)
         if gone:
             say('unset', gone)
             say('note', 'The row stays empty. Press x to give the row '
                         'to the planner.')
             say('plain')
-        # Only when there is nothing below to say it: the table names
+        # Only where there is nothing below to say it. The table names
         # the planner's choice and marks it.
         if plan is None:
             say('meta', 'The planner has no control for this row.')
@@ -1416,13 +1550,14 @@ def _side(rv, row, width=DETAIL_MIN - 4):
         _asked_for(need, say)
         say('plain')
         # And the account for it. An empty row is where "why there?" is
-        # still an open question, and it was the row that answered least:
-        # the planner's choice was named and never costed, so there was
-        # nothing on screen to agree or disagree with.
+        # still open, and it is the row that answers least: the planner's
+        # choice named and never costed leaves nothing on screen to agree
+        # or disagree with.
         say('head', 'WHAT WOULD TAKE IT')
         _against(rv, need, plan.role if plan else '',
-                 plan.ctrl if plan else None, say, width,
-                 said='The planner wants this control.' if plan else '')
+                 plan.ctrl if plan else None, say, width)
+        say('plain')
+        _what_happens(rv, need, say)
         return out
 
     say('head', 'WHERE')
@@ -1431,8 +1566,8 @@ def _side(rv, row, width=DETAIL_MIN - 4):
     if dev is not None:
         said.append(('device', dev.product))
     if need.takes == corneeds.AXIS:
-        # The axis's own label, not its control's: three of the stick's
-        # axes are `Main stick` and only one of them is pitch.
+        # The axis's own label, not its control's. Three of the stick's
+        # axes are `Main stick`, and one of them is pitch.
         a = rv.lever(p)
         said += [('lever', a.label), ('axis', str(a.index))]
     else:
@@ -1444,24 +1579,74 @@ def _side(rv, row, width=DETAIL_MIN - 4):
     if binds:
         say('plain')
         say('head', 'BINDS')
-        # Fields, like every other panel. It had its own shape -- the part
-        # cut to seven characters and left-aligned -- so one panel read
-        # `press   Map: Map pan to rotate` under three that read
-        # `  control  Thumb hat`, and the column the eye follows moved
-        # between sections of the same box.
+        # Fields, like every other panel. A shape of its own, with the
+        # part cut to seven characters and left-aligned, reads `press
+        # Map: Map pan to rotate` under three lines that read `  control
+        # Thumb hat`. The column the eye follows then moves between
+        # sections of one box.
         _fields(say, list(binds))
 
     say('plain')
     _why(rv, need, p, say, width)
+    say('plain')
+    _what_happens(rv, need, say)
     return out
+
+
+def _what_happens(rv, need, say):
+    """The last section of the panel: the row's state, and what moves it.
+
+    Every other section answers a question about the past. This one
+    answers the two a reader has next: where does this row stand, and
+    what changes it.
+
+    Four states and one line each, because the four differ in what moves
+    them. A proposal moves on the next plan. A choice of yours moves on
+    nothing. A row you emptied is left alone by every pass. A row the
+    planner found nowhere for waits for a press.
+
+    The job gets a line of its own, because a row without one is
+    invisible to every template and that looks like a template which did
+    not apply.
+    """
+    mark = rv.mark[need]
+    say('head', 'WHAT HAPPENS TO IT')
+    if mark == MINE:
+        # Two decisions wear one mark, and they differ in exactly what
+        # this section answers. `chose` takes the control before anything
+        # is scored, so nothing moves it. `accepted` changes no
+        # allocation: the row still competes, and the day the desk or the
+        # list changes the allocator can move it and the mark goes back
+        # to `?`. `Need.assignment` is where the two are told apart.
+        if (need.assignment or {}).get('how') == corneeds.ACCEPTED:
+            say('mine', 'You accepted this control.')
+            say('note', f'A new desk or a new list can move it back to '
+                        f'{MARK[PROPOSED]}.')
+        else:
+            say('mine', 'You put this here. Nothing moves it.')
+            say('note', 'Press x to hand the row back to the program.')
+    elif mark == PROPOSED:
+        say('proposed', 'The program put this here. The next plan can '
+                        'move it.')
+        say('note', 'Press c to keep it. Press x to empty the row.')
+    elif (need.assignment or {}).get('how') == corneeds.CLEARED:
+        say('unset', 'You emptied this row. No pass fills it.')
+        say('note', 'Press p to ask the program again.')
+    else:
+        say('unset', 'Nothing is on this row. The program found no '
+                     'control.')
+        say('note', 'Press RETURN to put it on a control.')
+    if not corneeds.described(need):
+        say('plain')
+        say('unset', 'This row has no job. No overlay rule reaches it.')
 
 
 def _title_of(row):
     """What the detail panel is headed with. Never None.
 
-    Every kind has a branch, which is the point: the axis rows had none,
-    so the title came back None and slicing it took the screen down the
-    moment the cursor reached the AXES section.
+    Every kind has a branch, and that is the point. A kind with none
+    gives a title of None, and slicing that takes the screen down the
+    moment the cursor reaches those rows.
     """
     if row is None:
         return ''
@@ -1473,10 +1658,10 @@ def _title_of(row):
 
 
 def _group_side(rv, name, width):
-    """What a heading is, when the cursor is on one.
+    """What a heading is, where the cursor is on one.
 
-    It answered nothing before, so landing on a heading left an empty box
-    -- which reads as a hole rather than as a thing you are standing on.
+    An unanswered heading leaves an empty box, and that reads as a hole
+    rather than as a thing you are standing on.
     """
     out = []
 
@@ -1487,9 +1672,9 @@ def _group_side(rv, name, width):
     tally = collections.Counter(rv.mark[n] for n in members)
     say('head', 'GROUP')
     # Fields, like every other panel. `a band, not yours to rename` and
-    # `r files things out of it` were two keystroke notes wearing the
-    # grammar of statements, under a heading that says neither which key
-    # nor what it would do.
+    # `r files things out of it` are keystroke notes in the grammar of
+    # statements, under a heading that says neither which key nor what it
+    # does.
     _fields(say, [('name', name),
                   ('kind', 'band of urgency' if name in corneeds.URGENCY_NAME
                    else 'yours'),
@@ -1510,19 +1695,35 @@ ASKS = (('held', 'held down'), ('rapid', 'tapped'),
 def _fields(say, rows):
     """`label  value`, one field to a line, aligned on the gutter.
 
-    Loose sentences are what this replaced. `thumb, your hand where it
-    lives, nothing moved` sat under WHERE with nothing saying what it
-    was an answer to, so a reader had to work out that it was a
-    measurement and not a remark.
+    A field, not a loose sentence. `thumb, your hand where it lives,
+    nothing moved` under WHERE says nothing about what it answers, so a
+    reader has to work out that it is a measurement and not a remark.
 
     The gutter comes from the longest label there is. Fixed at twelve it
-    put `         shape  hat4` -- twenty characters -- into a panel
-    eighteen wide, and right-aligning in a narrower field does not
-    shorten a label, it only stops padding it.
+    puts twenty characters, `         shape  hat4`, into a panel eighteen
+    wide. Right-aligning in a narrower field does not shorten a label. It
+    stops padding it.
     """
     gutter = max(len(label) for label, _v in rows)
     for label, value in rows:
         say('plain', value, lead=f'  {label:>{gutter}}  ')
+
+
+#: The four fields the scorer reads that a row can be without. Each one
+#: is drawn whether it has a value or not, because the absence changes
+#: where the row lands and nothing else on the screen says so.
+#:
+#:     job     an overlay matches on it, so a row without one is a row
+#:             no `[[want]]` rule reaches
+#:     device  `device_right` pays +40 and `device_wrong` costs -50, so a
+#:             row without one is scored on reach and shape alone
+#:     on      a hat without it lands in press order, and not where the
+#:             switch moves
+#:     rests   an axis without it takes a lever that rests anywhere
+#:
+#: `shape` and `when` are not here. Every need has both, and the file
+#: requires them.
+MISSING = 'MISSING'
 
 
 def _asked_for(need, say):
@@ -1531,17 +1732,24 @@ def _asked_for(need, say):
     Its shape, its band and whichever flags somebody set come from
     `games/<g>/<g>-needs.json`, which describes the function. The device
     comes from the overlay, which is where wanting one is said. Nothing
-    here is derived and nothing is prose.
+    here is derived, and nothing here is prose.
+
+    A field the scorer reads is drawn empty as `MISSING`. Left out, the
+    row says nothing about it, and a reader cannot tell a field nobody
+    answered from a field this panel does not show.
     """
     say('head', 'WHAT IT ASKED FOR')
-    said = [('shape', need.first_shape)]
-    # The job, because it is the one word an overlay takes hold of: a
-    # function filed under the wrong one quietly misses every wish in the
-    # template, and until this line there was nowhere on screen to see it.
-    if need.suits:
-        said.append(('job', need.suits))
-    if need.device:
-        said.append(('device', need.device))
+    said = [('shape', need.first_shape),
+            ('job', need.suits or MISSING),
+            ('device', need.device or MISSING)]
+    # `on` is three questions under one name, and `_applies` answers
+    # which one this row asks. A lone button press has no direction to
+    # choose, so there is nothing missing from it.
+    if _applies('family', need):
+        said.append(('on', ', '.join(str(w) for w in need.on)
+                     if need.on else MISSING))
+    if need.takes == corneeds.AXIS:
+        said.append(('rests', need.rests or MISSING))
     said.append(('when', corneeds.URGENCY_NAME[need.urgency]))
     said += [('', phrase) for flag, phrase in ASKS
              if getattr(need, flag, False)]
@@ -1551,12 +1759,13 @@ def _asked_for(need, say):
 def _how_it_moves(rv, p, say):
     """What the map measured about this lever.
 
-    None of it reached a screen before: where it rests decides whether
-    zero means off, and two levers that move together are one lever
-    until you uncouple them -- which is the sort of thing you find out
-    by flying. `THE LEVER` was the heading, which named the thing
-    instead of saying what the lines answer, and named it wrong for most
-    of them: a twist and a mini-stick are not levers.
+    Where a lever rests decides whether zero means off. Two levers that
+    move together are one lever until you uncouple them. Both are the
+    sort of thing you otherwise find out by flying.
+
+    The heading says what the lines answer. `THE LEVER` names the thing
+    instead, and names it wrong for most of them: a twist and a
+    mini-stick are not levers.
     """
     dev = rv.layout.devices.get(p.role)
     a = rv.lever(p)
@@ -1575,9 +1784,9 @@ def _how_it_moves(rv, p, say):
 def _every_lever(rv, need, p, say):
     """The device's levers, and what is on each.
 
-    The answer to the one question an axis row raises -- why this lever
-    and not the one beside it -- which had nowhere to be asked. A button
-    row has the candidate table for that; this is the same question.
+    This answers the one question an axis row raises: why this lever and
+    not the one beside it. A button row has the candidate table for that,
+    and this is the same question.
     """
     dev = rv.layout.devices.get(p.role)
     if dev is None:
@@ -1593,10 +1802,10 @@ def _every_lever(rv, need, p, say):
             held.setdefault((at.role, rv.lever(at).index), []).append(
                 other.what)
     # What each lever is worth to this need, which is the comparison the
-    # allocator made: `axes_for` scores every lever that answers the ask
-    # and the points pick among them. The panel used to say `answers this
-    # too` and no more, because the resolver it was written for took the
-    # first lever that answered and recorded nothing about the rest.
+    # allocator made. `axes_for` scores every lever that answers the ask,
+    # and the points pick among them. `answers this too` and no more is
+    # what a resolver that took the first lever and recorded nothing
+    # about the rest leaves to say.
     worth = {(r, a.index): s for s, r, _c, a
              in corneeds.axes_for(need, rv.layout.devices, rules=rv.rules)}
     say('plain')
@@ -1606,7 +1815,7 @@ def _every_lever(rv, need, p, say):
         on = held.get((p.role, got.index), [])
         said = ', '.join(n for n in on if n != need.what) or 'free'
         points = worth.get((p.role, got.index))
-        # A dash where it has no score, as the button table does: the ask
+        # A dash where it has no score, as the button table does. The ask
         # refused it, so there is no number to lose on.
         num = '\u2014' if points is None else str(points)
         say(rv.mark[need] if mine else 'meta',
@@ -1617,20 +1826,19 @@ def _every_lever(rv, need, p, say):
 def _how_it_was_set(need, p, say):
     """Who put this where it is, and what you have said about it.
 
-    Three states live on this screen and the panel named one of them, as
-    a phrase under a heading about which control beat which: `you chose
-    it`. The other two -- the planner put it there and you agreed, and
-    the planner put it there and you have not looked -- had no words at
-    all, so the only way to tell them apart was the colour of the row.
+    Three states live on this screen, and all three have words here. Two
+    of them are "the planner put it there and you agreed" and "the
+    planner put it there and you have not looked". Unworded, the only
+    thing that tells those apart is the colour of the row.
 
-    It matters most at the moment you press `s`: what goes into the file
-    is all three, and `how` in the file is exactly this.
+    This matters most at the moment you press `s`. All three go into the
+    file, and `how` in the file is this.
     """
     mine = need.assignment or {}
     by_hand = p.why is not None and p.why.how == 'yours'
     say('plain')
     say('head', 'HOW IT WAS SET')
-    # `set by`, not `put there by`: the gutter is the longest label and
+    # `set by`, not `put there by`. The gutter is the longest label and
     # `_fit` keeps six columns for the value, so a label past eight
     # characters is wider than the narrowest panel the screen draws.
     said = [('set by', 'by hand' if by_hand else 'the planner')]
@@ -1640,27 +1848,35 @@ def _how_it_was_set(need, p, say):
             mine.get('control') == p.ctrl.id:
         said.append(('you said', 'yes, to this control'))
     elif mine.get('how') == corneeds.ACCEPTED:
-        # You agreed to a control, and this is not it.
+        # You agreed to a control, and this is not that control.
         said.append(('you said', 'yes, to another control'))
     else:
         said.append(('you said', 'nothing yet'))
     _fields(say, said)
+    # Which pass placed it, in the words the table already has. Under
+    # the candidate list instead, a share or a reach past the floor reads
+    # as a note about the arrow. `yours` is left out, because `set by`
+    # has just said it.
+    how = p.why.how if p.why is not None else ''
+    if how in corneeds.CAME_BY and how != 'yours':
+        say('note', _sentence(corneeds.CAME_BY[how]), lead='  ')
 
 
 def _why(rv, need, p, say, width=DETAIL_MIN - 4):
     """Why this binding is on this control, in the allocator's own terms.
 
-    Every control is worth points to an action; the actions go in order,
-    most urgent first; each takes the free control worth most. So three
-    things account for a placement, and the panel is those three: what
-    the action asked for, what each control was worth and who is sitting
-    on it, and what the winner's points were made of.
+    Every control is worth points to an action. The actions go in order,
+    most urgent first. Each takes the free control worth most.
 
-    It drew only the last of those once -- a total and its terms -- which
-    is how the score was reached and not why this control. Measured over
-    the five games, 85 placements of 146 were ties and 24 more went where
-    they went because something better was taken: for 109 of 146 the
-    answer is in the middle section and nowhere else.
+    So three things account for a placement, and the panel is those
+    three: what the action asked for, what each control was worth and who
+    sits on it, and what the winner's points were made of.
+
+    The last of those alone is how the score was reached, and not why
+    this control. Measured over the five games, 85 placements of 146 were
+    ties and 24 more went where they went because something better was
+    taken. For 109 of 146 the answer is in the middle section and nowhere
+    else.
     """
     r = p.why
     how = r.how if r is not None else ''
@@ -1670,10 +1886,11 @@ def _why(rv, need, p, say, width=DETAIL_MIN - 4):
         # The same three answers as a button row, in the shapes an axis
         # has them in: what the map measured about the lever, every lever
         # that could have taken it and what each is worth, and what the
-        # winner's points were made of. The last two were not drawn at
-        # all -- an axis was named rather than chosen when this panel was
-        # written, so there was no comparison to report and no score to
-        # break down.
+        # winner's points were made of.
+        #
+        # An axis that is named rather than chosen has no comparison to
+        # report and no score to break down. An axis IS chosen, by
+        # `axes_for`.
         _how_it_moves(rv, p, say)
         _every_lever(rv, need, p, say)
         if p.points is not None:
@@ -1683,17 +1900,14 @@ def _why(rv, need, p, say, width=DETAIL_MIN - 4):
     say('plain')
     say('head', 'WHICH CONTROL GOT IT')
     # What it is, where the heading's own answer is not the whole of it.
-    # Not `you chose it`: that is what HOW IT WAS SET says, and it said
-    # it here as a phrase under a heading about which control beat which
-    # -- the wrong question for it to be the answer to.
-    word = {'pinned': 'You pinned this control by name.',
-            'borrowed': 'This is a spare button.'}.get(how, '')
-    if how == 'borrowed':
-        owner = [n for n in rv.who_has(p.role, p.ctrl) if n is not need]
-        if owner:
-            word = (f'This is a spare button. {owner[0].what} has the '
-                    'control.')
+    # Not `you chose it`: HOW IT WAS SET says that. Said here, it answers
+    # a heading about which control beat which, which is the wrong
+    # question.
+    # Nothing to say about a pin. The ledger below names the pin and the
+    # control, as `+1000 pinned to 'Pinky button'`. A sentence that says
+    # the same thing in words is one you learn to skip.
     plan = rv.plan.get(need)
+    word = ''
     if how == 'yours' and plan and not (plan.role == p.role
                                         and plan.ctrl is p.ctrl):
         word = (word + ' ' if word else '') \
@@ -1703,24 +1917,25 @@ def _why(rv, need, p, say, width=DETAIL_MIN - 4):
 
 
 def _against(rv, need, role, ctrl, say, width, how='', said=''):
-    """Every control that could take this, and what the one on it is worth.
+    """Every control that could take this, and what the one on it is
+    worth.
 
-    Both halves used to be refused to any placement the allocator had
-    not picked: the panel drew one line, the control's name, and
-    stopped. Counted over the six games that was 45 rows of 174 -- 31 of
-    DCS's 32, all hand-placed -- and 24 of them had a score and a field
-    of candidates sitting there unprinted. What a control is worth to an
-    action is a fact about the desk, not about who typed it.
+    Drawn for a hand-placed row as well. What a control is worth to an
+    action is a fact about the desk, and not about who typed it. Refused
+    to any placement the allocator did not pick, this panel draws one
+    line, the control's name, and stops: 45 rows of 174 across the six
+    games, and 24 of those have a score and a field of candidates sitting
+    unprinted.
 
-    An empty row is the other half of the same hole: the planner's
-    choice was named and never accounted for, so the one row where the
-    question "why there?" is still open was the one that answered least.
+    An empty row is the other half of the same hole. The planner's choice
+    is named and never accounted for, so the one row where "why there?"
+    is still open is the row that answers least.
     """
     LEAD, NUM = 2, 7
     # Scored without `stayed`, which pays whichever control the need is
-    # already on: counted, every alternative sits 20 below and the panel
+    # already on. Counted, every alternative sits 20 below and the panel
     # reports that nothing else came close. So these totals are what the
-    # controls are worth to the action, not what the run added up.
+    # controls are worth to the action, and not what the run added up.
     rules = corneeds.merge_rules(rv.rules, {'term': [{'name': 'stayed',
                                                       'weight': 0}]})
     ran = corneeds.ran_against(need, rv.layout.devices, rules=rv.rules,
@@ -1728,19 +1943,19 @@ def _against(rv, need, role, ctrl, say, width, how='', said=''):
     mine = next((s for s, r, c in ran if c is ctrl and r == role), None)
     if ctrl is not None and mine is None:
         # Sitting on a control that was never a candidate: a hand-placed
-        # need on one button of a hat, or a spare button the borrow pass
+        # need on one button of a hat, or a spare button the share pass
         # lent it. It goes at the head of the table with no number,
-        # because it has none -- `score` refuses the control for the
-        # whole function -- rather than being left out of its own
-        # account.
+        # because it has none: `score` refuses the control for the whole
+        # function. It is not left out of its own account.
         ran = [(None, role, ctrl)] + list(ran)
     if not ran:
         say('plain', 'No control on this desk fits this row.', lead='  ')
         return
 
-    # Everything that could have had it, and the next best under it. Only
-    # what beat it made a binding that won outright read as the only one
-    # that fitted, which was a lie wherever anything else fitted at all.
+    # Everything that could have had it, and the next best under it.
+    # Only what beat it makes a binding that won outright read as the
+    # only one that fitted, and that is a lie wherever anything else
+    # fitted.
     rows = (ran if mine is None else
             [x for x in ran if x[0] >= mine]
             + [x for x in ran if x[0] < mine][:1])
@@ -1748,10 +1963,10 @@ def _against(rv, need, role, ctrl, say, width, how='', said=''):
     def whos_on(role, got):
         """`Strafe +1` -- a control carries more than one need.
 
-        The borrow pass hands a leftover need a spare button of a
-        control something else took, so four names can belong on one
-        line. The first and a count: the map screen has room for all of
-        them and this column has room for one.
+        The share pass hands a leftover need a spare button of a control
+        something else took, so four names can belong on one line. The
+        first name and a count. The map screen has room for all of them
+        and this column has room for one.
         """
         if got is ctrl:
             return ''
@@ -1763,16 +1978,18 @@ def _against(rv, need, role, ctrl, say, width, how='', said=''):
     held = {(r, c.id): whos_on(r, c) for _s, r, c in rows}
     lab = max(len(c.label) for _s, _r, c in rows) + 2
     # One shape for the block, decided by whether the names fit whole.
-    # Per row, a name a character too long wrapped while the four around
-    # it did not, and the block read as though that line meant something
-    # the others did not. And the name wins over the columns: a control
-    # whose name you cannot read is not one you can find, and `Thumb top
-    # butto` was on screen before this.
+    # Decided per row, a name a character too long wraps while the four
+    # around it do not, and the block reads as though that line meant
+    # something the others did not.
+    #
+    # The name wins over the columns. A control whose name you cannot
+    # read is not one you can find, and `Thumb top butto` is what the
+    # columns leave of it.
     room = width - LEAD - NUM - 2
     # The `taken by` column counts towards the width. Measured on the
-    # label alone, a table that just fitted wrapped its last column to
-    # column zero -- `free` under the points, reading as a row of its
-    # own -- which is the shape the stacked form exists to avoid.
+    # label alone, a table that just fits wraps its last column to column
+    # zero: `free` under the points, reading as a row of its own. That is
+    # the shape the stacked form exists to avoid.
     wide = lab + max((len(w) for w in held.values()), default=0) <= room
     if wide:
         say('plain', 'taken by' if any(held.values()) else '',
@@ -1782,21 +1999,23 @@ def _against(rv, need, role, ctrl, say, width, how='', said=''):
         tone = rv.mark[need] if here else 'plain'
         mark = '\u25b6' if here else ' '
         who = held[(r, c.id)]
-        # A dash, not a zero: it has no score because the control cannot
-        # play this part at all, and a zero would read as one it lost on.
+        # A dash, not a zero. It has no score, because the control
+        # cannot play this part at all. A zero reads as a score it lost
+        # on.
         num = '\u2014' if points is None else str(points)
         if wide:
             say(tone, f'{mark} {num:>{NUM}}  {c.label:<{lab}}{who}')
             continue
-        # Stacked: the name on its own line, what it was worth under it.
+        # Stacked. The name on its own line, and what it was worth under
+        # it.
         say(tone, f'{mark} {c.label}')
         say('meta', who, lead=f'  {num:>{NUM}}  ')
     if how == 'relaxed':
         say('note', 'No closer control was free.', lead='  ')
     if said:
         say('meta', said, lead='  ')
-    # No control, or no number for the one there is: an empty row the
-    # planner had nowhere to put, or a control that cannot take the
+    # No control, or no number for the one there is. That is an empty row
+    # the planner had nowhere to put, or a control that cannot take the
     # whole function and lent it a button.
     if ctrl is None or mine is None:
         return
@@ -1808,13 +2027,12 @@ def _worth(say, need, role, ctrl, points, rules, floor=True, axis=None,
            lead=7):
     """What the points were made of, term by term.
 
-    Drawn for an axis as well as a button, from the same call: an axis is
-    scored by the same table and this panel said nothing about it, on the
-    argument that a lever is named rather than chosen. It is chosen -- by
-    `axes_for`, out of everything that answers the ask.
+    Drawn for an axis as well as a button, from the same call. An axis is
+    scored by the same table. It is chosen by `axes_for`, out of
+    everything that answers the ask.
     """
     say('plain')
-    # What makes it worth that, rather than where it `got` it: a control
+    # What makes it worth that, rather than where it `got` it. A control
     # you put this on yourself was never in a run to get anything, and
     # the number is what it is worth to the action either way.
     say('head', f'WHAT MAKES {ctrl.label.upper()} WORTH {points}')
@@ -1840,25 +2058,26 @@ def _panel(scr, theme, rect, title, right='', keys=(), tail='', note=''):
 def _tally(rv):
     """What sits beside the title: the filter, or what is on the list.
 
-    The filter when there is one and the tally otherwise -- both answer
-    "what am I looking at", and only one of them can be true at a time.
-    Only what is there: the long form was dropped whole by `lid` for not
-    fitting beside the title, so the counts vanished from a screen that
-    had always carried them.
+    The filter where there is one, and the tally otherwise. Both answer
+    "what am I looking at", and one of them is true at a time.
+
+    Only what is there. `lid` drops a line whole where it does not fit
+    beside the title, so a long form takes the counts off the screen
+    with it.
     """
     mine, prop, unset = rv.counts()
     counts = [f'{MARK[MINE]}{mine}' if mine else '',
               f'{MARK[PROPOSED]}{prop}' if prop else '',
               f'{unset} {MARK_SAID[UNSET]}' if unset else '',
               # Which overlay this was laid out to. A state, so it goes
-              # here rather than in the status line -- and said even when
-              # there is none, because "the planner had no wishes" and
-              # "the planner ignored mine" look identical on a row.
+              # here and not in the status line. Said even where there is
+              # none: "the planner had no wishes" and "the planner
+              # ignored mine" look identical on a row.
               rv.overlay().name if rv.overlay() is not None
               else 'no overlay',
-              # Last, and here rather than in the status line: a status
+              # Last, and here rather than in the status line. A status
               # line says what just happened and goes on the next
-              # keypress, and this is a state of the files.
+              # keypress. This is a state of the files.
               'unsaved' if rv.unsaved else '']
     return rv.narrowed() or ctui.SEP.join(c for c in counts if c)
 
@@ -1866,8 +2085,8 @@ def _tally(rv):
 def _draw(scr, rv, sel, state, theme):
     h, w = scr.getmaxyx()
     rows = rv.rows()
-    # As wide as the widest row actually is, so the detail panel gets the
-    # space instead of the gap getting it.
+    # As wide as the widest row is, so the detail panel gets the space
+    # and the gap does not.
     wants = 4 + 2 + NAME_W + max((len(rv.where(r.need)) for r in rows
                                   if r.kind == 'need'), default=0)
     (ly, lx, lh, lw), side = _layout(w, h, wants)
@@ -1881,15 +2100,15 @@ def _draw(scr, rv, sel, state, theme):
 
     scr.erase()
     right = _tally(rv)
-    # Needs, not every selectable row: this says which of the things you
+    # Needs, not every selectable row. This says which of the things you
     # are placing you are on, and a heading is not one of them.
     pick = [i for i, r in enumerate(rows) if r.kind == 'need']
     at = sum(1 for i in pick if i <= sel)
     iy, ix, ih, iw = _panel(
         scr, theme, (ly, lx, lh, lw),
         rv.title + (f' · {rv.subtitle}' if rv.subtitle else ''),
-        # A game's own keys sit in the sill beside the family's, because
-        # a key nobody shows is a key nobody presses.
+        # A game's own keys sit in the sill beside the family's. A key
+        # nobody shows is a key nobody presses.
         right, HINTS + tuple(f'{key} {word}' for key, word, _do in rv.offers),
         _where(rows, sel, at, pick), note=rv.status)
 
@@ -1902,29 +2121,36 @@ def _draw(scr, rv, sel, state, theme):
         elif row.kind == 'bind':
             _put(scr, y, ix + 4, row.text[:iw - 4], theme.meta)
         elif row.kind == 'need':
-            # The state name is the tone name, so this screen and the map
-            # ask the theme the same question and get the same answer.
+            # The state name is the tone name, so this screen and the
+            # map ask the theme the same question and get the same
+            # answer.
             st = rv.mark[row.need]
             attr = theme.sel if i == sel else theme[st]
-            # A divider, not a gap: at 68 columns the eye has to carry a
-            # name across 26 blank spaces to reach what it is bound to,
-            # and it loses the row on the way.
-            _put(scr, y, ix, f'{MARK[st]} {row.text[:26]:26}'[:iw], attr)
+            # A divider, not a gap. At 68 columns the eye carries a name
+            # across 26 blank spaces to reach what it is bound to, and it
+            # loses the row on the way.
+            # The dot costs the name one column of twenty-six. A
+            # description is not a fourth mark. The mark says where the
+            # row sits. This says whether anybody has said what it is.
+            # `plan` counts the same thing in its last line.
+            said = ' ' if corneeds.described(row.need) else BARE
+            _put(scr, y, ix,
+                 f'{MARK[st]} {row.text[:25]:25}{said}'[:iw], attr)
             if iw > NAME_W + 2:
                 _put(scr, y, ix + NAME_W, ctui.V, theme.meta)
                 _put(scr, y, ix + NAME_W + 2,
                      rv.where(row.need)[:iw - NAME_W - 2], attr)
 
     row = rows[sel] if 0 <= sel < len(rows) else None
-    # The group on a heading, the need on a row: the panel is about
-    # whatever the cursor is on, and its title should say which.
+    # The group on a heading, the need on a row. The panel is about
+    # whatever the cursor is on, and its title says which.
     name = _title_of(row)
     dy, dx, dh, dw = _panel(scr, theme, side, name[:side[3] - 6],
                             tail='? help')
-    # One wrapper, not two. `_side` fits its own lines to `dw` because it
-    # is the half that knows which of them are a ledger and need hanging
-    # under their `+40`; wrapping them again here would have dropped that
-    # indent the moment a line landed one character over.
+    # One wrapper, not two. `_side` fits its own lines to `dw`, because
+    # it is the half that knows which of them are a ledger and hang under
+    # their `+40`. Wrapped again here, that indent goes the moment a line
+    # lands one character over.
     for n, (tone, text) in enumerate(_side(rv, row, dw)):
         if n >= dh:
             break
@@ -1938,16 +2164,14 @@ def _draw(scr, rv, sel, state, theme):
 class Sticks:
     """The joystick nodes, opened once and matched to roles by USB id.
 
-    The two capture wizards ask you to press a button on each device to work
-    out which is which, because they run before anything knows what hardware
-    you have. Here the map has already been loaded and every device in it
-    carries its USB id, so the same question can be answered without asking:
-    `/proc/bus/input/devices` gives vendor and product per `js` node, and that
-    pair is exactly what `devicemap` matches on.
+    Nothing asks you to press a button on each device. The map is loaded
+    already and every device in it carries its USB id:
+    `/proc/bus/input/devices` gives vendor and product per `js` node, and
+    that pair is what `devicemap` matches on.
 
-    Nothing is opened until the first capture, so a review of a layout on a
-    machine with no sticks plugged in costs nothing and fails only if you ask
-    it to.
+    Nothing is opened until the first capture. A review of a layout on a
+    machine with no sticks plugged in costs nothing, and it fails only
+    where you ask it to open one.
     """
 
     def __init__(self, layout):
@@ -1974,8 +2198,8 @@ class Sticks:
             try:
                 dev = ccapture.Device(info['js'])
             except OSError as e:
-                self.why = (f"{info['js']} will not open ({e}) — are you in "
-                            "the `input` group?")
+                self.why = (f"{info['js']} will not open ({e}). Are you "
+                            "in the `input` group?")
                 continue
             dev.role = role
             self.devices.append(dev)
@@ -1997,11 +2221,11 @@ class Sticks:
 def _ask(scr, tui, prompt, start=''):
     """Read a line on the bottom row. -> the text, or None on ESC.
 
-    `core/tui.py` has no text entry -- the capture wizards never needed one
-    and `sim-device-map`'s Tui cannot be imported here -- so this is the
-    smallest thing that answers the question. ESC is None rather than the
-    empty string, because emptying the filter and abandoning the typing are
-    different answers and `f` offers both.
+    The smallest thing that answers the question. `core/tui.py` has no
+    text entry, and `sim-device-map`'s Tui cannot be imported here.
+
+    ESC is None and not the empty string. Emptying the filter and
+    abandoning the typing are different answers, and `f` offers both.
     """
     text = start
     while True:
@@ -2033,11 +2257,12 @@ def _head_of(rv, name, fallback):
 def _where(rows, sel, at, pick):
     """The sill's tail: which of the things you are placing you are on.
 
-    On a heading there is no such thing -- `0/32` read like a fault -- so
-    it says what the heading holds. Counted from the rows on screen, not
-    from the group: with a filter up, what it holds and what you can see
-    are different numbers, and the one to report is the one in front of
-    you.
+    A heading is not one of them, and `0/32` there reads as a fault, so
+    on a heading this says what the heading holds.
+
+    Counted from the rows on screen and not from the group. With a filter
+    up, what the group holds and what you can see are different numbers,
+    and the one in front of you is the one to report.
     """
     here = rows[sel] if 0 <= sel < len(rows) else None
     if here is None or here.kind != 'head':
@@ -2051,8 +2276,11 @@ def _where(rows, sel, at, pick):
 
 
 def _row_of(rv, need, fallback):
-    """Where this need's row is now. `sel` is an index, not a reference,
-    so anything that reorders the list has to say where to look again."""
+    """Where this need's row is now.
+
+    `sel` is an index and not a reference, so anything that reorders the
+    list says where to look again.
+    """
     for i, row in enumerate(rv.rows()):
         if row.kind == 'need' and row.need is need:
             return i
@@ -2068,11 +2296,11 @@ def _hits(action, find):
 
 
 def _pick_category(scr, tui, rv):
-    """Which group to file it under. None if you changed your mind.
+    """Which group to file it under. None where you changed your mind.
 
-    Existing ones first, because filing beside something is the common
-    case and typing a name that differs by a space from one you already
-    have is how you end up with two.
+    The existing groups first. Filing beside something is the common
+    case, and a typed name that differs by a space from one you have is
+    how you end up with two.
     """
     known = rv.categories()
     got = tui.choose('file it under',
@@ -2085,35 +2313,271 @@ def _pick_category(scr, tui, rv):
     return name.strip() or None if name is not None else None
 
 
-def _pick_job(tui, need):
-    """Which job this function does. None if you changed your mind.
+#: Nothing said. The screen's own word for it, from `MARKS` above, so an
+#: empty field and an unassigned row read the same way.
+#: What a function may say about ITSELF, in the order the form offers it,
+#: and which closed list each answer comes out of. No words here. A
+#: vocabulary lives in the table the scorer reads, so a job or a shape
+#: added there is offered by that fact alone.
+#:
+#: `on` is absent. For a hat it is which way each member points, and the
+#: game's own data says that. For an axis it is which part of the stick.
+#: Both are in the needs file, and neither is a judgement a screen can
+#: improve.
+DESCRIBED = (
+    ('suits', 'job', 'job', 'always'),
+    ('urgency', 'band', 'band', 'always'),
+    ('shape', 'shape', 'shape', 'always'),
+    ('device', 'device', 'device', 'always'),
+    ('finger', 'finger', 'finger', 'always'),
+    ('held', 'held', 'flag', 'always'),
+    ('rapid', 'rapid', 'flag', 'always'),
+    ('by_feel', 'by feel', 'flag', 'always'),
+    ('costly', 'costly', 'flag', 'always'),
+    ('rests', 'rests', 'rests', 'axis'),
+    ('invert', 'inverted', 'flag', 'axis'),
+    ('on', 'on', 'on', 'moves'),
+)
 
-    The ten from `[jobs]`, with what each covers beside it, because the
-    difference between `flight` and `systems` is a judgement and the
-    table is where it is written down.
+
+def _said(need, field):
+    """One field of a description, as the form shows it.
+
+    A value the program proposed carries `MARK[PROPOSED]`. That is the
+    same `?` a placement nobody has accepted wears, and it says the same
+    thing: nobody has confirmed this.
+
+    Answering the row takes the mark off. `Review.say` drops the field
+    from `Need.guessed`.
     """
-    known = list(corneeds.JOBS)
-    says = corneeds.RULES['jobs']
-    got = tui.choose(
-        f'{need.what} is...',
-        [(MINE if k == need.suits else 'plain', f'{k:8} {says[k]}')
-         for k in known])
-    return None if got is None else known[got]
+    got = getattr(need, field, None)
+    if got is None or got == '':
+        return NOTHING
+    said = (', '.join(str(w) for w in got) if field == 'on'
+            else _as_said(got, field))
+    if field in need.guessed:
+        return f'{said} {MARK[PROPOSED]}'
+    return said
+
+
+def _applies(when, need):
+    """Is this row a question for this need?
+
+    `on` is three questions under one name. For an axis it is which part
+    of a control the axis is. For a family it is which way each member
+    points. For a button with one binding it is nothing, because a lone
+    press has no direction to choose.
+    """
+    if when == 'always':
+        return True
+    if when == 'axis':
+        return need.takes == corneeds.AXIS
+    return need.takes == corneeds.AXIS or len(need.bindings) > 1
+
+
+def _ways(need, ctrl):
+    """The words `on` may take for this need: the map's own.
+
+    For an axis, which part of the control it is. Those are the roles the
+    device's axes answer to.
+
+    For a family, the direction words `[directions]` accepts, plus
+    whatever the control it sits on calls its own positions. A trigger
+    says `first` and `second`, and no table of compass words covers
+    that.
+    """
+    if need.takes == corneeds.AXIS:
+        return ('x', 'y', 'z')
+    said = list(corneeds.RULES['directions'])
+    if ctrl is not None:
+        said += [w for w in (ctrl.direction(b)
+                             for b in ctrl.bindable_buttons)
+                 if w and w not in said]
+    return tuple(said)
+
+
+def _pick_on(tui, rv, need):
+    """Which way each member of a family points. True where something
+    changed.
+
+    An axis asks once: which part of the control it is. A family asks per
+    member, in the order the bindings are in. That order IS which button
+    gets which, and `slots_for` reads them one to one.
+
+    The names come from the game's own vocabulary, so this reads as the
+    four commands of a four-way switch and not as four hashes.
+
+    Two members on one word is shown and not refused. The allocator gives
+    up on the lot and hands out presses in order, and a seed that read
+    `AFT` and `DOWN` both as `down` leaves a switch in that state.
+    """
+    names = {a.id: a.name for a in rv.catalogue}
+    p = rv.at.get(need)
+    ctrl = p.ctrl if p is not None else None
+    ways = _ways(need, ctrl)
+    if need.takes == corneeds.AXIS:
+        rows = [(MINE if (need.on or ('',))[0] == w else 'plain', w)
+                for w in ways]
+        got = tui.choose(_FORM % need.what, rows,
+                         head=[('meta', 'on'), ('plain', '')])
+        if got is None:
+            return False
+        rv.say(need, 'on', (ways[got],))
+        return True
+    slots = [[names.get(b.action, b.action) for b in slot]
+             for slot in need.bindings]
+    wide = max((len(', '.join(s)) for s in slots), default=0)
+    at, said = 0, False
+    while True:
+        was = list(need.on or ()) + [''] * len(slots)
+        rows = [('plain', f'{", ".join(s)[:wide]:{wide}}  '
+                 + (was[i] or NOTHING)) for i, s in enumerate(slots)]
+        got = tui.choose(_FORM % need.what, rows, index=at,
+                         head=[('meta', 'on'), ('plain', '')])
+        if got is None:
+            return said
+        at = got
+        rows = [(MINE if was[at] == w else 'plain', w) for w in ways]
+        pick = tui.choose(_FORM % need.what, rows,
+                          head=[('meta', ', '.join(slots[at])),
+                                ('plain', '')])
+        if pick is None:
+            continue
+        now = list(need.on or ()) + [''] * (len(slots) - len(need.on or ()))
+        now[at] = ways[pick]
+        rv.say(need, 'on', tuple(now))
+        said = True
+
+
+def _choices(need, kind):
+    """[(value, what it means)] -- the closed list behind one field."""
+    if kind == 'job':
+        says = corneeds.RULES['jobs']
+        return [(k, says[k]) for k in corneeds.JOBS]
+    if kind == 'band':
+        return [(i, '') for i, _n in enumerate(corneeds.URGENCY_NAME)]
+    if kind == 'shape':
+        subs = corneeds.RULES['shapes']
+        return [(k, ', '.join(list(subs[k])[1:])) for k in subs]
+    if kind == 'flag':
+        return [(True, ''), (False, '')]
+    if kind == 'device':
+        return [(r, '') for r in sorted(devmap.load().ROLES_ON_A_DESK)]
+    if kind == 'finger':
+        dm = devmap.load()
+        return [(f, '') for f in sorted(set(dm.FINGERS) - {dm.HAND})]
+    return [(r, '') for r in corneeds.RESTS]
+
+
+def _pick_said(tui, need, field, label, kind):
+    """One answer about what a function is. None where you changed your
+    mind.
+
+    The same box as the form it was opened from, with the field in the
+    head and not in a sentence of its own. You pressed RETURN on that
+    row, and the row is still the question.
+
+    A job carries what it covers. The difference between `flight` and
+    `systems` is a judgement, and `[jobs]` is where that is written down.
+    The rest are words that say themselves.
+    """
+    rows = _choices(need, kind)
+    was = getattr(need, field, None)
+    wide = max(len(str(v)) for v, _m in rows)
+    lines = [(MINE if v == was else 'plain',
+              f'{_as_said(v, field):{wide}} {m}'.rstrip())
+             for v, m in rows]
+    # Taking an answer back is a choice like any other, and the job is
+    # the answer you most want back. It is the only field that is either
+    # said or not said, and a word picked by mistake makes the row look
+    # described.
+    #
+    # Not a flag. `held` is yes or no, and a third state is a fact
+    # nothing has a term for. Not the band or the shape either: every
+    # need has those and the file requires them.
+    clearable = kind not in ('flag', 'band', 'shape')
+    if clearable:
+        lines.append((MINE if was in (None, '') else 'plain', NOTHING))
+    got = tui.choose(_FORM % need.what, lines,
+                     head=[('meta', label), ('plain', '')])
+    if got is None:
+        return None, False
+    if clearable and got == len(rows):
+        return None, True
+    return rows[got][0], True
+
+
+def _as_said(value, field):
+    """A value as the screen spells it."""
+    if field == 'urgency':
+        return corneeds.URGENCY_NAME[value]
+    if value is True:
+        return 'yes'
+    if value is False:
+        return 'no'
+    return str(value)
+
+
+#: The form's own title, and the title of every question inside it. The
+#: question is which row you are on, and the row is on the screen.
+_FORM = 'What is "%s"?'
+
+
+def _describe(tui, rv, need):
+    """The form behind `J`: what this function is, field by field.
+
+    Everything the scorer reads about a function except where it ended
+    up, in one place, each answer out of the closed list that scores it.
+
+    One key per field runs out of keys. A screen where `J` asks the job
+    and nothing asks the band, the shape or the hand leaves a game whose
+    needs were worked out from its command names with no way to correct
+    them.
+    """
+    at, changed = 0, False
+    while True:
+        rows = [(f, label, kind) for f, label, kind, when in DESCRIBED
+                if _applies(when, need)]
+        wide = max(len(label) for _f, label, _k in rows)
+        lines = [('plain', f'{label:{wide}}  {_said(need, f)}')
+                 for f, label, _k in rows]
+        got = tui.choose(_FORM % need.what, lines, index=at)
+        if got is None:
+            # On the way out. The form is about what the function IS and
+            # the proposals are about where things sit, and four of these
+            # nine fields are scored. A description you corrected under a
+            # plan nobody asked again is a screen answering the question
+            # you had before.
+            if changed:
+                rv.plan_again()
+            return
+        at = got
+        field, label, kind = rows[got]
+        if kind == 'on':
+            # Its own walk: one question per member, with the member
+            # named by the game rather than numbered.
+            changed = _pick_on(tui, rv, need) or changed
+            continue
+        value, said = _pick_said(tui, need, field, label, kind)
+        if said:
+            rv.say(need, field, value)
+            changed = True
 
 
 def _pick_overlay(tui, rv):
-    """Which overlay to lay this out to. None if you changed your mind.
+    """Which overlay to lay this out to. None where you changed your
+    mind.
 
-    `no overlay` is a choice like any other and sits with the rest rather
-    than being a second keystroke: laying one on and taking it off are the
-    same question asked twice.
+    `no overlay` is a choice like any other and it sits with the rest. It
+    is not a second keystroke: laying one on and taking it off are the
+    same question.
     """
     known = coverlay.names()
     on = rv.overlay()
-    # By the file's own stem, without reading a single one: working this
-    # out by loading each and comparing display names meant an unreadable
-    # overlay anywhere in the directory took the screen down on `o`. Now
-    # a bad file only bites when you pick it, and `lay_over` catches it.
+    # By the file's own stem, and without reading one of them. Loading
+    # each file and comparing display names lets an unreadable overlay
+    # anywhere in the directory take the screen down on `o`. This way a
+    # bad file bites when you pick it, and `lay_over` catches it.
     rows = [(MINE if on is not None and k == on.called else 'plain', k)
             for k in known]
     rows.append(('plain' if on is not None else MINE, 'no overlay'))
@@ -2124,28 +2588,28 @@ def _pick_overlay(tui, rv):
 
 
 def _ran(tui, title, lines):
-    """Show what a subprocess said, and wait. The transcript model, which
-    is what `core/tui.py` keeps it for."""
-    tui.page(title)
-    for line in lines:
-        tui.log(f'  {line}')
-    tui.log('')
-    tui.log('  The vocabulary on screen is the one from the start of '
-            'this run.')
-    tui.log('  Quit and come back to read the new one.')
-    tui.wait_any_key()
+    """Show what a subprocess said, and wait.
+
+    A box, like every other view on this screen. A full screen of its own
+    is a second way of putting words up.
+    """
+    tui.popup(title, [('plain', f'  {line}') for line in lines]
+              + [('plain', ''),
+                 ('plain', '  The vocabulary on screen is the one from '
+                           'the start of this run.'),
+                 ('plain', '  Quit and come back to read the new one.')],
+              full=True)
 
 
 def _browse(scr, tui, rv):
     """The whole vocabulary, to take something out of. Returns a line.
 
-    The list this screen was built around holds what somebody asked for;
-    this holds what the game accepts. 147 rows against 5856 across the
-    family, and until now nothing here knew the rest was there.
+    The list this screen is built around holds what somebody asked for.
+    This holds what the game accepts: 147 rows against 5856 across the
+    family.
 
-    Windowed rather than sized to content: MSFS ships 3111 actions
-    and a box that quietly drops what does not fit would be worse
-    than no box.
+    Windowed rather than sized to content. MSFS ships 3111 actions, and a
+    box that drops what does not fit, in silence, is worse than no box.
     """
     order = [a for _cat, group in cactions.grouped(rv.catalogue)
              for a in group]
@@ -2168,7 +2632,7 @@ def _browse(scr, tui, rv):
         _put(scr, 0, 0, ctui.lid(w, rv.source or 'vocabulary', right),
              tui.theme.head)
         # The sides the corners promise. `lid` and `sill` end in `╭╮╰╯`,
-        # so a box drawn without them reads as an unfinished one.
+        # so a box drawn without the sides reads as an unfinished one.
         for row in range(1, h - 1):
             _put(scr, row, 0, ctui.V, tui.theme.head)
             _put(scr, row, w - 1, ctui.V, tui.theme.head)
@@ -2210,9 +2674,9 @@ def _browse(scr, tui, rv):
         elif k == 'h' and rv.harvest is not None:
             _ran(tui, 'reading the game again', rv.harvest())
         elif k == 'D' and rv.drop is not None:
-            # Typed, not a keystroke. It is the one destructive thing on
-            # this screen, and a finger landing on D beside the f it was
-            # going for should not be enough.
+            # Typed, not a keystroke. This is the one destructive thing
+            # on this screen, and a finger landing on D beside the f it
+            # was going for is not enough.
             sure = _ask(scr, tui, "type 'drop' to forget the vocabulary: ")
             if (sure or '').strip() == 'drop':
                 _ran(tui, 'forgetting what was read', rv.drop())
@@ -2231,9 +2695,9 @@ def _browse(scr, tui, rv):
 def _loop_keys():
     """The source of the key loop, for the collision check above.
 
-    Read rather than listed: a list of keys beside the loop is a second
-    place to forget, and this one only has to be right about which
-    letters appear in it.
+    Read, not listed. A list of keys beside the loop is a second place to
+    forget, and this only has to be right about which letters appear in
+    the loop.
     """
     import inspect
     return inspect.getsource(_loop)
@@ -2241,17 +2705,19 @@ def _loop_keys():
 
 def run(layout, title, subtitle='', describe=None, write=None, paths=(),
         catalogue=(), source='', save=None, harvest=None, drop=None,
-        rules=None, rebuild=None, game='', offers=()):
+        rules=None, rebuild=None, game='', offers=(), add=None,
+        guess=None):
     """Show the need list, let it be filled, write what has a control.
 
     Returns what was written, or the `Adapter` an offer asked to reopen
-    on: a game's own key may change what the screen is OF -- DCS lays out
-    one aircraft at a time -- and that is a different list, a different
-    store and a different kneeboard, so it is a new screen.
+    on. A game's own key may change what the screen is OF: DCS lays out
+    one aircraft at a time, and that is a different list, a different
+    store and a different kneeboard. So it is a new screen.
     """
     sticks = Sticks(layout)
     rv = Review(layout, title, subtitle, describe, paths, catalogue,
-                source, save, harvest, drop, rules, rebuild, game, offers)
+                source, save, harvest, drop, rules, rebuild, game, offers,
+                add, guess)
     try:
         return curses.wrapper(_loop, rv, write, sticks)
     finally:
@@ -2281,19 +2747,19 @@ def _loop(scr, rv, write, sticks):
         k = tui.key(0.5)
         if k is None:
             continue
-        # By kind, not by `selectable`: a heading is selectable now and
-        # carries no need, so every handler that wants one still gets
-        # None and does nothing. The ones that act on a GROUP ask for the
-        # kind themselves.
+        # By kind, not by `selectable`. A heading is selectable and
+        # carries no need, so every handler that wants a need gets None
+        # and does nothing. A handler that acts on a GROUP asks for the
+        # kind itself.
         here = rows[sel] if 0 <= sel < len(rows) else Row('gap', '')
         need = here.need if here.kind == 'need' else None
         group = here.group if here.kind == 'head' else None
 
         if k in ('q', 'Q', 'esc'):
             if rv.unsaved and rv.save is not None:
-                # The same box `s` puts up, so leaving is not a second way
-                # of saving with its own idea of what it is about to
-                # write. This is what sim-device-map does on the way out.
+                # The same box `s` puts up. Leaving is then not a second
+                # way of saving with its own idea of what it writes.
+                # sim-device-map does this on the way out.
                 _save(scr, tui, rv)
             return written
         if k in ('up', 'k'):
@@ -2317,6 +2783,14 @@ def _loop(scr, rv, write, sticks):
             rv.status = rv.propose(need)
         elif k == 'P':
             rv.status = rv.propose_all()
+        elif k == 'Z' and rv.guess is not None:
+            # Replanned after, because `device` is a wish the allocator
+            # reads. A field filled here moves rows, and the old places
+            # under the new judgements are a screen telling you
+            # something untrue.
+            rv.status = rv.guess()
+            rv.touched('the program proposed what things are')
+            rv.plan_again()
         elif k == 'x' and need is not None:
             rv.status = rv.clear(need)
         elif k == 'X':
@@ -2326,8 +2800,9 @@ def _loop(scr, rv, write, sticks):
         elif k in ('l', 'L') and need is not None:
             rv.status = _by_hand(scr, tui, rv, need)
         elif k in ('f', 'F'):
-            # Typed and confirmed: narrow to it. Confirmed with nothing in
-            # it: show everything again. ESC: leave the filter as it was.
+            # Typed and confirmed: narrow to it. Confirmed with nothing
+            # in it: show everything again. ESC: leave the filter as it
+            # was.
             got = _ask(scr, tui, 'filter: ', rv.filter)
             if got is not None:
                 rv.filter = got
@@ -2360,8 +2835,8 @@ def _loop(scr, rv, write, sticks):
             if where:
                 rv.status = rv.refile(need, where)
                 # The row has moved to another group, so the index it was
-                # at means nothing now. Every other shape change here
-                # resets to the top; that would lose what you were doing.
+                # at means nothing. Every other shape change here resets
+                # to the top, and that loses what you were doing.
                 sel = _row_of(rv, need, sel)
         elif k in ('o', 'O'):
             want, said = _pick_overlay(tui, rv)
@@ -2373,24 +2848,21 @@ def _loop(scr, rv, write, sticks):
         elif any(k == key for key, _w, _do in rv.offers):
             got = next(do for key, _w, do in rv.offers if key == k)(rv, tui)
             if not isinstance(got, str):
-                # An Adapter: reopen the screen on it. Which drops
-                # everything this one is holding, so it asks first --
-                # changing aircraft is a way out of this screen, and the
-                # other way out has asked since there was a file to ask
-                # about. This one took the evening with it in silence.
+                # An Adapter: reopen the screen on it. That drops
+                # everything this screen holds, so it asks first.
+                # Changing aircraft is a way out of this screen, and the
+                # other way out asks.
                 if rv.unsaved and rv.save is not None:
                     _save(scr, tui, rv)
                 return got
             rv.status = got
         elif k == 'i' and need is not None:
             rv.status = rv.turn_round(need)
-        # `J`, because `j` is a step down the list and the step wins:
-        # the chain answered it there and this branch was unreachable,
-        # so the sill advertised a key that did nothing at all.
+        # `J`, because `j` is a step down the list and the step wins. The
+        # chain answers `j` first, and this branch is then unreachable:
+        # the sill advertises a key that does nothing.
         elif k == 'J' and need is not None:
-            job = _pick_job(tui, need)
-            if job:
-                rv.status = rv.refile_job(need, job)
+            _describe(tui, rv, need)
         elif k in ('y', 'Y'):
             tui.popup('why a control is chosen',
                    rv.rules_lines(tui.inner()), full=True)
@@ -2402,19 +2874,18 @@ def _loop(scr, rv, write, sticks):
         elif k in ('w', 'W'):
             written = _write(scr, tui, rv, write) or written
         elif k == ' ' and need is not None:
-            # SPACE was keep/drop before the table grew a third state. It is
-            # kept as confirm, because that is the one a walk through the list
-            # presses over and over.
+            # SPACE confirms, because that is the key a walk through the
+            # list presses over and over.
             rv.status = rv.confirm(need)
             move(+1)
 
 
 def _by_press(scr, tui, rv, need, sticks):
-    """Assign by pressing the control, the way the capture wizards do.
+    """Assign by pressing the control.
 
-    A box rather than the transcript. `wait_input` only reads `tui` to
-    notice ESC, so the prompt can stay on screen while it blocks -- and
-    every other thing that interrupts this screen is a box.
+    A box. `wait_input` reads `tui` only to notice ESC, so the prompt
+    stays on screen while it blocks. Everything else that interrupts this
+    screen is a box.
     """
     devices = sticks.open()
     if not devices:
@@ -2422,8 +2893,9 @@ def _by_press(scr, tui, rv, need, sticks):
                 'list.')
 
     # The product, as the map and the detail panel name it. `d.name` is
-    # the raw evdev string, which carries a vendor and a firmware date --
-    # noise here, and a second name for one stick on one screen.
+    # the raw evdev string, and it carries a vendor and a firmware date.
+    # That is noise here, and a second name for one stick on one
+    # screen.
     known = rv.layout.devices
     lines = [('head', 'DEVICES')]
     lines += [('plain', f'  {d.role:9}  '
@@ -2441,14 +2913,15 @@ def _by_press(scr, tui, rv, need, sticks):
     elif len(need.bindings) == 1 and not need.on:
         lines.append(('plain', '  the exact position you want it on'))
     else:
-        lines += [('plain', '  any position; the whole control is taken'),
-                  ('plain', '  and the bindings go in its own order')]
+        lines += [('plain', '  any position'),
+                  ('plain', '  the whole control is taken, bindings in its '
+                            'own order')]
     tui.box(need.what, lines, tail='ESC leaves it as it is')
     ccapture.drain(devices, tui)
 
-    # One key, and it reads whichever kind of input the row is for: an
-    # axis need is answered by moving a lever, a button need by pressing
-    # a button, and that was two keys and two code paths.
+    # One key, and it reads whichever kind of input the row is for. An
+    # axis need is answered by moving a lever and a button need by
+    # pressing a button. Two keys for that is two code paths.
     got = ccapture.wait_input(devices, want_axis=axis, tui=tui)
     if got == 'skip':
         return f'{need.what} stays as it was.'
@@ -2466,7 +2939,7 @@ def _by_hand(scr, tui, rv, need):
     labels = [('plain', f'{role:9} {c.label:30} {c.kind:9} '
                                 f'{corneeds.reach_said(c)}')
               for role, c in fits]
-    idx = tui.choose(f'{need.what} — wants {need.first_shape}', labels)
+    idx = tui.choose(f'{need.what} wants {need.first_shape}', labels)
     if idx is None:
         return f'{need.what} stays as it was.'
     role, ctrl = fits[idx]
@@ -2477,9 +2950,9 @@ def _by_hand(scr, tui, rv, need):
 def _write_plan(rv, width):
     """What `w` is about to do, before it does it.
 
-    The keystroke overwrites a game's config and there was nothing between
-    the press and the file. What it writes and where is exactly the thing
-    a reader would want to check, and it was only ever printed afterwards.
+    The keystroke overwrites a game's configuration file. What it writes
+    and where is what a reader wants to check, and printed afterwards it
+    is too late to check.
     """
     out = []
 
@@ -2497,9 +2970,9 @@ def _write_plan(rv, width):
         say('plain')
     say('head', 'PLAN')
     say('plain', f'  {ctui.plural(len(kept.placed), "binding")}')
-    # Named, because they go into the same files and a plan reading `0
-    # bindings` over a write that is about to lay down nine axes is a
-    # box that has not said what it is about to do.
+    # Named, because they go into the same files. A plan that reads `0
+    # bindings` over a write about to lay down nine axes is a box that
+    # has not said what it does.
     if kept.on_axes:
         say('plain',
             f'  {ctui.plural(len(kept.on_axes), "axis", "axes")}')
@@ -2507,8 +2980,8 @@ def _write_plan(rv, width):
         say(MINE, f'  {MARK[MINE]}{mine} {MARK_SAID[MINE]}')
     if prop:
         # Before the keystroke, not after it. `?` means you have not been
-        # through them, and they go into the file either way -- which is
-        # a thing to learn while you can still say no.
+        # through them, and they go into the file either way. That is a
+        # thing to learn while you can still say no.
         say(PROPOSED, f'  {MARK[PROPOSED]}{prop} {MARK_SAID[PROPOSED]}')
         say(PROPOSED, '  The write includes them.', lead='  ')
     return out
@@ -2517,8 +2990,8 @@ def _write_plan(rv, width):
 def _save_plan(rv, width):
     """What `s` is about to keep, before it keeps it.
 
-    The counts, because that is what changed: a save writes the whole
-    list, and the question a reader has is how much of it is theirs now.
+    The counts. A save writes the whole list, and the question a reader
+    has is how much of that list is theirs now.
     """
     out = []
 
@@ -2531,18 +3004,17 @@ def _save_plan(rv, width):
     if mine:
         say(MINE, f'  {MARK[MINE]}{mine} {MARK_SAID[MINE]}')
     if prop:
-        # They go in the file either way, which is a thing to learn while
+        # They go in the file either way. That is a thing to learn while
         # you can still say no.
         say(PROPOSED, f'  {MARK[PROPOSED]}{prop} {MARK_SAID[PROPOSED]}')
         say(PROPOSED, '  The save includes them.', lead='  ')
     if unset:
         say('unset', f'  {unset} {MARK_SAID[UNSET]}')
     # And what it is that the files do not have. The counts answer how
-    # much is being written, which is not the question somebody has when
-    # this box comes up on the way out after they pressed `s`: that
-    # question is what changed since, and twelve keys can have changed
-    # it -- one of them a button read off the stick while the box that
-    # asked for it was on screen.
+    # much is being written. Somebody who sees this box on the way out
+    # after pressing `s` is asking what changed since, and twelve keys
+    # can have changed it. One of those keys is a button read off the
+    # stick while the box that asked for it was on screen.
     if rv.since:
         say('plain')
         say('head', 'SINCE THE LAST SAVE')
@@ -2572,19 +3044,19 @@ def _write(scr, tui, rv, write):
     kept = rv.result()
     # The axes count as something to write. Clear every button and the
     # layout still says which lever is pitch, which is throttle and
-    # which way round they run -- nine rows for the Hornet -- and this
-    # refused to write any of it because no BUTTON had a home. One list
-    # now, so the question is simply whether anything is placed.
+    # which way round they run. That is nine rows for the Hornet, and a
+    # check on BUTTONS alone refuses to write any of it. One list, so the
+    # question is whether anything is placed.
     if not kept.placed:
         rv.status = 'No row has a control. There is nothing to write.'
         return None
     if not tui.confirm('write', _write_plan(rv, tui.inner())):
         rv.status = 'The write did not happen.'
         return None
-    # Every writer in the family reports by printing, and some warn on stderr.
-    # Under curses that lands on the screen being drawn, so it is caught here
-    # and shown afterwards -- cheaper than teaching six writers to return
-    # text they already print.
+    # Every writer reports by printing, and some warn on stderr. Under
+    # curses that lands on the screen being drawn, so it is caught here
+    # and shown afterwards. Six writers returning text they already print
+    # is the other way, and it costs more.
     out = io.StringIO()
     written = None
     try:
@@ -2596,9 +3068,9 @@ def _write(scr, tui, rv, write):
     except (RuntimeError, OSError, ValueError) as e:
         extra = [f'ERROR: {e}']
     said = [('meta', ln) for ln in out.getvalue().splitlines()]
-    # The two that matter, in the tone that says so: a refusal or an error
-    # is one line in whatever a writer printed, and finding it was the
-    # reader's problem.
+    # The two that matter, in the tone that says so. A refusal or an
+    # error is one line in whatever a writer printed, and finding that
+    # line is otherwise the reader's problem.
     said += [('unset' if str(ln).startswith(('refused:', 'ERROR:'))
               else 'plain', str(ln)) for ln in (extra or [])]
     tui.popup('written' if written else 'not written',

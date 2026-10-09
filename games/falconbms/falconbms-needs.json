@@ -1,829 +1,381 @@
 {
- "needs": [
-  {
-   "what": "Trigger",
-   "shape": "trigger",
-   "bindings": [
-    [
-     {
-      "action": "SimTriggerFirstDetent"
-     }
-    ],
-    [
-     {
-      "action": "SimTriggerSecondDetent"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "fire",
-   "held": true,
-   "by_feel": true
-  },
-  {
-   "what": "Weapon release (Pickle)",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "SimPickle"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "fire",
-   "by_feel": true
-  },
-  {
-   "what": "TMS \u2014 target management",
-   "shape": "hat4",
-   "bindings": [
-    [
-     {
-      "action": "SimTMSUp"
-     }
-    ],
-    [
-     {
-      "action": "SimTMSRight"
-     }
-    ],
-    [
-     {
-      "action": "SimTMSDown"
-     }
-    ],
-    [
-     {
-      "action": "SimTMSLeft"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "lock",
-   "by_feel": true
-  },
-  {
-   "what": "DMS \u2014 display management",
-   "shape": "hat4",
-   "bindings": [
-    [
-     {
-      "action": "SimDMSUp"
-     }
-    ],
-    [
-     {
-      "action": "SimDMSRight"
-     }
-    ],
-    [
-     {
-      "action": "SimDMSDown"
-     }
-    ],
-    [
-     {
-      "action": "SimDMSLeft"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "view",
-   "by_feel": true
-  },
-  {
-   "what": "CMS \u2014 countermeasures",
-   "shape": "hat4",
-   "bindings": [
-    [
-     {
-      "action": "SimCMSUp"
-     }
-    ],
-    [
-     {
-      "action": "SimCMSRight"
-     }
-    ],
-    [
-     {
-      "action": "SimCMSDown"
-     }
-    ],
-    [
-     {
-      "action": "SimCMSLeft"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "defence",
-   "rapid": true,
-   "by_feel": true
-  },
-  {
-   "what": "Paddle \u2014 AP / trim disconnect",
-   "shape": "paddle",
-   "bindings": [
-    [
-     {
-      "action": "SimAPOverride"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "flight",
-   "held": true,
-   "by_feel": true
-  },
-  {
-   "what": "NWS / AR DISC / MSL STEP",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "SimMissileStep"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "flight",
-   "rapid": true,
-   "by_feel": true
-  },
-  {
-   "what": "Trim \u2014 pitch",
-   "shape": "encoder",
-   "bindings": [
-    [
-     {
-      "action": "AFElevatorTrimDown"
-     }
-    ],
-    [
-     {
-      "action": "AFElevatorTrimUp"
-     }
-    ]
-   ],
-   "push": [
+  "needs": [
     {
-     "action": "AFResetTrim"
-    }
-   ],
-   "urgency": 0,
-   "suits": "trim",
-   "rapid": true,
-   "by_feel": true
-  },
-  {
-   "what": "Master arm",
-   "shape": "latch",
-   "bindings": [
-    [
-     {
-      "action": "SimSafeMasterArm"
-     }
-    ],
-    [
-     {
-      "action": "SimArmMasterArm"
-     }
-    ]
-   ],
-   "suits": "fire",
-   "by_feel": true,
-   "costly": true
-  },
-  {
-   "what": "Radar cursor (slew)",
-   "shape": "ministick",
-   "bindings": [],
-   "push": [
+      "what": "Trigger",
+      "shape": "trigger",
+      "urgency": 0,
+      "suits": "fire",
+      "held": true,
+      "by_feel": true,
+      "bindings": [[{"action": "SimTriggerFirstDetent"}], [{"action": "SimTriggerSecondDetent"}]]
+    },
     {
-     "action": "SimCursorEnable"
+      "what": "Weapon release (Pickle)",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "fire",
+      "by_feel": true,
+      "bindings": [[{"action": "SimPickle"}]]
+    },
+    {
+      "what": "TMS — target management",
+      "shape": "hat4",
+      "urgency": 0,
+      "suits": "lock",
+      "by_feel": true,
+      "bindings": [[{"action": "SimTMSUp"}], [{"action": "SimTMSRight"}], [{"action": "SimTMSDown"}], [{"action": "SimTMSLeft"}]]
+    },
+    {
+      "what": "DMS — display management",
+      "shape": "hat4",
+      "urgency": 0,
+      "suits": "view",
+      "by_feel": true,
+      "bindings": [[{"action": "SimDMSUp"}], [{"action": "SimDMSRight"}], [{"action": "SimDMSDown"}], [{"action": "SimDMSLeft"}]]
+    },
+    {
+      "what": "CMS — countermeasures",
+      "shape": "hat4",
+      "urgency": 0,
+      "suits": "defence",
+      "rapid": true,
+      "by_feel": true,
+      "bindings": [[{"action": "SimCMSUp"}], [{"action": "SimCMSRight"}], [{"action": "SimCMSDown"}], [{"action": "SimCMSLeft"}]]
+    },
+    {
+      "what": "Paddle — AP / trim disconnect",
+      "shape": "paddle",
+      "urgency": 0,
+      "suits": "flight",
+      "held": true,
+      "by_feel": true,
+      "bindings": [[{"action": "SimAPOverride"}]]
+    },
+    {
+      "what": "NWS / AR DISC / MSL STEP",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "flight",
+      "rapid": true,
+      "by_feel": true,
+      "bindings": [[{"action": "SimMissileStep"}]]
+    },
+    {
+      "what": "Trim — pitch",
+      "shape": "encoder",
+      "push": [{"action": "AFResetTrim"}],
+      "urgency": 0,
+      "suits": "trim",
+      "rapid": true,
+      "by_feel": true,
+      "bindings": [[{"action": "AFElevatorTrimDown"}], [{"action": "AFElevatorTrimUp"}]]
+    },
+    {
+      "what": "Master arm",
+      "shape": "latch",
+      "suits": "fire",
+      "by_feel": true,
+      "costly": true,
+      "bindings": [[{"action": "SimSafeMasterArm"}], [{"action": "SimArmMasterArm"}]]
+    },
+    {
+      "what": "Radar cursor (slew)",
+      "shape": "ministick",
+      "push": [{"action": "SimCursorEnable"}],
+      "urgency": 0,
+      "suits": "sensor",
+      "by_feel": true,
+      "bindings": []
+    },
+    {
+      "what": "COMMS switch",
+      "shape": "hat4",
+      "urgency": 0,
+      "suits": "comms",
+      "by_feel": true,
+      "bindings": [[{"action": "SimTransmitCom1"}], [{"action": "SimCommsSwitchRight"}], [{"action": "SimTransmitCom2"}], [{"action": "SimCommsSwitchLeft"}]]
+    },
+    {
+      "what": "SPD BRAKE switch",
+      "shape": "hat2",
+      "urgency": 0,
+      "suits": "flight",
+      "held": true,
+      "by_feel": true,
+      "on": ["forward", "back"],
+      "bindings": [[{"action": "AFBrakesIn"}], [{"action": "AFBrakesOut"}]]
+    },
+    {
+      "what": "DOGFIGHT / MRM override",
+      "shape": "hat2",
+      "urgency": 0,
+      "suits": "fire",
+      "held": true,
+      "by_feel": true,
+      "on": ["forward", "back"],
+      "bindings": [[{"action": "SimSelectMRMOverride"}, {"action": "SimDeselectOverride", "edge": "release"}], [{"action": "SimSelectSRMOverride"}, {"action": "SimDeselectOverride", "edge": "release"}]]
+    },
+    {
+      "what": "MAN RANGE knob — UNCAGE",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "sensor",
+      "held": true,
+      "by_feel": true,
+      "bindings": [[{"action": "SimToggleMissileCage"}]]
+    },
+    {
+      "what": "Radar cursor zero",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "sensor",
+      "by_feel": true,
+      "bindings": [[{"action": "SimRadarCursorZero"}]]
+    },
+    {
+      "what": "MAN RANGE knob",
+      "shape": "encoder",
+      "suits": "sensor",
+      "rapid": true,
+      "bindings": [[{"action": "SimRangeKnobDown"}], [{"action": "SimRangeKnobUp"}]]
+    },
+    {
+      "what": "Radar gain",
+      "shape": "encoder",
+      "suits": "sensor",
+      "rapid": true,
+      "bindings": [[{"action": "SimRadarGainDown"}], [{"action": "SimRadarGainUp"}]]
+    },
+    {
+      "what": "ICP — master mode",
+      "shape": "hat2",
+      "suits": "fire",
+      "by_feel": true,
+      "bindings": [[{"action": "SimICPAA"}], [{"action": "SimICPAG"}]]
+    },
+    {
+      "what": "ICP — NAV mode",
+      "shape": "button",
+      "suits": "nav",
+      "bindings": [[{"action": "SimICPNav"}]]
+    },
+    {
+      "what": "IFF MASTER knob",
+      "shape": "selector",
+      "suits": "comms",
+      "bindings": [[{"action": "SimIFFMasterOff"}], [{"action": "SimIFFMasterStby"}], [{"action": "SimIFFMasterLow"}], [{"action": "SimIFFMasterNorm"}], [{"action": "SimIFFMasterEmerg"}]]
+    },
+    {
+      "what": "DX shift (pinky)",
+      "shape": "button",
+      "suits": "systems",
+      "held": true,
+      "bindings": [[{"action": "SimHotasPinkyShift"}]]
+    },
+    {
+      "what": "Recentre head tracking",
+      "shape": "button",
+      "suits": "view",
+      "bindings": [[{"action": "RecenterTrackIR"}]]
+    },
+    {
+      "what": "Look closer",
+      "shape": "button",
+      "suits": "view",
+      "rapid": true,
+      "bindings": [[{"action": "FOVToggle"}]]
+    },
+    {
+      "what": "Slap switch (ECM)",
+      "shape": "button",
+      "suits": "defence",
+      "by_feel": true,
+      "bindings": [[{"action": "SimSlapSwitch"}]]
+    },
+    {
+      "what": "Laser arm",
+      "shape": "button",
+      "suits": "fire",
+      "bindings": [[{"action": "SimLaserArmToggle"}]]
+    },
+    {
+      "what": "Landing gear",
+      "shape": "hat2",
+      "urgency": 1,
+      "suits": "systems",
+      "by_feel": true,
+      "on": ["up", "down"],
+      "bindings": [[{"action": "AFGearUp"}], [{"action": "AFGearDown"}]]
+    },
+    {
+      "what": "Parking brake",
+      "shape": "hat2",
+      "urgency": 1,
+      "suits": "systems",
+      "on": ["up", "down"],
+      "bindings": [[{"action": "SimParkingBrakeUp"}], [{"action": "SimParkingBrakeDown"}]]
+    },
+    {
+      "what": "Landing / taxi lights",
+      "shape": "button",
+      "urgency": 1,
+      "suits": "systems",
+      "bindings": [[{"action": "SimLandingLightCycle"}]]
+    },
+    {
+      "what": "JFS — engine start",
+      "shape": "hat2",
+      "urgency": 3,
+      "suits": "systems",
+      "rapid": true,
+      "on": ["up", "down"],
+      "bindings": [[{"action": "SimJfsStartUp"}], [{"action": "SimJfsStartDown"}]]
+    },
+    {
+      "what": "Throttle idle detent",
+      "shape": "hat2",
+      "urgency": 3,
+      "suits": "flight",
+      "rapid": true,
+      "on": ["up", "down"],
+      "bindings": [[{"action": "SimThrottleIdleDetentForward"}], [{"action": "SimThrottleIdleDetentBack"}]]
+    },
+    {
+      "what": "Stores config (CAT I / III)",
+      "shape": "button",
+      "urgency": 3,
+      "suits": "systems",
+      "bindings": [[{"action": "SimCATSwitch"}]]
+    },
+    {
+      "what": "Air refuelling door",
+      "shape": "button",
+      "urgency": 3,
+      "suits": "systems",
+      "bindings": [[{"action": "SimFuelDoorToggle"}]]
+    },
+    {
+      "what": "Canopy",
+      "shape": "button",
+      "urgency": 3,
+      "suits": "systems",
+      "costly": true,
+      "bindings": [[{"action": "AFCanopyToggle"}]]
+    },
+    {
+      "what": "AVTR",
+      "shape": "button",
+      "urgency": 3,
+      "suits": "systems",
+      "bindings": [[{"action": "SimAVTRToggle"}]]
+    },
+    {
+      "what": "Night vision",
+      "shape": "button",
+      "urgency": 3,
+      "suits": "view",
+      "bindings": [[{"action": "ToggleNVGMode"}]]
+    },
+    {
+      "what": "Visor",
+      "shape": "button",
+      "urgency": 3,
+      "suits": "view",
+      "bindings": [[{"action": "SimVisorToggle"}]]
+    },
+    {
+      "what": "AXIS_ROLL",
+      "shape": "stick",
+      "urgency": 0,
+      "suits": "flight",
+      "takes": "axis",
+      "device": "stick",
+      "on": ["x"],
+      "rests": "centred",
+      "bindings": [[{"action": "AXIS_ROLL"}]]
+    },
+    {
+      "what": "AXIS_PITCH",
+      "shape": "stick",
+      "urgency": 0,
+      "suits": "flight",
+      "takes": "axis",
+      "device": "stick",
+      "on": ["y"],
+      "rests": "centred",
+      "bindings": [[{"action": "AXIS_PITCH"}]]
+    },
+    {
+      "what": "AXIS_YAW",
+      "shape": "stick",
+      "urgency": 0,
+      "suits": "flight",
+      "takes": "axis",
+      "device": "stick",
+      "on": ["z"],
+      "rests": "centred",
+      "bindings": [[{"action": "AXIS_YAW"}]]
+    },
+    {
+      "what": "AXIS_THROTTLE",
+      "shape": "lever",
+      "urgency": 0,
+      "suits": "flight",
+      "takes": "axis",
+      "device": "throttle",
+      "rests": "mid",
+      "bindings": [[{"action": "AXIS_THROTTLE"}]]
+    },
+    {
+      "what": "AXIS_BRAKE_LEFT",
+      "shape": "lever",
+      "urgency": 0,
+      "suits": "flight",
+      "takes": "axis",
+      "device": "stick",
+      "rests": "min",
+      "bindings": [[{"action": "AXIS_BRAKE_LEFT"}]]
+    },
+    {
+      "what": "AXIS_ANT_ELEV",
+      "shape": "lever",
+      "urgency": 0,
+      "suits": "sensor",
+      "takes": "axis",
+      "device": "throttle",
+      "rests": "mid",
+      "bindings": [[{"action": "AXIS_ANT_ELEV"}]]
+    },
+    {
+      "what": "AXIS_CURSOR_X",
+      "shape": "ministick",
+      "urgency": 0,
+      "suits": "sensor",
+      "takes": "axis",
+      "device": "throttle",
+      "on": ["x"],
+      "rests": "centred",
+      "bindings": [[{"action": "AXIS_CURSOR_X"}]]
+    },
+    {
+      "what": "AXIS_CURSOR_Y",
+      "shape": "ministick",
+      "urgency": 0,
+      "suits": "sensor",
+      "takes": "axis",
+      "device": "throttle",
+      "on": ["y"],
+      "rests": "centred",
+      "bindings": [[{"action": "AXIS_CURSOR_Y"}]]
+    },
+    {
+      "what": "AXIS_FOV",
+      "shape": "dial",
+      "suits": "view",
+      "takes": "axis",
+      "device": "throttle",
+      "rests": "min",
+      "bindings": [[{"action": "AXIS_FOV"}]]
     }
-   ],
-   "urgency": 0,
-   "suits": "sensor",
-   "by_feel": true
-  },
-  {
-   "what": "COMMS switch",
-   "shape": "hat4",
-   "bindings": [
-    [
-     {
-      "action": "SimTransmitCom1"
-     }
-    ],
-    [
-     {
-      "action": "SimCommsSwitchRight"
-     }
-    ],
-    [
-     {
-      "action": "SimTransmitCom2"
-     }
-    ],
-    [
-     {
-      "action": "SimCommsSwitchLeft"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "comms",
-   "by_feel": true
-  },
-  {
-   "what": "SPD BRAKE switch",
-   "shape": "hat2",
-   "bindings": [
-    [
-     {
-      "action": "AFBrakesIn"
-     }
-    ],
-    [
-     {
-      "action": "AFBrakesOut"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "flight",
-   "held": true,
-   "by_feel": true,
-   "on": [
-    "forward",
-    "back"
-   ]
-  },
-  {
-   "what": "DOGFIGHT / MRM override",
-   "shape": "hat2",
-   "bindings": [
-    [
-     {
-      "action": "SimSelectMRMOverride"
-     },
-     {
-      "action": "SimDeselectOverride",
-      "edge": "release"
-     }
-    ],
-    [
-     {
-      "action": "SimSelectSRMOverride"
-     },
-     {
-      "action": "SimDeselectOverride",
-      "edge": "release"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "fire",
-   "held": true,
-   "by_feel": true,
-   "on": [
-    "forward",
-    "back"
-   ]
-  },
-  {
-   "what": "MAN RANGE knob \u2014 UNCAGE",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "SimToggleMissileCage"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "sensor",
-   "held": true,
-   "by_feel": true
-  },
-  {
-   "what": "Radar cursor zero",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "SimRadarCursorZero"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "sensor",
-   "by_feel": true
-  },
-  {
-   "what": "MAN RANGE knob",
-   "shape": "encoder",
-   "bindings": [
-    [
-     {
-      "action": "SimRangeKnobDown"
-     }
-    ],
-    [
-     {
-      "action": "SimRangeKnobUp"
-     }
-    ]
-   ],
-   "suits": "sensor",
-   "rapid": true
-  },
-  {
-   "what": "Radar gain",
-   "shape": "encoder",
-   "bindings": [
-    [
-     {
-      "action": "SimRadarGainDown"
-     }
-    ],
-    [
-     {
-      "action": "SimRadarGainUp"
-     }
-    ]
-   ],
-   "suits": "sensor",
-   "rapid": true
-  },
-  {
-   "what": "ICP \u2014 master mode",
-   "shape": "hat2",
-   "bindings": [
-    [
-     {
-      "action": "SimICPAA"
-     }
-    ],
-    [
-     {
-      "action": "SimICPAG"
-     }
-    ]
-   ],
-   "suits": "fire",
-   "by_feel": true
-  },
-  {
-   "what": "ICP \u2014 NAV mode",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "SimICPNav"
-     }
-    ]
-   ],
-   "suits": "nav"
-  },
-  {
-   "what": "IFF MASTER knob",
-   "shape": "selector",
-   "bindings": [
-    [
-     {
-      "action": "SimIFFMasterOff"
-     }
-    ],
-    [
-     {
-      "action": "SimIFFMasterStby"
-     }
-    ],
-    [
-     {
-      "action": "SimIFFMasterLow"
-     }
-    ],
-    [
-     {
-      "action": "SimIFFMasterNorm"
-     }
-    ],
-    [
-     {
-      "action": "SimIFFMasterEmerg"
-     }
-    ]
-   ],
-   "suits": "comms"
-  },
-  {
-   "what": "DX shift (pinky)",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "SimHotasPinkyShift"
-     }
-    ]
-   ],
-   "suits": "systems",
-   "held": true
-  },
-  {
-   "what": "Recentre head tracking",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "RecenterTrackIR"
-     }
-    ]
-   ],
-   "suits": "view"
-  },
-  {
-   "what": "Look closer",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "FOVToggle"
-     }
-    ]
-   ],
-   "suits": "view",
-   "rapid": true
-  },
-  {
-   "what": "Slap switch (ECM)",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "SimSlapSwitch"
-     }
-    ]
-   ],
-   "suits": "defence",
-   "by_feel": true
-  },
-  {
-   "what": "Laser arm",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "SimLaserArmToggle"
-     }
-    ]
-   ],
-   "suits": "fire"
-  },
-  {
-   "what": "Landing gear",
-   "shape": "hat2",
-   "bindings": [
-    [
-     {
-      "action": "AFGearUp"
-     }
-    ],
-    [
-     {
-      "action": "AFGearDown"
-     }
-    ]
-   ],
-   "urgency": 1,
-   "suits": "systems",
-   "by_feel": true,
-   "on": [
-    "up",
-    "down"
-   ]
-  },
-  {
-   "what": "Parking brake",
-   "shape": "hat2",
-   "bindings": [
-    [
-     {
-      "action": "SimParkingBrakeUp"
-     }
-    ],
-    [
-     {
-      "action": "SimParkingBrakeDown"
-     }
-    ]
-   ],
-   "urgency": 1,
-   "suits": "systems",
-   "on": [
-    "up",
-    "down"
-   ]
-  },
-  {
-   "what": "Landing / taxi lights",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "SimLandingLightCycle"
-     }
-    ]
-   ],
-   "urgency": 1,
-   "suits": "systems"
-  },
-  {
-   "what": "JFS \u2014 engine start",
-   "shape": "hat2",
-   "bindings": [
-    [
-     {
-      "action": "SimJfsStartUp"
-     }
-    ],
-    [
-     {
-      "action": "SimJfsStartDown"
-     }
-    ]
-   ],
-   "urgency": 3,
-   "suits": "systems",
-   "rapid": true,
-   "on": [
-    "up",
-    "down"
-   ]
-  },
-  {
-   "what": "Throttle idle detent",
-   "shape": "hat2",
-   "bindings": [
-    [
-     {
-      "action": "SimThrottleIdleDetentForward"
-     }
-    ],
-    [
-     {
-      "action": "SimThrottleIdleDetentBack"
-     }
-    ]
-   ],
-   "urgency": 3,
-   "suits": "flight",
-   "rapid": true,
-   "on": [
-    "up",
-    "down"
-   ]
-  },
-  {
-   "what": "Stores config (CAT I / III)",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "SimCATSwitch"
-     }
-    ]
-   ],
-   "urgency": 3,
-   "suits": "systems"
-  },
-  {
-   "what": "Air refuelling door",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "SimFuelDoorToggle"
-     }
-    ]
-   ],
-   "urgency": 3,
-   "suits": "systems"
-  },
-  {
-   "what": "Canopy",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "AFCanopyToggle"
-     }
-    ]
-   ],
-   "urgency": 3,
-   "suits": "systems",
-   "costly": true
-  },
-  {
-   "what": "AVTR",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "SimAVTRToggle"
-     }
-    ]
-   ],
-   "urgency": 3,
-   "suits": "systems"
-  },
-  {
-   "what": "Night vision",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "ToggleNVGMode"
-     }
-    ]
-   ],
-   "urgency": 3,
-   "suits": "view"
-  },
-  {
-   "what": "Visor",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "SimVisorToggle"
-     }
-    ]
-   ],
-   "urgency": 3,
-   "suits": "view"
-  },
-  {
-   "what": "AXIS_ROLL",
-   "takes": "axis",
-   "device": "stick",
-   "suits": "flight",
-   "shape": "stick",
-   "on": [
-    "x"
-   ],
-   "bindings": [
-    [
-     {
-      "action": "AXIS_ROLL"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "centred"
-  },
-  {
-   "what": "AXIS_PITCH",
-   "takes": "axis",
-   "device": "stick",
-   "suits": "flight",
-   "shape": "stick",
-   "on": [
-    "y"
-   ],
-   "bindings": [
-    [
-     {
-      "action": "AXIS_PITCH"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "centred"
-  },
-  {
-   "what": "AXIS_YAW",
-   "takes": "axis",
-   "device": "stick",
-   "suits": "flight",
-   "shape": "stick",
-   "on": [
-    "z"
-   ],
-   "bindings": [
-    [
-     {
-      "action": "AXIS_YAW"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "centred"
-  },
-  {
-   "what": "AXIS_THROTTLE",
-   "takes": "axis",
-   "device": "throttle",
-   "suits": "flight",
-   "shape": "lever",
-   "bindings": [
-    [
-     {
-      "action": "AXIS_THROTTLE"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "mid"
-  },
-  {
-   "what": "AXIS_BRAKE_LEFT",
-   "takes": "axis",
-   "device": "stick",
-   "suits": "flight",
-   "shape": "lever",
-   "bindings": [
-    [
-     {
-      "action": "AXIS_BRAKE_LEFT"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "min"
-  },
-  {
-   "what": "AXIS_ANT_ELEV",
-   "takes": "axis",
-   "device": "throttle",
-   "suits": "sensor",
-   "shape": "lever",
-   "bindings": [
-    [
-     {
-      "action": "AXIS_ANT_ELEV"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "mid"
-  },
-  {
-   "what": "AXIS_CURSOR_X",
-   "takes": "axis",
-   "device": "throttle",
-   "suits": "sensor",
-   "shape": "ministick",
-   "on": [
-    "x"
-   ],
-   "bindings": [
-    [
-     {
-      "action": "AXIS_CURSOR_X"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "centred"
-  },
-  {
-   "what": "AXIS_CURSOR_Y",
-   "takes": "axis",
-   "device": "throttle",
-   "suits": "sensor",
-   "shape": "ministick",
-   "on": [
-    "y"
-   ],
-   "bindings": [
-    [
-     {
-      "action": "AXIS_CURSOR_Y"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "centred"
-  },
-  {
-   "what": "AXIS_FOV",
-   "takes": "axis",
-   "device": "throttle",
-   "suits": "view",
-   "shape": "dial",
-   "bindings": [
-    [
-     {
-      "action": "AXIS_FOV"
-     }
-    ]
-   ],
-   "rests": "min"
-  }
- ]
+  ]
 }

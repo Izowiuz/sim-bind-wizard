@@ -5,18 +5,19 @@
     ./tests/run.py needs backup only these
     ./tests/run.py -v           and say what each one was
 
-Stdlib `unittest` and nothing else, because the rest of the repo takes no
-dependencies either and a test suite you have to install something to run is a
-test suite that stops being run.
+The standard library's `unittest` and nothing else. The rest of the
+repository takes no dependencies either, and a test suite you have to
+install something to run is a test suite that stops being run.
 
-`sim-device-map` has to be findable -- the fake hardware is built out of its
-classes on purpose (see fake.py) -- so a missing map is reported as the one
-thing wrong rather than as thirty broken imports.
+`sim-device-map` has to be findable. The fake hardware is built out of its
+classes on purpose, which `fake.py` explains. So a missing map is reported
+as the one thing wrong, and not as thirty broken imports.
 
-The tests that run a real planner need a desk named, because the map will
-not guess which one you are at and neither will this. Whichever is first on
-file is used, unless SIM_DEVICE_PROFILE already says otherwise: the tests
-are about a planner returning a layout, not about which desk it was for.
+The tests that run a real planner need a desk named. The map does not
+guess which desk you are at, and neither does this. Whichever is first on
+file is used, unless SIM_DEVICE_PROFILE says otherwise. These tests are
+about a planner returning a layout, and not about which desk it was
+for.
 """
 
 import os

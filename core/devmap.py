@@ -1,14 +1,14 @@
 """Find and load the shared hardware map.
 
-Every wizard in the family opened with the same twenty lines: work out where
-sim-device-map is, fail with a useful message if it is missing, put it on the
-path. Four copies, four chances to drift.
+Three things happen here. This module finds `sim-device-map`, reports a
+missing one, and puts it on the path. Then it answers which device does
+which job at one desk.
 """
 
 import os
 import sys
 
-#: Sibling directory by default; SIM_DEVICE_MAP overrides it, for a clone that
+#: The sibling directory. SIM_DEVICE_MAP overrides it, for a clone that
 #: does not sit next to this one.
 DEFAULT = os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..',
@@ -21,17 +21,17 @@ def where():
 
 
 def capture_command():
-    """How to run the capture tool, as a reader can type it.
+    """How to run the capture tool, as a reader types it.
 
-    The path rather than the bare name: the tool is a command once
-    `bin` is on your PATH, and a message that says `devicemap` to
-    somebody who has not done that names nothing they can run.
+    The path, not the bare name. The tool is a command once `bin` is on
+    your PATH. A message that says `devicemap` to somebody who has not
+    done that names nothing they can run.
     """
     return os.path.join(where(), 'bin', 'devicemap')
 
 
 def load():
-    """The devicemap module, or exit saying where it should have been."""
+    """The devicemap module, or exit naming where it should have been."""
     path = where()
     if not os.path.isdir(path):
         sys.exit(f'There is no device map at {path}.\n'
@@ -41,9 +41,9 @@ def load():
         sys.path.insert(0, path)
     import devicemap
     # The first moment both the rules and the map exist. `core.needs`
-    # cannot check this at import, because it has to load on a clone
-    # with no map at all -- and a shape the rules name and the map has
-    # never heard of matches nothing, silently.
+    # cannot check this at import, because it loads on a clone with no map
+    # at all. A shape the rules name and the map has never heard of
+    # matches nothing, and it matches nothing silently.
     from core import needs
     needs.check_rules(needs.RULES, devicemap)
     return devicemap
@@ -52,17 +52,12 @@ def load():
 def by_role(*required, desk=None):
     """{'stick': Device, 'throttle': Device, ...} as the desk says it is.
 
-    Keying on the role is what lets hardware change without touching any
-    game's code: put a new stick on the desk and every planner picks it
-    up. Which device that is comes from the profile in the map, not from
-    what happens to be plugged in.
+    The key is the role. That is what lets hardware change with no edit to
+    a game's code: put a new stick on the desk and every planner picks it
+    up.
 
-    This used to guess. It bucketed the captures by `kind`, preferred a
-    connected one, and where that still did not decide it fell through to
-    `(plugged or devs)[0]` -- the last one loaded silently won. Two
-    override channels existed to paper over it. A desk answers the
-    question outright, so all of that is gone and the only thing left to
-    say is which desk:
+    The desk says which device does which job. What happens to be plugged
+    in does not.
 
         SIM_DEVICE_PROFILE=Biurko ./plan.py
 
@@ -73,14 +68,13 @@ def by_role(*required, desk=None):
         rig = dm.profile(desk)
     except SystemExit as e:
         # The map's own message names the desks and the environment
-        # variable. This adds the flag, which is the spelling anybody
-        # running a planner has in front of them.
+        # variable. This adds the flag, which is the spelling in front of
+        # anybody running a planner.
         raise SystemExit(f'{e}\n  Or name one: --desk <name>') from None
     if rig is None:
-        # Two states, and this answered with one of them. `profile()`
-        # returns None both when nothing is on file and when SEVERAL are
-        # and nothing says which -- so a desk you had made read as a desk
-        # you had not, and the fix it named was the wrong one.
+        # `profile()` returns None in two states: nothing is on file, and
+        # several are on file with nothing to say which. The two need
+        # different answers, because each one names a different fix.
         have = dm.load_profiles()
         if have:
             sys.exit('More than one desk is on file: '
@@ -99,11 +93,11 @@ def by_role(*required, desk=None):
 
 
 def _nothing_to_bind(rig, have, missing):
-    """Why this desk cannot answer, said about the desk and nothing else.
+    """Why this desk cannot answer, said about the desk only.
 
     Never about what you own. A desk with nothing on it is a desk nobody
-    has filled in -- the hardware may be plugged in right now -- and
-    `you have no stick` is a claim this has no way of making.
+    has filled in. The hardware can be plugged in at that moment, so
+    `you have no stick` is a claim this cannot make.
     """
     if not have:
         return (f'{rig.name} has nothing on it, so nothing here knows what'
@@ -115,4 +109,3 @@ def _nothing_to_bind(rig, have, missing):
             f'  it names: {", ".join(sorted(have))}\n'
             f'  Change what it says: {capture_command()}\n'
             '  or work at another desk:  --desk <name>')
-

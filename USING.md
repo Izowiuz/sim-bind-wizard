@@ -2,250 +2,311 @@
 
 Four tasks.
 
----
+## The needs list is an example
+
+Each game ships a needs list in `games/<game>/<game>-needs.json`. That
+list is an example. It is the one input nothing can derive, and these
+examples were not written by somebody who flies these aircraft.
+
+| game | where its list came from |
+|---|---|
+| X4 | the owner's own saved profile |
+| Elite | partly the presets Frontier ships, which are other people's layouts |
+| MSFS | written by hand, by somebody who does not fly it |
+| DCS | written by hand, by somebody who does not fly it |
+
+So change it. A function you want is a function you add. A row you do not
+want is a row you clear. Nothing here knows your aircraft better than you
+do.
+
+The review screen is where you do it. `a` adds a row from the game's own
+vocabulary. `x` clears a row. `J` says what a function is for. `s` saves.
+
+The program never overwrites what you decided. A field you answered stays
+answered, and a control you chose holds its row against the scoring.
 
 ## 1. Change what a control does
 
-Configs the game reads are **outputs**. Edit `NEEDS` and regenerate.
+The game's own configuration file is an output. Change the needs list, then
+run the program again.
 
-    ./bind-wizard.py <game>              what it would bind, and where
-    ./bind-wizard.py <game> why          and why each control was chosen
-    ./bind-wizard.py <game> tui          walk it, keep what you want, write that
-    ./bind-wizard.py <game> write        all of it, into the game
-    ./bind-wizard.py <game> sheet        refresh the kneeboard
+    ./bind-wizard.py GAME               review the layout. Save what you keep.
+    ./bind-wizard.py GAME plan          print the layout
+    ./bind-wizard.py GAME why           print the evidence for each control
+    ./bind-wizard.py GAME free          print the controls that stay unbound
+    ./bind-wizard.py GAME sheet         write the kneeboard
+    ./bind-wizard.py GAME write         write the whole layout into the game
 
-`./bind-wizard.py` with no arguments lists the games and the verbs each answers to.
-Anything after the verb is forwarded to the script under `games/<game>/`,
-which does the same work and takes its own flags.
+`./bind-wizard.py` with no argument lists the games. Every argument after
+the verb goes to the script in `games/<game>/`. That script does the same
+work and takes its own flags. Run `plan.py --help` for them.
 
-Close the game first. Writers refuse while it is running.
+Close the game first. A writer refuses to run while the game is up.
 
 ### Which solver
 
-`--solver NAME` says who decides which need takes which control. Every verb
-that plans takes it, and every run prints the one it used.
+`--solver NAME` chooses who decides which need takes which control. Every
+verb that plans takes the flag. Every run prints the name it used.
 
-    cp-sat   the whole assignment as one model; needs `ortools`
-    greedy   walk the list, each taking the best still free
+| name | what it does |
+|---|---|
+| `cp-sat` | the whole assignment as one model. It needs `ortools`. |
+| `greedy` | walk the list. Each need takes the best control still free. |
 
-Without the flag you get the best one that runs under the python you started.
-That is the difference `cp-sat` can find and `greedy` cannot: greedy places a
-need on the best control still free and can never take it back, so an early
-urgent need keeps a control a later one needed more.
+Without the flag the program takes the best solver that runs under your
+python. `greedy` places a need on the best control still free, and it
+cannot take that control back. An early urgent need therefore keeps a
+control that a later need wanted more. `cp-sat` finds that trade and
+`greedy` cannot.
 
-`ortools` is the one dependency outside the standard library, so a python
-without it runs `greedy` — which is why the flag exists. The same command
-under two pythons used to produce two different kneeboards for the same desk,
-77 lines apart, and said nothing. Naming a solver that cannot run stops the
-run rather than handing back the other one.
+`ortools` is the only dependency outside the standard library. A python
+without it runs `greedy`. Name a solver that cannot run and the program
+stops. It does not hand you the other one.
 
 ### The review screen
 
-`tui` is `write` with a say in it. Every need is a row, whether the planner
-found it a home or not, and each row is in one of three states:
+`tui` is `write` with a say in it. Every need is a row. A row is in one of
+three states.
 
-    (unset)   nothing on it
-    ?         the planner put it there and you have not looked yet
-    +         yours: you confirmed it, or you chose it yourself
+| mark | state |
+|---|---|
+| (none) | nothing is on this row |
+| `?` | the program put it here. You have not answered yet. |
+| `+` | you put it here, or you accepted the proposal |
 
-    c / C   confirm this one / every proposal
-    p / P   put the planner's choice on this one / into every gap
-    RETURN  press the control you want it on — or move the lever, on a
-            row that wants an axis
-    l       or assign from the free controls that fit, with no hardware
-    x / X   clear this one / drop every proposal, leaving yours
-    i       turn an axis round
-    J       say what this function is FOR, from the ten jobs
-    o       lay the whole thing out to an overlay, or to none
-    m       the device map, which desk, and which overlay
-    y       why a control is chosen: the weights, and what they are for
-    s       save what you decided
-    w       write everything that has a control into the game
+A row carries a second mark. `·` shows that the row's job is empty. Press
+`J` to fill it. The two marks are independent, so a row can carry either,
+both or neither.
 
-`P` only fills gaps and `X` only drops proposals, so neither can undo a choice
-of yours: both are safe to press at any point.
+The screen lists its own keys. Press `?` for them.
 
-`?` is a note to yourself, not a switch. A proposal you never confirmed is
-still written; clearing it is how you say no.
+    ↑↓  j k     move to the previous or the next entry
+    g  G        move to the first or the last entry
+    f           filter by text
+    h           show or hide the bindings under each entry
+    ↵           assign by pressing a control
+    l           assign from the free controls that fit
+    c  C        accept this proposal, or every proposal
+    SPACE       accept, then move down
+    p  P        restore the proposal here, or in every gap
+    x  X        unassign this row, or every row
+    a           browse the game's vocabulary. Add entries.
+    J           say what this function is
+    Z           guess what every function is
+    r  R        move this entry to another category, or rename the category
+    i           invert an axis
+    o           apply an overlay
+    y           say why a control is chosen
+    m           show the device map and the install paths
+    s           save what you decided
+    w           write the plan to the game
+    q           quit
+
+`P` fills gaps only. `X` drops proposals only. Neither undoes a choice of
+yours. Press either at any point.
+
+`?` is a note to yourself. The program writes a proposal you never
+answered. Clear the row to refuse it.
+
+`Z` fills two fields: which device a function belongs on, and what the
+function is for. It reads the game's own category for the first. It reads
+the category and then the words of the name for the second. It marks both
+fields as proposals. It leaves a field you answered alone. It adds no row.
+
+`a` opens the game's whole vocabulary. `↵` adds the selected action as a
+row. `h` reads the game again. `D` forgets what the program read, and it
+asks you to type `drop` first.
+
+### Two strengths of a choice
+
+Pressing `↵` and pressing `c` are not the same claim.
+
+| key | what it claims |
+|---|---|
+| `↵`, `l` | you put it there. The control is taken before anything is scored. |
+| `c`, `C` | you looked at the proposal and said yes. The row still scores. |
+
+A control taken by `↵` holds the row against everything. Remove that
+control from the device map and the row comes back empty. It says so.
+
+A row accepted by `c` scores as it did before. Change the map or the needs
+and the row can land somewhere else. It goes back to `?` to tell you.
+
+`c` is the weak one on purpose. It is one keystroke over a whole list.
+
+`x` forgets both and hands the row back to the program.
+
+### What `↵` does with the press
+
+The screen says which of two cases you are in before you press anything.
+
+| the need | what the press takes |
+|---|---|
+| several bindings | the whole control, in its own order |
+| one binding | exactly where you pressed |
+
+So the second detent of a trigger is the second detent.
+
+The USB ids say which stick is which. Nothing asks you to name them.
+Nothing opens a device until you press `↵`. A control that cannot take the
+need says why. The reason is the shape, the number of buttons, or the need
+already sitting there.
+
+`l` picks from a list instead. Use it when the sticks are not plugged in.
+Neither `l` nor `↵` applies the reach rules.
 
 ### What outlasts the session
 
-`s` writes what you decided to `games/<game>/<game>-binds.json` — which
-control each entry sits on and who decided — and the list itself to
-`<game>-needs.json`. Until you press it the frame says `unsaved`, and `q`
-offers the same box on the way out. This is the capture wizard's `s`, the same
-key for the same act in both halves of the pair.
+`s` writes two files in `games/<game>/`.
 
-`w` is the other thing: it writes the layout into the game's own config, with
-a backup. Nothing reaches the game until you press it.
+| file | what is in it |
+|---|---|
+| `<game>-binds.json` | which control each entry sits on, and who decided |
+| `<game>-needs.json` | the list itself |
 
-A game may add a key of its own for the one thing only it does: DCS's `t`
-picks which aircraft module the screen is of, because that is a different list
-of commands, a different store and a different kneeboard. The sill shows it
-beside the rest, and the screen refuses a key it already answers to.
+The frame says `unsaved` until you press `s`. `q` offers the same box.
 
-`o` lays the whole list out again to a cockpit template from `overlays/` —
-`f-18`, `generic-hotas-spaceship`, or none at all — and says how many of its
-place wishes got through, which is the number two templates are compared on.
-What you chose, accepted, filed and named survives it: the overlay decides
-where the planner leans, not what you decided. The frame says which template
-is on, and `m` names it beside the desk.
+`w` is the other thing. It writes the layout into the game's own
+configuration file, and it keeps a backup. Nothing reaches the game until
+you press `w`.
 
-What you want of the LAYOUT is in neither file — that is `overlays/`, picked
-with `--overlay`. Two strengths, because pressing RETURN and pressing `c` are not the
-same claim:
+`o` lays the list out again to a template in `overlays/`. The choices are
+`by-hand`, `f-18` and `generic-hotas-spaceship`. Give `none` to ask for
+nothing. The screen says how many of the template's wishes got through.
+What you chose, accepted, filed and named survives the overlay. The frame
+names the template. `m` names it beside the desk.
 
-    RETURN / l   you put it there. The control is taken before anything is
-                 scored, so nothing outranks it and nothing moves it. If
-                 that control later leaves the map the row comes back
-                 empty and says so, rather than being quietly re-homed.
-    c / C        you looked at where the planner put it and said yes. It
-                 still scores exactly as before -- so if the map or the
-                 needs change and it lands somewhere else, the row goes
-                 back to `?` to tell you.
-
-`c` is deliberately the weak one. It is a single keystroke over a whole
-list, and if it froze every row the planner would never speak again.
-
-`x` on a row forgets both, and hands it back to the planner.
-
-What `RETURN` does with the press depends on the need, and the screen says
-which of the two you are in before you press anything:
-
-    several bindings   the whole control, in its own order — press whichever
-                       corner is under your thumb
-    one binding        exactly where you pressed, so the second detent of a
-                       trigger is the second detent
-
-Which stick is which comes from the USB ids, so nothing asks you to identify
-them, and nothing is opened until you press RETURN. A control that cannot take
-the need says why: wrong shape, too few buttons, or which other need is
-already sitting on it.
-
-`l` picks from a list instead, for when the sticks are not plugged in. Neither
-`l` nor RETURN applies the reach rules.
-
-`m` shows where the game was found, which file will be written, and every
-control the map knows about with what is on it. The header names the device
-behind each role, because "stick" is a role and you may own two.
-
-DCS answers `capture` instead of `tui`.
+A game may add one key for the one thing only it does. DCS adds `t`, which
+picks the aircraft module. Each module is a different list of commands, a
+different store and a different kneeboard. The sill shows the key beside
+the rest. The screen refuses a key it already answers to.
 
 ### Backups
 
-Everything a writer replaces is copied into `backups/<game>/<stamp>/` in the
-repo first — one folder per run, with a `MANIFEST` saying where each file came
-from. Nothing prunes them.
+A writer copies every file it replaces into `backups/<game>/<stamp>/`
+first. One folder holds one run. A `MANIFEST` file says where each file
+came from. Nothing deletes old runs.
 
-    --backup-dir DIR      somewhere else; SIM_BIND_BACKUPS does the same
-    --restore             put the newest run back
-    --restore-from STAMP  an older one
+    --backup-dir DIR    copy them somewhere else
+    SIM_BIND_BACKUPS    the same, from the environment
 
-    ./bind-wizard.py <game> write --backup-dir ~/OneDrive/backups/<game>
-    ./bind-wizard.py wt write --restore --restore-from 20260918
+A cloud folder or an external disk is a reasonable choice. The game's own
+directory is not.
 
-A cloud folder or an external disk is a reasonable choice for `--backup-dir`;
-the game's own directory is not.
+No verb puts a backup back. `core/backup.py` holds `restore(game, which)`,
+and nothing on the command line reaches it.
 
-Putting one back is War Thunder's only, so far. The `MANIFEST` already says
-where every file belongs, so the rest are a restore away from having it.
+### What decides where a need lands
 
-### What decides placement
+**`urgency`** says when you touch it. The four bands:
 
-**`urgency`** — when you touch it. Nothing at `ON_THE_RAMP` can take a control
-your thumb rests on; nothing at `IN_A_TURN` can be given one you must let go of
-the grip to reach.
+| band | what it means |
+|---|---|
+| `in a turn` | with something on your tail |
+| `on approach` | hands busy, and there is time |
+| `in the air` | somewhere in the cruise |
+| `on the ramp` | canopy open, engine off |
 
-    IN_A_TURN     with something on your tail
-    ON_APPROACH   hands busy, but there is time
-    IN_THE_AIR    somewhere in the cruise
-    ON_THE_RAMP   canopy open, engine off
+A need at `on the ramp` cannot take a control your thumb rests on. A need
+at `in a turn` cannot take a control you must leave the grip to reach.
 
-**`prefer`** — a control you have chosen, by its label in the device map.
-Placed before urgency is considered, so it survives regeneration.
+**`prefer`** pins the need to one control, by its label in the device map.
+The program applies it before it considers urgency.
 
     Need('Gear', 'button', ['ID_GEAR'], prefer='Keyboard B1 button')
 
-**`on`** — the directions a switch physically moves in.
+**`device`** says which device the need belongs on, by the map's kind.
+
+**`on`** says which directions a switch physically moves in.
 
     Need('Speedbrake', 'hat2', ['close', 'open'], on=('forward', 'back'))
 
----
+**`suits`** says what the function is for. The ten jobs: `fire`, `lock`,
+`sensor`, `view`, `trim`, `flight`, `systems`, `defence`, `comms`, `nav`.
+An overlay matches on this.
+
+**`rests`** says where an axis must sit when you let go. The words are
+`centred`, `min`, `mid` and `max`. Pitch has to spring back. A throttle has
+to stay. A brake has to rest at the minimum.
+
+**`finger`** and **`level`** say where on the hand the need belongs, in the
+map's own words.
+
+`ALLOCATION.md` says how these turn into a score.
 
 ## 2. Your hardware changed
 
-    python -m devicemap        (in ../sim-device-map)
+    python -m devicemap        in ../sim-device-map
 
-The capture lands in `captures/<maker>/` with a `kind` — `stick`, `throttle`.
-Planners ask for a kind, so no game code changes. Matching is by USB id and
-fingerprint, not by name, so a firmware update that renames the device still
-matches.
+The capture lands in `captures/<maker>/` with a kind, such as `stick` or
+`throttle`. A planner asks for a kind, so no game code changes. The map
+matches a device by its USB id and its fingerprint, not by its name. A
+firmware update that renames the device still matches.
 
-Two devices of one kind: the connected one wins, otherwise you are asked.
+With two devices of one kind the connected one wins. The program asks you
+when neither is connected.
 
     SIM_DEVICE_ROLES="stick=virpil-vpc-stick-warbrd-d" ./plan.py
     SIM_DEVICE_MAP=/path/to/map ./plan.py
-
----
+    SIM_DEVICE_PROFILE=NAME ./plan.py
 
 ## 3. Find out what a control physically is
 
     ../sim-device-map/probe.py
 
-Touch one thing at a time. Every event prints live with the map's name on it;
-Ctrl-C summarises what moved **together** — a button closing while an axis
-travels, or two axes reporting the same value.
+Touch one thing at a time. Every event prints live with the map's name on
+it. Ctrl-C prints what moved together. A button can close while an axis
+travels. Two axes can report the same value.
 
-Ask before assuming an axis or button is free. *Nothing is bound to it* and
-*nothing else moves with it* are different questions, and the map only answers
-the first unless someone has measured the second.
-
----
+Ask before you assume an axis or a button is free. *Nothing is bound to it*
+and *nothing else moves with it* are different questions. The map answers
+the first one only.
 
 ## 4. Add a game
 
-Two halves have to exist before a layout can:
+Two halves must exist before a layout can.
 
-    ../sim-device-map    what the hardware IS
-    harvest.py           what the game can be TOLD
+| half | what it holds |
+|---|---|
+| `../sim-device-map` | what the hardware is |
+| `games/<game>/harvest.py` | what the game accepts |
 
 ### What a harvest is
 
-**In: the installed game's own files — archives, configs, whatever
-enumerates the actions. Out: one JSON file next to `harvest.py` — every
-action the game will accept a binding for.**
+A harvest reads the installed game's own files. Those are archives,
+configuration files, and whatever else enumerates the actions. It writes
+one JSON file beside `harvest.py`. That file holds every action the game
+accepts a binding for.
 
-The vocabulary is what `plan.py` may name, and that is all a harvest
-answers. It used to answer a second question — how many of the profiles the
-game ships bind each action — and that number ranked somebody else's layout
-for somebody else's hardware. What belongs on a HOTAS is a judgement, and it
-is written down where judgements live: the needs file, or for DCS, its own
-hint table.
+The vocabulary is what `plan.py` may name. That is all a harvest answers.
+What belongs on a HOTAS is a judgement, and a judgement lives in the needs
+file.
 
 ### Steps
 
-1. `games/<name>/harvest.py` — a `core.adapter.Harvest` subclass. `read()`
-   returns `{filename: {section: data}}` and `summary()` the lines a bare run
-   prints. `--json` and the writing come from the base.
-2. Measure what the files do not say. Record it in the code with its evidence,
-   and mark what is still inference.
-3. `games/<name>/plan.py` — a `core.adapter.Planner` subclass: `NEEDS` of
-   `core.needs.Need`, `build()` returning a `core.needs.Layout`, `describe()`,
-   `show()`, `sheet()`, and `write_layout()` returning `{path: contents}`.
-   The flags, the backups and the writing come from the base, so a missing
-   one is a `TypeError` naming it rather than a game that behaves differently
-   from the others.
-4. `games/<name>/README.md` — six headings: where it lives, how to run it, the
-   format, measured, still a guess, gotchas.
-5. A test in `tests/test_formats.py` for whatever the writer does to the game's
-   own text — above all that it **removes** as well as adds, which is the one
-   clause no interface can state. Write the fixture, then break the writer and
-   check the test notices.
-6. A row in `bind-wizard.py`, naming which script and flags each verb maps to. The game
-   itself needs no row: `bind-wizard.py` reads `games/` for that. A verb the game has no
-   answer for is left out and the reason goes in `GAPS`, so a gap reads as a
-   fact about the game rather than an omission.
+1. Write `games/<game>/harvest.py`. Subclass `core.adapter.Harvest`.
+   Implement `read()`, which returns `{filename: {section: data}}`, and
+   `summary()`, which returns the lines a bare run prints. The base class
+   gives you `--json` and the writing. Override `arguments()` for a flag of
+   your own.
+2. Measure what the files do not say. Record the measurement in the code
+   with its evidence. Mark what is still inference.
+3. Write `games/<game>/plan.py`. Subclass `core.adapter.Planner`.
+   Implement `write_layout(rows, layout)`, which returns `{path:
+   contents}`. Declare the rest: `NEEDS_FILE`, `BINDS`, `CATALOGUE`,
+   `CACHE`, `AXES`, `BUTTON`, `MODES`, `PATHS`. Override `variants()` where
+   the game has modules or aircraft. The base class gives you the flags,
+   the backups and the writing.
+4. Write a test in `tests/test_formats.py` for what the writer does to the
+   game's own text. Test that it removes as well as adds. No interface can
+   state that clause. Write the fixture first. Then break the writer and
+   check that the test notices.
+5. Write `games/<game>/README.md`. Describe what is peculiar to this game
+   and nothing else. No code reads it.
 
-`tests/test_contract.py` checks the rest, and checks it on a clone with no
-game installed and nothing harvested. `ARCHITECTURE.md` says what each of the
-three enforcement moments catches.
+`bind-wizard.py` needs no entry. It reads `games/` for the list, and it
+lists a folder that holds a `plan.py`.
+
+`tests/test_contract.py` checks the rest. It checks it on a clone with no
+game installed and nothing harvested. `ARCHITECTURE.md` says what each
+check catches.

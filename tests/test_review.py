@@ -1,14 +1,13 @@
 """The review's bookkeeping, without a terminal.
 
-`core/review.py` is two things bolted together: what the reviewer decided, and
-how it is drawn. Only the first has anything to get wrong, and it is the half
-that decides what ends up in the game's config -- so it is the half kept
-outside the curses loop and tested here.
+`core/review.py` holds two things: what the reviewer decided, and how it
+is drawn. Only the first has anything to get wrong, and it decides what
+ends up in the game's configuration. So it is kept outside the curses loop
+and tested here.
 
-The rules under test are DCS's, because this table is its `run_table`
-generalised: three states rather than two, proposing fills gaps and never
-overwrites, choosing by hand needs no confirming, and `?` is a note to
-yourself rather than a filter.
+The rules under test: three states rather than two, proposing fills gaps
+and never overwrites, choosing by hand needs no confirming, and `?` is a
+note to yourself rather than a filter.
 """
 
 import curses
@@ -16,15 +15,18 @@ import inspect
 import os
 import re
 import unittest
+import unittest.mock
 
 import fake
 from core.actions import Action, Bind
+from core import devmap
 from core import needs as corneeds
 from core import solvers as csolvers
 from core import review
 from core import tui as ctui
 from core.review import UNSET, PROPOSED, MINE, MARK
 from core.needs import Layout, Need, allocate, IN_A_TURN, ON_THE_RAMP
+from test_box import Keyed
 
 
 def stick(*controls):
@@ -39,13 +41,13 @@ DEVS = lambda: stick(                                        # noqa: E731
 )
 
 def plan():
-    """Fresh needs every time, which is not fussiness.
+    """Fresh needs every time, and that is not fussiness.
 
-    `allocate` writes `relaxed` onto a need and a reviewer writes
-    `category`, so a module-level list is one set of objects shared by
-    every test in the file -- and one test filing something under
-    "Combat" put it there for all the others. It cost two failures in
-    tests that were right.
+    `allocate` writes `relaxed` onto a need, and a reviewer writes
+    `category`. A module-level list is one set of objects shared by every
+    test in the file, so one test filing something under "Combat" puts it
+    there for all the others. That cost two failures in tests that were
+    right.
     """
     return [Need('Trim', 'hat4',
                  [[Bind('U')], [Bind('R')], [Bind('D')], [Bind('L')]],
@@ -102,8 +104,9 @@ def owns(rv, role, button):
 def refused(rv, need, role, ctrl):
     """Why this need may not go on this control.
 
-    `why_not` answers None for one that may, and every caller here is about
-    a refusal -- so None is the test failing, not an answer to assert on.
+    `why_not` answers None for one that may, and every caller here is
+    about a refusal. So None is the test failing, and not an answer to
+    assert on.
     """
     no = rv.why_not(need, role, ctrl)
     assert no is not None, f'{need.what} was allowed onto it'
@@ -178,11 +181,10 @@ class Clearing(unittest.TestCase):
         self.assertEqual((0, 0, 3), rv.counts())
 
     def test_a_row_does_not_move_when_it_is_cleared(self):
-        # The rows came in the order the needs list happens to be in,
-        # which is every placement followed by everything unplaced -- so
-        # clearing a binding sent its row to the bottom of its group on
-        # the next open, and a row you were walking towards was not where
-        # you left it.
+        # The needs list runs every placement and then everything
+        # unplaced. Rows in that order move: clearing a binding sends its
+        # row to the bottom of its group on the next open, and a row you
+        # are walking towards is not where you left it.
         rv = made()
         before = [r.text for r in rv.rows() if r.kind == 'need']
         for need in list(rv.needs):
@@ -371,8 +373,9 @@ class ByPress(unittest.TestCase):
         self.assertIn('4', why)
 
     def test_a_control_another_need_holds_is_refused_by_that_needs_name(self):
-        # Canopy is a button need like Gear, so shape is not what refuses it
-        # here -- it is genuinely occupied, and the message has to say by what.
+        # Canopy is a button need like Gear, so the shape is not what
+        # refuses it here. The control is occupied, and the message says
+        # by what.
         rv, gear = self.rv, self.gear
         canopy = by(rv, 'Canopy')
         why = refused(rv, gear, 'stick', at(rv, canopy).ctrl)
@@ -427,11 +430,10 @@ class ByPress(unittest.TestCase):
                 self.assertIn(f'{n} {corneeds.REACH_MEANS[n]}', said)
 
     def test_who_has_names_every_need_on_one_control(self):
-        # The borrow pass hands a leftover need one spare button of a
-        # control something else took, so a hat can hold four needs at
-        # once -- thirteen controls across the five games do. It answered
-        # with the first it found, and the map named that one as if the
-        # rest were nowhere.
+        # The share pass hands a leftover need one spare button of a
+        # control something else took, so a hat holds four needs at once.
+        # Thirteen controls across the five games do. The first one found
+        # is the one the map names, as though the rest were nowhere.
         devs = {'stick': fake.device('stick', [
             fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4)])}
         rv = made([Need('Trim', 'hat4', [[Bind('U')], [Bind('R')],
@@ -573,8 +575,8 @@ class WhereThePressLands(unittest.TestCase):
 
 class Writing(unittest.TestCase):
     def test_a_proposal_nobody_looked_at_is_still_written(self):
-        # `?` says you did not check it, not that it is off -- the call DCS
-        # makes too, whose generator has never filtered on the flag.
+        # `?` says you did not check it. It does not say the row is
+        # off.
         rv = made()
         self.assertEqual((0, 3, 0), rv.counts())
         self.assertEqual(3, len(rv.result().placed))
@@ -593,9 +595,9 @@ class Writing(unittest.TestCase):
 
     def test_axes_alone_are_something_to_write(self):
         # Clear every button and the layout still says which lever is
-        # pitch, which is throttle and which way round they run -- nine
-        # rows for the Hornet -- and `w` refused to write any of it,
-        # because no BUTTON had a home.
+        # pitch, which is throttle, and which way round they run. That is
+        # nine rows for the Hornet, and a check on BUTTONS alone refuses
+        # to write any of it.
         from core import tui as ctui
         from test_box import Keyed
         devs = {'stick': fake.device('stick', [
@@ -649,8 +651,8 @@ class Rows(unittest.TestCase):
         self.assertEqual(['IN A TURN', 'IN THE AIR', 'ON THE RAMP'], heads)
 
     def test_a_gap_cannot_be_selected(self):
-        # A heading is a thing you act on -- `R` renames it -- so what is
-        # left unselectable is what answers nothing.
+        # A heading is a thing you act on, because `R` renames it. What
+        # is left unselectable is what answers nothing.
         rows = made().rows()
         self.assertTrue(all(r.kind != 'gap' for r in rows if r.selectable))
         self.assertTrue(any(r.kind == 'gap' for r in rows))
@@ -707,9 +709,8 @@ class BindsUnderTheAction(unittest.TestCase):
         self.assertNotEqual('bind', rows[i + 1].kind)
 
     def test_an_unassigned_row_still_says_what_would_fit(self):
-        # The footer these two used to check is gone -- what a row binds
-        # has been on the tree since `h` arrived, and the function had no
-        # caller left but them. The panel answers it now.
+        # What a row binds is on the tree, under `h`. The panel answers
+        # it. A footer for the same thing has no caller but a test.
         rv = self.rv()
         gear = by(rv, 'Gear')
         rv.clear(gear)
@@ -737,14 +738,15 @@ class BindsUnderTheAction(unittest.TestCase):
 class TheDetailPanel(unittest.TestCase):
     """What the right-hand panel says about the row you are on.
 
-    It answers three questions and they are not the same question: what is
-    this sitting on, what does it fire, and WHY is it there. The third had
-    no answer at all -- the panel listed the control and its reach and
-    stopped, so the one thing a reader actually argues with, the planner's
-    choice, was the one thing it would not account for.
+    It answers three questions, and they are not the same question: what
+    is this sitting on, what does it fire, and WHY is it there.
 
-    `Reason` is that account, recorded where the decision was made. The
-    panel is its first human reader.
+    A panel that lists the control and its reach and stops leaves the
+    third unanswered. The planner's choice is the thing a reader argues
+    with.
+
+    `Reason` is the account of that choice, recorded where the decision
+    was made. The panel is its first human reader.
     """
 
     def rv(self, **kw):
@@ -835,13 +837,14 @@ class TheDetailPanel(unittest.TestCase):
         self.assertRegex(got, r'\+\d+  \S')
 
     def test_a_control_carrying_several_needs_says_how_many(self):
-        # The borrow pass hands a leftover need a spare button of a
-        # control something else took, so several names can belong on
-        # one row. The first and a count; the map screen has room for
+        # The share pass hands a leftover need a spare button of a
+        # control something else took, so several names belong on one
+        # row. The first name and a count. The map screen has room for
         # all of them and this column has room for one.
-        # `Flaps` wants a hat2, which a hat4 will stand in for, so the
-        # shared hat is a real candidate for it -- a button need is
-        # never ranked against a hat and would see nothing.
+        #
+        # `Flaps` wants a hat2, and a hat4 stands in for one, so the
+        # shared hat is a real candidate for it. A button need is never
+        # ranked against a hat and sees nothing.
         devs = stick(fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4),
                      fake.hat2('Rocker', 5, reach=fake.PINKY))
         rv = made([Need('Trim', 'hat4', [[Bind(x)] for x in 'URDL']),
@@ -891,13 +894,22 @@ class TheDetailPanel(unittest.TestCase):
         self.assertIn(was.label, got, 'where the planner had wanted it')
         self.assertIn(f'The planner wants {was.label}.', got)
 
-    def test_a_borrowed_button_names_whose_control_it_is(self):
+    def test_a_shared_button_says_which_pass_placed_it(self):
+        # In `HOW IT WAS SET`, which is the section about how the row
+        # came to be there, and in the words `CAME_BY` has for it.
+        #
+        # A sentence of its own under the candidate list, such as `This is
+        # a spare button. Trim has the control.`, reads as a note about
+        # the arrow above it, and nothing else on the panel says a share
+        # happened.
         devs = stick(fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4))
         rv = made([Need('Trim', 'hat4', [[Bind(x)] for x in 'URDL']),
                    Need('Fire', 'button', [[Bind('F')]])], devs=devs)
         got = self.text(rv, 'Fire', width=60)
-        self.assertIn('spare button', got)
-        self.assertIn('Trim', got)
+        self.assertIn('HOW IT WAS SET', got)
+        self.assertIn('shares a control', got)
+        head = got[got.index('HOW IT WAS SET'):]
+        self.assertIn('shares', head[:head.index('WHICH CONTROL')])
 
     def test_the_only_control_that_fits_is_one_row_and_no_words(self):
         rv = made([Need('Trim', 'hat4', [[Bind('U')], [Bind('R')],
@@ -952,12 +964,14 @@ class TheDetailPanel(unittest.TestCase):
     # ---- the decision, drawn ----
 
     def test_a_hand_placed_one_is_costed_like_any_other(self):
-        # It drew one line, the control's name, and stopped -- on the
-        # argument that you chose it so there was no argument to draw.
-        # But what a control is worth to an action is a fact about the
-        # desk and not about who typed it, and the number is the whole
-        # of what there is to disagree with. Counted over the six games
-        # the panel was refusing it on 45 rows of 174, 31 of them DCS's.
+        # One line, the control's name, and a stop, on the argument that
+        # you chose it and there is no argument to draw.
+        #
+        # What a control is worth to an action is a fact about the desk
+        # and not about who typed it, and the number is the whole of what
+        # there is to disagree with. Counted over the six games, that
+        # panel refuses it on 45 rows of 174, and 31 of those are
+        # DCS's.
         rv = self.rv()
         gear = by(rv, 'Gear')
         ctrl = next(c for c in rv.layout.devices['stick'].groups(bindable=True)
@@ -970,10 +984,10 @@ class TheDetailPanel(unittest.TestCase):
     # ---- which button of the control ----
 
     def test_which_button_is_not_a_section(self):
-        # It drew a phrase per binding saying why that button. Of the 223
-        # it ever produced across the five games, 221 said nothing had
-        # happened -- `press order`, `as asked`, and `asked for back;
-        # this control calls it aft` about two words for one direction.
+        # A phrase per binding, saying why that button, produces 223
+        # phrases across the five games, and 221 of them say nothing
+        # happened: `press order`, `as asked`, and `asked for back; this
+        # control calls it aft` about two words for one direction.
         got = self.text(self.rv(), 'Trim', width=60)
         self.assertNotIn('WHICH BUTTON', got)
         for rule in ('press order', 'as asked'):
@@ -986,9 +1000,9 @@ class TheDetailPanel(unittest.TestCase):
     # ---- the width ----
 
     def test_nothing_comes_back_wider_than_the_panel(self):
-        # `_draw` wraps too, but without a hanging indent -- so a ledger
-        # line it has to break lands flush left and stops reading as a
-        # ledger. The panel wraps its own.
+        # `_draw` wraps without a hanging indent, so a ledger line it
+        # breaks lands flush left and stops reading as a ledger. The
+        # panel wraps its own lines.
         for w in (18, 22, 26, 40):
             for _tone, t in self.side(self.rv(), 'Trim', w):
                 self.assertLessEqual(len(t), w, repr(t))
@@ -1064,12 +1078,13 @@ class HowItWasSet(unittest.TestCase):
 class Categories(unittest.TestCase):
     """What the list groups by.
 
-    It grouped by urgency band, which is the allocator's scale and not
-    yours: four buckets, named for when you touch a thing, fixed in the
-    source. A category is yours -- you name it, you put things in it, you
-    move them between.
+    The urgency band is the allocator's scale and not yours: four
+    buckets, named for when you touch a thing, fixed in the source.
 
-    They are two fields on purpose. "Combat" can hold something you reach
+    A category is yours. You name it, you put things in it, and you move
+    them between.
+
+    They are two fields on purpose. "Combat" holds something you reach
     for in a turn and something you set on the ramp, and the allocator
     still has to know which is which.
     """
@@ -1102,9 +1117,9 @@ class Categories(unittest.TestCase):
         self.assertNotIn('Trim', self.under(rv, 'IN A TURN'))
 
     def test_a_group_sorts_by_the_most_urgent_thing_in_it(self):
-        # A category holding something you reach for in a turn belongs
-        # above one whose most urgent member waits for the ramp -- the
-        # same order the bands had, derived rather than declared.
+        # A category that holds something you reach for in a turn belongs
+        # above one whose most urgent member waits for the ramp. That is
+        # the order the bands have, derived rather than declared.
         rv = made()
         by(rv, 'Canopy').category = 'Housekeeping'
         by(rv, 'Trim').category = 'Combat'
@@ -1123,10 +1138,10 @@ class Categories(unittest.TestCase):
 class Promoting(unittest.TestCase):
     """Taking something out of the vocabulary and putting it on the list.
 
-    The screen showed 147 rows across five games while the games between
-    them accept 5856 actions. The other 5709 were not hidden -- nothing
-    ever knew about them, because the list was a hand-written literal and
-    the vocabulary was only ever consulted to check spelling.
+    The screen shows 147 rows across five games, and those games accept
+    5856 actions between them. The other 5709 are not hidden. Nothing
+    knows about them, because the list is a hand-written literal and the
+    vocabulary is consulted to check spelling.
     """
 
     CAT = [Action('ID_GEAR', 'Landing gear'),
@@ -1171,13 +1186,19 @@ class Promoting(unittest.TestCase):
         self.assertEqual(1, sum(1 for n in rv.needs
                                 if n.what == 'Landing gear'))
 
-    def test_an_axis_says_it_cannot_go_that_way_yet(self):
-        # Axes never went through the allocator in any game in the family,
-        # so there is nothing for a promoted one to be placed on.
+    def test_an_axis_goes_on_the_list_like_anything_else(self):
+        # It was refused, on the argument that an axis row needs a shape
+        # and a rest and the vocabulary says neither. Axes go through
+        # the allocator with every other need now, and `J` says both --
+        # so the refusal was the last thing standing, and it stood in
+        # the way of binding an axis by hand at all.
         rv = self.rv()
         said = rv.promote(self.CAT[2], 'Combat')
-        self.assertIn('axis', said.lower())
-        self.assertNotIn('Pitch', [n.what for n in rv.needs])
+        self.assertIn('Pitch', [n.what for n in rv.needs])
+        got = next(n for n in rv.needs if n.what == 'Pitch')
+        self.assertEqual(corneeds.AXIS, got.takes)
+        self.assertEqual('axis', got.shape, 'any lever will do')
+        self.assertIn('on the list', said)
 
     def test_promoting_says_the_file_is_behind(self):
         # A judgement is derived from nothing, so it has to be keepable --
@@ -1194,9 +1215,9 @@ class Promoting(unittest.TestCase):
         self.assertFalse(rv.unsaved)
 
     def test_a_screen_with_nowhere_to_write_still_works(self):
-        # DCS derives its needs, so there is no list to keep -- and a
-        # screen that raised rather than said so would take the whole
-        # review down over a thing it cannot help.
+        # DCS derives its needs, so there is no list to keep. A screen
+        # that raised over that takes the whole review down for a thing
+        # it cannot help.
         rv = made(catalogue=self.CAT)
         said = rv.promote(self.CAT[0], 'Combat')
         self.assertIn('Landing gear', [n.what for n in rv.needs])
@@ -1236,9 +1257,8 @@ class Refiling(unittest.TestCase):
                                       if n.what == 'Trim'])
 
     def test_putting_it_back_in_its_band_forgets_the_category(self):
-        # The band is the fallback, not a category -- filing something
-        # under `in a turn` and having that written down as a name would
-        # make the fallback a place you cannot leave.
+        # The band is the fallback and not a category. Written down as a
+        # name, it makes the fallback a place you cannot leave.
         rv = made()
         trim = by(rv, 'Trim')
         rv.refile(trim, 'Combat')
@@ -1256,16 +1276,16 @@ class Refiling(unittest.TestCase):
 
 
 class SelectableHeadings(unittest.TestCase):
-    """A category heading is a thing you can stand on.
+    """A category heading is a thing you stand on.
 
-    `R` renamed the group the cursor's row was IN, which meant renaming a
-    category by standing on one of its members -- so the heading was the
-    one thing on the screen you could read and not touch.
+    `R` that renames the group the cursor's row is IN renames a category
+    by standing on one of its members, and it leaves the heading the one
+    thing on the screen you read and cannot touch.
 
-    Everything else stays guarded by `row.kind`. The handlers that need a
-    `Need` keep asking for one and get None on a heading, which is the
-    graceful half; the ones that act on a group have to branch on the kind
-    themselves rather than lean on `need is not None`.
+    Everything else stays guarded by `row.kind`. A handler that needs a
+    `Need` asks for one and gets None on a heading, which is the graceful
+    half. A handler that acts on a group branches on the kind itself,
+    rather than leaning on `need is not None`.
     """
 
     def rows(self, rv):
@@ -1301,11 +1321,11 @@ class SelectableHeadings(unittest.TestCase):
 
 
 class ThePanelOnAHeading(unittest.TestCase):
-    """Standing on a heading should say something.
+    """Standing on a heading says something.
 
-    It said nothing: `_side` answered `[]` for anything that was not a
-    need, so landing on a heading left an empty box beside it -- which
-    reads as a hole rather than as a thing you are on.
+    `_side` that answers `[]` for anything which is not a need leaves an
+    empty box beside a heading, and that reads as a hole rather than as a
+    thing you are on.
     """
 
     def side(self, rv, name, width=28):
@@ -1339,10 +1359,9 @@ class ThePanelOnAHeading(unittest.TestCase):
 class BeforeWriting(unittest.TestCase):
     """What `w` says before it does it.
 
-    It did it first. The keystroke that overwrites a game's config was
-    one press with nothing between, and the warning that some bindings
-    were still `?` was printed AFTER the file had been written -- which
-    is a warning about a decision already made.
+    The keystroke overwrites a game's configuration file. A warning that
+    some bindings are still `?`, printed AFTER the file is written, is a
+    warning about a decision already made.
     """
 
     def rv(self, **kw):
@@ -1373,17 +1392,18 @@ class BeforeWriting(unittest.TestCase):
 
 
 class WhatYouDecidedOutLastsTheSession(unittest.TestCase):
-    """The marks and the placements used to be rebuilt from the planner on
-    every open, so `C` over the whole list came back purple and in the
-    planner's order, and a binding moved by hand moved back. Three things
-    reached disk -- a category, a rename, an added entry -- and nothing
-    about where anything sat.
+    """What you decided outlasts the session.
 
-    Two strengths, because pressing ENTER and pressing `c` are not the
+    Marks and placements rebuilt from the planner on every open bring `C`
+    over the whole list back purple and in the planner's order, and they
+    move a binding you moved by hand back. Three things reach disk then:
+    a category, a rename and an added entry. Nothing about where anything
+    sits.
+
+    Two strengths, because pressing RETURN and pressing `c` are not the
     same claim. `chose` takes the control before anything is scored.
-    `accepted` changes no allocation at all: it records WHICH control you
-    said yes to, so the row can go back to `?` the day the allocator
-    moves it.
+    `accepted` changes no allocation: it records WHICH control you said
+    yes to, so the row goes back to `?` the day the allocator moves it.
     """
 
     def rig(self, *labels):
@@ -1402,9 +1422,9 @@ class WhatYouDecidedOutLastsTheSession(unittest.TestCase):
                     save=lambda needs, axes=():
                     self.saved.append(needs),
                     # What the adapter hands the real screen. `p` on a
-                    # row you cleared and saved has to lay the thing out
-                    # again -- the allocator was told to leave that row
-                    # alone, so the last plan has nothing for it.
+                    # row you cleared and saved lays the thing out again.
+                    # The allocator was told to leave that row alone, so
+                    # the last plan holds nothing for it.
                     rebuild=lambda: Layout(devs,
                                            *allocate(self.needs, devs)))
 
@@ -1481,7 +1501,7 @@ class WhatYouDecidedOutLastsTheSession(unittest.TestCase):
         self.assertEqual('Thumb B', where['Boost'])
 
     def test_a_control_you_chose_that_is_gone_leaves_the_row_empty(self):
-        # Not moved, and not borrowed a button somewhere else either:
+        # Not moved, and not shared a button somewhere else either:
         # moving it is the one thing writing the choice down was for.
         rv = self.open()
         other = next(c for c in self.devs['stick'].groups()
@@ -1600,9 +1620,9 @@ class WhatYouDecidedOutLastsTheSession(unittest.TestCase):
         self.assertEqual(was, back.assignment)
 
     def test_what_the_allocator_chose_comes_back_as_nothing(self):
-        # It is written so a screen can show what moved since last time,
-        # and read back as no claim at all -- otherwise every run starts
-        # from wherever the last one happened to stop.
+        # It is written so a screen shows what moved since last time, and
+        # read back as no claim at all. Otherwise every run starts from
+        # wherever the last one stopped.
         rv = self.open()
         need = self.only(rv)
         need.assignment = {'role': 'stick', 'control': 'thumb-b',
@@ -1617,15 +1637,14 @@ class WhatYouDecidedOutLastsTheSession(unittest.TestCase):
 class EveryKeyTheScreenNamesIsOneItAnswers(unittest.TestCase):
     """The help, the sill and the handler, held to each other.
 
-    Three places name the keys and a person renaming one has to find all
-    three. Moving write from `w` to `s` -- to match the capture wizard,
-    where `s` has always saved -- touched every one of them, and the only
-    thing that would have caught a miss was pressing the key.
+    Three places name the keys, and somebody who renames one has to find
+    all three. Without this test the only thing that catches a miss is
+    pressing the key.
 
-    A key named but not answered is worse than a missing line: you press
-    it, nothing happens, and nothing says why. The one that would have
-    lost work is `w` still reading "write" in the sill while the handler
-    had stopped listening.
+    A key named and not answered is worse than a missing line: you press
+    it, nothing happens, and nothing says why. The one that loses work is
+    `w` still reading "write" in the sill while the handler has stopped
+    listening.
     """
 
     def named(self, rows):
@@ -1654,9 +1673,9 @@ class EveryKeyTheScreenNamesIsOneItAnswers(unittest.TestCase):
         self.assertEqual(set(), missing, 'shown in the sill and dead')
 
     def test_the_sill_and_the_help_agree(self):
-        # The sill is a subset by design -- it holds what you reach for
-        # constantly -- but a key in it that the help has never heard of
-        # is one of them left behind by a rename.
+        # The sill is a subset by design, because it holds what you reach
+        # for constantly. A key in it the help has never heard of is one
+        # a rename left behind.
         self.assertEqual(set(), self.named(review.HINTS)
                          - self.named(review.KEYS))
 
@@ -1673,15 +1692,16 @@ class EveryKeyTheScreenNamesIsOneItAnswers(unittest.TestCase):
         self.assertIn('w', self.answered())
 
     def test_no_key_is_answered_twice(self):
-        # Answered is not the same as reachable. `j` was a step down the
-        # list AND the job menu, and the step is first in the chain, so
-        # the menu could not be opened and `j job` in the sill was a line
-        # about nothing -- which the two tests above pass straight over,
-        # because the key IS answered, just not for the thing it says.
-        # Twice is allowed and used: `c` and `enter` mean one thing on an
+        # Answered is not the same as reachable. A `j` that is both a
+        # step down the list AND the job menu answers at the step, which
+        # comes first in the chain. The menu never opens, and `j job` in
+        # the sill is a line about nothing. The two tests above pass
+        # straight over that, because the key IS answered.
+        #
+        # Twice is allowed and used. `c` and `enter` mean one thing on an
         # axis row and another on a need, and each branch says which row
         # it wants. What kills a key is an earlier branch that asks for
-        # nothing but the key -- after that, nothing else can see it.
+        # nothing but the key. Nothing after that sees it.
         src = inspect.getsource(review._loop)
         branches = re.findall(r"^\s+(?:el)?if k (?:==|in) ([^:]+):", src,
                               re.M)
@@ -1697,12 +1717,12 @@ class EveryKeyTheScreenNamesIsOneItAnswers(unittest.TestCase):
 
 
 class AGameMayPutAKeyOnTheScreen(unittest.TestCase):
-    """For the one thing only it does.
+    """For the one thing only that game does.
 
-    DCS lays out one aircraft module at a time -- the Hornet's commands
-    are not the Su-25T's -- so changing which is a different list, a
-    different store and a different kneeboard. It kept a menu of its own
-    for that, which is half of why it kept a whole screen.
+    DCS lays out one aircraft module at a time, because the Hornet's
+    commands are not the Su-25T's. So changing which one means a
+    different list, a different store and a different kneeboard. A menu
+    of its own for that is half of why a game keeps a whole screen.
     """
 
     def rv(self, offers):
@@ -1724,16 +1744,51 @@ class AGameMayPutAKeyOnTheScreen(unittest.TestCase):
     def test_a_game_that_offers_nothing_is_the_normal_case(self):
         self.assertEqual([], self.rv([]).offers)
 
+    def driven(self, offers, keys):
+        """`_loop` over a fake screen, and what it returned.
+
+        `Sticks` opens no device until a capture asks it to, so a loop
+        with no press in it costs nothing here.
+        """
+        rv = self.rv(offers)
+        scr = Keyed(list(keys))
+        # `setup` is the one part that wants a real terminal: it sets the
+        # cursor and starts colour. A `Tui` over the fake screen is what
+        # every other screen test uses.
+        with unittest.mock.patch.object(
+                review.ctui, 'setup',
+                lambda s: ctui.Tui(s, ctui.Theme(False))):
+            got = review._loop(scr, rv, None, review.Sticks(rv.layout))
+        return got, scr.frames
+
+    def test_a_word_it_answers_with_lands_in_the_status(self):
+        got, _frames = self.driven(
+            [('t', 'type', lambda _rv, _tui: 'picked the same one')],
+            [ord('t'), ord('q')])
+        self.assertIsNone(got)
+
+    def test_an_adapter_it_answers_with_comes_back_out_of_the_loop(self):
+        # This is DCS's `t`. The screen closes and `Adapter.review`
+        # opens a new one on what comes back, because another aircraft is
+        # another list, another store and another kneeboard. A loop that
+        # swallowed this left the key doing nothing you could see.
+        sentinel = object()
+        got, _frames = self.driven(
+            [('t', 'type', lambda _rv, _tui: sentinel)],
+            [ord('t')])
+        self.assertIs(sentinel, got)
+
 
 class AnAxisIsARowLikeAnyOther(unittest.TestCase):
     """The axes, on the one list, answering the one set of keys.
 
-    They were a second model of everything: their own object, their own
-    resolver, their own section at the bottom of the list, their own
-    panel, their own file section and their own branch of `c`, `x`, `↵`
-    and `i`. None of that was a decision -- it is how they grew. The one
-    thing that really is different is that a lever is NAMED and not
-    chosen, which is one pass in the allocator.
+    A second model of everything is their own object, their own resolver,
+    their own section at the bottom of the list, their own panel, their
+    own file section, and their own branch of `c`, `x`, `↵` and `i`. None
+    of that is a decision. It is how they grow.
+
+    The one thing that is different is that a lever is NAMED and not
+    chosen, and that is one pass in the allocator.
     """
 
     def rv(self, **kw):
@@ -1780,9 +1835,9 @@ class AnAxisIsARowLikeAnyOther(unittest.TestCase):
         self.assertIn('is yours.', rv.confirm(pitch))
 
     def test_capital_c_takes_it_too(self):
-        # `C` greened every need and left the axes purple, which is what
-        # "I saved it and it is still purple" turned out to be -- and
-        # there is nothing left for it to walk past now.
+        # `C` over the needs alone leaves the axes purple. That is what
+        # "I saved it and it is still purple" was, and there is nothing
+        # left for `C` to walk past.
         rv, pitch = self.rv()
         rv.confirm_all()
         self.assertEqual(MINE, rv.mark[pitch])
@@ -1881,6 +1936,22 @@ class AnAxisIsARowLikeAnyOther(unittest.TestCase):
         self.assertIn('  i ', '\n'.join(t for _tone, t in review.KEYS))
 
 
+class _Answers:
+    """A `tui` that answers `choose` from a list, for the walks.
+
+    The form and its sub-walks are `choose` boxes and nothing else, so a
+    test drives them by saying which row each box comes back with.
+    """
+
+    def __init__(self, picks):
+        self.picks = list(picks)
+        self.asked = []
+
+    def choose(self, title, lines, **kw):
+        self.asked.append((title, [t for _tone, t in lines]))
+        return self.picks.pop(0) if self.picks else None
+
+
 class _Fake:
     """An axis object with just enough on it to be drawn."""
     index = 0
@@ -1888,12 +1959,12 @@ class _Fake:
 
 
 class LayingItOutToAnOverlay(unittest.TestCase):
-    """`o`: put a cockpit template on, take it off, and plan again.
+    """`o` puts a cockpit template on, takes it off, and plans again.
 
-    It used to be a flag at startup and nothing else, so trying a template
-    meant quitting, and the screen never said whether one was on. Two
-    things that look identical on a row -- "the planner had no wishes" and
-    "the planner ignored mine" -- and no way to tell them apart.
+    A flag at startup and nothing else means trying a template means
+    quitting, and the screen says nothing about whether one is on. Two
+    things then look identical on a row: "the planner had no wishes" and
+    "the planner ignored mine".
     """
 
     def setUp(self):
@@ -1983,14 +2054,15 @@ class LayingItOutToAnOverlay(unittest.TestCase):
 
 
 class WhatAFunctionIsFor(unittest.TestCase):
-    """The job: the one word an overlay takes hold of.
+    """The job is the one word an overlay takes hold of.
 
-    It was free text, invisible on screen, and absent from 65 of the 147
-    functions -- so a template had nothing to match for nearly half the
-    list, and no way to tell. Now it is on the panel and `j` sets it from
-    the closed table, because a function filed under the wrong job misses
-    every wish in every template and looks exactly like a template that
-    did not apply.
+    As free text, invisible on screen, it is absent from 65 of the 147
+    functions: a template has nothing to match for nearly half the list,
+    and nothing says so.
+
+    It is on the panel, and `J` sets it from the closed table. A function
+    filed under the wrong job misses every wish in every template, and
+    that looks like a template that did not apply.
     """
 
     def rv(self):
@@ -2028,20 +2100,173 @@ class WhatAFunctionIsFor(unittest.TestCase):
     def test_the_key_is_in_the_sill_and_the_help(self):
         # `J`: `j` is a step down the list, and the step is first in the
         # chain, so the menu on `j` could not be opened at all.
-        self.assertIn('J job', review.HINTS)
+        self.assertIn('J what it is', review.HINTS)
         self.assertIn('  J ', '\n'.join(t for _tone, t in review.KEYS))
+
+
+class WhatAFunctionIs(unittest.TestCase):
+    """The form behind `J`: everything the scorer reads about a function.
+
+    One key per field runs out of keys. `J` asks the job and `i` turns an
+    axis round, and nothing asks the band, the shape, the device or the
+    hand. The game whose needs were worked out from its own command names
+    then has no way to correct them.
+    """
+
+    def rv(self, need=None, catalogue=()):
+        return made([need or Need('Boost', 'button', [[Bind('BOOST')]],
+                                  suits='flight')],
+                    catalogue=catalogue,
+                    save=lambda needs, axes=(): 'wrote 1')
+
+    def axis(self):
+        return Need('Pitch', 'stick', [[Bind('PITCH')]], suits='flight',
+                    takes=corneeds.AXIS, rests='centred', on=('y',))
+
+    def test_every_field_it_offers_is_one_the_scorer_reads(self):
+        # A row that sets something nothing scores is a question that
+        # wastes your time and reads as if it mattered.
+        need = self.axis()
+        for field, label, kind, _when in review.DESCRIBED:
+            with self.subTest(field=field):
+                self.assertTrue(hasattr(need, field), field)
+                self.assertTrue(label and kind)
+
+    def test_every_word_it_offers_is_one_the_tables_define(self):
+        # The point of the closed lists: a form cannot ask for a job, a
+        # shape, a band, a device, a finger or a rest that nothing
+        # scores, because it reads the same tables the scorer reads.
+        dm = devmap.load()
+        known = {
+            'job': set(corneeds.JOBS),
+            'band': set(range(len(corneeds.URGENCY_NAME))),
+            'shape': set(corneeds.RULES['shapes']),
+            'flag': {True, False},
+            'device': set(dm.ROLES_ON_A_DESK),
+            'finger': set(dm.FINGERS) - {dm.HAND},
+            'rests': set(corneeds.RESTS),
+        }
+        need = self.axis()
+        for _field, _label, kind, _when in review.DESCRIBED:
+            if kind == 'on':
+                # Its own list, and its own screen: the words a control
+                # answers with, which is why `_ways` takes the control.
+                got = set(review._ways(need, None))
+                self.assertTrue(got <= {'x', 'y', 'z'}, got)
+                continue
+            with self.subTest(kind=kind):
+                got = {v for v, _said in review._choices(need, kind)}
+                self.assertTrue(got)
+                self.assertTrue(got <= known[kind], got - known[kind])
+
+    def test_an_axis_is_asked_what_it_rests_at_and_a_button_is_not(self):
+        # `rests` is the one field that is about an axis and nothing
+        # else, and a button asked where it rests is a question with no
+        # answer.
+        for need, want in ((self.axis(), True),
+                           (Need('Gear', 'button', [[Bind('GEAR')]]), False)):
+            with self.subTest(takes=need.takes):
+                rows = [f for f, _l, _k, when in review.DESCRIBED
+                        if when == 'always' or need.takes == corneeds.AXIS]
+                self.assertEqual(want, 'rests' in rows)
+
+    def test_saying_one_thing_marks_the_file_behind(self):
+        rv = self.rv()
+        need = rv.needs[0]
+        rv.say(need, 'shape', 'hat2')
+        self.assertEqual('hat2', need.shape)
+        self.assertTrue(rv.unsaved)
+        self.assertEqual('a shape changed', rv.since)
+
+    def test_a_flag_takes_no_article(self):
+        rv = self.rv()
+        rv.say(rv.needs[0], 'held', True)
+        self.assertIs(True, rv.needs[0].held)
+        self.assertEqual('held changed', rv.since)
+
+    def test_saying_what_it_already_says_changes_nothing(self):
+        # Picking the value it is already on said `unsaved` for it, and
+        # then the save box named a change nobody made.
+        rv = self.rv()
+        rv.say(rv.needs[0], 'shape', 'button')
+        self.assertFalse(rv.unsaved)
+
+    def test_the_job_goes_through_the_one_check_there_is(self):
+        # `refile_job` holds the word list. Two ways in would be two
+        # chances for a word nobody wrote.
+        rv = self.rv()
+        rv.say(rv.needs[0], 'suits', 'reflex')
+        self.assertEqual('flight', rv.needs[0].suits)
+
+    def test_which_way_a_family_points_is_asked_per_member(self):
+        # `on` is three questions wearing one name. For a family it is
+        # one answer per member, in the order the bindings are in,
+        # because that order IS which button gets which.
+        need = Need('Select', 'hat4',
+                    [[Bind('AMRAAM')], [Bind('GUN')], [Bind('AIM9')],
+                     [Bind('SPARROW')]], suits='fire',
+                    on=('left', 'down', 'down', 'up'))
+        rv = self.rv(need, catalogue=[
+            Action('AMRAAM', 'Select AMRAAM'), Action('GUN', 'Select Gun'),
+            Action('AIM9', 'Select Sidewinder'),
+            Action('SPARROW', 'Select Sparrow')])
+        ways = review._ways(need, None)
+        tui = _Answers([2, ways.index('right')])
+        said = review._pick_on(tui, rv, need)
+        self.assertTrue(said)
+        self.assertEqual(('left', 'down', 'right', 'up'), need.on)
+        # Named out of the game's own vocabulary, not numbered: the four
+        # rows of the first box are the four commands of the switch, and
+        # `Select Sidewinder` is the one this test moved.
+        first = tui.asked[0][1]
+        self.assertTrue(any('Select Sidewinder' in t for t in first), first)
+        self.assertFalse(any('AIM9' in t for t in first), first)
+
+    def test_and_an_axis_is_asked_which_part_of_the_control_it_is(self):
+        need = self.axis()
+        rv = self.rv(need)
+        said = review._pick_on(_Answers([0]), rv, need)
+        self.assertTrue(said)
+        self.assertEqual(('x',), need.on)
+
+    def test_the_words_are_the_maps_own(self):
+        # A hat takes the direction words `[directions]` accepts; an
+        # axis takes which part of the control it is.
+        hat = Need('Trim', 'hat4', [[Bind('U')], [Bind('D')]], suits='trim')
+        self.assertTrue(set(review._ways(hat, None))
+                        >= set(corneeds.RULES['directions']))
+        self.assertEqual(('x', 'y', 'z'), review._ways(self.axis(), None))
+
+    def test_a_lone_button_is_not_asked_which_way_it_points(self):
+        # One press has no direction to choose, and a row offering one
+        # is a question with no answer.
+        lone = Need('Gear', 'button', [[Bind('GEAR')]])
+        self.assertFalse(review._applies('moves', lone))
+        for need in (self.axis(),
+                     Need('Trim', 'hat2', [[Bind('U')], [Bind('D')]])):
+            with self.subTest(what=need.what):
+                self.assertTrue(review._applies('moves', need))
+
+    def test_a_field_can_be_taken_back_to_nothing(self):
+        # `device` and `finger` are the cockpit, and a module that does
+        # not keep a thing under a finger has to be able to say so.
+        rv = self.rv()
+        rv.say(rv.needs[0], 'finger', 'thumb')
+        rv.say(rv.needs[0], 'finger', None)
+        self.assertIsNone(rv.needs[0].finger)
 
 
 class SavingIsAKeystroke(unittest.TestCase):
     """Nothing reaches disk until `s`, the way the capture wizard works.
 
-    It used to write on every decision -- eight call sites, a whole-file
-    rewrite each. The argument was that a save key you can forget is how
-    an evening of choices comes back purple; the answer is that `s` means
-    save in the other half of the pair, used in the same sitting, and one
-    key meaning two things is worse than the keystroke it saved. The way
-    out is the capture wizard's: say `unsaved` on the frame, and offer the
-    save on the way out.
+    A write on every decision is eight call sites and a whole-file
+    rewrite each. The argument for it is that a save key you can forget
+    is how an evening of choices comes back purple.
+
+    The answer is that `s` means save in the other half of the pair, used
+    in the same sitting, and one key meaning two things is worse than the
+    keystroke it saves. So the frame says `unsaved`, and the save is
+    offered on the way out.
     """
 
     def setUp(self):
@@ -2087,11 +2312,11 @@ class SavingIsAKeystroke(unittest.TestCase):
         self.assertNotIn('unsaved', review._tally(rv))
 
     def test_the_box_names_what_the_files_do_not_have(self):
-        # The counts say how much is about to be written, which is not
-        # the question somebody has when this box comes up on the way out
-        # after they pressed `s`. That question is what changed since,
-        # and twelve keys can have changed it -- one of them a button
-        # read off the stick while the box asking for it was on screen.
+        # The counts say how much is about to be written. Somebody who
+        # sees this box on the way out after pressing `s` is asking what
+        # changed since, and twelve keys can have changed it. One of those
+        # keys is a button read off the stick while the box asking for it
+        # was on screen.
         rv = self.rv()
         rv.confirm_all()
         said = '\n'.join(t for _tone, t in review._save_plan(rv, 44))
@@ -2140,13 +2365,15 @@ class SavingIsAKeystroke(unittest.TestCase):
 class TheRulesScreen(unittest.TestCase):
     """How a control is chosen, drawn from the tables that choose it.
 
-    The point is not that it explains the allocator -- a hand-written
-    paragraph would too, until somebody changed a number. The point is
-    that it cannot go stale: every line it draws is read out of the table
-    the allocator itself reads, so tuning a weight rewrites the screen.
+    The point is not that it explains the allocator. A hand-written
+    paragraph does that, until somebody changes a number.
 
-    What is NOT here is the pass order, which is control flow and would
-    need a parser to derive. It is one sentence and it is written out.
+    The point is that it cannot go stale. Every line it draws is read out
+    of the table the allocator reads, so tuning a weight rewrites the
+    screen.
+
+    The pass order is NOT here. That is control flow, and deriving it
+    needs a parser. It is one sentence, written out.
     """
 
     def said(self, rv=None):
@@ -2178,11 +2405,11 @@ class TheRulesScreen(unittest.TestCase):
             self.assertIn(str(term['weight']), said, term['name'])
 
     def test_it_leaves_the_working_out_in_the_file(self):
-        # It drew every `note` once -- the reason a limit is what it is,
+        # Every `note` drawn here puts the reason a limit is what it is
         # on the screen beside the limit. Half a page of why a weight was
         # retuned, under some rows and not others, reads as noise that
         # turns up at random. Whoever is about to change a number is
-        # looking at scoring.toml, and that is where they are.
+        # looking at scoring.toml, and the notes are there.
         said = self.said()
         noted = [x for x in list(corneeds.RULES['band'])
                  + list(corneeds.TERMS) + list(corneeds.FACTS)
@@ -2242,11 +2469,11 @@ class TheRulesScreen(unittest.TestCase):
             self.assertNotIn(gate['says'], self.said(made(rules=mine)))
 
     def test_it_shows_what_the_desk_measured(self):
-        # 205 answers you gave the capture wizard decide bindings now, so
-        # the screen that explains the decision has to name them -- and
-        # name what turns each one on, because a fact the binding does not
-        # ask for counts for nothing and a screen that omitted that would
-        # be describing a harsher allocator than the one that ran.
+        # 205 answers you gave the capture wizard decide bindings, so the
+        # screen that explains the decision names them. It names what
+        # turns each one on as well: a fact the binding does not ask for
+        # counts for nothing, and a screen that left that out would
+        # describe a harsher allocator than the one that ran.
         said = self.said()
         for fact in corneeds.FACTS:
             self.assertIn(fact['asked'], said, fact['reads'])
@@ -2268,10 +2495,10 @@ class TheRulesScreen(unittest.TestCase):
         self.assertIn('it stages', said)
 
     def test_it_is_derived_and_not_transcribed(self):
-        # The test that earns the screen. Move a limit and it has to move
-        # with it; a hand-written one would not. It is also the thing DCS
-        # needs, since it tightens a band -- a screen showing the core's
-        # numbers there would be explaining somebody else's allocator.
+        # The test that earns the screen. Move a limit and the screen
+        # moves with it. A hand-written one does not. DCS needs this,
+        # because it tightens a band: the core's numbers there explain
+        # somebody else's allocator.
         mine = corneeds.merge_rules(
             corneeds.RULES, {'band': [{'name': 'in the air',
                                        'takes': [0, 1]}]})
@@ -2390,11 +2617,11 @@ class FilteringAndFolding(unittest.TestCase):
 
 
 class TheFilterSaysSoOnScreen(unittest.TestCase):
-    """A narrowed list has to say it is narrowed.
+    """A narrowed list says it is narrowed.
 
-    The status line said it once, on the keystroke, and then the next
-    movement cleared it -- so a screen showing three of thirty-one rows
-    looked exactly like a game with three needs.
+    Said once on the keystroke, and cleared by the next movement, a
+    screen showing three of thirty-one rows looks like a game with three
+    needs.
     """
 
     def test_nothing_is_said_when_nothing_is_narrowed(self):
@@ -2418,11 +2645,12 @@ class TheFilterSaysSoOnScreen(unittest.TestCase):
 
 
 class TwoPanelsOrOne(unittest.TestCase):
-    """Side by side where there is room, stacked where there is not.
+    """Side by side where there is room, and stacked where there is not.
 
-    The detail panel used to be five lines at the bottom, and X4's `View`
-    puts six under one hat -- so the one row that needed the space was the
-    one that could not have it. A column has the height of the screen.
+    A detail panel of five lines at the bottom cannot hold X4's `View`,
+    which puts six bindings under one hat. The row that needs the space
+    is the one that cannot have it. A column has the height of the
+    screen.
     """
 
     def test_a_wide_terminal_gets_two_panels(self):
@@ -2533,9 +2761,10 @@ class WhatItFound(unittest.TestCase):
                          'ids and counts are true but never the answer')
 
     def test_the_map_is_three_levels_deep_and_looks_it(self):
-        # WHERE / profile dir / the path itself are a section, the thing it
-        # names and the detail under it -- and all three in one blue is a
-        # listing you have to read from the top to know where you are.
+        # WHERE, the profile directory and the path itself are a section,
+        # the thing it names, and the detail under it. All three in one
+        # blue is a listing you read from the top to know where you
+        # are.
         rv = self.two_sticks()
         self.assertEqual('head', map_tone(rv, 'WHERE'))
         self.assertEqual('subhead', map_tone(rv, 'game'))
@@ -2660,8 +2889,8 @@ class Footer(unittest.TestCase):
             self.assertLessEqual(len(line), self.WIDTH - 1, line)
 
     def test_every_hint_in_the_border_is_also_in_the_help(self):
-        # Otherwise the two drift and the short list becomes the only place
-        # some key is named -- which is how `w write` went missing before.
+        # Otherwise the two drift, and the short list becomes the only
+        # place some key is named.
         listed = self.said()
         for hint in review.HINTS:
             key = hint.split()[0]
@@ -2676,9 +2905,10 @@ class Footer(unittest.TestCase):
             self.assertIn(what, keys)
 
     def test_every_branch_of_the_loop_is_reachable_from_the_footer(self):
-        # Per branch, not per letter: `m` and `M` are one action under two
-        # keys, while `c` and `C` are two actions. What has to be findable is
-        # the action -- so each branch needs one of its keys spelled out.
+        # Per branch, and not per letter. `m` and `M` are one action
+        # under two keys, and `c` and `C` are two actions. The action is
+        # what has to be findable, so each branch spells out one of its
+        # keys.
         import inspect
         src = inspect.getsource(review._loop)
         listed = self.said()
@@ -2716,3 +2946,263 @@ class Describing(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class AFieldNobodyAnsweredSaysSo(unittest.TestCase):
+    """`WHAT IT ASKED FOR` draws an empty field as `MISSING`.
+
+    Four of its fields are ones the scorer reads and a row can be
+    without. Left out of the panel, the row says nothing about them, and
+    a reader cannot tell a field nobody answered from a field this panel
+    does not show.
+
+    Measured on X4's 45 rows: 32 carry no `device` and 27 no `on`. Those
+    32 are placed on reach and shape alone, and nothing else on the
+    screen says so.
+    """
+
+    def side(self, need):
+        rv = made([need])
+        row = next(r for r in rv.rows()
+                   if r.kind == 'need' and r.need is need)
+        return '\n'.join(t for _tone, t in review._side(rv, row, 46))
+
+    def asked(self, need):
+        """Just the `WHAT IT ASKED FOR` section."""
+        said = self.side(need).split('WHAT IT ASKED FOR')[1]
+        return said.split('\n\n')[0]
+
+    def test_a_row_with_no_job_says_missing(self):
+        said = self.asked(Need('Gear', 'button', [[Bind('GEAR')]]))
+        self.assertIn('job', said)
+        self.assertIn(review.MISSING, said)
+
+    def test_a_row_with_no_device_says_missing(self):
+        # 32 of X4's 45. A row with no device is scored on reach and
+        # shape alone, which is a different layout from one that asked.
+        said = self.asked(Need('Gear', 'button', [[Bind('GEAR')]],
+                               suits='systems'))
+        self.assertRegex(said, r'device\s+' + review.MISSING)
+
+    def test_a_family_with_no_directions_says_missing(self):
+        # A hat without `on` lands in press order, and not where the
+        # switch moves.
+        said = self.asked(Need('Trim', 'hat4', [[Bind('U')], [Bind('R')],
+                                                [Bind('D')], [Bind('L')]],
+                               suits='trim'))
+        self.assertRegex(said, r'on\s+' + review.MISSING)
+
+    def test_one_binding_is_not_asked_for_directions(self):
+        # A lone press has no direction to choose, so there is nothing
+        # missing from it.
+        said = self.asked(Need('Gear', 'button', [[Bind('GEAR')]],
+                               suits='systems'))
+        self.assertNotRegex(said, r'\bon\s')
+
+    def test_an_answered_field_says_the_answer(self):
+        said = self.asked(Need('Gear', 'button', [[Bind('GEAR')]],
+                               suits='systems', device='stick'))
+        self.assertNotIn(review.MISSING, said)
+        self.assertIn('systems', said)
+        self.assertIn('stick', said)
+
+
+class WhatHappensToTheRow(unittest.TestCase):
+    """The last section of the panel: the state, and what moves it.
+
+    Every other section answers a question about the past. This one
+    answers the two a reader has next: where does this row stand, and
+    what changes it.
+
+    The four states differ in what moves them, which is why each one
+    gets its own line.
+    """
+
+    def last(self, rv, what):
+        """The `WHAT HAPPENS TO IT` section of one row's panel."""
+        row = next(r for r in rv.rows()
+                   if r.kind == 'need' and r.need.what == what)
+        said = '\n'.join(t for _tone, t in review._side(rv, row, 60))
+        self.assertIn('WHAT HAPPENS TO IT', said)
+        return said.split('WHAT HAPPENS TO IT')[1]
+
+    def test_a_proposal_says_the_next_plan_can_move_it(self):
+        rv = made()
+        said = self.last(rv, 'Gear')
+        self.assertIn('The program put this here', said)
+        self.assertIn('next plan', said)
+
+    def test_your_own_choice_says_nothing_moves_it(self):
+        rv = made()
+        need = by(rv, 'Gear')
+        rv.assign(need, 'stick', DEVS()['stick'].groups()[1])
+        said = self.last(rv, 'Gear')
+        self.assertIn('You put this here', said)
+        self.assertIn('Nothing moves it', said)
+
+    def test_a_proposal_you_accepted_says_what_can_move_it(self):
+        # Two decisions wear the mark `+`, and they differ in exactly
+        # what this section answers. `chose` takes the control before
+        # anything is scored, so nothing moves it. `accepted` changes no
+        # allocation: the row still competes, and a new desk or a new
+        # list moves it and sends the mark back to `?`.
+        #
+        # One sentence for both says "nothing moves it" about a row a
+        # replan can move, which is the opposite of true.
+        rv = made()
+        need = by(rv, 'Gear')
+        rv.confirm(need)
+        said = self.last(rv, 'Gear')
+        self.assertIn('You accepted this control', said)
+        self.assertNotIn('Nothing moves it', said)
+        self.assertIn('move it back', said)
+        # And it names the mark the row goes back to, so the sentence
+        # points at a thing the legend explains.
+        self.assertIn(MARK[PROPOSED], said)
+
+    def test_the_two_strengths_do_not_read_the_same(self):
+        chose, accepted = made(), made()
+        chose.assign(by(chose, 'Gear'), 'stick',
+                     DEVS()['stick'].groups()[1])
+        accepted.confirm(by(accepted, 'Gear'))
+        self.assertNotEqual(self.last(chose, 'Gear'),
+                            self.last(accepted, 'Gear'))
+
+    def test_a_row_you_emptied_says_no_pass_fills_it(self):
+        # `x` writes `how: cleared`, and the allocator is told to leave
+        # such a row alone. Said as "the program found no control", it
+        # would be blaming the planner for your own decision.
+        rv = made()
+        rv.clear(by(rv, 'Gear'))
+        said = self.last(rv, 'Gear')
+        self.assertIn('You emptied this row', said)
+
+    def test_a_row_with_nowhere_to_go_says_the_program_found_none(self):
+        # An encoder, on a desk with no encoder on it. The shape gate
+        # refuses every control, so this row is empty and nobody
+        # emptied it.
+        rv = made([Need('Range', 'encoder', [[Bind('UP')], [Bind('DN')]],
+                        suits='sensor')])
+        said = self.last(rv, 'Range')
+        self.assertIn('found no control', said)
+
+    def test_a_row_with_no_job_says_no_overlay_reaches_it(self):
+        # The job is the one word an overlay matches on, so a row
+        # without one is invisible to every template.
+        rv = made([Need('Gear', 'button', [[Bind('GEAR')]])])
+        self.assertIn('no job', self.last(rv, 'Gear'))
+
+    def test_a_row_with_a_job_does_not_say_it(self):
+        rv = made([Need('Gear', 'button', [[Bind('GEAR')]],
+                        suits='systems')])
+        self.assertNotIn('no job', self.last(rv, 'Gear'))
+
+    def test_it_is_the_last_thing_on_the_panel(self):
+        # The two questions a reader has next, so they are where the
+        # reader stops.
+        rv = made()
+        row = next(r for r in rv.rows()
+                   if r.kind == 'need' and r.need.what == 'Gear')
+        said = [t for _tone, t in review._side(rv, row, 60) if t.strip()]
+        head = next(i for i, t in enumerate(said)
+                    if 'WHAT HAPPENS TO IT' in t)
+        self.assertLessEqual(len(said) - head, 4)
+
+
+class WhatTheProgramPlacedIsWrittenDown(unittest.TestCase):
+    """The binds file answers what is on the desk, not what a hand
+    touched.
+
+    `dump_assignments` writes a row for every need that carries an
+    assignment. A proposal carried none, so `X` then `P` then `s` wrote a
+    file with no rows in it while the screen held 42 placed. That is the
+    opposite of what that function's own first line promises.
+
+    `SOLVED` is the word for a placement the program made.
+    `read_assignments` drops such a row, so the next run scores from
+    scratch, and the `yours` pass takes `CHOSE` alone. What the row buys
+    is `stayed`, the term worth +20 that keeps a layout from reshuffling,
+    and a screen that can say what moved.
+    """
+
+    def test_a_proposal_reaches_the_file(self):
+        rv = made()
+        rows = corneeds.dump_assignments(rv.needs)
+        self.assertEqual(len(rv.placements()), len(rows))
+        self.assertEqual({corneeds.SOLVED}, {r['how'] for r in rows})
+
+    def test_it_names_the_control_it_sits_on(self):
+        rv = made()
+        # `at` for a row the planner placed, which `made()` guarantees.
+        # None here is the fixture failing rather than a case to handle.
+        at = rv.at[by(rv, 'Gear')]
+        assert at is not None
+        (row,) = [r for r in corneeds.dump_assignments(rv.needs)
+                  if r['what'] == 'Gear']
+        self.assertEqual(at.role, row['role'])
+        self.assertEqual(at.ctrl.id, row['control'])
+
+    def test_it_reads_back_as_no_claim(self):
+        # Otherwise every run starts from wherever the last one stopped.
+        rv = made()
+        rows = corneeds.dump_assignments(rv.needs)
+        fresh = corneeds.read_needs(corneeds.dump_needs(rv.needs))
+        corneeds.read_assignments(rows, fresh)
+        self.assertEqual([None] * len(fresh), [n.assignment for n in fresh])
+
+    def test_a_decision_of_yours_is_not_overwritten(self):
+        # `chose`, `accepted` and `cleared` are answers. This is a note
+        # about a proposal, and a replan must not turn one into the other.
+        rv = made()
+        rv.assign(by(rv, 'Gear'), 'stick', DEVS()['stick'].groups()[1])
+        rv.confirm(by(rv, 'Trim'))
+        rv.clear(by(rv, 'Canopy'))
+        was = {n.what: (n.assignment or {}).get('how') for n in rv.needs}
+        rv.relay(Layout(DEVS(), *allocate(rv.needs, DEVS())))
+        for what, how in was.items():
+            with self.subTest(what=what):
+                need = by(rv, what)
+                self.assertEqual(how, (need.assignment or {}).get('how'))
+
+    def test_a_cleared_row_writes_no_control(self):
+        # `x` is the one decision of yours that names no control, so a
+        # replan must not fill the gap it made with a `solver` row.
+        rv = made()
+        rv.clear(by(rv, 'Gear'))
+        rv.relay(Layout(DEVS(), *allocate(rv.needs, DEVS())))
+        said = by(rv, 'Gear').assignment or {}
+        self.assertEqual(corneeds.CLEARED, said.get('how'))
+        self.assertIsNone(said.get('control'))
+
+
+class LayingItOutMarksTheScreen(unittest.TestCase):
+    """`o` is a decision, so the frame says the files do not have it.
+
+    Unmarked, the frame says nothing, `q` offers nothing, and the choice
+    lasts until you quit. Measured on the Hornet: `o f-18` took the list
+    from 33 accepted rows to 45, and the next open put it back to 33.
+    """
+
+    def rv(self):
+        return made(rebuild=lambda: Layout(DEVS(),
+                                           *allocate(plan(), DEVS())))
+
+    def test_putting_one_on_says_unsaved(self):
+        rv = self.rv()
+        self.assertFalse(rv.unsaved)
+        rv.lay_over('f-18')
+        self.assertTrue(rv.unsaved)
+        self.assertIn('f-18', rv.since)
+
+    def test_taking_every_one_off_says_unsaved(self):
+        # "No template" is a decision too, and the file holds it.
+        rv = self.rv()
+        rv.lay_over(None)
+        self.assertTrue(rv.unsaved)
+        self.assertIn('no template', rv.since)
+
+    def test_a_name_nothing_answers_to_changes_nothing(self):
+        rv = self.rv()
+        said = rv.lay_over('no-such-overlay')
+        self.assertIn('no-such-overlay', said)
+        self.assertFalse(rv.unsaved)

@@ -1,933 +1,429 @@
 {
- "needs": [
-  {
-   "what": "Guns",
-   "shape": "trigger",
-   "bindings": [
-    [
-     {
-      "action": "ID_FIRE_MGUNS"
-     },
-     {
-      "action": "ID_FIRE_MGUNS_HELICOPTER"
-     }
-    ],
-    [
-     {
-      "action": "ID_FIRE_CANNONS"
-     },
-     {
-      "action": "ID_FIRE_CANNONS_HELICOPTER"
-     }
-    ],
-    [
-     {
-      "action": "ID_FIRE_ADDITIONAL_GUNS"
-     },
-     {
-      "action": "ID_FIRE_ADDITIONAL_GUNS_HELICOPTER"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "fire",
-   "held": true,
-   "by_feel": true
-  },
-  {
-   "what": "Countermeasures",
-   "shape": [
-    "paddle",
-    "button"
-   ],
-   "bindings": [
-    [
-     {
-      "action": "ID_FLARES"
-     },
-     {
-      "action": "ID_FLARES_HELICOPTER"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "defence",
-   "rapid": true,
-   "by_feel": true
-  },
-  {
-   "what": "Fire missile",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "ID_AAM"
-     },
-     {
-      "action": "ID_ATGM_HELICOPTER"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "fire",
-   "by_feel": true
-  },
-  {
-   "what": "Fire rockets",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "ID_ROCKETS"
-     },
-     {
-      "action": "ID_ROCKETS_HELICOPTER"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "fire",
-   "rapid": true,
-   "by_feel": true
-  },
-  {
-   "what": "Views",
-   "shape": "hat4",
-   "bindings": [
-    [
-     {
-      "action": "ID_CAMERA_DEFAULT"
-     },
-     {
-      "action": "ID_CAMERA_DEFAULT"
-     }
-    ],
-    [
-     {
-      "action": "ID_CAMERA_GUNNER_HELICOPTER"
-     }
-    ],
-    [
-     {
-      "action": "ID_CAMERA_VIEW_DOWN"
-     },
-     {
-      "action": "ID_CAMERA_VIEW_DOWN"
-     }
-    ],
-    [
-     {
-      "action": "ID_CAMERA_VIEW_BACK"
-     },
-     {
-      "action": "ID_CAMERA_VIEW_BACK"
-     }
-    ]
-   ],
-   "push": [
+  "needs": [
     {
-     "action": "ID_CAMERA_NEUTRAL"
+      "what": "Guns",
+      "shape": "trigger",
+      "urgency": 0,
+      "suits": "fire",
+      "held": true,
+      "by_feel": true,
+      "bindings": [[{"action": "ID_FIRE_MGUNS"}, {"action": "ID_FIRE_MGUNS_HELICOPTER"}], [{"action": "ID_FIRE_CANNONS"}, {"action": "ID_FIRE_CANNONS_HELICOPTER"}], [{"action": "ID_FIRE_ADDITIONAL_GUNS"}, {"action": "ID_FIRE_ADDITIONAL_GUNS_HELICOPTER"}]]
     },
     {
-     "action": "ID_CAMERA_NEUTRAL"
-    }
-   ],
-   "urgency": 0,
-   "suits": "view",
-   "rapid": true,
-   "by_feel": true
-  },
-  {
-   "what": "Radar / IRST",
-   "shape": "hat4",
-   "bindings": [
-    [
-     {
-      "action": "ID_SENSOR_SWITCH"
-     },
-     {
-      "action": "ID_SENSOR_SWITCH_HELICOPTER"
-     }
-    ],
-    [
-     {
-      "action": "ID_SENSOR_RANGE_SWITCH"
-     },
-     {
-      "action": "ID_SENSOR_RANGE_SWITCH_HELICOPTER"
-     }
-    ],
-    [
-     {
-      "action": "ID_SENSOR_MODE_SWITCH"
-     },
-     {
-      "action": "ID_SENSOR_MODE_SWITCH_HELICOPTER"
-     }
-    ],
-    [
-     {
-      "action": "ID_SENSOR_TARGET_SWITCH"
-     },
-     {
-      "action": "ID_SENSOR_TARGET_SWITCH_HELICOPTER"
-     }
-    ]
-   ],
-   "push": [
-    {
-     "action": "ID_SENSOR_TARGET_LOCK"
+      "what": "Countermeasures",
+      "shape": ["paddle", "button"],
+      "urgency": 0,
+      "suits": "defence",
+      "rapid": true,
+      "by_feel": true,
+      "bindings": [[{"action": "ID_FLARES"}, {"action": "ID_FLARES_HELICOPTER"}]]
     },
     {
-     "action": "ID_SENSOR_TARGET_LOCK_HELICOPTER"
-    }
-   ],
-   "urgency": 0,
-   "suits": "sensor",
-   "by_feel": true
-  },
-  {
-   "what": "Weapon lock",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "ID_WEAPON_LOCK"
-     },
-     {
-      "action": "ID_WEAPON_LOCK_HELICOPTER"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "lock",
-   "held": true,
-   "by_feel": true
-  },
-  {
-   "what": "Cockpit sight on/off",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "ID_TOGGLE_COLLIMATOR"
-     },
-     {
-      "action": "ID_TOGGLE_COLLIMATOR_HELICOPTER"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "view",
-   "by_feel": true
-  },
-  {
-   "what": "Target lock",
-   "shape": "hat4",
-   "bindings": [
-    [
-     {
-      "action": "ID_LOCK_TARGET"
-     }
-    ],
-    [
-     {
-      "action": "ID_NEXT_TARGET"
-     }
-    ],
-    [
-     {
-      "action": "ID_RESET_TARGET"
-     }
-    ],
-    [
-     {
-      "action": "ID_PREV_TARGET"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "lock",
-   "rapid": true,
-   "by_feel": true
-  },
-  {
-   "what": "Trim",
-   "shape": "hat4",
-   "bindings": [
-    [
-     {
-      "action": "ID_TRIM_ELEVATOR_PLUS"
-     }
-    ],
-    [
-     {
-      "action": "ID_TRIM_AILERONS_PLUS"
-     }
-    ],
-    [
-     {
-      "action": "ID_TRIM_RESET"
-     },
-     {
-      "action": "ID_HELICOPTER_TRIM_RESET"
-     }
-    ],
-    [
-     {
-      "action": "ID_TRIM_AILERONS_MINUS"
-     }
-    ]
-   ],
-   "push": [
-    {
-     "action": "ID_TRIM"
+      "what": "Fire missile",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "fire",
+      "by_feel": true,
+      "bindings": [[{"action": "ID_AAM"}, {"action": "ID_ATGM_HELICOPTER"}]]
     },
     {
-     "action": "ID_HELICOPTER_TRIM"
+      "what": "Fire rockets",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "fire",
+      "rapid": true,
+      "by_feel": true,
+      "bindings": [[{"action": "ID_ROCKETS"}, {"action": "ID_ROCKETS_HELICOPTER"}]]
+    },
+    {
+      "what": "Views",
+      "shape": "hat4",
+      "push": [{"action": "ID_CAMERA_NEUTRAL"}, {"action": "ID_CAMERA_NEUTRAL"}],
+      "urgency": 0,
+      "suits": "view",
+      "rapid": true,
+      "by_feel": true,
+      "bindings": [[{"action": "ID_CAMERA_DEFAULT"}, {"action": "ID_CAMERA_DEFAULT"}], [{"action": "ID_CAMERA_GUNNER_HELICOPTER"}], [{"action": "ID_CAMERA_VIEW_DOWN"}, {"action": "ID_CAMERA_VIEW_DOWN"}], [{"action": "ID_CAMERA_VIEW_BACK"}, {"action": "ID_CAMERA_VIEW_BACK"}]]
+    },
+    {
+      "what": "Radar / IRST",
+      "shape": "hat4",
+      "push": [{"action": "ID_SENSOR_TARGET_LOCK"}, {"action": "ID_SENSOR_TARGET_LOCK_HELICOPTER"}],
+      "urgency": 0,
+      "suits": "sensor",
+      "by_feel": true,
+      "bindings": [[{"action": "ID_SENSOR_SWITCH"}, {"action": "ID_SENSOR_SWITCH_HELICOPTER"}], [{"action": "ID_SENSOR_RANGE_SWITCH"}, {"action": "ID_SENSOR_RANGE_SWITCH_HELICOPTER"}], [{"action": "ID_SENSOR_MODE_SWITCH"}, {"action": "ID_SENSOR_MODE_SWITCH_HELICOPTER"}], [{"action": "ID_SENSOR_TARGET_SWITCH"}, {"action": "ID_SENSOR_TARGET_SWITCH_HELICOPTER"}]]
+    },
+    {
+      "what": "Weapon lock",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "lock",
+      "held": true,
+      "by_feel": true,
+      "bindings": [[{"action": "ID_WEAPON_LOCK"}, {"action": "ID_WEAPON_LOCK_HELICOPTER"}]]
+    },
+    {
+      "what": "Cockpit sight on/off",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "view",
+      "by_feel": true,
+      "bindings": [[{"action": "ID_TOGGLE_COLLIMATOR"}, {"action": "ID_TOGGLE_COLLIMATOR_HELICOPTER"}]]
+    },
+    {
+      "what": "Target lock",
+      "shape": "hat4",
+      "urgency": 0,
+      "suits": "lock",
+      "rapid": true,
+      "by_feel": true,
+      "bindings": [[{"action": "ID_LOCK_TARGET"}], [{"action": "ID_NEXT_TARGET"}], [{"action": "ID_RESET_TARGET"}], [{"action": "ID_PREV_TARGET"}]]
+    },
+    {
+      "what": "Trim",
+      "shape": "hat4",
+      "push": [{"action": "ID_TRIM"}, {"action": "ID_HELICOPTER_TRIM"}],
+      "suits": "trim",
+      "rapid": true,
+      "by_feel": true,
+      "bindings": [[{"action": "ID_TRIM_ELEVATOR_PLUS"}], [{"action": "ID_TRIM_AILERONS_PLUS"}], [{"action": "ID_TRIM_RESET"}, {"action": "ID_HELICOPTER_TRIM_RESET"}], [{"action": "ID_TRIM_AILERONS_MINUS"}]]
+    },
+    {
+      "what": "WEP / afterburner",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "flight",
+      "held": true,
+      "by_feel": true,
+      "bindings": [[{"action": "ID_IGNITE_BOOSTERS"}]]
+    },
+    {
+      "what": "Radar ACM",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "sensor",
+      "by_feel": true,
+      "bindings": [[{"action": "ID_SENSOR_ACM_SWITCH"}]]
+    },
+    {
+      "what": "Sight stabilization",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "sensor",
+      "held": true,
+      "by_feel": true,
+      "bindings": [[{"action": "ID_LOCK_TARGETING_AT_POINT_HELICOPTER"}]]
+    },
+    {
+      "what": "Bombs",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "fire",
+      "by_feel": true,
+      "bindings": [[{"action": "ID_BOMBS"}, {"action": "ID_BOMBS_HELICOPTER"}]]
+    },
+    {
+      "what": "Air-to-ground lock",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "lock",
+      "by_feel": true,
+      "bindings": [[{"action": "ID_AGM_LOCK"}, {"action": "ID_AGM_LOCK_HELICOPTER"}]]
+    },
+    {
+      "what": "Gear",
+      "shape": "button",
+      "urgency": 1,
+      "suits": "systems",
+      "by_feel": true,
+      "bindings": [[{"action": "ID_GEAR"}, {"action": "ID_GEAR_HELICOPTER"}]]
+    },
+    {
+      "what": "Flaps",
+      "shape": "hat2",
+      "urgency": 1,
+      "suits": "flight",
+      "rapid": true,
+      "by_feel": true,
+      "bindings": [[{"action": "ID_FLAPS_UP"}], [{"action": "ID_FLAPS_DOWN"}]]
+    },
+    {
+      "what": "Airbrake",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "flight",
+      "by_feel": true,
+      "bindings": [[{"action": "ID_AIR_BRAKE"}]]
+    },
+    {
+      "what": "Hover mode",
+      "shape": "button",
+      "suits": "flight",
+      "bindings": [[{"action": "ID_CONTROL_MODE_HELICOPTER"}]]
+    },
+    {
+      "what": "SAS",
+      "shape": "button",
+      "suits": "flight",
+      "bindings": [[{"action": "ID_FBW_MODE_HELICOPTER"}]]
+    },
+    {
+      "what": "Cockpit / external view",
+      "shape": "hat2",
+      "suits": "view",
+      "bindings": [[{"action": "ID_CAMERA_FPS"}, {"action": "ID_CAMERA_FPS_HELICOPTER"}], [{"action": "ID_CAMERA_TPS"}, {"action": "ID_CAMERA_TPS_HELICOPTER"}]]
+    },
+    {
+      "what": "Radar / IRST swap",
+      "shape": "button",
+      "suits": "sensor",
+      "by_feel": true,
+      "bindings": [[{"action": "ID_SENSOR_TYPE_SWITCH"}]]
+    },
+    {
+      "what": "Engine",
+      "shape": "button",
+      "urgency": 3,
+      "suits": "systems",
+      "bindings": [[{"action": "ID_TOGGLE_ENGINE"}, {"action": "ID_TOGGLE_ENGINE_HELICOPTER"}]]
+    },
+    {
+      "what": "Tactical map",
+      "shape": "button",
+      "urgency": 3,
+      "suits": "nav",
+      "bindings": [[{"action": "ID_TACTICAL_MAP"}]]
+    },
+    {
+      "what": "Bomb bay",
+      "shape": "button",
+      "urgency": 3,
+      "suits": "fire",
+      "bindings": [[{"action": "ID_BAY_DOOR"}]]
+    },
+    {
+      "what": "Drag chute",
+      "shape": "button",
+      "urgency": 3,
+      "suits": "systems",
+      "costly": true,
+      "bindings": [[{"action": "ID_CHUTE"}]]
+    },
+    {
+      "what": "Laser designator",
+      "shape": "button",
+      "suits": "sensor",
+      "bindings": [[{"action": "ID_TOGGLE_LASER_DESIGNATOR_HELICOPTER"}]]
+    },
+    {
+      "what": "Weapon select",
+      "shape": "hat2",
+      "suits": "fire",
+      "rapid": true,
+      "by_feel": true,
+      "bindings": [[{"action": "ID_SWITCH_SHOOTING_CYCLE_PRIMARY_HELICOPTER"}], [{"action": "ID_SWITCH_SHOOTING_CYCLE_SECONDARY_HELICOPTER"}]]
+    },
+    {
+      "what": "ailerons",
+      "shape": "stick",
+      "urgency": 0,
+      "suits": "flight",
+      "takes": "axis",
+      "device": "stick",
+      "on": ["x"],
+      "rests": "centred",
+      "bindings": [[{"action": "ailerons", "mode": "Air"}]]
+    },
+    {
+      "what": "elevator",
+      "shape": "stick",
+      "urgency": 0,
+      "suits": "flight",
+      "takes": "axis",
+      "device": "stick",
+      "on": ["y"],
+      "invert": true,
+      "rests": "centred",
+      "bindings": [[{"action": "elevator", "mode": "Air"}]]
+    },
+    {
+      "what": "rudder",
+      "shape": "stick",
+      "urgency": 0,
+      "suits": "flight",
+      "takes": "axis",
+      "device": "stick",
+      "on": ["z"],
+      "rests": "centred",
+      "bindings": [[{"action": "rudder", "mode": "Air"}]]
+    },
+    {
+      "what": "helicopter_cyclic_roll",
+      "shape": "stick",
+      "urgency": 0,
+      "suits": "flight",
+      "takes": "axis",
+      "device": "stick",
+      "on": ["x"],
+      "rests": "centred",
+      "bindings": [[{"action": "helicopter_cyclic_roll", "mode": "Helicopter"}]]
+    },
+    {
+      "what": "helicopter_cyclic_pitch",
+      "shape": "stick",
+      "urgency": 0,
+      "suits": "flight",
+      "takes": "axis",
+      "device": "stick",
+      "on": ["y"],
+      "invert": true,
+      "rests": "centred",
+      "bindings": [[{"action": "helicopter_cyclic_pitch", "mode": "Helicopter"}]]
+    },
+    {
+      "what": "helicopter_pedals",
+      "shape": "stick",
+      "urgency": 0,
+      "suits": "flight",
+      "takes": "axis",
+      "device": "stick",
+      "on": ["z"],
+      "rests": "centred",
+      "bindings": [[{"action": "helicopter_pedals", "mode": "Helicopter"}]]
+    },
+    {
+      "what": "throttle",
+      "shape": "lever",
+      "urgency": 0,
+      "suits": "flight",
+      "takes": "axis",
+      "device": "throttle",
+      "rests": "mid",
+      "bindings": [[{"action": "throttle", "mode": "Air"}]]
+    },
+    {
+      "what": "helicopter_collective",
+      "shape": "lever",
+      "urgency": 0,
+      "suits": "flight",
+      "takes": "axis",
+      "device": "throttle",
+      "rests": "mid",
+      "bindings": [[{"action": "helicopter_collective", "mode": "Helicopter"}]]
+    },
+    {
+      "what": "camx",
+      "shape": "ministick",
+      "suits": "view",
+      "takes": "axis",
+      "device": "throttle",
+      "on": ["x"],
+      "rests": "centred",
+      "bindings": [[{"action": "camx", "mode": "Air"}]]
+    },
+    {
+      "what": "camy",
+      "shape": "ministick",
+      "suits": "view",
+      "takes": "axis",
+      "device": "throttle",
+      "on": ["y"],
+      "rests": "centred",
+      "bindings": [[{"action": "camy", "mode": "Air"}]]
+    },
+    {
+      "what": "helicopter_camx",
+      "shape": "ministick",
+      "suits": "view",
+      "takes": "axis",
+      "device": "throttle",
+      "on": ["x"],
+      "rests": "centred",
+      "bindings": [[{"action": "helicopter_camx", "mode": "Helicopter"}]]
+    },
+    {
+      "what": "helicopter_camy",
+      "shape": "ministick",
+      "suits": "view",
+      "takes": "axis",
+      "device": "throttle",
+      "on": ["y"],
+      "rests": "centred",
+      "bindings": [[{"action": "helicopter_camy", "mode": "Helicopter"}]]
+    },
+    {
+      "what": "sensor_cue_x",
+      "shape": "ministick",
+      "urgency": 0,
+      "suits": "sensor",
+      "takes": "axis",
+      "device": "stick",
+      "on": ["x"],
+      "rests": "centred",
+      "bindings": [[{"action": "sensor_cue_x", "mode": "Air"}]]
+    },
+    {
+      "what": "sensor_cue_y",
+      "shape": "ministick",
+      "urgency": 0,
+      "suits": "sensor",
+      "takes": "axis",
+      "device": "stick",
+      "on": ["y"],
+      "rests": "centred",
+      "bindings": [[{"action": "sensor_cue_y", "mode": "Air"}]]
+    },
+    {
+      "what": "helicopter_atgm_aim_x",
+      "shape": "ministick",
+      "urgency": 0,
+      "suits": "sensor",
+      "takes": "axis",
+      "device": "stick",
+      "on": ["x"],
+      "rests": "centred",
+      "bindings": [[{"action": "helicopter_atgm_aim_x", "mode": "Helicopter"}]]
+    },
+    {
+      "what": "helicopter_atgm_aim_y",
+      "shape": "ministick",
+      "urgency": 0,
+      "suits": "sensor",
+      "takes": "axis",
+      "device": "stick",
+      "on": ["y"],
+      "rests": "centred",
+      "bindings": [[{"action": "helicopter_atgm_aim_y", "mode": "Helicopter"}]]
+    },
+    {
+      "what": "brake_left",
+      "shape": "lever",
+      "urgency": 0,
+      "suits": "flight",
+      "takes": "axis",
+      "device": "stick",
+      "rests": "min",
+      "bindings": [[{"action": "brake_left", "mode": "Air"}]]
+    },
+    {
+      "what": "brake_right",
+      "shape": "lever",
+      "urgency": 0,
+      "suits": "flight",
+      "takes": "axis",
+      "device": "stick",
+      "rests": "min",
+      "bindings": [[{"action": "brake_right", "mode": "Air"}]]
+    },
+    {
+      "what": "zoom",
+      "shape": "dial",
+      "suits": "view",
+      "takes": "axis",
+      "device": "throttle",
+      "rests": "min",
+      "bindings": [[{"action": "zoom", "mode": "Air"}]]
     }
-   ],
-   "suits": "trim",
-   "rapid": true,
-   "by_feel": true
-  },
-  {
-   "what": "WEP / afterburner",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "ID_IGNITE_BOOSTERS"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "flight",
-   "held": true,
-   "by_feel": true
-  },
-  {
-   "what": "Radar ACM",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "ID_SENSOR_ACM_SWITCH"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "sensor",
-   "by_feel": true
-  },
-  {
-   "what": "Sight stabilization",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "ID_LOCK_TARGETING_AT_POINT_HELICOPTER"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "sensor",
-   "held": true,
-   "by_feel": true
-  },
-  {
-   "what": "Bombs",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "ID_BOMBS"
-     },
-     {
-      "action": "ID_BOMBS_HELICOPTER"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "fire",
-   "by_feel": true
-  },
-  {
-   "what": "Air-to-ground lock",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "ID_AGM_LOCK"
-     },
-     {
-      "action": "ID_AGM_LOCK_HELICOPTER"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "lock",
-   "by_feel": true
-  },
-  {
-   "what": "Gear",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "ID_GEAR"
-     },
-     {
-      "action": "ID_GEAR_HELICOPTER"
-     }
-    ]
-   ],
-   "urgency": 1,
-   "suits": "systems",
-   "by_feel": true
-  },
-  {
-   "what": "Flaps",
-   "shape": "hat2",
-   "bindings": [
-    [
-     {
-      "action": "ID_FLAPS_UP"
-     }
-    ],
-    [
-     {
-      "action": "ID_FLAPS_DOWN"
-     }
-    ]
-   ],
-   "urgency": 1,
-   "suits": "flight",
-   "rapid": true,
-   "by_feel": true
-  },
-  {
-   "what": "Airbrake",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "ID_AIR_BRAKE"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "suits": "flight",
-   "by_feel": true
-  },
-  {
-   "what": "Hover mode",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "ID_CONTROL_MODE_HELICOPTER"
-     }
-    ]
-   ],
-   "suits": "flight"
-  },
-  {
-   "what": "SAS",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "ID_FBW_MODE_HELICOPTER"
-     }
-    ]
-   ],
-   "suits": "flight"
-  },
-  {
-   "what": "Cockpit / external view",
-   "shape": "hat2",
-   "bindings": [
-    [
-     {
-      "action": "ID_CAMERA_FPS"
-     },
-     {
-      "action": "ID_CAMERA_FPS_HELICOPTER"
-     }
-    ],
-    [
-     {
-      "action": "ID_CAMERA_TPS"
-     },
-     {
-      "action": "ID_CAMERA_TPS_HELICOPTER"
-     }
-    ]
-   ],
-   "suits": "view"
-  },
-  {
-   "what": "Radar / IRST swap",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "ID_SENSOR_TYPE_SWITCH"
-     }
-    ]
-   ],
-   "suits": "sensor",
-   "by_feel": true
-  },
-  {
-   "what": "Engine",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "ID_TOGGLE_ENGINE"
-     },
-     {
-      "action": "ID_TOGGLE_ENGINE_HELICOPTER"
-     }
-    ]
-   ],
-   "urgency": 3,
-   "suits": "systems"
-  },
-  {
-   "what": "Tactical map",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "ID_TACTICAL_MAP"
-     }
-    ]
-   ],
-   "urgency": 3,
-   "suits": "nav"
-  },
-  {
-   "what": "Bomb bay",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "ID_BAY_DOOR"
-     }
-    ]
-   ],
-   "urgency": 3,
-   "suits": "fire"
-  },
-  {
-   "what": "Drag chute",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "ID_CHUTE"
-     }
-    ]
-   ],
-   "urgency": 3,
-   "suits": "systems",
-   "costly": true
-  },
-  {
-   "what": "Laser designator",
-   "shape": "button",
-   "bindings": [
-    [
-     {
-      "action": "ID_TOGGLE_LASER_DESIGNATOR_HELICOPTER"
-     }
-    ]
-   ],
-   "suits": "sensor"
-  },
-  {
-   "what": "Weapon select",
-   "shape": "hat2",
-   "bindings": [
-    [
-     {
-      "action": "ID_SWITCH_SHOOTING_CYCLE_PRIMARY_HELICOPTER"
-     }
-    ],
-    [
-     {
-      "action": "ID_SWITCH_SHOOTING_CYCLE_SECONDARY_HELICOPTER"
-     }
-    ]
-   ],
-   "suits": "fire",
-   "rapid": true,
-   "by_feel": true
-  },
-  {
-   "what": "ailerons",
-   "takes": "axis",
-   "device": "stick",
-   "suits": "flight",
-   "shape": "stick",
-   "on": [
-    "x"
-   ],
-   "bindings": [
-    [
-     {
-      "action": "ailerons",
-      "mode": "Air"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "centred"
-  },
-  {
-   "what": "elevator",
-   "takes": "axis",
-   "device": "stick",
-   "suits": "flight",
-   "shape": "stick",
-   "on": [
-    "y"
-   ],
-   "invert": true,
-   "bindings": [
-    [
-     {
-      "action": "elevator",
-      "mode": "Air"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "centred"
-  },
-  {
-   "what": "rudder",
-   "takes": "axis",
-   "device": "stick",
-   "suits": "flight",
-   "shape": "stick",
-   "on": [
-    "z"
-   ],
-   "bindings": [
-    [
-     {
-      "action": "rudder",
-      "mode": "Air"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "centred"
-  },
-  {
-   "what": "helicopter_cyclic_roll",
-   "takes": "axis",
-   "device": "stick",
-   "suits": "flight",
-   "shape": "stick",
-   "on": [
-    "x"
-   ],
-   "bindings": [
-    [
-     {
-      "action": "helicopter_cyclic_roll",
-      "mode": "Helicopter"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "centred"
-  },
-  {
-   "what": "helicopter_cyclic_pitch",
-   "takes": "axis",
-   "device": "stick",
-   "suits": "flight",
-   "shape": "stick",
-   "on": [
-    "y"
-   ],
-   "invert": true,
-   "bindings": [
-    [
-     {
-      "action": "helicopter_cyclic_pitch",
-      "mode": "Helicopter"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "centred"
-  },
-  {
-   "what": "helicopter_pedals",
-   "takes": "axis",
-   "device": "stick",
-   "suits": "flight",
-   "shape": "stick",
-   "on": [
-    "z"
-   ],
-   "bindings": [
-    [
-     {
-      "action": "helicopter_pedals",
-      "mode": "Helicopter"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "centred"
-  },
-  {
-   "what": "throttle",
-   "takes": "axis",
-   "device": "throttle",
-   "suits": "flight",
-   "shape": "lever",
-   "bindings": [
-    [
-     {
-      "action": "throttle",
-      "mode": "Air"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "mid"
-  },
-  {
-   "what": "helicopter_collective",
-   "takes": "axis",
-   "device": "throttle",
-   "suits": "flight",
-   "shape": "lever",
-   "bindings": [
-    [
-     {
-      "action": "helicopter_collective",
-      "mode": "Helicopter"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "mid"
-  },
-  {
-   "what": "camx",
-   "takes": "axis",
-   "device": "throttle",
-   "suits": "view",
-   "shape": "ministick",
-   "on": [
-    "x"
-   ],
-   "bindings": [
-    [
-     {
-      "action": "camx",
-      "mode": "Air"
-     }
-    ]
-   ],
-   "rests": "centred"
-  },
-  {
-   "what": "camy",
-   "takes": "axis",
-   "device": "throttle",
-   "suits": "view",
-   "shape": "ministick",
-   "on": [
-    "y"
-   ],
-   "bindings": [
-    [
-     {
-      "action": "camy",
-      "mode": "Air"
-     }
-    ]
-   ],
-   "rests": "centred"
-  },
-  {
-   "what": "helicopter_camx",
-   "takes": "axis",
-   "device": "throttle",
-   "suits": "view",
-   "shape": "ministick",
-   "on": [
-    "x"
-   ],
-   "bindings": [
-    [
-     {
-      "action": "helicopter_camx",
-      "mode": "Helicopter"
-     }
-    ]
-   ],
-   "rests": "centred"
-  },
-  {
-   "what": "helicopter_camy",
-   "takes": "axis",
-   "device": "throttle",
-   "suits": "view",
-   "shape": "ministick",
-   "on": [
-    "y"
-   ],
-   "bindings": [
-    [
-     {
-      "action": "helicopter_camy",
-      "mode": "Helicopter"
-     }
-    ]
-   ],
-   "rests": "centred"
-  },
-  {
-   "what": "sensor_cue_x",
-   "takes": "axis",
-   "device": "stick",
-   "suits": "sensor",
-   "shape": "ministick",
-   "on": [
-    "x"
-   ],
-   "bindings": [
-    [
-     {
-      "action": "sensor_cue_x",
-      "mode": "Air"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "centred"
-  },
-  {
-   "what": "sensor_cue_y",
-   "takes": "axis",
-   "device": "stick",
-   "suits": "sensor",
-   "shape": "ministick",
-   "on": [
-    "y"
-   ],
-   "bindings": [
-    [
-     {
-      "action": "sensor_cue_y",
-      "mode": "Air"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "centred"
-  },
-  {
-   "what": "helicopter_atgm_aim_x",
-   "takes": "axis",
-   "device": "stick",
-   "suits": "sensor",
-   "shape": "ministick",
-   "on": [
-    "x"
-   ],
-   "bindings": [
-    [
-     {
-      "action": "helicopter_atgm_aim_x",
-      "mode": "Helicopter"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "centred"
-  },
-  {
-   "what": "helicopter_atgm_aim_y",
-   "takes": "axis",
-   "device": "stick",
-   "suits": "sensor",
-   "shape": "ministick",
-   "on": [
-    "y"
-   ],
-   "bindings": [
-    [
-     {
-      "action": "helicopter_atgm_aim_y",
-      "mode": "Helicopter"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "centred"
-  },
-  {
-   "what": "brake_left",
-   "takes": "axis",
-   "device": "stick",
-   "suits": "flight",
-   "shape": "lever",
-   "bindings": [
-    [
-     {
-      "action": "brake_left",
-      "mode": "Air"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "min"
-  },
-  {
-   "what": "brake_right",
-   "takes": "axis",
-   "device": "stick",
-   "suits": "flight",
-   "shape": "lever",
-   "bindings": [
-    [
-     {
-      "action": "brake_right",
-      "mode": "Air"
-     }
-    ]
-   ],
-   "urgency": 0,
-   "rests": "min"
-  },
-  {
-   "what": "zoom",
-   "takes": "axis",
-   "device": "throttle",
-   "suits": "view",
-   "shape": "dial",
-   "bindings": [
-    [
-     {
-      "action": "zoom",
-      "mode": "Air"
-     }
-    ]
-   ],
-   "rests": "min"
-  }
- ]
+  ]
 }

@@ -2,15 +2,15 @@
 
 The weights are judgements. "+25 because it suits the job" against "+20
 because it is exactly the shape asked for" is somebody's opinion about
-which matters more, and this project moves judgements out of source --
-the 382 in `games/*/‑binds.json` went first and these are the same kind.
+which matters more, and a judgement lives in a file here. The 382 in
+`games/*/-binds.json` went first, and these are the same kind.
 
-What a file may NOT hold is what a condition MEANS. `device_matches` is a
-predicate over a control and a need; the file names it, `core/needs.py`
-writes it. A file that could define conditions would need an expression
+A file may NOT hold what a condition MEANS. `device_matches` is a
+predicate over a control and a need: the file names it and `core/needs.py`
+writes it. A file that defined conditions would need an expression
 language, and that is a worse thing to own than this one.
 
-So the two halves have to be held to each other, which is what these do.
+So the two halves are held to each other, and these tests do that.
 """
 
 import unittest
@@ -23,15 +23,15 @@ from core import needs as corneeds
 class TheDescriptor(unittest.TestCase):
 
     def test_every_condition_named_has_one_written(self):
-        # A typo in the file would otherwise be a term that silently never
-        # fires -- a weight nobody applies, and a screen that says it does.
+        # A typo in the file is otherwise a term that never fires: a
+        # weight nobody applies, and a screen that says it does.
         for term in corneeds.TERMS:
             self.assertIn(term['when'], corneeds.WHEN, term['says'])
         for gate in corneeds.GATES:
             self.assertIn(gate['when'], corneeds.REFUSE, gate['says'])
 
     def test_every_condition_written_is_one_the_file_names(self):
-        # The other way: a predicate nothing references is a rule that was
+        # The other way round. A predicate nothing references is a rule
         # removed from the file and left behind in the code.
         named = {t['when'] for t in corneeds.TERMS}
         self.assertEqual(set(corneeds.WHEN), named)
@@ -40,34 +40,33 @@ class TheDescriptor(unittest.TestCase):
 
     def test_every_term_is_named_once(self):
         # The handle an override uses. Three terms are conditioned on
-        # `always`, so the condition cannot be it.
+        # `always`, so the condition cannot be the handle.
         names = [t['name'] for t in corneeds.TERMS]
         self.assertEqual(len(names), len(set(names)), names)
 
     def test_a_term_with_holes_in_its_words_has_a_general_form(self):
         # `says` is filled from the run. The screen that explains the
-        # rules has no run, and `pinned to {label}` on it is a hole.
+        # rules has no run, and `pinned to {label}` there is a hole.
         for term in corneeds.TERMS:
             if '{' in term['says']:
                 self.assertIn('general', term, term['name'])
                 self.assertNotIn('{', term['general'], term['name'])
 
     def test_every_pass_a_row_names_is_one_of_the_two(self):
-        # A term narrowed to a pass nobody runs fires in neither, and a
-        # weight that never applies looks exactly like one that does.
+        # A term narrowed to a pass nobody runs fires in neither pass,
+        # and a weight that never applies looks like one that does.
         for row in list(corneeds.TERMS) + list(corneeds.GATES):
             if 'pass' in row:
                 self.assertIn(row['pass'],
-                              (corneeds.PLACED, corneeds.BORROWED),
+                              (corneeds.PLACED, corneeds.SHARED),
                               row.get('name') or row['when'])
 
     def test_both_passes_have_rows_of_their_own(self):
         # The column exists because the last pass is scored differently.
-        # If every row said the same thing it would be a column for
-        # nothing.
+        # Every row saying the same thing is a column for nothing.
         said = {row.get('pass') for row in corneeds.TERMS}
         self.assertIn(corneeds.PLACED, said)
-        self.assertIn(corneeds.BORROWED, said)
+        self.assertIn(corneeds.SHARED, said)
         self.assertIn(None, said, 'nothing applies to both any more')
 
     def test_every_multiplier_named_has_one_written(self):
@@ -76,8 +75,8 @@ class TheDescriptor(unittest.TestCase):
                 self.assertIn(term['per'], corneeds.PER, term['says'])
 
     def test_a_term_that_stops_is_worth_more_than_the_rest_together(self):
-        # A pin outranks the reach tables, not just the ranking, so it has
-        # to beat any sum the ordinary terms can reach.
+        # A pin outranks the reach tables and not only the ranking, so it
+        # beats any sum the ordinary terms reach.
         stops = [t for t in corneeds.TERMS if t.get('stops')]
         self.assertTrue(stops)
         rest = sum(abs(t['weight']) for t in corneeds.TERMS
@@ -85,7 +84,7 @@ class TheDescriptor(unittest.TestCase):
         self.assertGreater(stops[0]['weight'], rest)
 
     def test_the_tables_the_allocator_uses_come_from_the_file(self):
-        # Not transcribed beside it: one definition, or they drift.
+        # Not transcribed beside it. One definition, or the two drift.
         self.assertEqual(len(corneeds.RULES['band']),
                          len(corneeds.URGENCY_NAME))
         self.assertEqual(len(corneeds.RULES['shapes']), len(corneeds.FITS))
@@ -93,8 +92,8 @@ class TheDescriptor(unittest.TestCase):
                          corneeds.UNMEASURED)
 
     def test_a_band_may_not_reach_closer_than_it_may_reach(self):
-        # `takes` is [closest, furthest]; the other way round would make a
-        # band that can take nothing, and nothing would say why.
+        # `takes` is [closest, furthest]. The other way round makes a band
+        # that takes nothing, and nothing says why.
         for n, band in enumerate(corneeds.RULES['band']):
             low, high = band['takes']
             self.assertLessEqual(low, high, band['name'])
@@ -103,7 +102,7 @@ class TheDescriptor(unittest.TestCase):
 
     def test_every_shape_stands_in_for_itself_first(self):
         # The first entry scores the exact-shape bonus, so a list whose
-        # head is something else hands the bonus to a substitute.
+        # head is something else hands that bonus to a substitute.
         for shape, subs in corneeds.FITS.items():
             self.assertEqual(shape, subs[0])
 
@@ -111,11 +110,12 @@ class TheDescriptor(unittest.TestCase):
 class TheFactTable(unittest.TestCase):
     """The five ergonomic answers the map collects, and what they cost.
 
-    Unlike a term, a fact names no predicate: `reads` names a field on the
-    control and the row's shape does the rest. So the lock here is not
-    "every name has a definition" -- it is `check_rules`, which fails the
-    whole map load on a `reads` the map does not measure, and these, which
-    hold the three shapes to what they promise.
+    A fact names no predicate, unlike a term. `reads` names a field on the
+    control, and the row's shape does the rest.
+
+    So the lock is not "every name has a definition". It is `check_rules`,
+    which fails the whole map load on a `reads` the map does not measure,
+    and these tests, which hold the three shapes to what they promise.
     """
 
     def ctrl(self, **facts):
@@ -130,9 +130,9 @@ class TheFactTable(unittest.TestCase):
         return one
 
     def points(self, ctrl, need):
-        # Asserted rather than returned raw: a gate answers None and
-        # every caller here is doing arithmetic. `refused` is the one
-        # that wants the other answer.
+        # Asserted rather than returned raw. A gate answers None, and
+        # every caller here does arithmetic. `refused` is the one that
+        # wants the other answer.
         got = corneeds.score(ctrl, need, 'stick')
         assert got is not None
         return got
@@ -157,8 +157,8 @@ class TheFactTable(unittest.TestCase):
                                                     self.need(held=True)))
 
     def test_a_scale_fact_pays_per_step(self):
-        # Generic over the table: both the shapes in it are here, one
-        # charging the answer and one charging the shortfall from it.
+        # Generic over the table. Both of its shapes are here: one
+        # charges the answer and one charges the shortfall from it.
         for fact in corneeds.FACTS:
             if 'scale' not in fact or fact.get('on') == 'axis':
                 continue
@@ -181,8 +181,8 @@ class TheFactTable(unittest.TestCase):
                                  self.need(by_feel=True)))
 
     def test_a_shortfall_is_charged_from_the_best_answer_down(self):
-        # The other way round -- paying for the answer -- paid nearly
-        # every control on this desk the same and decided nothing.
+        # The other way round pays for the answer. That pays nearly every
+        # control on this desk the same, and it decides nothing.
         best = self.points(self.ctrl(blind_distinct=2),
                            self.need(by_feel=True))
         self.assertEqual(self.points(self.ctrl(), self.need()), best)
@@ -196,24 +196,27 @@ class TheFactTable(unittest.TestCase):
     # ---- the two rules that hold for every row, present and future ----
 
     def test_a_fact_nobody_answered_counts_for_nothing(self):
-        # None is an unwalked desk, not a middling answer. Generic over
-        # the table, so a sixth fact is covered the day it is written.
+        # None is an unwalked desk and not a middling answer. Generic
+        # over the table, so a sixth fact is covered the day somebody
+        # writes it.
         plain = self.points(self.ctrl(), self.need())
         for fact in corneeds.FACTS:
             if fact.get('on') == 'axis':
-                continue            # reads the axis; see TheLeverFacts
+                continue            # It reads the axis. See
+                                    # TheLeverFacts.
             self.assertEqual(
                 plain, self.points(self.ctrl(),
                                    self.need(**{fact['asked']: True})),
                 fact['reads'])
 
     def test_a_fact_the_need_does_not_ask_for_counts_for_nothing(self):
-        # The thing that keeps a term from being weather: it moves the
-        # handful of needs somebody judged, and nothing else.
+        # This is what keeps a term from being weather. It moves the
+        # handful of needs somebody judged and nothing else.
         plain = self.points(self.ctrl(), self.need())
         for fact in corneeds.FACTS:
             if fact.get('on') == 'axis':
-                continue            # reads the axis; see TheLeverFacts
+                continue            # It reads the axis. See
+                                    # TheLeverFacts.
             for answer in (True, False):
                 self.assertEqual(
                     plain, self.points(self.ctrl(**{fact['reads']: answer}),
@@ -221,8 +224,8 @@ class TheFactTable(unittest.TestCase):
                     f'{fact["reads"]} = {answer}')
 
     def test_a_refusing_fact_refuses_only_on_a_measured_no(self):
-        # A gate that refused out of ignorance would leave BMS's shift
-        # nowhere at all on a map nobody has answered yet.
+        # A gate that refused out of ignorance leaves a shift nowhere at
+        # all, on a map nobody has answered yet.
         for fact in corneeds.FACTS:
             if not fact.get('refuses'):
                 continue
@@ -237,10 +240,10 @@ class TheFactTable(unittest.TestCase):
     # ---- the property the whole table exists for ----
 
     def test_a_new_fact_costs_no_python(self):
-        # This is the point of the table rather than five more lambdas in
-        # WHEN, so it is the one thing that has to be tested directly: a
-        # block in the file, and the flag, the predicate and the words all
-        # appear. Nothing below imports or patches any code.
+        # This is the point of the table, rather than five more lambdas
+        # in WHEN, so it is tested directly. A block goes in the file, and
+        # the flag, the predicate and the words all appear. Nothing below
+        # imports or patches any code.
         rules = corneeds.merge_rules(corneeds.RULES, {})
         rules['fact'] = list(rules['fact']) + [
             {'reads': 'cumulative', 'asked': 'staged', 'yes': 7, 'no': -3,
@@ -292,25 +295,26 @@ class TheFactTable(unittest.TestCase):
 class AGameOverTheTop(unittest.TestCase):
     """A game's own rules, merged over the core's.
 
-    Two games already needed this and got it as a function argument: DCS
-    replaces the band limits, BMS vetoes controls the game cannot address.
-    The first is data and belongs in a file; the second stays a hook,
-    because only the game knows which of its buttons it can reach.
+    Two games need this. DCS replaces the band limits. Falcon BMS vetoes
+    controls the game cannot address.
+
+    The first is data and belongs in a file. The second stays a hook,
+    because only the game knows which of its buttons it reaches.
     """
 
     def merged(self, extra):
         return corneeds.merge_rules(corneeds.RULES, extra)
 
     def test_a_band_is_replaced_by_name_not_by_position(self):
-        # By position, inserting a band in the core file would silently
-        # repoint every override in the family at the wrong one.
+        # Merged by position, a band inserted in the core file repoints
+        # every override at the wrong one.
         got = self.merged({'band': [{'name': 'in the air', 'takes': [0, 1]}]})
         by_name = {b['name']: b['takes'] for b in got['band']}
         self.assertEqual([0, 1], by_name['in the air'])
         self.assertEqual([0, 1], by_name['in a turn'], 'the rest stand')
 
     def test_a_band_the_core_does_not_have_is_refused(self):
-        # A typo would otherwise add a fifth band nothing places into.
+        # A typo otherwise adds a fifth band nothing places into.
         with self.assertRaises(ValueError):
             self.merged({'band': [{'name': 'mid-burn', 'takes': [0, 1]}]})
 

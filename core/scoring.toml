@@ -41,8 +41,8 @@ name  = "in a turn"
 takes = [0, 1]
 note  = """Tier 2 was tried here and measured worse: War Thunder's airbrake, \
 bombs, radar ACM, sight stabilisation and air-to-ground lock were being \
-served by the borrow pass, which runs last, so tightening this let 'in the \
-air' take the whole controls whose presses they were borrowing. Five combat \
+served by the sharing pass, which runs last, so tightening this let 'in the \
+air' take the whole controls whose presses they were sharing. Five combat \
 functions moved to the keyboard panel and five cruise functions took their \
 place. The fault is the pass order, not the ceiling."""
 
@@ -80,8 +80,8 @@ name = "relaxed"
 does = "nothing was left inside them, so the far end opens"
 
 [[pass]]
-name = "borrowed"
-does = "a spare button on a control something else owns"
+name = "shared"
+does = "a spare button on a control that another function owns"
 
 # What makes one control beat another. `when` names a predicate defined in
 # core/needs.py; `per` names a count to multiply the weight by; `takes`
@@ -262,18 +262,18 @@ plural = "{n} spare buttons"
 
 [[term]]
 name   = "lent"
-pass   = "borrowed"
+pass   = "shared"
 weight = 60
 when   = "always"
 says   = "still free in the last try"
-note   = """What a borrowed button is worth before anything is said about \
+note   = """What a shared button is worth before anything is said about \
 which one. Below `fits` on purpose: these are not compared against the \
 ordinary passes -- by the time this one runs they have finished -- so what \
 the number has to do is sit above what the facts can take off it."""
 
 [[term]]
 name   = "left_over"
-pass   = "borrowed"
+pass   = "shared"
 weight = 12
 when   = "always"
 per    = "closeness"
@@ -287,7 +287,7 @@ stabilisation off the thumb onto the middle-finger hat for nobody's gain."""
 
 [[term]]
 name   = "opens"
-pass   = "borrowed"
+pass   = "shared"
 weight = -15
 when   = "untouched"
 says   = "opens a control that nothing has touched"
@@ -305,7 +305,7 @@ says = "the game cannot address it"
 when = "wrong_shape"
 pass = "placed"
 says = "it is the wrong shape"
-note = """Not when borrowing. What a borrowed button is taken off is a \
+note = """Not when sharing. What a shared button is taken off is a \
 control something else owns -- a hat's fourth direction, a rocker's spare \
 half -- and refusing those for their shape would leave the pass with the \
 one thing it cannot offer: a whole control."""

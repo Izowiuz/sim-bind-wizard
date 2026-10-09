@@ -1,32 +1,23 @@
 """Keep a copy of every game file before a writer touches it, in one place.
 
-Six writers had six answers. X4 and MSFS copied into
-`~/OneDrive/backups/save-backup/<GAME>/<stamp>/` -- one person's cloud folder,
-hard-coded as the default -- *and* left a `.bak.<stamp>` beside the original.
-Falcon BMS, War Thunder and DCS only left the sibling. Elite wrote its preset
-over whatever was there with no copy at all.
-
-The sibling copies are the part that actually went wrong. MSFS finds its
-profiles by globbing `inputprofile_*`, which matched the backups too, so a
-second run bound into its own backup and backed THAT up again; the
-`.bak.X.bak.Y` files were the proof, and `find_profiles` still carries the
-regex that works around it. A backup that lives in the directory the game
-reads is a file the game can find.
-
-So: copies go into the repo by default, one folder per run, and nothing is
-left behind in the game's own directories.
+Copies go into this repository, one folder per run. Nothing is left behind
+in the game's own directories.
 
     backups/<game>/<stamp>/MANIFEST         stored name -> where it came from
     backups/<game>/<stamp>/<file>...
 
-`backups/` is gitignored. Point it somewhere else -- a cloud folder, an
-external disk -- with `--backup-dir` or `SIM_BIND_BACKUPS`, which every writer
-takes because the flag is defined here.
+A backup that lives in the directory the game reads is a file the game can
+find. MSFS finds its profiles by globbing `inputprofile_*`, and a sibling
+copy matched that glob. A second run then bound into its own backup and
+backed that file up again. The `.bak.X.bak.Y` files are the proof, and
+`find_profiles` still carries the filter that works around them.
 
-The MANIFEST is what makes a restore generic. War Thunder's `--restore` used
-to sort sibling filenames and copy the last one back, which only worked
-because the copy sat next to the original; with a manifest any run of any game
-can be put back where it came from.
+`backups/` is in `.gitignore`. Point it somewhere else, such as a cloud
+folder or an external disk, with `--backup-dir` or `SIM_BIND_BACKUPS`.
+Every writer takes the flag, because this module defines it.
+
+The MANIFEST is what makes a restore generic. It names where each file
+came from, so any run of any game can go back where it came from.
 
 Nothing here prunes. A backup you deleted to save 40 KB is not a backup.
 """
@@ -36,8 +27,8 @@ import os
 import shutil
 import sys
 
-#: The repo root: `backups/` sits beside `core/` and `games/`. Override with
-#: SIM_BIND_BACKUPS, for someone who wants them on a different disk entirely.
+#: The repository root. `backups/` sits beside `core/` and `games/`.
+#: SIM_BIND_BACKUPS overrides it, for copies on another disk.
 DEFAULT = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backups')
 
@@ -45,7 +36,7 @@ MANIFEST = 'MANIFEST'
 
 
 def stamp():
-    """`20260918-213012` -- the same format every writer already used."""
+    """`20260918-213012`, the format every writer uses."""
     return datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
 
 
@@ -56,15 +47,16 @@ def root(into=None):
 
 
 def dir_for(game, into=None):
-    """This game's folder. Not created until something is saved into it."""
+    """This game's folder. It is created when something is saved into it."""
     return os.path.join(root(into), game)
 
 
 def add_argument(parser, game):
     """The `--backup-dir` flag, worded once.
 
-    Games differ in what they write and when, but not in what the flag means,
-    and a reader who has seen one writer's `--help` has seen them all.
+    Games differ in what they write and when they write it. They do not
+    differ in what the flag means. A reader who has seen one writer's
+    `--help` has seen them all.
     """
     return parser.add_argument(
         '--backup-dir', metavar='DIR', default=None,
@@ -75,12 +67,13 @@ def add_argument(parser, game):
 
 
 def _unique(paths):
-    """Stored names for these sources, disambiguated only where they collide.
+    """Stored names for these sources, disambiguated where they collide.
 
-    War Thunder writes several files all called `machine.blk`, one per account
-    directory. Flattening the full path would name every file after its
-    absolute location and make the folder unreadable, so a name only grows a
-    parent directory when it has to -- and keeps growing until it is unique.
+    War Thunder writes several files all called `machine.blk`, one per
+    account directory. A flattened full path names every file after its
+    absolute location and makes the folder unreadable. So a name grows a
+    parent directory only when it has to, and it keeps growing until it is
+    unique.
     """
     names = {}
     for p in paths:
@@ -100,28 +93,28 @@ def _unique(paths):
                 if len(names[p]) < len(full):
                     names[p] = full[-(len(names[p]) + 1):]
                     grew = True
-        if not grew:                    # two identical paths; nothing to do
+        if not grew:                    # two identical paths. Nothing to do.
             break
     return {p: '_'.join(n) for p, n in names.items()}
 
 
 def save(game, *paths, into=None, move=False, when=None):
-    """Copy (or move) these files into a run folder.
+    """Copy these files into a run folder, or move them.
 
-    Returns `(directory, [(stored name, original path)])`. A path that does not
-    exist is skipped -- a writer creating a file for the first time has nothing
-    to back up -- and if that leaves nothing at all, no folder is made.
+    Returns `(directory, [(stored name, original path)])`. A path that
+    does not exist is skipped, because a writer creating a file for the
+    first time has nothing to back up. No folder is made where that leaves
+    nothing.
 
-    Pass the same `when` to group several calls into one run. A file already
-    stored under that stamp is then left as it is, because a run folder holds
-    what things looked like BEFORE the run: DCS's `--reseed` rewrites one
-    results file once per aircraft, and copying it again on the second
-    aircraft overwrote the only copy of the state anybody wanted back.
+    Pass the same `when` to group several calls into one run. A file
+    already stored under that stamp is then left as it is. A run folder
+    holds what things looked like BEFORE the run: DCS's `--reseed`
+    rewrites one results file once per aircraft, and a second copy
+    overwrites the only copy of the state anybody wants back.
 
-    `move=True` is for a file the writer needs *gone* rather than replaced:
-    BMS's `axismapping.dat` has to be out of the way for the game to rebuild it
-    from the defaults, and renaming it in place left the game's config folder
-    full of `.dat.<stamp>.bak`.
+    `move=True` is for a file the writer needs gone rather than replaced.
+    Falcon BMS's `axismapping.dat` has to be out of the way before the
+    game rebuilds it from the defaults.
     """
     live = [p for p in paths if os.path.exists(p)]
     if not live:
@@ -137,8 +130,8 @@ def save(game, *paths, into=None, move=False, when=None):
         if os.path.exists(target):
             if not move:
                 continue                # an earlier call in this run kept it
-            # It still has to leave, and the copy already there is the older
-            # and therefore better one, so this goes beside it.
+            # The file still has to leave. The copy already there is the
+            # older one, so this one goes beside it.
             n = 1
             while os.path.exists(f'{target}.{n}'):
                 n += 1
@@ -157,8 +150,8 @@ def save(game, *paths, into=None, move=False, when=None):
 def runs(game, into=None):
     """`[(stamp, directory, [(stored name, original path)])]`, oldest first.
 
-    A folder without a MANIFEST is not one of ours and is left out rather than
-    guessed at -- the point of a restore is knowing where a file goes.
+    A folder without a MANIFEST is not one of ours. It is left out rather
+    than guessed at, because a restore needs to know where a file goes.
     """
     base = dir_for(game, into)
     if not os.path.isdir(base):
@@ -179,10 +172,11 @@ def runs(game, into=None):
 
 
 def restore(game, which=None, into=None):
-    """Put a run's files back where they came from. Returns what was written.
+    """Put a run's files back where they came from. Returns what it wrote.
 
-    `which` is a stamp, or a prefix of one; the newest run is the default,
-    because the thing you want undone is nearly always the thing you just did.
+    `which` is a stamp or a prefix of one. The newest run is the default,
+    because the thing you want undone is nearly always the thing you just
+    did.
     """
     have = runs(game, into)
     if not have:

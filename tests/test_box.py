@@ -1,15 +1,14 @@
 """The frame a panel is drawn in, as strings.
 
-btop puts its chrome in the border -- the title, the counts and the key
-names all live in the box edge rather than in rows of their own -- and that
-is the whole reason to have a frame at all: three lines of key names at the
-bottom of a 24-row terminal is an eighth of the screen spent on something
-you read once.
+The chrome lives in the border. The title, the counts and the key names
+all sit in the box edge rather than in rows of their own, and that is the
+reason to have a frame: three lines of key names at the bottom of a
+24-row terminal spends an eighth of the screen on something you read
+once. btop does it this way.
 
-The two builders here are pure, which is the point. The last two attempts
-at chrome drew one thing over another and every test passed, because they
-all asked what the text said rather than what reached the screen. A string
-cannot paint over itself.
+The two builders here are pure, and that is the point. Chrome drawn in
+pieces paints one thing over another, and a test that asks what the text
+said does not catch it. A string cannot paint over itself.
 """
 
 import os
@@ -41,7 +40,7 @@ class TheLid(unittest.TestCase):
         self.assertTrue(got.endswith('note ╮'))
 
     def test_a_note_too_wide_to_fit_is_dropped_not_wrapped(self):
-        # Better a plain edge than a border that has eaten the title.
+        # A plain edge beats a border that has eaten the title.
         got = lid(20, 'actions', 'a very long note indeed')
         self.assertIn('actions', got)
         self.assertEqual(20, len(got))
@@ -71,7 +70,7 @@ class TheSill(unittest.TestCase):
 
     def test_keys_that_do_not_fit_are_dropped_from_the_end(self):
         # Losing the last hint beats losing the frame. Moving is listed
-        # first everywhere for this reason: it is what survives.
+        # first everywhere for that reason. It is what survives.
         got = sill(24, ('↑↓ move', '↵ press', 'q quit'), '')
         self.assertIn('↑↓ move', got)
         self.assertNotIn('q quit', got)
@@ -82,20 +81,19 @@ class TheSill(unittest.TestCase):
         self.assertTrue(got.endswith('12/32 ╯'))
 
     def test_the_tail_wins_over_a_key(self):
-        # Where you are is the thing that changes; a key name is not.
+        # Where you are is the thing that changes. A key name is not.
         got = sill(26, ('↑↓ move', '↵ press'), '12/32')
         self.assertIn('12/32', got)
         self.assertEqual(26, len(got))
 
 
 class HowBigAPopup(unittest.TestCase):
-    """A box sized to what it holds, and honest when it cannot hold it.
+    """A box sized to what it holds, and honest where it cannot hold it.
 
-    `_popup` rendered `lines[:bh - 2]` and stopped. On a 24-row terminal
-    the help list simply ended, with nothing to say it had -- and the
-    keys that fell off were the ones furthest down, which is where the
-    less-used ones live and therefore where somebody looking for help is
-    most likely to be looking.
+    A box that renders `lines[:bh - 2]` and stops ends the help list on a
+    24-row terminal, with nothing to say it has. The keys that fall off
+    are the ones furthest down, and that is where the less-used ones live.
+    Somebody looking for help is looking there.
     """
 
     def test_a_short_list_gets_a_box_its_own_size(self):
@@ -103,7 +101,8 @@ class HowBigAPopup(unittest.TestCase):
         self.assertEqual(2, rows_in(bh))
 
     def test_a_box_keeps_a_blank_row_above_its_sill(self):
-        # Text that runs into the bottom edge reads as text cut off there.
+        # Text that runs into the bottom edge reads as text cut off
+        # there.
         _y, _x, bh, _bw = box_for(['one', 'two'], 24, 80, 'keys')
         self.assertEqual(rows_in(bh) + 2 + 1, bh)
 
@@ -117,9 +116,10 @@ class HowBigAPopup(unittest.TestCase):
         self.assertLessEqual(bw, 80)
 
     def test_a_full_box_is_the_whole_screen(self):
-        # The vocabulary screen and the device map are lists you work in,
-        # not notices you read: centred and sized to content they sit in
-        # a hole, and every row they could have shown is one they did not.
+        # The vocabulary screen and the device map are lists you work in.
+        # They are not notices you read. Centred and sized to content,
+        # they sit in a hole, and every row they could have shown is one
+        # they did not.
         self.assertEqual((0, 0, 24, 80),
                          box_for(['one'], 24, 80, 'map', full=True))
 
@@ -131,9 +131,12 @@ class HowBigAPopup(unittest.TestCase):
 
 
 class ABoxLeavesRoomForItsOwnKeys(unittest.TestCase):
-    """`sill` drops the keys that will not fit, and a short list under a
-    short title made a box too narrow to say `↵ choose` — so the way out
-    of it was the one thing it did not show."""
+    """Room for the keys.
+
+    `sill` drops the keys that do not fit. A short list under a short
+    title makes a box too narrow to say `↵ choose`, and that is the way
+    out of the box.
+    """
 
     def test_the_keys_widen_a_narrow_box(self):
         body = ['a', 'b']
@@ -142,8 +145,8 @@ class ABoxLeavesRoomForItsOwnKeys(unittest.TestCase):
         self.assertGreater(with_keys, bare)
 
     def test_and_all_of_them_reach_the_sill(self):
-        # With the tail, because `sill` keeps that before any of them: a
-        # box sized for the keys alone still drops the last one.
+        # With the tail, because `sill` keeps that before any key. A box
+        # sized for the keys alone still drops the last one.
         _y, _x, _h, bw = box_for(['a'], 24, 80, 'Pick', keys=CHOOSE_KEYS,
                                  tail='1 of 2')
         said = sill(bw, CHOOSE_KEYS, '1 of 2')
@@ -174,8 +177,11 @@ class ABoxLeavesRoomForItsOwnKeys(unittest.TestCase):
 
 
 class TheCounterDoesNotResizeTheBox(unittest.TestCase):
-    """`1 of 12` is narrower than `12 of 12`, and a box that sizes itself
-    to whichever one is showing changes width as the cursor moves."""
+    """The width holds as the cursor moves.
+
+    `1 of 12` is narrower than `12 of 12`, and a box that sizes itself to
+    whichever one is showing changes width as you scroll.
+    """
 
     def widths(self, count):
         wide = len(str(count))
@@ -238,7 +244,7 @@ class ThePickerAsItIsDriven(unittest.TestCase):
 
     def test_it_does_not_change_width_as_the_cursor_moves(self):
         # `1 of 12` is narrower than `12 of 12`, and a box that sizes
-        # itself to whichever is showing twitches as you scroll.
+        # itself to whichever one is showing twitches as you scroll.
         said = self.lids()
         self.assertGreater(len(said), 1, 'nothing was drawn')
         self.assertEqual(1, len(set(said)), said)
@@ -256,8 +262,11 @@ class ThePickerAsItIsDriven(unittest.TestCase):
 
 class RowsThatAreNotPartOfTheList(unittest.TestCase):
     """`head` says where a list came from, above the list and inside the
-    box — the sill's note would push the keys off, and the way out of a
-    box is not the thing to trade away."""
+    box.
+
+    The sill's note pushes the keys off, and the way out of a box is not
+    the thing to trade away.
+    """
 
     def driven(self, head, keys=()):
         import curses
@@ -272,8 +281,8 @@ class RowsThatAreNotPartOfTheList(unittest.TestCase):
         self.assertIn('read from /somewhere', frames[0])
 
     def test_the_cursor_starts_on_the_list_and_not_on_the_head(self):
-        # The returned index says nothing about which row is lit, and
-        # lighting the head reads as a heading you can choose.
+        # The returned index says nothing about which row is lit, and a
+        # lit head reads as a heading you can choose.
         import curses
         from core import tui as ctui
         scr = Keyed([27])
@@ -310,8 +319,11 @@ if __name__ == '__main__':
 
 
 class WhatTheFrameLooksLike(unittest.TestCase):
-    """Every row of it, on a grid, because a string cannot paint over
-    itself and the last two goes at chrome did exactly that."""
+    """Every row of it, on a grid.
+
+    A string cannot paint over itself, so a test over the text does not
+    catch chrome drawn in pieces.
+    """
 
     def drawn(self, body, title='Pick', keys=CHOOSE_KEYS, tail='1 of 2'):
         from core import tui as ctui
@@ -345,11 +357,11 @@ class WhatTheFrameLooksLike(unittest.TestCase):
         self.assertTrue(text.endswith(' ' * ctui.GAP + ctui.V), repr(text))
 
     def test_a_line_that_fits_the_screen_is_not_cut(self):
-        # The box is sized to what it holds, so what it holds must
-        # survive: a gap counted on one side and not made room for on
-        # the other takes it out of the text instead.
-        # With no keys and no tail, so the width is decided by the text
-        # alone: the keys are wide enough to hide a mistake here.
+        # The box is sized to what it holds, so what it holds has to
+        # survive. A gap counted on one side and not allowed for on the
+        # other takes its room out of the text.
+        # No keys and no tail, so the text alone decides the width. The
+        # keys are wide enough to hide a mistake here.
         said = 'a line of some length'
         got = [r.strip() for r in self.box_rows([said], keys=(), tail='')]
         self.assertIn(said, got[1])
@@ -365,8 +377,11 @@ class WhatTheFrameLooksLike(unittest.TestCase):
 
 
 class RowsTheCursorStepsOver(unittest.TestCase):
-    """A blank row holding two kinds of thing apart. Landing on it would
-    be landing on nothing, and `↵ choose` there means nothing."""
+    """A blank row holding two kinds of thing apart.
+
+    Landing on it is landing on nothing, and `↵ choose` there means
+    nothing.
+    """
 
     def driven(self, keys, skip=(1,), count=4):
         from core import tui as ctui

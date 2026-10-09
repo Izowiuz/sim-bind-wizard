@@ -1,0 +1,167 @@
+{
+  "needs": [
+    {
+      "what": "Trim Aileron",
+      "shape": "hat2",
+      "urgency": 0,
+      "suits": "trim",
+      "on": ["left", "right"],
+      "device": "stick",
+      "bindings": [[{"action": "dnilp3011unilcd12vdnilvp-0.1vunil"}], [{"action": "dnilp3011unilcd12vdnilvp0.1vunil"}]]
+    },
+    {
+      "what": "Trim Elevator",
+      "shape": "hat2",
+      "urgency": 0,
+      "suits": "trim",
+      "on": ["up", "down"],
+      "device": "stick",
+      "bindings": [[{"action": "dnilp3012unilcd12vdnilvp0.05vunil"}], [{"action": "dnilp3012unilcd12vdnilvp-0.05vunil"}]]
+    },
+    {
+      "what": "Trim Rudder",
+      "shape": "hat2",
+      "urgency": 0,
+      "suits": "trim",
+      "on": ["left", "right"],
+      "device": "stick",
+      "bindings": [[{"action": "dnilp3013unilcd12vdnilvp-0.1vunil"}], [{"action": "dnilp3013unilcd12vdnilvp0.1vunil"}]]
+    },
+    {
+      "what": "Landing Gear",
+      "shape": "hat2",
+      "urgency": 1,
+      "suits": "systems",
+      "on": ["down", "up"],
+      "bindings": [[{"action": "d3004pnilunilcd12vd0.1vpnilvunil"}], [{"action": "d3004pnilunilcd12vd0.2vpnilvunil"}]]
+    },
+    {
+      "what": "Wheel brake",
+      "shape": "hat2",
+      "urgency": 1,
+      "suits": "flight",
+      "on": ["left", "right"],
+      "device": "stick",
+      "bindings": [[{"action": "d961pnilu962cdnilvdnilvpnilvunil"}], [{"action": "d963pnilu964cdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Engine RPM Decrease",
+      "shape": "dial",
+      "urgency": 0,
+      "suits": "systems",
+      "device": "throttle",
+      "bindings": [[{"action": "dnilp3024unilcd5vdnilvp-1vunil"}]]
+    },
+    {
+      "what": "Engine RPM Increase",
+      "shape": "dial",
+      "urgency": 0,
+      "suits": "systems",
+      "device": "throttle",
+      "bindings": [[{"action": "dnilp3024unilcd5vdnilvp1vunil"}]]
+    },
+    {
+      "what": "Engine RPM Setting",
+      "shape": "dial",
+      "urgency": 0,
+      "suits": "systems",
+      "takes": "axis",
+      "rests": "mid",
+      "device": "throttle",
+      "bindings": [[{"action": "a3026cd5"}]]
+    },
+    {
+      "what": "Pitch",
+      "shape": "stick",
+      "urgency": 0,
+      "suits": "flight",
+      "on": ["y"],
+      "takes": "axis",
+      "invert": true,
+      "rests": "centred",
+      "device": "stick",
+      "bindings": [[{"action": "a2001cdnil"}]]
+    },
+    {
+      "what": "Roll",
+      "shape": "stick",
+      "urgency": 0,
+      "suits": "flight",
+      "on": ["x"],
+      "takes": "axis",
+      "rests": "centred",
+      "device": "stick",
+      "bindings": [[{"action": "a2002cdnil"}]]
+    },
+    {
+      "what": "Rudder",
+      "shape": "stick",
+      "urgency": 0,
+      "suits": "flight",
+      "on": ["z"],
+      "takes": "axis",
+      "rests": "centred",
+      "device": "stick",
+      "bindings": [[{"action": "a2003cdnil"}]]
+    },
+    {
+      "what": "Throttle",
+      "shape": "lever",
+      "urgency": 0,
+      "suits": "flight",
+      "takes": "axis",
+      "rests": "mid",
+      "device": "throttle",
+      "bindings": [[{"action": "a3025cd5"}]]
+    },
+    {
+      "what": "War Emergency Power",
+      "shape": "button",
+      "urgency": 0,
+      "device": "throttle",
+      "bindings": [[{"action": "d1601pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Flaps",
+      "shape": "axis",
+      "urgency": 1,
+      "suits": "flight",
+      "takes": "axis",
+      "rests": "mid",
+      "device": "throttle",
+      "bindings": [[{"action": "a3017cd12"}]]
+    },
+    {
+      "what": "Wheel Brake",
+      "shape": "lever",
+      "urgency": 1,
+      "suits": "flight",
+      "takes": "axis",
+      "rests": "min",
+      "device": "stick",
+      "bindings": [[{"action": "a2101cdnil"}]]
+    },
+    {
+      "what": "Wheel brake Both",
+      "shape": "button",
+      "urgency": 1,
+      "suits": "flight",
+      "device": "stick",
+      "bindings": [[{"action": "d74pnilu75cdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "COMM Communication menu",
+      "shape": "button",
+      "bindings": [[{"action": "d179pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Zoom View",
+      "shape": "dial",
+      "urgency": 3,
+      "suits": "view",
+      "takes": "axis",
+      "rests": "min",
+      "bindings": [[{"action": "a2012cdnil"}]]
+    }
+  ]
+}

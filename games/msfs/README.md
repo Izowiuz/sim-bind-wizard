@@ -1,75 +1,73 @@
 # MSFS 2024
 
-## Where it lives
+What is peculiar to this game.
 
-Profiles are Steam Cloud saves, not files in the install:
+## A profile belongs to one device
 
-    ~/.local/share/Steam/userdata/<steam id>/2537590/remote/
-      inputprofile_<n>      two per device
+MSFS keeps its bindings in Steam Cloud, in
+`userdata/*/2537590/remote/inputprofile_<number>`. One profile belongs to
+one device. The writer matches a profile to a device by its USB product
+id.
 
-The vocabulary comes from the install:
+Every joystick binding in a profile is one this program wrote. The writer
+therefore owns the file completely.
 
-    .../steamapps/common/MSFS2024/Packages/
-      asobo-input-profiles-pc/InputProfiles/Categories/   551 shipped profiles,
-                                                          read for the action
-                                                          names they mention
+## Two profiles per device
 
-## How to run it
+| the file carries | it holds |
+|---|---|
+| `<AircraftInfo CategoryName="..."/>` | the flying actions |
+| no `AircraftInfo` | cameras, radio, and whatever applies however you fly |
 
-    ./harvest.py              the action vocabulary
-    ./plan.py                 the layout
-    ./plan.py --why           and the evidence for each choice
-    ./plan.py --sheet --html  the kneeboard
-    ./plan.py --tui           walk the layout and write what you keep
-    ./plan.py --write         all of it (close Steam first)
+The label says aeroplane. The file holds the helicopter actions too.
 
-    --backup-dir DIR   where every touched profile is copied first
-                       (default <repo>/backups/msfs/<stamp>/; SIM_BIND_BACKUPS
-                       does the same)
+The two context sets do not overlap, so every action belongs to exactly
+one of the two files.
 
-Backups never land beside the originals.
+## The context is a property of the binding
 
-## The format
+Which file somebody put a binding in is not a fact about the action. It
+rides on the binding. No rule over an action name will find it.
 
-Plain XML. Each device has **two** profiles, and one element decides which of
-them an action belongs in:
+## The vocabulary comes from the shipped profiles
 
-    with     <AircraftInfo CategoryName="AIRPLANE"/>   flight controls,
-                                                       aeroplane and helicopter
-    without                                            global: camera, ATC, UI
+MSFS 2024 accepts about 1700 actions. It ships 551 default profiles
+covering 101 devices, split by aircraft category. Between them they name
+the vocabulary.
 
-A device is identified by `ProductID`, decimal, equal to the USB PID.
+`msfs-actions.json` is derived from Asobo's own files. It does not belong
+in version control.
 
-Writing is text surgery on the existing file, not XML reserialisation, so
-untouched entries stay byte-identical.
+## One-based names, zero-based codes
 
-## Measured
+MSFS shows a button number that counts from one. It stores a code that
+counts from zero. So the name is the index plus one and the code is the
+index.
 
-Buttons are one-based in the label and zero-based in the code:
-`Joystick Button N` carries code `N-1`.
+An axis carries a code of its own. The codes step by 16. The owner's own
+profiles confirm X, Y, Z, Rx and Slider. The rest follow the same step and
+want checking in the sim.
 
-Axis codes are fixed per DirectInput axis:
+## The writer edits the text
 
-    X       Joystick L-Axis X   1026     Rx    Joystick R-Axis X    770
-    Y       Joystick L-Axis Y   1042     Ry    Joystick R-Axis Y    786
-    Z       Joystick L-Axis Z   1058     Rz    Joystick R-Axis Z    802
-    Slider  Joystick Slider X    514     Dial  Joystick Slider Y    530
+An unbound action is a self-closing element. A bound one carries a
+`<Primary>` block.
 
-`Dial` is `Slider Y`, code 530 — the VMAX's rotary, distinct from its slider.
+The writer edits the text. It does not reserialise the XML. That keeps the
+170 KB of formatting MSFS wrote exactly as it was.
 
-## Still a guess
-
-Nothing load-bearing.
+The writer also takes our joystick out of every action the plan no longer
+names. Such an action goes back to self-closing, which is what the game
+ships.
 
 ## Gotchas
 
-**Steam must be closed to write.** It syncs these files from the cloud and
-overwrites what the tool wrote. `plan.py --write` refuses while it is running.
+Close Steam before a write. Steam syncs these files from the cloud and
+puts the old ones back over anything written here.
 
-**Both profiles of a device matter.** An action put in the wrong one is
-accepted and never fires. `find_profiles()` decides by the `AircraftInfo`
-element, not by filename.
+The profile filter takes digits only. `inputprofile_*` also matched the
+`.bak.<stamp>` copies an older writer left beside them, so a second run
+bound into its own backups and backed those up again. Backups live outside
+the folder now. The old copies still sit there, so the filter stays.
 
-**`Look around` binds nothing.** It reserves the mini-stick so a button need
-cannot take it; the head-look axes are rows in the needs file like
-everything else, asking for the throttle's mini-stick by name.
+An action the profile does not contain is skipped. The run reports it.

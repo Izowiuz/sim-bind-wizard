@@ -1,0 +1,385 @@
+{
+  "needs": [
+    {
+      "what": "Trimmer Switch",
+      "shape": "hat4",
+      "urgency": 0,
+      "suits": "trim",
+      "on": ["left", "down", "up", "right"],
+      "device": "stick",
+      "bindings": [[{"action": "dnilp3016u3016cd13vdnilvp1vu0"}], [{"action": "dnilp3014u3014cd13vdnilvp1vu0"}], [{"action": "dnilp3015u3015cd13vdnilvp1vu0"}], [{"action": "dnilp3017u3017cd13vdnilvp1vu0"}]]
+    },
+    {
+      "what": "Arresting Hook Handle",
+      "shape": "hat2",
+      "urgency": 1,
+      "suits": "systems",
+      "on": ["down", "up"],
+      "device": "throttle",
+      "bindings": [[{"action": "d3009pnilunilcd5vd0vpnilvunil"}], [{"action": "d3009pnilunilcd5vd1vpnilvunil"}]]
+    },
+    {
+      "what": "FLAP Switch",
+      "shape": "hat2",
+      "urgency": 1,
+      "suits": "flight",
+      "device": "throttle",
+      "bindings": [[{"action": "d3007pnilunilcd2vd1vpnilvunil"}], [{"action": "d3007pnilunilcd2vd-1vpnilvunil"}], [{"action": "d3007pnilunilcd2vd0vpnilvunil"}]]
+    },
+    {
+      "what": "Landing Gear Control Handle",
+      "shape": "hat2",
+      "urgency": 1,
+      "suits": "systems",
+      "on": ["down", "up"],
+      "bindings": [[{"action": "d431pnilunilcdnilvdnilvpnilvunil"}], [{"action": "d430pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Dispense Switch",
+      "shape": "hat2",
+      "urgency": 0,
+      "suits": "defence",
+      "on": ["down", "up"],
+      "device": "throttle",
+      "bindings": [[{"action": "d3033pnilu3033cd13vd-1vpnilvu0"}], [{"action": "d3032pnilu3032cd13vd1vpnilvu0"}]]
+    },
+    {
+      "what": "Master Arm Switch",
+      "shape": "latch",
+      "urgency": 0,
+      "suits": "fire",
+      "device": "stick",
+      "bindings": [[{"action": "d3003pnilunilcd23vd0vpnilvunil"}], [{"action": "d3003pnilunilcd23vd1vpnilvunil"}]]
+    },
+    {
+      "what": "Select",
+      "shape": "hat4",
+      "urgency": 0,
+      "suits": "fire",
+      "on": ["left", "down", "down", "up"],
+      "device": "stick",
+      "bindings": [[{"action": "d3011pnilu3011cd13vd1vpnilvu0"}], [{"action": "d3010pnilu3010cd13vd1vpnilvu0"}], [{"action": "d3012pnilu3012cd13vd1vpnilvu0"}], [{"action": "d3009pnilu3009cd13vd1vpnilvu0"}]]
+    },
+    {
+      "what": "Sensor Control Switch",
+      "shape": "hat4",
+      "urgency": 0,
+      "suits": "sensor",
+      "on": ["down", "push", "up", "left", "right"],
+      "device": "stick",
+      "bindings": [[{"action": "d3006pnilu3006cd13vd1vpnilvu0"}], [{"action": "d3045pnilu3045cd13vd1vpnilvu0"}], [{"action": "d3005pnilu3005cd13vd1vpnilvu0"}], [{"action": "d3007pnilu3007cd13vd1vpnilvu0"}], [{"action": "d3008pnilu3008cd13vd1vpnilvu0"}]]
+    },
+    {
+      "what": "Engine Crank Switch",
+      "shape": "hat2",
+      "urgency": 3,
+      "suits": "systems",
+      "on": ["left", "right"],
+      "bindings": [[{"action": "d3015pnilu3015cd12vd-1vpnilvu0"}], [{"action": "d3016pnilu3016cd12vd1vpnilvu0"}]]
+    },
+    {
+      "what": "Throttle",
+      "shape": "hat2",
+      "urgency": 3,
+      "suits": "flight",
+      "on": ["left", "right"],
+      "device": "throttle",
+      "bindings": [[{"action": "d313pnilu311cdnilvd1vpnilvu1"}], [{"action": "d314pnilu312cdnilvd1vpnilvu1"}]]
+    },
+    {
+      "what": "ATC Engage/Disengage Switch",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "flight",
+      "device": "throttle",
+      "bindings": [[{"action": "d3037pnilu3037cd13vd1vpnilvu0"}]]
+    },
+    {
+      "what": "Autopilot/Nosewheel Steering Disengage (Paddle) Switch",
+      "shape": "paddle",
+      "urgency": 0,
+      "suits": "flight",
+      "device": "stick",
+      "bindings": [[{"action": "d3018pnilu3018cd13vd1vpnilvu0"}]]
+    },
+    {
+      "what": "Pitch",
+      "shape": "stick",
+      "urgency": 0,
+      "suits": "flight",
+      "on": ["y"],
+      "takes": "axis",
+      "invert": true,
+      "rests": "centred",
+      "device": "stick",
+      "bindings": [[{"action": "a2001cdnil"}]]
+    },
+    {
+      "what": "Roll",
+      "shape": "stick",
+      "urgency": 0,
+      "suits": "flight",
+      "on": ["x"],
+      "takes": "axis",
+      "rests": "centred",
+      "device": "stick",
+      "bindings": [[{"action": "a2002cdnil"}]]
+    },
+    {
+      "what": "Rudder",
+      "shape": "stick",
+      "urgency": 0,
+      "suits": "flight",
+      "on": ["z"],
+      "takes": "axis",
+      "rests": "centred",
+      "device": "stick",
+      "bindings": [[{"action": "a2003cdnil"}]]
+    },
+    {
+      "what": "Thrust Left",
+      "shape": "lever",
+      "urgency": 0,
+      "suits": "flight",
+      "takes": "axis",
+      "rests": "mid",
+      "device": "throttle",
+      "prefer": "left throttle lever",
+      "bindings": [[{"action": "a2005cdnil"}]]
+    },
+    {
+      "what": "Thrust Right",
+      "shape": "lever",
+      "urgency": 0,
+      "suits": "flight",
+      "takes": "axis",
+      "rests": "mid",
+      "device": "throttle",
+      "prefer": "right throttle lever",
+      "bindings": [[{"action": "a2006cdnil"}]]
+    },
+    {
+      "what": "Launch Bar Control Switch - EXTEND",
+      "shape": "button",
+      "urgency": 1,
+      "suits": "systems",
+      "device": "throttle",
+      "bindings": [[{"action": "d3014pnilu3014cd5vd1vpnilvu0"}]]
+    },
+    {
+      "what": "Launch Bar Control Switch - RETRACT",
+      "shape": "button",
+      "urgency": 1,
+      "suits": "systems",
+      "device": "throttle",
+      "bindings": [[{"action": "d3014pnilunilcd5vd-1vpnilvunil"}]]
+    },
+    {
+      "what": "Speed Brake Switch - EXTEND",
+      "shape": "hat2",
+      "urgency": 1,
+      "suits": "flight",
+      "device": "throttle",
+      "bindings": [[{"action": "d3035pnilu3035cd13vd-1vpnilvu0"}]]
+    },
+    {
+      "what": "Speed Brake Switch - OFF",
+      "shape": "hat2",
+      "urgency": 1,
+      "suits": "flight",
+      "device": "throttle",
+      "bindings": [[{"action": "d3035pnilunilcd13vd0vpnilvunil"}]]
+    },
+    {
+      "what": "Speed Brake Switch - RETRACT",
+      "shape": "hat2",
+      "urgency": 1,
+      "suits": "flight",
+      "device": "throttle",
+      "bindings": [[{"action": "d3035pnilunilcd13vd1vpnilvunil"}]]
+    },
+    {
+      "what": "Undesignate/Nose Wheel Steer Switch",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "lock",
+      "device": "stick",
+      "bindings": [[{"action": "d3013pnilu3013cd13vd1vpnilvu0"}]]
+    },
+    {
+      "what": "Wheel Brake",
+      "shape": "lever",
+      "urgency": 1,
+      "suits": "flight",
+      "takes": "axis",
+      "rests": "min",
+      "device": "stick",
+      "bindings": [[{"action": "a2101cdnil"}]]
+    },
+    {
+      "what": "Wheel Brake - ON/OFF",
+      "shape": "button",
+      "urgency": 1,
+      "suits": "flight",
+      "device": "stick",
+      "bindings": [[{"action": "d74pnilu75cdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Gun Trigger - SECOND DETENT (Press to shoot)",
+      "shape": "trigger",
+      "urgency": 0,
+      "suits": "fire",
+      "on": ["second"],
+      "device": "stick",
+      "bindings": [[{"action": "d3002pnilu3002cd13vd1vpnilvu0"}]]
+    },
+    {
+      "what": "Master Mode Button - A/A",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "fire",
+      "device": "throttle",
+      "bindings": [[{"action": "d3001pnilu3001cd23vd1vpnilvu0"}]]
+    },
+    {
+      "what": "Master Mode Button - A/G",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "fire",
+      "device": "throttle",
+      "bindings": [[{"action": "d3002pnilu3002cd23vd1vpnilvu0"}]]
+    },
+    {
+      "what": "Weapon Release Button",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "fire",
+      "device": "stick",
+      "bindings": [[{"action": "d3003pnilu3003cd13vd1vpnilvu0"}]]
+    },
+    {
+      "what": "Cage/Uncage Button",
+      "shape": "button",
+      "suits": "sensor",
+      "device": "throttle",
+      "bindings": [[{"action": "d3031pnilu3031cd13vd1vpnilvu0"}]]
+    },
+    {
+      "what": "COMM Switch - COMM 1 (call radio menu)",
+      "shape": "button",
+      "suits": "comms",
+      "device": "throttle",
+      "bindings": [[{"action": "d3027pnilu3027cd13vd0.2vpnilvu0"}]]
+    },
+    {
+      "what": "COMM Switch - COMM 2 (call radio menu)",
+      "shape": "button",
+      "suits": "comms",
+      "device": "throttle",
+      "bindings": [[{"action": "d3028pnilu3028cd13vd0.4vpnilvu0"}]]
+    },
+    {
+      "what": "COMM Switch - MIDS A",
+      "shape": "button",
+      "suits": "comms",
+      "device": "throttle",
+      "bindings": [[{"action": "d3029pnilu3029cd13vd0.6vpnilvu0"}]]
+    },
+    {
+      "what": "COMM Switch - MIDS B",
+      "shape": "button",
+      "suits": "comms",
+      "device": "throttle",
+      "bindings": [[{"action": "d3030pnilu3030cd13vd0.8vpnilvu0"}]]
+    },
+    {
+      "what": "Communication menu",
+      "shape": "button",
+      "suits": "nav",
+      "bindings": [[{"action": "d179pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Radar Elevation Control",
+      "shape": "dial",
+      "suits": "sensor",
+      "takes": "axis",
+      "rests": "mid",
+      "device": "throttle",
+      "bindings": [[{"action": "a3026cd13"}]]
+    },
+    {
+      "what": "RAID/FLIR FOV Select Button",
+      "shape": "button",
+      "suits": "sensor",
+      "device": "throttle",
+      "bindings": [[{"action": "d3034pnilu3034cd13vd1vpnilvu0"}]]
+    },
+    {
+      "what": "Throttle Designator Controller - Depress",
+      "shape": "ministick",
+      "suits": "sensor",
+      "on": ["push"],
+      "device": "throttle",
+      "bindings": [[{"action": "d3023pnilu3023cd13vd1vpnilvu0"}]]
+    },
+    {
+      "what": "Throttle Designator Controller - Horizontal Axis",
+      "shape": "ministick",
+      "suits": "sensor",
+      "on": ["x"],
+      "takes": "axis",
+      "rests": "centred",
+      "device": "throttle",
+      "bindings": [[{"action": "a3044cd13"}]]
+    },
+    {
+      "what": "Throttle Designator Controller - Vertical Axis",
+      "shape": "ministick",
+      "suits": "sensor",
+      "on": ["y"],
+      "takes": "axis",
+      "rests": "centred",
+      "device": "throttle",
+      "bindings": [[{"action": "a3043cd13"}]]
+    },
+    {
+      "what": "APU Control Switch - ON/OFF",
+      "shape": "button",
+      "urgency": 3,
+      "suits": "systems",
+      "bindings": [[{"action": "d3001pnilu3001cd12vd1vpnilvu0"}]]
+    },
+    {
+      "what": "Exterior Lights Switch - OFF",
+      "shape": "button",
+      "urgency": 3,
+      "suits": "systems",
+      "device": "throttle",
+      "bindings": [[{"action": "d3041pnilunilcd13vd0vpnilvunil"}]]
+    },
+    {
+      "what": "Exterior Lights Switch - ON",
+      "shape": "button",
+      "urgency": 3,
+      "suits": "systems",
+      "device": "throttle",
+      "bindings": [[{"action": "d3041pnilunilcd13vd1vpnilvunil"}]]
+    },
+    {
+      "what": "MASTER CAUTION Reset Button",
+      "shape": "button",
+      "urgency": 3,
+      "suits": "systems",
+      "bindings": [[{"action": "d3008pnilu3008cd9vd1vpnilvu0"}]]
+    },
+    {
+      "what": "Zoom View",
+      "shape": "dial",
+      "urgency": 3,
+      "suits": "view",
+      "takes": "axis",
+      "rests": "min",
+      "bindings": [[{"action": "a2012cdnil"}]]
+    }
+  ]
+}

@@ -1,58 +1,80 @@
-# WARNING WARNING 100% VIBECODED WARNING WARNING
-
 # sim-bind-wizard
 
-Generates HOTAS bindings for flight simulators from one description of the
-hardware. A shared core does the matching; a folder per game knows that game's
-file format and vocabulary.
+This program puts a game's actions onto HOTAS controls.
 
-Hardware lives in a separate repo, [`sim-device-map`](../sim-device-map): it
-describes devices, not games, and is useful with no game installed.
+It reads three things. The game says which actions accept a binding. The
+device map says what each physical control is. A needs list says what a
+pilot must be able to do. The program matches the needs against the
+controls. Then it writes the game's own configuration file.
 
-## Documents
+The device map is a separate repository,
+[`sim-device-map`](../sim-device-map). It describes hardware. It is useful
+with no game installed.
 
-| | for |
+## Run it
+
+    ./bind-wizard.py                    list the games
+    ./bind-wizard.py GAME               open the review screen
+    ./bind-wizard.py GAME VERB [ARG...] run one verb
+
+The verbs:
+
+| verb | what it does |
 |---|---|
-| [`USING.md`](USING.md) | changing a binding, adding a game — commands |
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) | files, data flow, API, contracts |
-| [`ALLOCATION.md`](ALLOCATION.md) | how the matching works: reach, scoring, the four passes |
-| `games/<game>/README.md` | one game's paths, format and measurements |
+| `harvest` | read the game. Write the action vocabulary. |
+| `plan` | print the layout |
+| `why` | print the layout and the evidence for each control |
+| `free` | print the controls that stay unbound |
+| `sheet` | write `KNEEBOARD.md` and `kneeboard.html` |
+| `tui` | review the layout. Save what you keep. |
+| `write` | write the whole layout into the game |
 
-## Layout
+`tui` is the default. Every argument after the verb goes to the script.
+`./bind-wizard.py dcs plan -a su-25T` works.
 
-    bind-wizard.py   one front door: ./bind-wizard.py <game> <verb>
-    core/            matching, device roles, game locations, kneeboards,
-                     reading the sticks directly and the curses shell for it
-    games/           one folder per game
+Close the game before you write. The writers refuse to run while the game
+is up.
 
-## Games
+## The games
 
 | game | folder | state |
 |---|---|---|
-| Falcon BMS | `games/falconbms` | on the core |
-| War Thunder | `games/warthunder` | on the core |
-| MSFS 2024 | `games/msfs` | on the core |
-| X4 Foundations | `games/x4` | on the core |
-| DCS World | `games/dcs` | on the core, own sheet template |
-| Elite Dangerous | `games/elite` | on the core |
+| DCS World | `games/dcs` | runs |
+| Elite Dangerous | `games/elite` | runs |
+| MSFS 2024 | `games/msfs` | runs |
+| X4 Foundations | `games/x4` | runs |
+| Falcon BMS | `games/falconbms` | a needs list, no code |
+| War Thunder | `games/warthunder` | a needs list, no code |
 
-## Quick start
+A folder with no `plan.py` holds a needs list and a binds file. The front
+door does not list it. `games/<game>/README.md` describes one game's own
+file format.
 
-    ./bind-wizard.py                   the games, and what each one can do
-    ./bind-wizard.py bms why           the layout, with the evidence for each choice
-    ./bind-wizard.py bms sheet         the kneeboard
-    ./bind-wizard.py bms write         into the game (close the game first)
+Each game's needs list is an example, and it is yours to change. See
+[`USING.md`](USING.md).
 
-    aliases   bms = falconbms   wt = warthunder   ed = elite
+## The folders
 
-The verb is canonical, what it runs is not — a game may answer it with a
-separate script, or need two writes for one layout. Anything after the verb is
-forwarded, so `./bind-wizard.py dcs plan -a su-25T` works.
+    bind-wizard.py   the front door
+    core/            the matching, the screens, the kneeboard
+    games/           one folder per game
+    overlays/        a cockpit template to lay a game out to
+    backups/         a copy of every file a writer replaced
+    tests/           the test suite
 
-The scripts are still there to be run directly:
+## The documents
 
-    cd games/falconbms
-    ./harvest.py             read the game: its own vocabulary
-    ./plan.py --why          what it would bind, and why
-    ./plan.py --write --write-axes    into the game
-    ./plan.py --sheet --html the kneeboard
+| document | for |
+|---|---|
+| [`USING.md`](USING.md) | the commands, the review screen, the keys |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | the files, the interface, the contracts |
+| [`ALLOCATION.md`](ALLOCATION.md) | how the matching decides |
+
+## Test it
+
+    ./tests/run.py              every test
+    ./tests/run.py needs        only these
+    ./tests/run.py -v           and name each one
+
+The suite takes the standard library and the device map. It needs no game
+installed and no harvest.

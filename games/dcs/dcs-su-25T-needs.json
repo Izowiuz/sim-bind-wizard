@@ -1,0 +1,281 @@
+{
+  "needs": [
+    {
+      "what": "Trim Hat",
+      "shape": "hat4",
+      "urgency": 0,
+      "suits": "trim",
+      "on": ["up", "down", "left", "right"],
+      "device": "stick",
+      "bindings": [[{"action": "dnilp96u215cdnilvdnilvpnilvunil"}], [{"action": "dnilp95u215cdnilvdnilvpnilvunil"}], [{"action": "dnilp93u215cdnilvdnilvpnilvunil"}], [{"action": "dnilp94u215cdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Landing Gear",
+      "shape": "hat2",
+      "urgency": 1,
+      "suits": "systems",
+      "on": ["down", "up"],
+      "bindings": [[{"action": "d431pnilunilcdnilvdnilvpnilvunil"}], [{"action": "d430pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Radar | Display Zoom",
+      "shape": "hat2",
+      "suits": "view",
+      "on": ["left", "right"],
+      "bindings": [[{"action": "d103pnilunilcdnilvdnilvpnilvunil"}], [{"action": "d104pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Engine",
+      "shape": "hat2",
+      "urgency": 3,
+      "suits": "systems",
+      "on": ["left", "right"],
+      "bindings": [[{"action": "d311pnilunilcdnilvdnilvpnilvunil"}], [{"action": "d312pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Engine",
+      "shape": "hat2",
+      "urgency": 3,
+      "suits": "systems",
+      "on": ["left", "right"],
+      "bindings": [[{"action": "d313pnilunilcdnilvdnilvpnilvunil"}], [{"action": "d314pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Pitch",
+      "shape": "stick",
+      "urgency": 0,
+      "suits": "flight",
+      "on": ["y"],
+      "takes": "axis",
+      "invert": true,
+      "rests": "centred",
+      "device": "stick",
+      "bindings": [[{"action": "a2001cdnil"}]]
+    },
+    {
+      "what": "Roll",
+      "shape": "stick",
+      "urgency": 0,
+      "suits": "flight",
+      "on": ["x"],
+      "takes": "axis",
+      "rests": "centred",
+      "device": "stick",
+      "bindings": [[{"action": "a2002cdnil"}]]
+    },
+    {
+      "what": "Rudder",
+      "shape": "stick",
+      "urgency": 0,
+      "suits": "flight",
+      "on": ["z"],
+      "takes": "axis",
+      "rests": "centred",
+      "device": "stick",
+      "bindings": [[{"action": "a2003cdnil"}]]
+    },
+    {
+      "what": "Thrust Left",
+      "shape": "lever",
+      "urgency": 0,
+      "suits": "flight",
+      "takes": "axis",
+      "rests": "mid",
+      "device": "throttle",
+      "prefer": "left throttle lever",
+      "bindings": [[{"action": "a2005cdnil"}]]
+    },
+    {
+      "what": "Thrust Right",
+      "shape": "lever",
+      "urgency": 0,
+      "suits": "flight",
+      "takes": "axis",
+      "rests": "mid",
+      "device": "throttle",
+      "prefer": "right throttle lever",
+      "bindings": [[{"action": "a2006cdnil"}]]
+    },
+    {
+      "what": "Airbrake",
+      "shape": "hat2",
+      "urgency": 1,
+      "device": "throttle",
+      "bindings": [[{"action": "d73pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Airbrake Off",
+      "shape": "hat2",
+      "urgency": 1,
+      "device": "throttle",
+      "bindings": [[{"action": "d148pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Airbrake On",
+      "shape": "hat2",
+      "urgency": 1,
+      "device": "throttle",
+      "bindings": [[{"action": "d147pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Flaps Landing Position",
+      "shape": "hat2",
+      "urgency": 1,
+      "suits": "flight",
+      "device": "throttle",
+      "bindings": [[{"action": "d145pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Flaps Up",
+      "shape": "hat2",
+      "urgency": 1,
+      "suits": "flight",
+      "on": ["up"],
+      "device": "throttle",
+      "bindings": [[{"action": "d146pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Flaps Up/Down",
+      "shape": "hat2",
+      "urgency": 1,
+      "suits": "flight",
+      "on": ["up"],
+      "device": "throttle",
+      "bindings": [[{"action": "d72pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Wheel Brake On",
+      "shape": "button",
+      "urgency": 1,
+      "suits": "flight",
+      "device": "stick",
+      "bindings": [[{"action": "d74pnilu75cdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "(1) Navigation Modes",
+      "shape": "hat4",
+      "urgency": 0,
+      "bindings": [[{"action": "d105pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "(6) Longitudinal Missile Aiming Mode",
+      "shape": "hat4",
+      "urgency": 0,
+      "bindings": [[{"action": "d110pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "(7) Air-To-Ground Mode",
+      "shape": "hat4",
+      "urgency": 0,
+      "bindings": [[{"action": "d111pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "(8) Gunsight Reticle Switch",
+      "shape": "hat4",
+      "urgency": 0,
+      "suits": "fire",
+      "bindings": [[{"action": "d112pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Cannon",
+      "shape": "trigger",
+      "urgency": 0,
+      "on": ["first"],
+      "device": "stick",
+      "prefer": "Main trigger",
+      "bindings": [[{"action": "d113pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Countermeasures Chaff Dispense",
+      "shape": "hat4",
+      "urgency": 0,
+      "suits": "defence",
+      "device": "throttle",
+      "bindings": [[{"action": "d358pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Countermeasures Flares Dispense",
+      "shape": "hat4",
+      "urgency": 0,
+      "suits": "defence",
+      "device": "throttle",
+      "bindings": [[{"action": "d357pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Weapon Change",
+      "shape": "hat4",
+      "urgency": 0,
+      "device": "stick",
+      "bindings": [[{"action": "d101pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Weapon Fire",
+      "shape": "trigger",
+      "urgency": 0,
+      "on": ["second"],
+      "device": "stick",
+      "prefer": "Main trigger",
+      "bindings": [[{"action": "d84pnilu85cdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Communication menu",
+      "shape": "button",
+      "bindings": [[{"action": "d179pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "I-251 Slew Horizontal",
+      "shape": "ministick",
+      "on": ["x"],
+      "takes": "axis",
+      "rests": "centred",
+      "device": "throttle",
+      "bindings": [[{"action": "a2033cdnil"}]]
+    },
+    {
+      "what": "I-251 Slew Vertical",
+      "shape": "ministick",
+      "on": ["y"],
+      "takes": "axis",
+      "rests": "centred",
+      "device": "throttle",
+      "bindings": [[{"action": "a2034cdnil"}]]
+    },
+    {
+      "what": "Laser Ranger On/Off",
+      "shape": "button",
+      "device": "throttle",
+      "bindings": [[{"action": "d392pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Target Lock",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "lock",
+      "device": "stick",
+      "bindings": [[{"action": "d100pnilu1627cdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Target Unlock",
+      "shape": "button",
+      "urgency": 0,
+      "suits": "lock",
+      "device": "stick",
+      "bindings": [[{"action": "d1635pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Electric Power Switch",
+      "shape": "button",
+      "urgency": 3,
+      "bindings": [[{"action": "d315pnilunilcdnilvdnilvpnilvunil"}]]
+    },
+    {
+      "what": "Zoom View",
+      "shape": "dial",
+      "urgency": 3,
+      "suits": "view",
+      "takes": "axis",
+      "rests": "min",
+      "bindings": [[{"action": "a2012cdnil"}]]
+    }
+  ]
+}

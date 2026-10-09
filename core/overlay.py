@@ -1,10 +1,8 @@
-"""One way of laying a game out, written down instead of repeated per action.
+"""One way of laying a game out, written once instead of once per action.
 
-A need says what a function IS and how you use it: held, rapid, found by feel,
-in which band. It says nothing about where you want it, and it should not --
-`stick` is not a property of firing a gun, it is a property of how you like
-your desk. That belonged in 76 identical hand-written fields, and an opinion
-written 76 times is an opinion you cannot change.
+A need says what a function IS and how you use it: held, rapid, found by
+feel, in which band. It says nothing about where you want it. `stick` is
+not a property of firing a gun. It is a property of how you like your desk.
 
 An overlay says it once:
 
@@ -12,28 +10,28 @@ An overlay says it once:
     suits  = "fire"
     device = "stick"
 
-Every key that is not something an overlay may SET is a condition on the need,
-and all of them must hold. So the rule above is read "for every need whose
-family is `fire`, ask for the stick", and a rule naming `what` applies to one
-need by name -- which is what `overlays/by-hand.toml` is, today's wishes
-carried over unchanged so that nothing is lost on the way to rules.
+A key an overlay may SET is an answer. Every other key is a condition on
+the need, and all the conditions have to hold. So read the rule above as
+"for every need whose family is `fire`, ask for the stick". A rule that
+names `what` applies to one need by name, and `overlays/by-hand.toml` is
+a file of those.
 
-The other half is the one thing a per-need file could not say at all:
+The other half is the thing a per-need file cannot say at all:
 
     [[pair]]
     rule  = "reachable together"
     one   = { modifier = true }
     other = { shift = true }
 
-Two needs, and a claim about the controls they land on rather than about
-either one of them. Until this existed every control was scored alone, so a
-modifier could land where your thumb already was and the layer it shifted
-could land under the same thumb -- each placement perfect, the pair useless.
+That is two needs, and a claim about the controls they land on rather than
+about either need. Without it every control is scored alone: a modifier
+lands where your thumb already is, and the layer it shifts lands under the
+same thumb. Each placement is perfect and the pair is useless.
 
-The rule vocabulary is closed and checked when the file loads, the way the
-device map checks its own words: a rule nobody implements is a mistake in the
-file, and a reader that skipped it would lay the desk out as though you had
-asked for nothing.
+The rule vocabulary is closed and it is checked when the file loads. The
+device map checks its own words the same way. A rule nothing implements is
+a mistake in the file, and a reader that skipped it would lay the desk out
+as though you had asked for nothing.
 """
 
 import os
@@ -44,65 +42,69 @@ from core import needs as corneeds
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-#: Where overlays live: beside `core`, not inside it. They are yours, like the
-#: desks in the device map's `profiles/` -- a desk says what your hardware is,
-#: an overlay says what you like doing with it.
+#: Where overlays live: beside `core`, not inside it. They are yours, like
+#: the desks in the device map's `profiles/`. A desk says what your hardware
+#: is. An overlay says what you like doing with it.
 WHERE = os.path.join(os.path.dirname(HERE), 'overlays')
 
-#: What a `[[want]]` may set on a need. Everything else in the table is a
-#: condition, which is why this list exists rather than a `when`/`then` split:
-#: a rule reads as one sentence, and the only thing you have to know to read
-#: it is which half of the words are the answer.
+#: What a `[[want]]` may set on a need. Every other key in the table is a
+#: condition. This list exists in place of a `when` and `then` split, so a
+#: rule reads as one sentence. To read it you need to know which of its
+#: words are the answer.
 SETS = corneeds.WISHES
 
-#: Which of them name a word the device map owns, and which constant says
-#: what that word may be. Checked when the file loads, so `finger = "thump"`
-#: is an error rather than a wish that silently never matches anything.
-#: Nothing is invented here: the map has held these since long before an
-#: overlay existed, and a desk's capture already answers in them.
+#: Which of them name a word the device map owns, and which constant holds
+#: the words it may be. Checked when the file loads, so `finger = "thump"`
+#: is an error. Unchecked it is a wish that matches nothing and says
+#: nothing. Nothing is invented here: the map holds these words and a
+#: desk's capture answers in them.
 FROM_THE_MAP = {'device': 'ROLES_ON_A_DESK', 'finger': 'FINGERS',
                 'level': 'LEVELS'}
 
-#: What a `[[want]]` may ask ABOUT a need -- its description, and nothing
-#: derived from a run. `bindings`, `push` and `on` are left out on purpose:
-#: they are lists, and a condition on a list is the expression language this
-#: format refuses. `modifier` is left out for a sharper reason: it is a wish,
-#: and a word that both asked and answered would make `modifier = true` a
-#: rule that only fires on needs that already said so.
+#: What a `[[want]]` may ask ABOUT a need. That is the need's description
+#: and nothing a run derived.
+#:
+#: `bindings`, `push` and `on` are left out on purpose. They are lists, and
+#: a condition on a list is the expression language this format refuses.
+#:
+#: `modifier` is left out for another reason. It is a wish. A word that
+#: both asks and answers makes `modifier = true` a rule that fires only on
+#: the needs that already say so.
 ASKS = ('what', 'shape', 'urgency', 'suits', 'category') + corneeds.TOLD
 
 #: The one condition that is not about a need: which game the rule is for.
-#: An overlay is general, and a rule naming `what` is not -- two games can
+#: An overlay is general. A rule that names `what` is not. Two games can
 #: both have a function called `Gear` and want different things of it, and
-#: MSFS's landing gear took Falcon's pin to a keyboard button exactly that
-#: way. Checked when the file loads rather than per need: the planner knows
-#: which game it is, so what reaches the allocator is already this game's.
+#: MSFS's landing gear took Falcon BMS's pin to a keyboard button that way.
+#:
+#: Checked when the file loads, not per need. The planner knows which game
+#: it is, so what reaches the allocator is already this game's.
 SCOPE = 'game'
 
 
 class Bad(SystemExit):
     """The file says something the reader does not know.
 
-    Always a fault in the file. An overlay is the only place that says where
-    you want things, so a word quietly skipped lays the desk out as though you
-    had not asked -- which looks exactly like the planner ignoring you.
+    This is always a fault in the file. An overlay is the only place that
+    says where you want things. A word skipped in silence lays the desk out
+    as though you had not asked, and that looks like the planner ignoring
+    you.
     """
 
 
 def _reachable_together(one, other):
     """Can a hand work both of these without letting go of either?
 
-    Different hands, always. Otherwise there has to be one position the hand
-    takes from which both are reached, and by DIFFERENT fingers -- two things
-    under one thumb are two things you do one after the other.
+    Two different hands always can. Otherwise the hand needs one position
+    it reaches both from, and it has to reach them with DIFFERENT fingers.
+    Two things under one thumb are two things you do one after the other.
 
-    `part` and not `level`, and the map says why: EXTENDED is not a posture of
-    its own, so a thumb at HOME and a pinky reaching are the same hand in the
-    same place doing two things. Comparing the raw level called that pair
-    incompatible, which is the one case the rule exists for.
+    This compares `part` and not `level`. EXTENDED is not a posture of its
+    own, so a thumb at HOME and a pinky reaching are one hand in one place
+    doing two things. The raw level calls that pair incompatible, and that
+    pair is the case the rule exists for.
 
-    This is `device-map-v2.md` §4, and it is the first thing in this tool that
-    reads a spot's `hand`, `finger` and `part` rather than only how far away
+    This reads a spot's `hand`, `finger` and `part` rather than how far away
     it is.
     """
     for a in one.access:
@@ -130,41 +132,40 @@ class Overlay:
 
     def __init__(self, name, says, wants=(), pairs=(), called=''):
         self.name = name
-        #: The file's own stem, which is what `--overlay` and the menu
-        #: say. Kept because `name` is the display name out of the file
-        #: and the two differ -- `f-18.toml` calls itself `F/A-18C`. The
-        #: menu used to re-read every overlay to work this out, so one
-        #: unreadable file in the directory took the review down on a
-        #: keypress.
+        #: The file's own stem. That is what `--overlay` and the menu
+        #: say. `name` is the display name out of the file, and the two
+        #: differ: `f-18.toml` calls itself `F/A-18C`. Both are kept here,
+        #: so the menu does not re-read every overlay to work one out.
         self.called = called
         self.says = says
         self.wants = list(wants)
         self.pairs = list(pairs)
 
     def apply(self, needs):
-        """Set what the rules ask for. Returns how many needs were touched.
+        """Set what the rules ask for. Returns how many needs it touched.
 
-        Every wish is taken off first, so laying this overlay on is
-        REPLACING whatever was on before rather than adding to it. One
-        overlay per process hid the difference; a menu that switches
-        between them does not.
+        Every wish comes off first. Laying an overlay on REPLACES what was
+        on before. It does not add to it.
 
         Later rules win, so a file may state the broad wish first and the
-        exception after it, which is the order you would say them in.
+        exception after it. That is the order you say them in.
 
-        A `device` the GAME asked for stands. This is the one wish that
-        names the same field a game names, and the game knows the thing:
-        DCS reads the device off its own command table, which is written
-        from the aircraft -- `Pitch` is the stick because the Hornet's
-        pitch is the stick. A template says the hand, one job at a time,
-        and `suits = "flight"` is one word over the flight axes AND the
+        What the GAME asked for stands. A wish and an ask are the same
+        field, such as `device` or `finger`, and the game knows the thing.
+        DCS reads both off its own command table, and that table is
+        written from the aircraft: `Pitch` is the stick because the
+        Hornet's pitch is the stick, and the sensor switch is under the
+        thumb because the grip has it there.
+
+        A template speaks one JOB at a time, and one word covers more than
+        you mean. `suits = "flight"` covers the flight axes AND the
         speedbrake. Overwriting with it put the Hornet's pitch, roll and
-        rudder on the throttle, where no axis answered them, and moved
-        five more commands off the device the real jet keeps them on.
+        rudder on the throttle, where no axis answers them, and it moved
+        five more commands to the wrong hand.
 
-        So the template stays what its own file calls itself, a lean: it
-        places a need the game said nothing about, and leans on finger
-        and level for the rest, at +15 against `device_right`'s +40.
+        So the template is a lean. It places what the game said nothing
+        about, and it leans on the rest at +15 against `device_right`'s
+        +40. This holds for every wish, not for `device` alone.
         """
         corneeds.forget_wishes(needs)
         touched = set()
@@ -173,9 +174,7 @@ class Overlay:
                 if not _matches(need, rule):
                     continue
                 for key in SETS:
-                    if key not in rule:
-                        continue
-                    if key == 'device' and (need.ask or {}).get('device'):
+                    if key not in rule or (need.ask or {}).get(key):
                         continue
                     setattr(need, key, rule[key])
                     touched.add(n)
@@ -185,8 +184,8 @@ class Overlay:
         """[(need, need, rule name)] -- every pair the file's rules bind.
 
         Both halves of a `[[pair]]` are conditions over needs, so one rule
-        can bind several pairs: a modifier and each of the four needs living
-        on its layer.
+        binds several pairs: a modifier, and each of the four needs that
+        live on its layer.
         """
         out = []
         for rule in self.pairs:
@@ -199,16 +198,16 @@ class Overlay:
         return out
 
     def kept(self, layout):
-        """(kept, broken, [what broke]) -- how much of this got honoured.
+        """(kept, broken, [what broke]) -- how much of this got through.
 
-        The answer to "is this overlay doing anything". A template is a
-        lean rather than a law, so some of it loses to reach and to what
-        is already taken -- and without a count the only way to know how
-        much was to read the whole layout and remember the file.
+        This answers "is the overlay doing anything". A template is a lean
+        and not a law, so some of it loses to reach and to what is already
+        taken. Without a count you read the whole layout and remember the
+        file.
 
-        Counted per WORD, not per need: a want asking for a thumb at HOME
-        is two claims about where a thing goes, and honouring one of them
-        is half an answer rather than a whole one.
+        Counted per WORD, not per need. A want that asks for a thumb at
+        HOME makes two claims about where a thing goes, and one of them
+        honoured is half an answer.
         """
         kept, broken, lost = 0, 0, []
         for placed in layout.placed:
@@ -230,10 +229,9 @@ class Overlay:
     def bound(self, needs):
         """`partners`, with each rule as the test itself.
 
-        What the allocator wants: it asks the question per candidate
-        control, in the hot loop, and handing it the callable means
-        nothing down there has to keep the overlay around to look a name
-        up in.
+        The allocator asks the question once per candidate control, inside
+        the hot loop. It gets the callable, so nothing down there keeps the
+        overlay around to look a name up in.
         """
         self.apply(needs)
         return [(a, b, PAIRS[rule]) for a, b, rule in self.partners(needs)]
@@ -251,10 +249,10 @@ def _mine(rows, game):
 def _in_the_map(rule, where):
     """Every map word this rule uses, against the map's own list.
 
-    Not at import, and not a list of our own: `core.devmap` finds the map,
-    and the words have been constants in it since before there were
-    overlays. A desk's capture already answers in them, so an overlay that
-    agrees with the map needs nothing added to either.
+    Not at import, and not against a list of our own. `core.devmap` finds
+    the map, and the words are constants in it. A desk's capture answers in
+    those words, so an overlay that agrees with the map needs nothing added
+    to either side.
     """
     from core import devmap
     devicemap = devmap.load()
@@ -262,9 +260,9 @@ def _in_the_map(rule, where):
         want = rule.get(word)
         known = getattr(devicemap, says)
         if want is not None and want not in known:
-            # The map spells "the whole hand" as the empty string, and an
-            # empty wish here means no wish at all -- so that one is not
-            # askable, and listing it as `''` would read as a typo.
+            # The map spells "the whole hand" as the empty string. An
+            # empty wish here means no wish at all, so that word is not
+            # askable. Listing it as `''` reads as a typo.
             said = ', '.join(repr(k) for k in known if k)
             raise Bad(f'{where}: {word} = {want!r} is not a word the map '
                       f'says. It says these: {said}.')

@@ -13,27 +13,24 @@ OPTIONS
 
 # Read what MSFS can be told to do, from the profiles it ships.
 #
-# MSFS 2024 has ~1700 bindable actions. It ships 551 default profiles covering
-# 101 devices, split by aircraft category, and between them they name the
-# vocabulary -- which is what this reads them for.
+# MSFS 2024 accepts about 1700 actions. It ships 551 default profiles
+# covering 101 devices, split by aircraft category, and between them they
+# name the vocabulary.
 #
 # One thing comes out:
 #
-#   msfs-actions.json   every action name seen, with the contexts it lives in
+#   msfs-actions.json   every action name seen, with its contexts
 #
-# It does not belong in version control: it is derived from Asobo's files.
+# It does not belong in version control. It is derived from Asobo's files.
 #
-# How many of those profiles bound each action used to come out too, and the
-# plan used it to break ties. It is a count of what Asobo's authors did with
-# a hundred other devices, so it is gone from the whole family.
+# How many profiles bound each action is not read. That is a count of what
+# Asobo's authors did with a hundred other devices.
 #
-#     ./harvest.py                  # auto-detect the Steam install
+#     ./harvest.py                  # find the Steam install
 #     ./harvest.py --game-dir PATH
 
-import argparse
 import collections
 import glob
-import json
 import os
 import re
 import sys
@@ -76,7 +73,7 @@ def profiles(game_dir):
     for path in sorted(glob.glob(os.path.join(root, '*', '*.xml'))):
         category = os.path.basename(os.path.dirname(path))
         try:
-            # the files carry a BOM and occasional stray encodings
+            # The files carry a BOM, and some carry a stray encoding.
             tree = ET.fromstring(open(path, encoding='utf-8-sig').read())
         except ET.ParseError:
             continue
@@ -92,9 +89,10 @@ USER_PROFILES = os.path.expanduser(
 def user_actions():
     """Every action the game knows, from the profiles it wrote for you.
 
-    The shipped defaults only mention what somebody chose to bind, which is
-    699 of them -- a profile the sim generates carries all 1710. Missing one
-    means refusing to write a binding the game would have accepted.
+    The shipped defaults mention what somebody chose to bind, which is 699
+    actions. A profile the sim generates carries all 1710. A missing action
+    is a binding the program refuses to write and the game would have
+    accepted.
     """
     out = {}
     for path in sorted(glob.glob(USER_PROFILES)):
@@ -130,8 +128,8 @@ def harvest(game_dir):
             if nm:
                 actions.setdefault(f'AXIS:{nm}', {'contexts': {'AXES'}})
 
-    # the shipped profiles name only what someone bound; a profile the sim
-    # wrote for this machine names everything
+    # The shipped profiles name what somebody bound. A profile the sim
+    # wrote for this machine names everything.
     for name, ctxs in user_actions().items():
         actions.setdefault(name, {'contexts': set()})
         actions[name]['contexts'] |= ctxs
@@ -139,36 +137,66 @@ def harvest(game_dir):
     return actions, seen_profiles
 
 
+#: Which file a binding goes into, as the kneeboard's columns. MSFS keeps
+#: two profiles per device. The one carrying `<AircraftInfo/>` holds the
+#: flying actions. The one without it holds cameras, radio, and whatever
+#: applies however you fly.
+#:
+#: This is a property of the BINDING and not of the action: it is which
+#: file somebody put the binding in. So it rides on `actions.Bind.mode`
+#: and it is not written onto the action below. No rule over an action
+#: name will find it.
+#: What MSFS calls each axis, in `adapter.HID_AXES` order, and the code it
+#: writes beside the name. Confirmed against the owner's own profiles for
+#: X, Y, Z, Rx and Slider. The rest follow the same +0x10 step and want
+#: checking in the sim.
+#:
+#: Two parallel tuples, not pairs. `Adapter.AXES` is the name, and the
+#: core indexes it by HID position. The code travels beside it in
+#: `AXIS_CODES`, which only the writer reads.
+AXES = ('Joystick L-Axis X ', 'Joystick L-Axis Y ', 'Joystick L-Axis Z ',
+        'Joystick R-Axis X ', 'Joystick R-Axis Y ', 'Joystick R-Axis Z ',
+        'Joystick Slider X ', 'Joystick Slider Y ')
+AXIS_CODES = (1026, 1042, 1058, 770, 786, 802, 514, 530)
+
+#: How MSFS spells a button. It shows a number that counts from one and
+#: stores a code that counts from zero, so the name is the index plus one
+#: and the code is the index.
+BUTTON, BUTTON_FROM = 'Joystick Button {n}', 1
+
+PLANE, HELI, GLOBAL = 'plane', 'heli', 'glob'
+MODES = (PLANE, HELI, GLOBAL)
+
+
 def catalogue(actions=None):
     """[Action] -- the whole vocabulary in the shape every game shares.
 
-    MSFS marks an axis by prefixing the name with `AXIS:`, so the kind and
-    the readable name come out of the same string.
+    MSFS marks an axis by putting `AXIS:` in front of the name, so the
+    kind and the readable name come out of one string.
+
+    The contexts an action appears in are its `category`. That is what
+    they are: the game's own grouping, and what the vocabulary screen
+    groups by. They are not its `mode`. See `MODES`.
     """
     actions = actions or {}
     return [cactions.Action(name, name.removeprefix('AXIS:'),
                             kind='axis' if name.startswith('AXIS:')
                             else 'button',
-                            mode=', '.join(sorted(ctxs)) or None)
+                            category=', '.join(sorted(ctxs)) or None)
             for name, ctxs in sorted(actions.items())]
-
-
-def action_rows(actions=None):
-    """The section the cache holds."""
-    return cactions.dump(catalogue(actions))
 
 
 @typing.final
 class MsfsHarvest(adapter.Harvest):
     """MSFS's action vocabulary.
 
-    `msfs-actions.json` gains an "actions" envelope here. It was the one
-    cache in the family whose top level WAS the data, because it was written
-    by hand with `json.dump`; `core.vocab.save` writes the sections it is
-    given and so can never emit a bare mapping. The cache is derived from
-    the installed game and gitignored, so the migration is one `--json` run
-    -- but `games/msfs/plan.py` had to learn the key in the same commit, or
-    it reads a cache that is there and shaped wrong.
+    `msfs-actions.json` carries an "actions" envelope. `core.vocab.save`
+    writes the sections it is given, so it cannot emit a bare mapping.
+
+    The cache is derived from the installed game and it is in
+    `.gitignore`, so one `--json` run rebuilds it. `games/msfs/plan.py`
+    has to know the key, or it reads a cache that is there and shaped
+    wrong.
     """
 
     game = 'msfs'
@@ -185,8 +213,9 @@ class MsfsHarvest(adapter.Harvest):
         actions, counts = harvest(self.where)
         self.counts = counts
         return {'msfs-actions.json': {
-            'actions': action_rows({k: sorted(v['contexts'])
-                                    for k, v in sorted(actions.items())})}}
+            'actions': cactions.dump(catalogue(
+                {k: sorted(v['contexts'])
+                 for k, v in sorted(actions.items())}))}}
 
     @typing.override
     def summary(self, data):

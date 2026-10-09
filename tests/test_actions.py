@@ -1,9 +1,9 @@
 """The one shape a game action takes.
 
-`core/actions.py` is a record and two functions, so what is worth pinning is
-the part that is a decision rather than a field: that nothing optional is
-invented to fill a gap, and that the ordering a screen leans on still holds
-for a game that counts nothing.
+`core/actions.py` is a record and two functions. What is worth pinning is
+the part that is a decision and not a field: that nothing optional is
+invented to fill a gap, and that the ordering a screen leans on holds for
+a game that counts nothing.
 """
 
 import os
@@ -23,19 +23,22 @@ from core.actions import (Action, Bind, PRESS, RELEASE,        # noqa: E402
 class TheBind(unittest.TestCase):
     """What sits on one button, in a shape the core can read.
 
-    A payload used to be whatever a game felt like -- a BMS callback, a
-    War Thunder `(air, heli)` pair, an X4 `(kind, id)` per context -- and
-    `core` carried it blindly, which is why every screen had to hand it
-    back to the game to be turned into words. A `Bind` names an action the
-    catalogue knows, so the core can answer for itself.
+    A payload the game chose is whatever the game felt like: a Falcon BMS
+    callback, a War Thunder `(air, heli)` pair, an X4 `(kind, id)` per
+    context. The core carries that blindly, so every screen hands it back
+    to the game for the words.
+
+    A `Bind` names an action the catalogue knows, so the core answers for
+    itself.
     """
 
     def test_it_is_a_press_unless_it_says_otherwise(self):
-        # Five of the six games never say otherwise; BMS says it twice.
+        # Five of the six games never say otherwise. Falcon BMS says it
+        # twice.
         self.assertEqual(PRESS, Bind('SimGear').edge)
 
     def test_release_is_the_other_half_of_one_binding(self):
-        # `SimDeselectOverride` is not a second mode of the switch -- it is
+        # `SimDeselectOverride` is not a second mode of the switch. It is
         # what that switch does when you let go of it.
         b = Bind('SimDeselectOverride', edge=RELEASE)
         self.assertEqual(RELEASE, b.edge)
@@ -46,8 +49,8 @@ class TheBind(unittest.TestCase):
         self.assertEqual(1, len({Bind('ID_GEAR'), Bind('ID_GEAR')}))
 
     def test_an_edge_nobody_recognises_is_refused(self):
-        # A typo here would be written into a game's config and discovered
-        # in the air, so it is refused where it is written instead.
+        # A typo here reaches a game's configuration file and is
+        # discovered in the air. It is refused where it is written.
         with self.assertRaises(ValueError):
             Bind('ID_GEAR', edge='hold')
 
@@ -56,21 +59,21 @@ class TheBind(unittest.TestCase):
         self.assertEqual('Toggle gear', Bind('ID_GEAR').named(cat))
 
     def test_an_action_the_catalogue_lost_still_answers(self):
-        # A harvest after a game patch can drop an id somebody bound. The
-        # row has to say something, and the id is better than a blank.
+        # A harvest taken after a game patch can drop an id somebody
+        # bound. The row says something, and the id beats a blank.
         self.assertEqual('ID_GONE', Bind('ID_GONE').named({}))
 
 
 class TheRecord(unittest.TestCase):
 
     def test_a_name_falls_back_to_the_id(self):
-        # X4 and Elite compute the name from the id, and War Thunder already
-        # degrades to it on a thin cache, so this is the family's own habit.
+        # X4 and Elite compute the name from the id, and War Thunder
+        # degrades to it on a thin cache.
         self.assertEqual('KEY_GEAR', Action('KEY_GEAR').name)
 
     def test_nothing_optional_is_invented(self):
-        # Four of the six ship no categories. A derived stand-in would be
-        # read as a fact by the next person.
+        # Four of the six ship no categories. The next person reads a
+        # derived stand-in as a fact.
         a = Action('KEY_GEAR')
         self.assertIsNone(a.category)
         self.assertIsNone(a.mode)
@@ -93,9 +96,9 @@ class Grouping(unittest.TestCase):
         self.assertEqual(['Panel', None], [c for c, _a in got])
 
     def test_inside_a_group_the_id_decides(self):
-        # It used to be how many factory profiles bound each one. A screen
-        # whose rows move between runs is one you cannot learn, and the id
-        # is the only thing here that cannot move.
+        # By the id. A screen whose rows move between runs is one you
+        # cannot learn, and the id is the only thing here that cannot
+        # move.
         ids = ['INPUT_ACTION_B', 'INPUT_ACTION_A', 'INPUT_STATE_C']
         got = grouped([Action(i) for i in ids])
         self.assertEqual(sorted(ids), [a.id for a in got[0][1]])
@@ -107,30 +110,29 @@ class Grouping(unittest.TestCase):
 class BindsOnDisk(unittest.TestCase):
     """A bind, written down and read back.
 
-    What a need binds has lived in a Python literal since the first commit,
-    so it has never had to survive a round trip. It does now: the judgements
-    leave the source, and a bind that comes back subtly different is a
-    binding the game will accept and nobody asked for.
+    The judgements live in a file now, not in a Python literal, so a bind
+    has to survive a round trip. A bind that comes back slightly different
+    is a binding the game accepts and nobody asked for.
     """
 
     def test_a_plain_press_writes_only_its_action(self):
         self.assertEqual([{'action': 'ID_GEAR'}], dump_binds([Bind('ID_GEAR')]))
 
     def test_the_other_half_of_a_binding_survives(self):
-        # Two of the family's 63 BMS bindings are a press and a release of
-        # one switch. A release that came back a press would fire on the
-        # way down and never let go.
+        # Two of the 63 Falcon BMS bindings are a press and a release of
+        # one switch. A release that comes back a press fires on the way
+        # down and never lets go.
         (back,) = read_binds(dump_binds([Bind('SimDeselect', edge=RELEASE)]))
         self.assertEqual(RELEASE, back.edge)
 
     def test_the_file_a_binding_belongs_in_survives(self):
-        # MSFS alone cannot read this off the id: which of its two
-        # profiles a binding goes into was chosen by whoever wrote it.
+        # MSFS alone cannot read this off the id. Whoever wrote the
+        # binding chose which of its two profiles it goes into.
         (back,) = read_binds(dump_binds([Bind('KEY_X', mode='heli')]))
         self.assertEqual('heli', back.mode)
 
     def test_a_slot_keeps_its_order(self):
-        # A slot is a list and the order is which button it lands on.
+        # A slot is a list, and the order is which button it lands on.
         ids = ['C', 'A', 'B']
         got = read_binds(dump_binds([Bind(i) for i in ids]))
         self.assertEqual(ids, [b.action for b in got])
@@ -139,16 +141,16 @@ class BindsOnDisk(unittest.TestCase):
 class OnDisk(unittest.TestCase):
     """The shape a harvest writes and a planner reads.
 
-    The record already existed and already had six producers -- every
-    `catalogue()` builds one. What it had no file, so the translating
-    happened on the way OUT of the cache, once per game, in six places that
-    could drift. Writing the record itself moves that to the way IN, where
-    the game's own format is already being read anyway.
+    The record has six producers, because every `catalogue()` builds one.
+    With no file, the translating happens on the way OUT of the cache,
+    once per game, in six places that drift. Writing the record itself
+    moves that to the way IN, where the game's own format is being read
+    anyway.
 
     Nothing optional is written. Four of the six ship no categories and X4
-    counts nothing, so a file full of `"category": null` would be three
-    thousand lines saying the same nothing -- and a reader that has to cope
-    with a missing key anyway gains nothing from being told.
+    counts nothing, so a file full of `"category": null` is three thousand
+    lines saying the same nothing. A reader copes with a missing key
+    anyway.
     """
 
     def test_a_bare_action_writes_only_what_it_has(self):
@@ -156,8 +158,8 @@ class OnDisk(unittest.TestCase):
                          dump([Action('KEY_GEAR')]))
 
     def test_a_name_the_same_as_the_id_is_not_written_twice(self):
-        # X4 and Elite compute the name from the id, so for them every
-        # single row would otherwise carry it twice.
+        # X4 and Elite compute the name from the id, so every row of
+        # theirs otherwise carries it twice.
         self.assertNotIn('name', dump([Action('KEY_GEAR', 'KEY_GEAR')])[0])
 
     def test_everything_a_game_does_know_survives_the_trip(self):
@@ -168,16 +170,17 @@ class OnDisk(unittest.TestCase):
             self.assertEqual(getattr(one, field), getattr(back, field))
 
     def test_a_row_from_an_older_harvest_still_reads(self):
-        # The cache is regenerated, not migrated -- but a working copy that
-        # predates a field should give a usable record rather than a
-        # KeyError naming nothing.
+        # The cache is regenerated and not migrated. A working copy that
+        # predates a field still gives a usable record, rather than a
+        # KeyError that names nothing.
         (back,) = read([{'id': 'KEY_GEAR'}])
         self.assertEqual('KEY_GEAR', back.id)
         self.assertEqual('button', back.kind)
         self.assertIsNone(back.category)
 
     def test_the_order_written_is_the_order_read(self):
-        # A screen whose rows move between harvests is one you cannot learn.
+        # A screen whose rows move between harvests is one you cannot
+        # learn.
         ids = ['C', 'A', 'B']
         self.assertEqual(ids, [a.id for a in read(dump(
             [Action(i) for i in ids]))])

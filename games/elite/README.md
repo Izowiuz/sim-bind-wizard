@@ -1,154 +1,92 @@
 # Elite Dangerous
 
-Two tools on one writer:
+What is peculiar to this game.
 
-    plan.py             lays a layout out from NEEDS and the device map
-    capture.py   picks a preset, names the devices, writes the .binds
+## The base preset is the template
 
-The plan hands its result to the wizard's own `generate()`, so there is one
-implementation of the `.binds` format. Binding itself is `./bind-wizard.py elite tui`,
-the screen the other five games open
-and both can be selected in the game to compare.
+A `.binds` file carries every function as an element. The binding inside
+it can be empty. The writer therefore reads a base preset and edits it. It
+does not build a file from nothing.
 
-## Where it lives
+`KeyboardMouseOnly.binds` is the vocabulary. It holds 311 buttons, 58
+axes, and 68 settings that are not bindings at all. `MouseSensitivity`,
+the deadzones and `YawToRollMode` are numbers in the same file.
 
-Steam app 359320, Proton. The vocabulary is a shipped preset; the output goes
-into the prefix:
+A function with no child element is a setting, not a binding. The reader
+leaves it out.
 
-    ~/.local/share/Steam/steamapps/common/Elite Dangerous/
-      Products/elite-dangerous-odyssey-64/ControlSchemes/
-        KeyboardMouseOnly.binds     the base preset — every function's name
+A function the base preset does not carry is added. That is how the
+functions only the game's own bindings file enumerates get a binding.
 
-    ~/.local/share/Steam/steamapps/compatdata/359320/pfx/drive_c/users/
-      steamuser/AppData/Local/Frontier Developments/Elite Dangerous/Options/
-      Bindings/
-        <preset>.4.2.binds          written
-        StartPreset.4.start         which preset is selected — not written
-        BindingLoadingErrors.log    the game's complaint if a preset is bad
+## The keyboard binding moves to Secondary
 
-    ED_DIR, --game-dir, --schemes-dir   the install; the Bindings folder is
-                                        derived from it
-    ED_PRESET, --preset                 which preset the plan writes
-    -r FILE                             elite-results.json, which
-                                        remembers both paths after the first
-                                        run
+The writer puts our control on `Primary`. The base preset's keyboard
+binding moves to `Secondary`. The function then still answers at the
+keyboard.
 
-## How to run it
+## The harvest reads the game's file, not ours
 
-    ./harvest.py              the function vocabulary
-    ./harvest.py --grep word  functions matching a word
-    ./harvest.py --json       cache it
+Elite keeps its own bindings file in the Proton prefix. That file lists
+every function Elite knows, with the binding left empty where there is
+none.
 
-    ./plan.py                 the layout
-    ./plan.py --why           and the evidence for each choice
-    ./plan.py --free          what stays unbound
-    ./plan.py --sheet --html  the kneeboard
-    ./plan.py --tui           walk the layout and write what you keep
-    ./plan.py --write         all of it, into the Bindings folder
+The harvest reads that file only. It never reads every `.binds` in the
+folder, because this program writes its own preset into the same folder. A
+typo of ours would otherwise enter the vocabulary and then validate
+itself.
 
-    ./capture.py             preset, devices, write
-    ./capture.py --reset     discard the results file
-    ./capture.py --generate  headless: write the captured preset
+The shipped presets are thirty layouts. Frontier wrote them for a
+Warthog. They say what Frontier chose, not what Elite accepts.
 
-In the TUI: pick the base preset, then SHIP or SRV, then a mapping section or
-ALL.
+## Pitch reads backwards
 
-    arrows   move                    I     invert an axis
-    RETURN   capture the next press  X     clear a binding
-             or axis move, and step  ESC   back out
-             to the next row
+Pull the stick towards you and the value goes negative. Negative is nose
+up. `Inverted` therefore means the opposite of what it means elsewhere for
+two functions:
 
-The results file is saved after every change.
+    PitchAxisRaw
+    BuggyPitchAxis
 
-Every function named in `NEEDS` is checked against the vocabulary before
-anything runs. A function claimed by two needs is an error: Elite has one
-element per function, so the second would quietly win.
+What you set on the review screen is combined with this fact, not written
+raw.
 
-## The format
+This is a fact about the game. It was found by flying it.
 
-`.binds` is plain XML, one element per function, named by the function rather
-than by a hash:
+## The SRV context is in the name
 
-    <Root PresetName="Izowiuz-VIRPIL" MajorVersion="4" MinorVersion="2">
-      <KeyboardLayout>en-US</KeyboardLayout>
-      <YawAxisRaw>
-        <Binding Device="334443E8" Key="Joy_ZAxis" />
-        <Inverted Value="0" />
-        <Deadzone Value="0.00000000" />
-      </YawAxisRaw>
-      <UseBoostJuice>
-        <Primary Device="33448196" Key="Joy_3" />
-        <Secondary Device="Keyboard" Key="Key_Tab" />
-      </UseBoostJuice>
-    </Root>
+Elite scopes a binding by which function it is. It uses no mode flag. One
+control therefore carries the ship's meaning and the SRV's without a
+clash.
 
-Axes carry one `<Binding>`; buttons carry `<Primary>` and `<Secondary>`. The
-file name must be `<PresetName>.4.2.binds` and match the `PresetName`
-attribute.
+Elite spells an SRV function `X_Buggy` or `BuggyX`. The reader checks the
+suffix and the prefix. The suffix alone is not enough: `PitchAxisRaw`
+looks shared until you see that its twin is `BuggyPitchAxis`.
 
-Button keys are `Joy_<index+1>`. Axis keys use DirectInput's naming, not
-Wine's HID one:
+Four SRV functions follow neither rule. No rule over the name will find
+them:
 
-    ABS_X → Joy_XAxis       ABS_THROTTLE → Joy_UAxis
-    ABS_RZ → Joy_RZAxis     ABS_RUDDER   → Joy_VAxis
+    HeadlightsBuggyButton      the twin of ShipSpotLightToggle
+    ToggleDriveAssist          the twin of ToggleFlightAssist
+    SteeringAxis               the SRV's steering
+    DriveSpeedAxis             the SRV's throttle
 
-## Measured
+They are written out, because somebody who knows the game found them. That
+is the only way to find them.
 
-**`Device` is VID concatenated with PID**, uppercase hex, no separator —
-VIRPIL's `3344` plus the product id, so the WarBRD is `334443E8` and the VMAX
-`33448196`. Read from `/proc/bus/input/devices`, matched to the `js` handler.
+## Deadzones
 
-**The base preset's keyboard binding is kept as a fallback.** Writing a HOTAS
-binding moves whatever the base had onto `<Secondary>` rather than dropping
-it, so keyboard control still works alongside.
-
-**The vocabulary is the shipped `KeyboardMouseOnly.binds`** — every function
-the game accepts a binding for is an element in it. There is no separate
-action list to harvest.
-
-**The other shipped presets are not read.** Thirteen of the thirty are
-HOTAS rather than pad or keyboard, and counting what they bind used to pick
-which functions mattered and which device they belonged on. They are
-Frontier's layouts for an X56 and a Warthog; what each function IS lives in
-`elite-needs.json` instead, by hand.
-
-**Several functions share one axis on purpose.** All four split HOTAS presets
-bind `RollAxisRaw`, `BuggyRollAxisRaw` and `SteeringAxis` to the same stick
-axis, and `ThrottleAxis` with `DriveSpeedAxis` to the same throttle axis. The
-game decides by mode; a checker that flags it is wrong.
-
-**The vocabulary is wider than the base preset.** `KeyboardMouseOnly.binds`
-carries 369 bindable functions, the other presets name 24 more (`Humanoid*`,
-the FSS camera buttons), and `NightVisionToggle` appears in none of the thirty
-although the game accepts it. A function bound and verified by hand counts as
-vouched for as well.
-
-**SRV functions do not all say so.** Most carry a `_Buggy` suffix or a `Buggy`
-prefix, but `SteeringAxis`, `DriveSpeedAxis` and `ToggleDriveAssist` are
-SRV-only and name nothing. The context is declared in `AXIS_NEEDS` and in each
-`Need`, never read off the name.
-
-## Still a guess
-
-**Whether the plan flies better than what was captured by hand.** The two
-presets sit side by side in the game and have not been compared in flight.
-They differ — secondary fire on the throttle rather than the stick, the panels
-left on the keyboard.
+A ministick drifts more than a flight axis. The writer sets a deadzone for
+the lateral and vertical thrust axes. It leaves a deadzone you tuned in
+the game alone.
 
 ## Gotchas
 
-**The preset is not selected by writing it.** `StartPreset.4.start` is the
-game's record of the active preset and nothing here touches it, so a newly
-written preset is chosen once in the game's own control options.
+Elite rewrites its bindings when it exits. Close the game before a write.
 
-**The game's own backups cover only presets it wrote itself**,
-as `<preset>.4.2.binds.<number>.backup` beside the file. Ours is copied into
-`<repo>/backups/elite/<stamp>/` before it is regenerated; `--backup-dir` or
-`SIM_BIND_BACKUPS` moves that elsewhere.
+The writer unbinds our devices from any function the layout dropped. A
+writer that only set `Primary` would leave the old binding in place.
 
-**`4.2` is the binds schema version**, not the game version. A game update
-that bumps it makes existing presets invisible, and the filename suffix in the
-writer has to follow.
+`4.2` in the file name is the schema version. It is not the game version.
 
-**`BindingLoadingErrors.log` is the only diagnostic.** A preset the game
-rejects is silently ignored in the UI; that file says why.
+A write does not select the preset. Choose it once in the game's own
+menu.

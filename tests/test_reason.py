@@ -1,20 +1,16 @@
 """Why a binding is where it is, written down where the decision is made.
 
-`Placement.points` reached the Layout and two readers tried to get a reason
-back out of it. BMS prints it. DCS asks `p.points == 200`, and its own
-docstring owns up: "the claim marker `place()` sets, and it was the same
-magic number before". A score is a comparison; an explanation is not, and
-the moment somebody wants the second they start reverse-engineering the
-first.
+A score is a comparison. An explanation is not. A reader that wants the
+second out of the first reverse-engineers it, and a reader that asks
+`p.points == 200` holds a sentinel nobody dares change.
 
 A `Reason` is written by the code that just decided, at the moment it
-decided. Five things decide: a pin, the floored pass, the relaxed pass, the
-borrow pass, and a hand on the review screen.
+decided. Five things decide: a pin, the floored pass, the relaxed pass,
+the share pass, and a hand on the review screen.
 
-The arithmetic test is the one that keeps the others honest. `score()` is a
-sum of named terms and a reason is the terms that fired, so the moment they
-stop adding up to the score the explanation is describing a run that did
-not happen.
+The arithmetic test keeps the others honest. `score()` is a sum of named
+terms and a reason is the terms that fired, so the moment they stop adding
+up to the score the explanation describes a run that did not happen.
 """
 
 import unittest
@@ -65,12 +61,10 @@ class TheArithmetic(unittest.TestCase):
             self.assertEqual(p.points, sum(d for d, _t in p.why.parts),
                              f'{p.need.what}: {said(p.why)}')
 
-    def test_a_borrowed_button_adds_up_too(self):
-        # The borrow pass is scored by its own rows -- the polarity of the
-        # reach term is flipped there -- so it is a second sum to get
-        # wrong. It used to be a second sum in the literal sense: four
-        # numbers added in `allocate` to compare, and the same four
-        # rebuilt by hand afterwards so the screen had words.
+    def test_a_shared_button_adds_up_too(self):
+        # The share pass is scored by its own rows, and the polarity of
+        # the reach term is flipped there. So it is a second sum to get
+        # wrong.
         devs = {'stick': fake.device('stick', [
             fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4,
                       hold_ok=True, blind_distinct=0),
@@ -82,14 +76,14 @@ class TheArithmetic(unittest.TestCase):
             Need('Trim', 'hat4', ['U', 'R', 'D', 'L'], urgency=IN_A_TURN),
             fire], devs)
         p = next(p for p in placed if p.need.what == 'Fire')
-        self.assertEqual('borrowed', p.why.how)
+        self.assertEqual('shared', p.why.how)
         self.assertEqual(p.points, sum(d for d, _t in p.why.parts))
         said = [t for _d, t in p.why.parts]
         self.assertIn('you can hold it', said)
         self.assertIn('you cannot find it by feel', said)
 
     def test_every_part_says_what_it_was_for(self):
-        # A list of bare numbers is the thing being replaced.
+        # A list of bare numbers is what this replaces.
         devs = {'stick': fake.device('stick', [
             fake.button('Thumb button', 0, reach=fake.THUMB)])}
         placed, _u, _f = allocate(
@@ -100,11 +94,13 @@ class TheArithmetic(unittest.TestCase):
 
 
     def test_explaining_the_winner_does_not_change_it(self):
-        # The reason is got by scoring the winning control a SECOND time,
-        # with the terms collected, so the hot loop can stay a comparison
-        # between numbers. That is only honest while `score()` is pure: an
-        # impure one would have the explanation describe a different run
-        # from the decision, and every other test here would still pass.
+        # The reason comes from scoring the winning control a SECOND
+        # time, with the terms collected, so the hot loop stays a
+        # comparison between numbers.
+        #
+        # That is honest only while `score()` is pure. An impure one has
+        # the explanation describe a different run from the decision, and
+        # every other test here still passes.
         devs = fake.hotas(
             [fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4),
              fake.button('Pinky button', 5, reach=fake.PINKY)],
@@ -123,8 +119,8 @@ class TheArithmetic(unittest.TestCase):
 class ABindKnowsWhereItIs(unittest.TestCase):
     """The assignment, not the payload.
 
-    A `Bind` named an action and nothing else, so where it ended up lived
-    one level up in the `Placement` and every reader had to walk down to
+    A `Bind` that names an action and nothing else leaves where it ended
+    up one level up, in the `Placement`, and every reader walks down to
     it. A bind carries its own role, its own button and its own account.
     """
 
@@ -149,7 +145,7 @@ class ABindKnowsWhereItIs(unittest.TestCase):
                 self.assertIsNotNone(b.reason)
 
     def test_the_binds_of_one_hat_agree_about_the_control(self):
-        # They share it, so they had better say the same thing about it.
+        # They share it, so they say the same thing about it.
         p = self.placed()
         said = {tuple(b.reason.parts)
                 for _n, slot in p.slots for b in slot if b.reason}
@@ -157,15 +153,15 @@ class ABindKnowsWhereItIs(unittest.TestCase):
 
     def test_where_it_landed_is_not_written_down_as_a_judgement(self):
         # `role`, `button` and `reason` are what a RUN worked out, like
-        # `Need.relaxed`. A judgements file that remembered them would
-        # have the next run start from the last one's answer.
+        # `Need.relaxed`. A judgements file that remembered them starts
+        # the next run from the last one's answer.
         p = self.placed()
         b = p.slots[0][1][0]
         self.assertEqual([{'action': b.action}], cactions.dump_binds([b]))
 
 
 class WhichPass(unittest.TestCase):
-    """Four ways in, and the screen should not have to guess which."""
+    """Four ways in, and the screen does not guess which."""
 
     def test_a_pin_says_it_was_pinned(self):
         devs = {'stick': fake.device('stick', [
@@ -185,8 +181,8 @@ class WhichPass(unittest.TestCase):
         self.assertEqual('floored', why(placed, 'Fire').how)
 
     def test_the_relaxed_pass_says_the_floor_came_off(self):
-        # MAX_REACH[IN_A_TURN] is 1 and a panel control is tier 3, so this
-        # only lands once the ceiling is lifted.
+        # `MAX_REACH[IN_A_TURN]` is 1 and a panel control is tier 3, so
+        # this lands once the ceiling is lifted.
         devs = {'stick': fake.device('stick', [
             fake.hat2('Panel rocker', 0, reach=fake.PANEL)])}
         placed, _u, _f = allocate(
@@ -194,13 +190,13 @@ class WhichPass(unittest.TestCase):
             devs)
         self.assertEqual('relaxed', why(placed, 'Airbrake').how)
 
-    def test_a_borrowed_button_says_it_was_borrowed(self):
+    def test_a_shared_button_says_it_was_shared(self):
         devs = {'stick': fake.device('stick', [
             fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4)])}
         placed, _u, _f = allocate([
             Need('Trim', 'hat4', ['U', 'R', 'D', 'L'], urgency=IN_A_TURN),
             Need('Fire', 'button', ['FIRE'], urgency=IN_A_TURN)], devs)
-        self.assertEqual('borrowed', why(placed, 'Fire').how)
+        self.assertEqual('shared', why(placed, 'Fire').how)
 
 
 class WhatItNames(unittest.TestCase):
@@ -217,7 +213,8 @@ class WhatItNames(unittest.TestCase):
 
     def test_it_records_the_reach_it_took_and_the_one_allowed(self):
         # `in a turn` may reach to tier 1 with the floor on. Without both
-        # numbers "reached past the floor" is a claim with nothing behind it.
+        # numbers, "reached past the floor" is a claim with nothing behind
+        # it.
         devs = {'stick': fake.device('stick', [
             fake.hat2('Panel rocker', 0, reach=fake.PANEL)])}
         placed, _u, _f = allocate(
@@ -229,8 +226,8 @@ class WhatItNames(unittest.TestCase):
 
 
 class ByHand(unittest.TestCase):
-    """The fifth decider is a person, and that is the one the screen has to
-    say out loud."""
+    """The fifth decider is a person. That is the one the screen says out
+    loud."""
 
     def made(self):
         devs = {'stick': fake.device('stick', [
@@ -253,8 +250,8 @@ class ByHand(unittest.TestCase):
         self.assertEqual('yours', now(rv, need).how)
 
     def test_moving_it_by_hand_keeps_what_the_planner_wanted(self):
-        # The override mention on the detail panel is this field. Comparing
-        # `at` against `plan` at drawing time gets the same answer only
+        # The override mention on the detail panel is this field. `at`
+        # compared against `plan` at drawing time gives the same answer
         # until something else moves a placement.
         rv, need, devs = self.made()
         was = rv.at[need]
@@ -264,9 +261,9 @@ class ByHand(unittest.TestCase):
         self.assertIs(was, now(rv, need).instead)
 
     def test_a_hand_that_confirms_the_planner_has_nothing_to_undo(self):
-        # Assigning what was already there is not an override, and saying
-        # "moved from Thumb button" about a binding on the thumb button
-        # would be the screen arguing with the person reading it.
+        # Assigning what was already there is not an override. "Moved
+        # from Thumb button" about a binding on the thumb button is the
+        # screen arguing with the person reading it.
         rv, need, devs = self.made()
         ctrl = next(c for c in devs['stick'].groups(bindable=True)
                     if c.label == 'Thumb button')
@@ -275,15 +272,13 @@ class ByHand(unittest.TestCase):
 
 
 class TheAccount(unittest.TestCase):
-    """One description of a placement, for the six that had their own.
+    """One description of a placement, for six games.
 
-    `show(why=True)` is about 199 lines across the family -- roughly forty
-    per game -- and every one of them reads the same fields: the band, the
-    floor, the pin, the note. It is the same paragraph written six times,
-    and the sixth copy is the one the rule forbids.
+    One copy per game is about forty lines each, and every copy reads the
+    same fields: the band, the floor, the pin, the note.
 
-    What stays a game's own is what only it knows: War Thunder's factory
-    count, BMS's DX number, X4's slot. Those are appended, not reassembled.
+    What stays a game's own is what only it knows: Falcon BMS's DX number,
+    X4's slot. The game appends those. It does not reassemble this.
     """
 
     def bits(self, need, devs=None):
@@ -298,11 +293,10 @@ class TheAccount(unittest.TestCase):
         self.assertIn('in a turn', got)
 
     def test_nobody_elses_profiles_are_in_the_account(self):
-        # It used to open with "9 of 13 factory profiles bind it", and
-        # every game gave its own denominator -- Elite 13 presets, BMS 22
-        # vendor profiles, War Thunder 29. What those profiles rank is
-        # somebody else's hardware, so the count is gone and so is the
-        # sentence.
+        # A line like "9 of 13 factory profiles bind it" gives every game
+        # its own denominator: Elite 13 presets, Falcon BMS 22 vendor
+        # profiles, War Thunder 29. Those profiles rank somebody else's
+        # hardware, so neither the count nor the sentence is here.
         got = self.bits(Need('Fire', 'button', ['F'], urgency=IN_A_TURN))
         self.assertFalse(any('factory' in b or 'profile' in b for b in got),
                          got)
@@ -332,8 +326,9 @@ class TheAccount(unittest.TestCase):
         self.assertTrue(any('you' in b for b in corneeds.why_bits(p)))
 
     def test_a_placement_with_no_reason_still_says_the_band(self):
-        # A planner may build one itself; a screen should degrade, not
-        # crash, and the band is a fact about the need rather than the run.
+        # A planner may build one itself. A screen degrades rather than
+        # fails, and the band is a fact about the need rather than about
+        # the run.
         need = Need('Gun', 'button', ['F'], urgency=IN_A_TURN)
         ctrl = fake.device('stick', [
             fake.button('Trigger', 0)]).groups(bindable=True)[0]

@@ -1,18 +1,18 @@
 """The parts of each writer that touch the game's own file format.
 
-A writer is mostly one pure function -- rewrite the text, put one binding in,
-keep the line endings -- wrapped in path-finding and argument parsing. Those
-functions are where the format bugs live, and they can be tested on a few
-lines of synthetic config instead of a game install.
+A writer is one pure function wrapped in path-finding and argument
+parsing. The function rewrites the text, puts one binding in, and keeps
+the line endings. The format bugs live there, and a few lines of synthetic
+configuration test them without a game install.
 
-The fixtures are written here rather than copied from a real game: what a
-harvest produces is the publisher's, which is why `.gitignore` keeps it out of
-the repo, and the same goes for their config files. Everything below is the
-shape of the format and nothing of its content.
+The fixtures are written here and not copied from a real game. What a
+harvest produces is the publisher's, which is why `.gitignore` keeps it
+out of the repository, and their configuration files are the same.
+Everything below is the shape of the format and nothing of its content.
 
-A game whose vocabulary has not been harvested cannot have its planner
-imported at all, so those tests skip with a reason rather than fail -- on a
-fresh clone that is the honest answer.
+A game whose vocabulary nobody has harvested cannot have its planner
+imported, so those tests skip with a reason. On a fresh clone that is the
+honest answer.
 """
 
 import os
@@ -28,24 +28,21 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def planner(game, script=None) -> typing.Any:
-    """A game's writer, or None if this clone cannot import it.
+    """A game's writer, or None where this clone cannot import it.
 
     Typed `Any` on purpose. A module imported from a path is a bare
-    `ModuleType` to a checker -- it cannot see `rewrite` or `blk_with` or
-    any of the rest -- so the only thing a precise `ModuleType | None` buys
-    is a complaint on every line of every test here, about the None that
-    the class-level `skipUnless` has already answered for.
+    `ModuleType` to a checker: it cannot see `rewrite` or `blk_with` or
+    any of the rest. A precise `ModuleType | None` buys a complaint on
+    every line of every test here, about the None the class-level
+    `skipUnless` has answered for.
 
-    Three jobs once: chdir into the game directory, put it on `sys.path`,
-    and swallow the exit an import took when no harvest had been run here.
-    The first two moved to `core.adapter.load`, which `bind-wizard.py` and the
-    contract test want as well; the third is simply gone -- importing an
-    adapter defines classes and reads nothing now, so the only thing left to
-    catch is a game whose planner is not there at all.
+    `core.adapter.load` does the chdir and the `sys.path` insert, because
+    `bind-wizard.py` and the contract test want those too. An import
+    defines classes and reads nothing, so the only thing left to catch is
+    a game whose planner is not there.
 
-    It also stops guessing filenames. `core.adapter.planner` reads the
-    directory for the file that defines the adapter, so `games/dcs` being
-    `plan.py` is not a special case anybody has to remember.
+    `core.adapter.planner` reads the directory for the file that defines
+    the adapter, so no filename is guessed here.
     """
     try:
         return adapter.load(game, script)
@@ -57,7 +54,7 @@ X4 = planner('x4')
 MSFS = planner('msfs')
 BMS = planner('falconbms')
 ED = planner('elite', 'capture.py')
-#: the planner itself, not the writer -- `context_of` lives there
+#: The planner itself, not the writer. `context_of` lives there.
 EDPLAN = planner('elite')
 WT = planner('warthunder', 'write.py')
 
@@ -67,7 +64,7 @@ class X4Rewrite(unittest.TestCase):
     """`rewrite()` has to remove as well as add, without touching anything
     that is not ours."""
 
-    #: Two joystick slots, a keyboard line, and an id that appears on both.
+    #: Two joystick slots, a keyboard line, and an id on both.
     PROFILE = (
         '<?xml version="1.0" encoding="utf-8"?>\n'
         '<inputmap>\n'
@@ -88,30 +85,38 @@ class X4Rewrite(unittest.TestCase):
         return X4.rewrite(self.PROFILE, wanted, ours)
 
     def test_a_binding_dropped_from_the_plan_stops_answering(self):
-        new, dropped = self.rewrite([])
+        new = self.rewrite([])
         self.assertNotIn('INPUT_ACTION_STALE', new)
-        self.assertEqual(3, len(dropped))
+        # Our three lines are gone and nobody else's are. Counted over
+        # the text, because `rewrite` hands back no list of what it took
+        # out. `lay_down` reports a write.
+        for src in ('INPUT_SOURCE_JOYBUTTONS_2', 'INPUT_SOURCE_JOYAXES_3'):
+            self.assertNotIn(src, new)
+        self.assertIn('INPUT_SOURCE_KEYBOARD', new)
 
     def test_the_keyboard_keeps_an_id_the_joystick_also_uses(self):
-        # Up to three lines share one id: INPUT_ACTION_OPEN_MAP is a keyboard
-        # line AND a joystick line. Matching on the id would take the keyboard
-        # binding with it -- so the plan is given that very id here, which is
-        # the only arrangement in which the rule does anything.
-        new, dropped = self.rewrite(
+        # Up to three lines share one id. `INPUT_ACTION_OPEN_MAP` is a
+        # keyboard line AND a joystick line, and matching on the id takes
+        # the keyboard binding with it. The plan is given that id here,
+        # which is the only arrangement where the rule does anything.
+        new = self.rewrite(
             [('action', 'INPUT_ACTION_OPEN_MAP', 'INPUT_SOURCE_JOYBUTTONS_2',
               '0x20')])
         self.assertIn('INPUT_SOURCE_KEYBOARD', new)
         self.assertEqual(2, new.count('INPUT_ACTION_OPEN_MAP'),
                          'the keyboard line and the new joystick line')
-        self.assertNotIn('INPUT_SOURCE_KEYBOARD',
-                         [src for _k, _i, src in dropped])
+        # And the keyboard's own line for that id is still there. The
+        # claim is made over the text, because `lay_down` is what reports
+        # a write.
+        self.assertIn('<action id="INPUT_ACTION_OPEN_MAP" '
+                      'source="INPUT_SOURCE_KEYBOARD"', new)
 
     def test_hardware_that_is_not_ours_is_never_touched(self):
-        new, _dropped = self.rewrite([])
+        new = self.rewrite([])
         self.assertIn('INPUT_SOURCE_MOUSE', new)
 
     def test_what_the_plan_wants_goes_in_before_the_closing_tag(self):
-        new, _dropped = self.rewrite(
+        new = self.rewrite(
             [('action', 'INPUT_ACTION_NEW', 'INPUT_SOURCE_JOYBUTTONS_2',
               '0x20')])
         self.assertIn('INPUT_ACTION_NEW', new)
@@ -119,7 +124,7 @@ class X4Rewrite(unittest.TestCase):
                         new.index('</inputmap>'))
 
     def test_the_file_is_still_the_file_it_was(self):
-        new, _dropped = self.rewrite([])
+        new = self.rewrite([])
         self.assertTrue(new.startswith('<?xml'))
         self.assertTrue(new.rstrip().endswith('</inputmap>'))
 
@@ -169,9 +174,10 @@ class MsfsProfiles(unittest.TestCase):
         return {'stick': fake.device('stick', usb='3344:0001')}
 
     def test_a_backup_is_never_mistaken_for_a_profile(self):
-        # `inputprofile_*` matched the copies write() used to leave behind, so
-        # a second run bound into its own backup and backed THAT up again.
-        # The copies are gone now; the ones from before that are not.
+        # `inputprofile_*` matches a copy a writer left behind, so a
+        # second run binds into its own backup and backs THAT up again.
+        # Backups live outside the folder now. The older copies are still
+        # there.
         self.write('inputprofile_0000000001', 1)
         self.write('inputprofile_0000000001.bak.20260912-221313', 1)
         self.write('inputprofile_0000000001.bak.20260912-221313'
@@ -211,21 +217,22 @@ class MsfsProfiles(unittest.TestCase):
         self.assertEqual(1, out.count('<Primary>'))
 
     def test_a_binding_dropped_from_the_plan_stops_answering(self):
-        """The clause no interface can state, and the one whose breakage is
-        invisible: a need cut from NEEDS simply keeps working in the game.
+        """The clause no interface can state.
 
-        MSFS really did this. `bind_into` added and replaced and never
-        removed, so an action the plan stopped naming kept its <Primary>
-        block through every regeneration.
+        A break here is invisible: a need cut from the list keeps working
+        in the game. A writer that adds and replaces and never removes
+        leaves an action the plan stopped naming with its `<Primary>`
+        block, through every regeneration.
         """
         text = MSFS.unbind_ours(self.PROFILE, {'KEY_FLAPS_UP'})
         self.assertNotIn('Joystick Button 5', text,
                          'the dropped action is still on the stick')
 
     def test_what_is_not_ours_survives_the_stripping(self):
-        # An MSFS profile is one device's, so every joystick binding in it is
-        # one this tool wrote -- but a keyboard fallback in the same file is
-        # not, and neither is an action the plan still names.
+        # An MSFS profile belongs to one device, so every joystick
+        # binding in it is one this program wrote. A keyboard fallback in
+        # the same file is not, and neither is an action the plan still
+        # names.
         text = MSFS.unbind_ours(self.PROFILE, {'KEY_GEAR_TOGGLE'})
         self.assertIn('Information="Key"', text)
         self.assertIn('Joystick Button 5', text)
@@ -250,10 +257,10 @@ class MsfsProfiles(unittest.TestCase):
 class EliteContexts(unittest.TestCase):
     """Which context a function answers in, read off its name.
 
-    Frontier names an SRV twin `X_Buggy` or `BuggyX` and almost everything
-    follows one of the two. Two do not, and no rule will ever find them --
-    they are here so that a refactor cannot quietly drop them and leave two
-    kneeboard rows claiming the ship function is an SRV one.
+    Frontier names an SRV twin `X_Buggy` or `BuggyX`, and nearly
+    everything follows one of the two. Two functions follow neither, and
+    no rule will find them. They are here so a refactor cannot drop them
+    and leave two kneeboard rows calling a ship function an SRV one.
     """
 
     def test_a_plain_function_is_the_ship_s(self):
@@ -264,24 +271,28 @@ class EliteContexts(unittest.TestCase):
         self.assertEqual('SRV', EDPLAN.context_of('BuggyPrimaryFireButton'))
 
     def test_the_two_that_no_rule_reaches(self):
-        # `HeadlightsBuggyButton` is the twin of `ShipSpotLightToggle` and
-        # `ToggleDriveAssist` of `ToggleFlightAssist`. Nothing in either
-        # pair of names is shared.
+        # `HeadlightsBuggyButton` is the twin of `ShipSpotLightToggle`,
+        # and `ToggleDriveAssist` is the twin of `ToggleFlightAssist`.
+        # Neither pair of names shares a word.
         self.assertEqual('SRV', EDPLAN.context_of('HeadlightsBuggyButton'))
         self.assertEqual('SRV', EDPLAN.context_of('ToggleDriveAssist'))
         self.assertEqual('Ship', EDPLAN.context_of('ShipSpotLightToggle'))
         self.assertEqual('Ship', EDPLAN.context_of('ToggleFlightAssist'))
 
 
+@unittest.skipUnless('warthunder' in adapter.games(),
+                     'war thunder is not in games/ yet')
 class WarThunderBlock(unittest.TestCase):
     """The plan owns the whole `controls{}` block, so it removes by
-    replacing it.
+    replacing that block.
 
-    Stripping only the PLANNED actions meant the plan could add and change
-    but never remove: drop something from NEEDS and its old button stayed
-    bound. Everything outside that block -- the keyboard half, the per-axis
-    multipliers that are a slider in the game's own UI -- has to come back
-    untouched, including the file's own line ending.
+    A writer that strips only the PLANNED actions adds and changes and
+    never removes: drop something from the list and its old button stays
+    bound.
+
+    Everything outside the block comes back untouched, including the
+    file's own line ending. That is the keyboard half, and the per-axis
+    multipliers that are a slider in the game's own interface.
     """
 
     BLK = ('gameVersion:i=1\r\n'
@@ -310,21 +321,22 @@ class WarThunderBlock(unittest.TestCase):
 
     def test_the_file_keeps_its_line_ending(self):
         out = WT.blk_with(self.path, ['  controls{', '  }'])
-        # Every newline in the result is a CRLF, not just some of them:
-        # writing LF rewrites the whole file and makes the backup useless
-        # for seeing what actually changed.
+        # Every newline in the result is a CRLF, and not some of them. LF
+        # rewrites the whole file, and that makes the backup useless for
+        # seeing what changed.
         self.assertEqual(out.count('\n'), out.count('\r\n'))
 
 
 class RebuiltFromScratch(unittest.TestCase):
-    """Three writers remove by never carrying anything over.
+    """Three writers remove by carrying nothing over.
 
-    x4 and War Thunder edit a file in place, so they have to strip what is
-    theirs before writing; BMS and Elite build their file from the one the
-    game shipped every time, so a binding dropped from `NEEDS` is gone
-    because it was never put back. Both are answers to the same clause, and
-    the second is only true for as long as nobody adds an "update in place"
-    shortcut -- which is what these hold.
+    X4 and War Thunder edit a file in place, so they strip what is theirs
+    before they write. Falcon BMS and Elite build their file from the one
+    the game shipped, so a binding dropped from the list is gone because
+    nothing put it back.
+
+    Both answer the same clause. The second holds for as long as nobody
+    adds an "update in place" shortcut, and these tests hold it.
     """
 
     def setUp(self):
@@ -339,9 +351,10 @@ class RebuiltFromScratch(unittest.TestCase):
         (cfg / 'BMS - Full.key').write_bytes(
             b'SimDoNothing -1 0 0 0 0 0 -1 "-- SECTION --"\r\n'
             b'SimStale 0 -1 -2 0 0x0 -1\r\n')
-        # The device table is filled by FalconBms.__init__, and this calls
-        # the writer without one. Naming it here is the point: the cache is
-        # read when an adapter is built, not when the module is imported.
+        # `FalconBms.__init__` fills the device table, and this calls the
+        # writer without one. Naming that here is the point: the cache is
+        # read when an adapter is built, and not when the module is
+        # imported.
         BMS.DEVICES[:] = vocab.load(
             os.path.join(REPO, 'games', 'falconbms'),
             'falconbms-actions.json', key='devices')
@@ -349,8 +362,8 @@ class RebuiltFromScratch(unittest.TestCase):
         self.assertIn('SimDoNothing', text, 'the shipped file survives')
         self.assertEqual(1, text.count('SimStale'),
                          'a DX line in the shipped file is not duplicated')
-        # The block we append carries a header comment whatever happens;
-        # what an empty plan may not produce is a binding LINE.
+        # The block we append carries a header comment whatever happens.
+        # An empty plan may not produce a binding LINE.
         lines = text.splitlines()
         at = next(i for i, ln in enumerate(lines) if 'VIRPIL layout' in ln)
         self.assertEqual([], [ln for ln in lines[at:]
@@ -387,13 +400,12 @@ class BmsText(unittest.TestCase):
         return p
 
     def laid_down(self, path, text, nl):
-        """What `core.adapter` writes for a BMS file of this shape.
+        """What `core.adapter` writes for a Falcon BMS file of this shape.
 
-        The writer no longer opens anything -- it hands back the text and the
-        encoding, and the base lays it down. So the round trip that used to
-        be `read_keeping` / `write_keeping` is now `read_keeping` and one
-        `adapter.Text`, and it is that pairing which has to preserve the
-        bytes.
+        The writer opens nothing. It hands back the text and the encoding,
+        and the base lays the file down. So the round trip is
+        `read_keeping` and one `adapter.Text`, and that pairing preserves
+        the bytes.
         """
         body = adapter.Text(text.replace('\n', nl), encoding='latin-1')
         with open(path, 'w', encoding=body.encoding, newline='') as f:
@@ -401,9 +413,9 @@ class BmsText(unittest.TestCase):
         return path.read_bytes()
 
     def test_crlf_survives_a_round_trip(self):
-        # Writing LF rewrites the whole file, which turns a one-line change
-        # into a diff the size of the file and makes the backup useless for
-        # telling what we actually did.
+        # LF rewrites the whole file. That turns a one-line change into a
+        # diff the size of the file, and it makes the backup useless for
+        # telling what we did.
         p = self.path('x.key', b'one\r\ntwo\r\n')
         text, nl = BMS.read_keeping(p)
         self.assertEqual('\r\n', nl)
@@ -446,14 +458,14 @@ if __name__ == '__main__':
 class TheKneeboardPanels(unittest.TestCase):
     """What a sheet shows, in both formats it writes.
 
-    `Left free` carried a reach column: `index, the hand off the grip,
+    A reach column in `Left free` reads `index, the hand off the grip,
     still on the device`, fifteen rows of it beside fifteen control names.
-    A column is for something you scan; that was an essay, and what it
-    answered the control's own name answers better.
+    A column is for something you scan. That is an essay, and the
+    control's own name answers it better.
 
-    Nothing held the row shape together -- four adapters built the tuple
-    and one renderer unpacked it -- so taking a field out meant changing
-    five places and hoping. `add_free` is what holds them now.
+    `add_free` holds the row shape. Four adapters building the tuple and
+    one renderer unpacking it hold nothing, so taking a field out means
+    changing five places and hoping.
     """
 
     def contextual(self):
@@ -475,9 +487,8 @@ class TheKneeboardPanels(unittest.TestCase):
         sh.add(csheet.Row('stick', 'Thumb hat', 'up', '23', 'CMS',
                           {'': 'SimCMSUp'}))
         sh.add_axis('stick', 'Main stick', 'X', 'Roll')
-        # A device with axes and no buttons at all: pedals are exactly
-        # that, and they used to vanish because the panels were built
-        # from the button rows alone.
+        # A device with axes and no buttons. Pedals are exactly that, and
+        # panels built from the button rows alone lose them.
         sh.add_axis('rudder', 'Pedals', 'RZ', 'Yaw')
         sh.add_free('throttle', 'T3 rocker', '65, 66')
         return sh
@@ -534,17 +545,16 @@ class TheKneeboardPanels(unittest.TestCase):
                 self.assertIn('?', got)
 
     def test_the_legend_appears_only_where_a_mark_is_used(self):
-        # A mark nobody has explained is some of the rows being slightly
-        # different; a legend over a page with no marks is a line you
-        # learn to skip.
+        # An unexplained mark is some rows looking slightly different. A
+        # legend over a page with no mark is a line you learn to skip.
         for how in ('markdown', 'html'):
             with self.subTest(how=how):
                 self.assertIn('proposed', self.wrote(self.marked(), how))
                 self.assertNotIn('proposed', self.wrote(self.sheet(), how))
 
     def test_a_pipe_in_a_name_does_not_end_the_cell(self):
-        # DCS calls one `Radar | Display Zoom Out`, and that row came out
-        # with four columns under a three-column header.
+        # DCS calls one command `Radar | Display Zoom Out`, and that row
+        # comes out with four columns under a three-column header.
         from core import sheet as csheet
         sh = csheet.Sheet('Test', 'fake', devices={'stick': 'A Stick'})
         sh.add(csheet.Row('stick', 'Pinky', '', '1', 'Radar | Zoom Out',
@@ -566,9 +576,8 @@ class TheKneeboardPanels(unittest.TestCase):
                 self.assertIn('Canopy', got)
 
     def test_the_order_of_that_list_is_said_where_it_means_something(self):
-        # DCS sorts it by how many shipped profiles bind each thing, and
-        # the count itself was on the page as `5 factory profiles` --
-        # a number a reader can do nothing with. The order carries it.
+        # The order carries the fact. A count on the page, as `5 factory
+        # profiles`, is a number a reader can do nothing with.
         from core import sheet as csheet
         sh = csheet.Sheet('Test', 'fake', devices={'stick': 'A Stick'})
         sh.add(csheet.Row('stick', 'Pinky', '', '1', 'Guns', {'': 'G'}))
@@ -592,9 +601,10 @@ class TheKneeboardPanels(unittest.TestCase):
         self.assertIn('and 7 more', got)
 
     def test_the_binding_goes_when_it_repeats_its_neighbour(self):
-        # DCS binds a command BY its name, so the column said the same as
-        # `Does` down the whole page -- a column in the markdown, and in
-        # the HTML a second line of small print under every heading.
+        # DCS binds a command BY its name, so that column says the same
+        # as `Does` down the whole page. In the markdown it is a column.
+        # In the HTML it is a second line of small print under every
+        # heading.
         from core import sheet as csheet
         sh = csheet.Sheet('Test', 'fake', devices={'stick': 'A Stick'})
         sh.add(csheet.Row('stick', 'Pinky', '', '1', 'Guns', {'': 'Guns'}))
@@ -605,7 +615,7 @@ class TheKneeboardPanels(unittest.TestCase):
 
     def test_the_unplaced_panel_is_two_columns_like_the_free_one(self):
         # It is one panel of two or three across the page, and a third
-        # column squeezed `6 factory profiles` to one word per line.
+        # column squeezes a short phrase to one word per line.
         from core import sheet as csheet
         sh = csheet.Sheet('Test', 'fake', devices={'stick': 'A Stick'})
         sh.add(csheet.Row('stick', 'Pinky', '', '1', 'Guns', {'': 'G'}))
@@ -629,9 +639,10 @@ class TheKneeboardPanels(unittest.TestCase):
                 self.assertNotIn('the hand off the grip', said)
 
     def test_an_axis_sits_under_its_own_device(self):
-        # Axes had a panel of their own, off at the bottom with the
-        # leftovers -- a fact about how the file grew, not about the
-        # hardware. A kneeboard answers "what does this stick do".
+        # A panel of their own puts the axes at the bottom with the
+        # leftovers. That is a fact about how a file grew and not about
+        # the hardware. A kneeboard answers "what does this stick
+        # do".
         for how in ('markdown', 'html'):
             with self.subTest(format=how):
                 panels = self.panels(self.written(how))
@@ -639,8 +650,8 @@ class TheKneeboardPanels(unittest.TestCase):
                 self.assertNotIn('Main stick', panels.get('Pedals', ''))
 
     def test_a_device_with_only_axes_still_gets_a_panel(self):
-        # The panels were built from the button rows, so a device with
-        # nothing but axes on it had nowhere to appear at all.
+        # Panels built from the button rows leave a device with nothing
+        # but axes on it nowhere to appear.
         for how in ('markdown', 'html'):
             with self.subTest(format=how):
                 panels = self.panels(self.written(how))
@@ -648,7 +659,7 @@ class TheKneeboardPanels(unittest.TestCase):
                 self.assertIn('Yaw', panels['Pedals'])
 
     def test_there_is_no_panel_of_loose_axes(self):
-        # A device's own section may head one `### Axes`; what is gone is
+        # A device's own section may head one `### Axes`. What is gone is
         # the panel that stood beside the devices and held all of them.
         import re
         for how in ('markdown', 'html'):
@@ -658,9 +669,9 @@ class TheKneeboardPanels(unittest.TestCase):
                 self.assertIsNone(re.search(r'^## Axes$', said, re.M))
 
     def test_an_axis_answers_each_context_in_its_own_column(self):
-        # The buttons had a column per context and the axes wrote the
-        # context into the text -- `Ship: Steering pitch` -- and listed
-        # one physical lever once per context. Two halves of one sheet
+        # Buttons with a column per context, and axes that write the
+        # context into the text as `Ship: Steering pitch`, list one
+        # physical lever once per context. That is two halves of one sheet
         # answering the same question two ways.
         import tempfile
         for how in ('markdown', 'html'):
@@ -672,17 +683,17 @@ class TheKneeboardPanels(unittest.TestCase):
                         said = f.read()
                 self.assertIn('Roll', said)
                 self.assertIn('Strafe', said)
-                # One row for the lever, not one per context, and the
-                # context named by the column rather than by the text.
+                # One row for the lever, and not one per context. The
+                # column names the context, and the text does not.
                 self.assertNotIn('Ship: Roll', said)
                 self.assertEqual(1, said.count('Main stick'))
 
     def test_an_axis_that_does_two_things_in_one_context_says_both(self):
         # Elite's main stick answers the SRV with both `Buggy roll axis`
-        # and `Steering axis` on axis 0. Five games each merged this for
-        # themselves and one of the five assigned instead of collecting,
-        # so it kept whichever came last. The merge is `Sheet.add_axis`'s
-        # job now, which is why one test covers all five.
+        # and `Steering axis`, on axis 0. Merged per game, one of the five
+        # assigns instead of collecting and keeps whichever came last.
+        # `Sheet.add_axis` does the merge, so one test covers all
+        # five.
         from core import sheet as csheet
         import tempfile
         sh = csheet.Sheet('Test', '', ident='DX', devices={'stick': 'A Stick'})
@@ -697,22 +708,66 @@ class TheKneeboardPanels(unittest.TestCase):
         self.assertIn('Steering', said)
 
     def test_the_leftovers_are_grouped_by_device(self):
-        # One run of fifteen control names made you work out which stick
-        # each was on, which is what the panels answer for everything
-        # that got a binding.
+        # One run of fifteen control names makes you work out which stick
+        # each is on. The panels answer that for everything that got a
+        # binding.
         for how in ('markdown', 'html'):
             with self.subTest(format=how):
                 said = self.written(how)
                 self.assertIn('T3 rocker', said)
-                # Named by its device, not lumped in one list.
+                # Named by its device, and not in one list.
                 head = said.split('T3 rocker')[0]
                 self.assertIn('throttle', head)
 
     def test_a_row_of_the_wrong_shape_fails_where_it_is_written(self):
         # Not at render time, three files away from the mistake. Splatted
         # so the type checker does not read the deliberate mistake as a
-        # real one -- this repo carries no ignore comments and a test is
-        # a poor place to start.
+        # real one. This repository carries no ignore comments, and a test
+        # is a poor place to start.
         four = ['stick', 'T1 rocker', '1, 2', 'thumb']
         with self.assertRaises(TypeError):
             self.sheet().add_free(*four)
+
+
+class WhereDcsReadsAModulesUserProfiles(unittest.TestCase):
+    """The save folder, read off the module's own entry.lua.
+
+    A module's factory profiles and a module's user profiles sit under
+    different names, and only entry.lua says both. The Hornet ships
+    `["FA-18C_hornet"] = current_mod_path .. '/Input/FA-18C/'`.
+
+    The writer builds its path from this. Read it wrong and the file lands
+    in a folder DCS does not read, and nothing says so: the write
+    succeeds, the game shows no binding.
+    """
+
+    HORNET = """
+InputProfiles =
+{
+\t["FA-18C_hornet"]\t\t= current_mod_path .. '/Input/FA-18C/',
+},
+"""
+
+    def read(self, body):
+        """`input_profiles` over a fixture entry.lua."""
+        harvest = planner('dcs', 'harvest.py')
+        if harvest is None:
+            self.skipTest('dcs is not harvested here')
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, 'entry.lua'), 'w',
+                      encoding='utf-8') as f:
+                f.write(body)
+            return harvest.input_profiles(d)
+
+    def test_a_trailing_separator_does_not_eat_the_folder_name(self):
+        # `os.path.basename('/Input/FA-18C/')` is the empty string, so the
+        # key was '' and the lookup fell back to the module folder name.
+        self.assertEqual({'FA-18C': 'FA-18C_hornet'}, self.read(self.HORNET))
+
+    def test_a_path_without_one_reads_the_same(self):
+        said = self.read(self.HORNET.replace("/Input/FA-18C/'",
+                                             "/Input/FA-18C'"))
+        self.assertEqual({'FA-18C': 'FA-18C_hornet'}, said)
+
+    def test_a_module_that_names_no_profile_answers_nothing(self):
+        self.assertEqual({}, self.read('GUI = {}\n'))

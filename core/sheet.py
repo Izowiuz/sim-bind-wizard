@@ -1,12 +1,7 @@
-"""Render a kneeboard: the same data as a layout, laid out to be read in flight.
+"""Render a kneeboard: a layout's own data, laid out to be read in flight.
 
-Three adapters grew their own copy of this and two of them shared a template
-by hand-copying it, which is how War Thunder's ended up with colour tokens
-called `--air` and `--heli` in a file about a single-engine jet.
-
-What they actually had in common is a table of rows, so that is the contract.
-An adapter builds `Row` objects and hands them over; it does not
-render anything.
+The contract is a table of rows. An adapter builds `Row` objects and hands
+them over. It renders nothing.
 
     sheet = Sheet('Kneeboard Falcon BMS', 'F-16C · VIRPIL', ident='DX')
     sheet.add(Row('stick', 'Grip thumb hat', 'up', '23', 'CMS',
@@ -14,11 +9,11 @@ render anything.
     sheet.markdown(path)
     sheet.html(path)
 
-`contexts` is the one piece of policy here. A game with one context -- BMS has
-only the F-16 -- puts the binding under the action's name as a second line. A
-game with several -- War Thunder flies aircraft and helicopters, MSFS adds a
-global layer -- gets a column each, because the whole point is seeing at a
-glance that one button does two different things.
+`contexts` is the one piece of policy here. A game with one context puts
+the binding under the action's name, as a second line. Falcon BMS has only
+the F-16. A game with several contexts gets a column each: War Thunder
+flies aircraft and helicopters, and MSFS adds a global layer. The point of
+a column is seeing at a glance that one button does two things.
 """
 
 import datetime
@@ -35,13 +30,12 @@ def esc(t):
 
 
 def cell(text):
-    """One markdown table cell: a pipe in the text would end it.
+    """One markdown table cell. A pipe in the text would end the cell.
 
-    DCS names a command `Radar | Display Zoom Out`, and that row came out
-    with an extra column -- the table header says three and the row said
-    four, so every renderer after it guessed. Nothing else in the family
-    has a pipe in a name, which is why this went unnoticed until DCS's
-    sheet moved onto this one.
+    DCS names a command `Radar | Display Zoom Out`. That row comes out
+    with an extra column: the header says three columns and the row says
+    four, so every renderer after it guesses. DCS is the only game here
+    with a pipe in a name.
     """
     return str(text).replace('|', '\\|')
 
@@ -67,22 +61,21 @@ def wrap(text, width, indent):
 @dataclass
 class Row:
     """One button, and what it does in each context."""
-    role: str                       # device kind: 'stick', 'throttle'
-    control: str                    # label from the device map
+    role: str                       # the device kind: 'stick', 'throttle'
+    control: str                    # the label from the device map
     part: str = ''                  # 'up', 'second', 'press'
     ident: str = ''                 # the game's own reference: DX 23, WT 130
-    does: str = ''                  # the need's human name
+    does: str = ''                  # the need's name, in words
     bindings: dict = field(default_factory=dict)   # context -> str or [str]
-    edge: str = ''                  # e.g. BMS's release action, shown inline
-    #: A word beside what this does, when the binding is not settled.
-    #: DCS's `?`: its sheet is built from the results file, so half of it
-    #: is what you confirmed at the stick and half is still the planner's
-    #: proposal, and a page that does not say which is which invites you
-    #: to trust the half nobody has pressed.
+    edge: str = ''                  # a release action, shown inline
+    #: A word beside what this does, where the binding is not settled.
+    #: DCS prints `?` there. Its sheet is built from the results file, so
+    #: half of it is what you confirmed at the stick and half is still a
+    #: proposal. A page that does not say which is which invites you to
+    #: trust the half nobody has pressed.
     mark: str = ''
     #: An axis rather than a button. The flight controls go at the top of
-    #: the device's table, because they are what the rest is reached for
-    #: while already holding.
+    #: the device's table. You hold those while you reach for the rest.
     axis: bool = False
 
 
@@ -93,28 +86,26 @@ class Sheet:
         self.title = title
         self.heading = heading
         self.subtitle = subtitle
-        #: Which rig it was laid out for, and to which overlay. Both
-        #: decide where everything on the page landed, and a kneeboard
-        #: that does not say reads as the only layout there could be --
-        #: so printing one on a desk it was not drawn for is silent.
-        #: Filled by `Adapter.write_sheets`, one place for six games.
+        #: Which desk this was laid out for, and to which overlay. Both
+        #: decide where everything on the page landed. A kneeboard that
+        #: does not say reads as the only layout there could be, and a
+        #: page printed for another desk then says nothing about it.
+        #: `Adapter.write_sheets` fills both, in one place for six games.
         self.desk = ''
         self.overlay = ''
-        self.ident = ident          # column header for the game's own numbering
+        self.ident = ident          # the header over the game's own numbering
         self.contexts = tuple(contexts)
-        self.devices = devices or {}     # role -> product name, for panel titles
+        self.devices = devices or {}     # role -> product name, for a title
         self.rows = []
         self.notes = []             # (heading, [(term, text)]) or (heading, text)
         self.free = []              # (role, control, ident)
         #: (what, wanted). What has no control on this desk.
         self.unplaced = []
-        #: What to say about the ORDER of that list, when the order means
-        #: something. DCS lists its in the order you learn an aircraft,
-        #: so the top of the list is the part worth reading. It used to
-        #: sort by how many of the shipped profiles bound each thing,
-        #: with the count on the page as `5 factory profiles` -- a number
-        #: you can do nothing with. The order carries what there is to
-        #: carry; this says the order is there.
+        #: What to say about the ORDER of that list, where the order
+        #: means something. DCS lists its own in the order you learn an
+        #: aircraft, so the top of the list is the part worth reading.
+        #: The order carries the fact. This line says the order is
+        #: there.
         self.unplaced_note = 'nothing on the desk fits these'
 
     # ---- building ----
@@ -124,21 +115,18 @@ class Sheet:
     def add_axis(self, role, control, ident, does, context=''):
         """One thing an axis does, merged onto that axis's row.
 
-        Games hand these over one at a time, because that is how their
-        own config reads them -- and one physical lever is one row, with
-        what it does in each context as a column. So the same
-        (role, control, ident) twice is not two rows.
+        A game hands these over one at a time, because its own
+        configuration reads them that way. One physical lever is one row,
+        and what it does in each context is a column. So the same
+        (role, control, ident) twice is one row.
 
-        Collected into a list, never assigned. Elite's main stick answers
-        the SRV with `Buggy roll axis raw` AND `Steering axis`, both on
-        axis 0, and assigning kept whichever came last. Five games each
-        merged this for themselves before it lived here; one of the five
-        had the bug.
+        The things are collected into a list. They are never assigned.
+        Elite's main stick answers the SRV with `Buggy roll axis raw` AND
+        `Steering axis`, both on axis 0, and an assignment keeps whichever
+        came last.
 
-        An ordinary `Row` with no `part`: an axis has no press order and
-        no direction, and that is the whole of the difference. It had a
-        row type of its own and a table of its own, so one sheet answered
-        the same question in two shapes.
+        An axis is an ordinary `Row` with no `part`. It has no press order
+        and no direction, and that is the whole difference.
         """
         for row in self.rows:
             if (row.role, row.control, row.ident) == (role, control, ident):
@@ -147,44 +135,35 @@ class Sheet:
             row = Row(role, control, ident=ident, axis=True)
             self.rows.append(row)
         row.bindings.setdefault(context, []).append(does)
-        # And in `does`, for a game with one context: that is the column
-        # the merged table reads, and `bindings` is what fills a column
-        # per context where a game has several.
+        # And in `does`, for a game with one context. That is the column
+        # the merged table reads. `bindings` fills one column per context
+        # where a game has several.
         row.does = row.does or does
 
     def add_free(self, role, control, ident=''):
         """One control nothing was put on.
 
-        A method rather than four adapters each building the tuple: they
-        did, and the tuple carried a fifth field -- how far the control is
-        -- rendered as `index, the hand off the grip, still on the device`
-        in a column beside a control's name. Fifteen rows of that is not a
-        column, it is an essay nobody reads, and what it answered ("could
-        I still use this?") the control's own name answers better.
-
-        Taking it out meant changing the shape in five places at once,
-        with nothing holding them together. Now there is: pass the wrong
-        number here and it fails at the call, naming the caller.
+        A method, not a tuple each adapter builds. Pass the wrong number
+        of arguments here and it fails at the call, naming the caller. A
+        tuple built in five places changes shape in five places, and
+        nothing holds those together.
         """
         self.free.append((role, control, ident))
 
     def add_unplaced(self, what, wanted=''):
-        """One thing with no control. In the order you add them.
+        """One thing with no control, in the order you add them.
 
-        A method rather than five adapters appending a tuple, for the
-        reason `add_free` is one: the shape changed and nothing held the
-        call sites together. Pass the wrong number here and it fails at
-        the call, naming the caller.
+        A method, for the reason `add_free` is one. Pass the wrong number
+        of arguments here and it fails at the call, naming the caller.
         """
         self.unplaced.append((what, wanted))
 
     def marked(self):
         """Is anything on this page unsettled?
 
-        What decides whether the legend is printed. A mark nobody has
-        explained is some of the rows being slightly different, and a
-        legend over a page that uses no marks is a line you learn to
-        skip -- so it appears exactly when it is earned.
+        This decides whether the legend is printed. An unexplained mark
+        makes some rows look slightly different and says nothing. A legend
+        over a page that uses no mark is a line you learn to skip.
         """
         return any(r.mark for r in self.rows)
 
@@ -195,11 +174,9 @@ class Sheet:
     def _roles(self):
         """Every device with anything on it, in the order it turns up.
 
-        Axes count. They used to have a panel of their own, off at the
-        bottom with the leftovers, which is a fact about how this file
-        grew and not about the hardware: an axis is part of a device the
-        same way a button is, and the question a kneeboard answers is
-        "what does this stick do", not "what do the buttons do".
+        Axes count. An axis is part of a device the same way a button is.
+        A kneeboard answers "what does this stick do", not "what do the
+        buttons do".
         """
         seen = []
         for r in self.rows:
@@ -220,9 +197,9 @@ class Sheet:
     def _free_roles(self):
         """Devices with something spare, the bound ones first.
 
-        Not `_roles()`: a device nothing was put on has no panel, and
-        grouping the leftovers by that list dropped its controls off the
-        sheet altogether -- which is the one list they belonged on.
+        Not `_roles()`. A device nothing was put on has no panel, so
+        grouping the leftovers by that list drops its controls off the
+        sheet. The leftovers list is the one list they belong on.
         """
         seen = [r for r in self._roles()
                 if any(x == r for x, _c, _i in self.free)]
@@ -247,7 +224,8 @@ class Sheet:
         return ''.join(f' · {part}' for part in (self.desk, self.overlay)
                        if part)
 
-    #: What a mark means, printed only where one is used. See `marked`.
+    #: What a mark means. Printed only where a mark is used. See
+    #: `marked`.
     LEGEND = 'A `?` is proposed and nobody has confirmed it at the stick.'
 
     def _said(self, row, ctx=''):
@@ -265,19 +243,17 @@ class Sheet:
              + (f' {self.LEGEND}' if self.marked() else ''), '']
         for role in self._roles():
             L += [f'## {self.devices.get(role, role)}', '']
-            # One table: the axes lead it, because they are the flight
-            # controls and the buttons are what you reach for while
-            # already holding them. Two tables made one page answer the
-            # same question in two shapes -- and an axis is an input like
-            # the rest of them.
+            # One table. The axes lead it, because they are the flight
+            # controls and you hold those while you reach for a button.
+            # Two tables make one page answer the same question in two
+            # shapes, and an axis is an input like the rest.
             mine = self._axes_of(role) + self._buttons_of(role)
             if not mine:
                 continue
-            # The binding column only where a game has one to show. DCS
-            # binds a command BY its name, so the column repeated the
-            # `Does` column verbatim down the whole page, and a column
-            # that says the same as its neighbour is a column to leave
-            # out rather than one to read twice.
+            # The binding column, only where a game has one to show. DCS
+            # binds a command BY its name, so that column repeats the
+            # `Does` column down the whole page. Leave a column out
+            # rather than read it twice.
             shows = any(self._cell(x, '') != x.does or x.edge for x in mine)
             if named:
                 L += ['| ' + ' | '.join([self.ident, 'Control'] + named) + ' |',
@@ -299,10 +275,11 @@ class Sheet:
                     if not shows:
                         L.append(f'| {r.ident} | {ctrl} | {does} |')
                         continue
-                    # Per row, not per table. The rule is "only where
-                    # the binding says something the name does not", and
-                    # measured over the table it put `AXIS_THROTTLE`
-                    # beside `AXIS_THROTTLE` on every axis row BMS has.
+                    # Per row, not per table. The rule is "print it only
+                    # where the binding says something the name does
+                    # not". Measured over the whole table instead, it put
+                    # `AXIS_THROTTLE` beside `AXIS_THROTTLE` on every
+                    # axis row Falcon BMS has.
                     got = self._cell(r, '')
                     if got == r.does and not r.edge:
                         L.append(f'| {r.ident} | {ctrl} | {does} |  |')
@@ -323,8 +300,8 @@ class Sheet:
             L += ['## Not placed', '', f'{self.unplaced_note[0].upper()}'
                   f'{self.unplaced_note[1:]}.', '']
             for what, wanted in self.unplaced:
-                # No article: the shapes are the map's words, and
-                # `a axis` is what one of them came out as.
+                # No article. The shapes are the map's own words, and
+                # one of them came out as `a axis`.
                 L.append(f'- {what}' + (f' (wanted `{wanted}`)'
                                         if wanted else ''))
             L.append('')
@@ -335,19 +312,19 @@ class Sheet:
                 if not mine:
                     continue
                 L += [f'### {self.devices.get(role, role)}', '']
-                L += [f'- {c} — {i or "no buttons"}' for c, i in mine] + ['']
+                L += [f'- {c} · {i or "no buttons"}' for c, i in mine] + ['']
         open(path, 'w', encoding='utf-8').write('\n'.join(L) + '\n')
         return path, len(self.rows), len(self._axes())
 
     # ---- html ----
     def _panel(self, role):
         named = [c for c in self.contexts if c]
-        # The axes lead the table: they are the flight controls, and the
-        # buttons are what you reach for while already holding them.
+        # The axes lead the table. They are the flight controls, and you
+        # hold those while you reach for a button.
         mine = self._axes_of(role) + self._buttons_of(role)
-        # The binding under the name only where it says something the
-        # name does not. DCS binds a command BY its name, so every row
-        # carried it twice: once as the heading and once in the small
+        # The binding goes under the name only where it says something
+        # the name does not. DCS binds a command BY its name, so every
+        # row carries it twice: once as the heading, once in the small
         # mono line under it.
         shows = any(self._cell(x, '') != x.does or x.edge for x in mine)
         head = ['Control', self.ident] + (named or ['Does'])
@@ -372,16 +349,15 @@ class Sheet:
                 does = esc(r.does) + _mark(r)
                 if r.edge:
                     does += ' <span class="edge">+ release</span>'
-                # Per row: a binding that repeats the name says nothing.
+                # Per row. A binding that repeats the name says nothing.
                 under = (f'<span class="cb">{b}</span>'
                          if shows and (got != r.does or r.edge) else '')
                 cells.append(f'<td>{does}{under}</td>')
             out.append('<tr>' + ''.join(cells) + '</tr>')
         title = esc(self.devices.get(role, role))
-        # One table. There were two, on the argument that the columns are
-        # not the same question -- an axis has no context split and no
-        # press order -- which is a difference in two cells, not in what
-        # the row IS.
+        # One table. An axis has no context split and no press order, and
+        # that is a difference in two cells. It is not a difference in
+        # what the row IS.
         tables = (f'<table><tr>{th}</tr>' + ''.join(out) + '</table>'
                   if out else '')
         return f'<div class="panel"><h2>{title}</h2>{tables}</div>'
@@ -389,9 +365,9 @@ class Sheet:
     def html(self, path, template=None):
         tpl = open(template or TEMPLATE, encoding='utf-8').read()
         # By device, like everything else on the sheet. One run of
-        # fifteen control names made you work out which stick each was
-        # on, which is the question the panels above already answer for
-        # every control that got something.
+        # fifteen control names makes you work out which stick each is
+        # on. The panels above answer that for every control that got
+        # something.
         ftables = ''
         for role in self._free_roles():
             mine = [(c, i) for r, c, i in self.free if r == role]
@@ -405,24 +381,25 @@ class Sheet:
                         f'{frows}</table>')
         free = (f'<div class="panel"><h2>Left free</h2>{ftables}</div>'
                 if ftables else '')
-        #: Eighteen and then a count. DCS's list is every essential the
-        #: results file has nothing for -- forty-odd on a fresh module --
-        #: and a panel that long stops being a panel. The markdown prints
-        #: all of them, because a page you scroll can afford it.
+        #: Eighteen rows, and then a count. DCS's list holds every
+        #: essential the results file has nothing for, which is forty-odd
+        #: on a fresh module. A panel that long stops being a panel. The
+        #: markdown prints all of them, because a page you scroll can
+        #: afford it.
         left = ''
         if self.unplaced:
             shown = self.unplaced[:18]
-            # Two columns, like `Left free`: a panel is one of two or
-            # three across the page, and a third column squeezed a short
+            # Two columns, like `Left free`. A panel is one of two or
+            # three across the page, and a third column squeezes a short
             # phrase into one word per line. The reason goes under the
-            # name, where the page already puts its small print.
+            # name, where the page puts its small print.
             urows = ''.join(
                 f'<tr><td class="c">{esc(w)}</td>'
                 f'<td class="n">{esc(s) or "—"}</td></tr>' for w, s in shown)
             more = len(self.unplaced) - len(shown)
             if more:
-                urows += (f'<tr><td colspan="2">and {more} more — '
-                          f'see the markdown</td></tr>')
+                urows += (f'<tr><td colspan="2">and {more} more. '
+                          f'See the markdown.</td></tr>')
             left = ('<div class="panel"><h2>Not placed'
                     f'<small>{esc(self.unplaced_note)}</small></h2>'
                     f'<table><tr><th>Wanted</th><th>Shape</th></tr>'
@@ -439,9 +416,9 @@ class Sheet:
                       f'<div class="note">{inner}</div></div>')
         out = (tpl.replace('__TITLE__', esc(self.title))
                   .replace('__HEADING__', esc(self.heading))
-                  # The legend only. Desk and overlay are on the
-                  # stamp at the foot of the page, and printing them in
-                  # both places says one fact twice.
+                  # The legend only. The desk and the overlay are on the
+                  # stamp at the foot of the page. In both places they
+                  # say one fact twice.
                   .replace('__SUBTITLE__', self.subtitle
                            + (f'. {self.LEGEND}' if self.marked() else ''))
                   .replace('__PANELS__', ''.join(self._panel(r)

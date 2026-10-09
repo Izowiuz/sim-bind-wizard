@@ -1,16 +1,14 @@
-"""The curses shell the capture wizards are built on.
+"""The curses shell the screens are built on.
 
-A transcript model, not a frame model: `page()` starts a screen, `log()`
-appends a line and repaints the tail. Every prompt in a capture wizard is a
-line, including the ones `core/capture.py` writes from inside the event loop,
-which is why the capture helpers take a `Tui`.
+Every screen here is a box. `box`, `popup`, `confirm`, `ask` and `choose`
+draw one, and each one erases and repaints itself. The chrome lives in the
+border: `lid` holds the title and the counts, and `sill` holds the key
+names and the status.
 
-The device map's capture tool has a Tui of its own and keeps it. That one is
-stateless -- every screen erases and repaints itself -- with a fixed chrome, a
-multi-select menu, free-text entry and a three-state confirm, and no
-transcript at all. Only `key()` and `_put()` are the same code, and the
-dependency arrow runs sim-bind-wizard -> sim-device-map, so it cannot import
-this.
+The device map's capture tool keeps a Tui of its own. That one has a fixed
+chrome, a multi-select menu, free-text entry and a three-state confirm.
+Only `key()` and `_put()` are the same code. The dependency runs
+sim-bind-wizard -> sim-device-map, so that tool cannot import this one.
 """
 
 import curses
@@ -20,30 +18,27 @@ import time
 class Theme:
     """What each meaning on the screen looks like, worked out once.
 
-    Tones are named for what a thing IS, never for the colour it comes out
-    as. `mine` is green on a need's row in the review table and green again
-    on the control that need is sitting on, and this class is the single
-    place that decides so -- a screen asks for `theme.mine`, or `theme[name]`
-    when the line it is drawing carries its own tone.
+    A tone is named for what a thing IS, never for the colour it comes out
+    as. `mine` is green on a need's row and green again on the control that
+    need sits on. This class is the one place that decides so. A screen
+    asks for `theme.mine`, or for `theme[name]` where the line it draws
+    carries its own tone.
 
-    `head`, `subhead` and `meta` are one ladder and are meant to be read as
-    one: the section, the thing the section names, and the detail under it.
-    A listing that puts all three in the same blue is a listing you have to
-    read from the top to know where you are.
+    `head`, `subhead` and `meta` are one ladder: the section, the thing the
+    section names, and the detail under it. Read them as one. All three in
+    the same blue is a listing you read from the top to know where you are.
 
     Base colours only, and never yellow. These draw on the terminal's own
-    background -- `use_default_colors` hands the palette back rather than
-    painting one -- and the wizards in this family run on a light terminal as
-    often as a dark one. Green, red, blue and magenta read on both; yellow on
-    white does not.
+    background, because `use_default_colors` hands the palette back. These
+    screens run on a light terminal as often as a dark one. Green, red,
+    blue and magenta read on both. Yellow on white does not.
 
-    With no colour at all every tone falls back to bold, dim or reverse,
-    which is all these screens ever had and is still what a terminal without
-    colour gets.
+    With no colour every tone falls back to bold, dim or reverse.
     """
 
-    #: The four that read on a light terminal and a dark one. Named here
-    #: and nowhere else: past this point the code says what it means.
+    #: The four colours that read on a light terminal and a dark one.
+    #: Named here and nowhere else. Past this point the code says what it
+    #: means.
     BLUE, GREEN, RED, MAGENTA = (curses.COLOR_BLUE, curses.COLOR_GREEN,
                                  curses.COLOR_RED, curses.COLOR_MAGENTA)
 
@@ -52,8 +47,9 @@ class Theme:
         self._pairs = 0
         norm, bold, dim, rev = (curses.A_NORMAL, curses.A_BOLD,
                                 curses.A_DIM, curses.A_REVERSE)
-        # Each tone reads: the colour it wants, what it adds where the
-        # terminal has one, and what it falls back to where it has not.
+        # Each tone holds three things: the colour it wants, what it adds
+        # where the terminal has colour, and what it falls back to where
+        # the terminal has none.
         self.title = self._tone(None, bold, bold)
         self.head = self._tone(self.BLUE, bold, bold)
         self.subhead = self._tone(self.BLUE, norm, norm)
@@ -68,9 +64,9 @@ class Theme:
     def _tone(self, colour, lit, dull):
         """One tone: a colour pair where there is colour, else the fallback.
 
-        Pairs are numbered in the order they are asked for, which is why no
-        caller ever sees a pair number -- there is nothing useful to say
-        about 3 that `theme.unset` does not say better.
+        Pairs are numbered in the order they are asked for. No caller sees
+        a pair number. There is nothing to say about 3 that `theme.unset`
+        does not say better.
         """
         if not self.colour:
             return dull
@@ -85,23 +81,24 @@ class Theme:
         return getattr(self, tone)
 
 
-#: The frame a panel is drawn in. btop's idea: the chrome lives in the
-#: border -- title, counts and key names all in the box edge -- so none of
-#: it costs a row. Three lines of key names at the bottom of a 24-row
-#: terminal is an eighth of the screen spent on something read once.
+#: The frame a panel is drawn in. The chrome lives in the border: the
+#: title, the counts and the key names all sit in the box edge, so none of
+#: them costs a row. Three lines of key names at the bottom of a 24-row
+#: terminal spends an eighth of the screen on something read once. btop
+#: does it this way.
 TL, TR, BL, BR, H, V = '╭', '╮', '╰', '╯', '─', '│'
 
 #: Hints are joined with the separator the rest of the family uses. btop
-#: notches each one into the border (`┘info ↵└`) because its hints are
-#: buttons you can click; ours are labels, so the notches cost two columns
-#: each for nothing -- at seven hints that is a hint and a half.
+#: notches each hint into the border, as `┘info ↵└`, because its hints are
+#: buttons you click. These are labels, so a notch costs two columns for
+#: nothing. At seven hints that is a hint and a half.
 SEP = ' · '
 
 
 def plural(n, one, many=None):
-    """`3 bindings`, `1 binding`. Six places wrote `binding(s)` instead.
+    """`3 bindings`, `1 binding`.
 
-    A parenthesised s is a form nobody speaks, and on a screen that is
+    A parenthesised s is a form nobody speaks. On a screen that is
     otherwise man-terse it is the loudest thing on the line.
     """
     word = one if n == 1 else (many or one + 's')
@@ -109,15 +106,14 @@ def plural(n, one, many=None):
 
 
 def lid(width, title='', right=''):
-    """The top edge: what this panel is, and what it is showing.
+    """The top edge: what this panel is, and what it shows.
 
-    Built as one string rather than drawn in pieces. The last two goes at
-    chrome painted one thing over another and every test passed, because
-    they asked what the text said rather than what reached the screen -- a
-    string cannot do that to itself.
+    Built as one string. Chrome drawn in pieces paints one thing over
+    another, and a test that asks what the text says does not catch that. A
+    string cannot paint over itself.
 
-    Anything that will not fit is dropped whole: a border that has eaten
-    half a title says less than a plain one.
+    Anything that will not fit is dropped whole. A border that has eaten
+    half a title says less than a plain border.
     """
     if width <= 0:
         return ''
@@ -137,15 +133,13 @@ def lid(width, title='', right=''):
 def sill(width, keys=(), tail='', note=''):
     """The bottom edge: which keys do what, and where you are.
 
-    `note` takes the left when there is one, and the keys give way to it.
-    A status line is the one thing down here that changes, and the keys are
-    the one thing that never does -- so it goes IN the edge rather than
-    being drawn over it, which is what happened the first two times and
-    what no test of the text could ever have caught.
+    `note` takes the left where there is one, and the keys give way to it.
+    The status is the one thing down here that changes. The keys never
+    change. So the status goes IN the edge rather than over it.
 
-    Keys are dropped from the end when they will not fit, because the list
-    is written most-needed first: nothing else is reachable without moving.
-    `tail` is kept before any of them.
+    Keys are dropped from the end where they will not fit. The list is
+    written most-needed first, and nothing else is reachable without
+    moving. `tail` is kept before any key.
     """
     if width <= 0:
         return ''
@@ -173,19 +167,18 @@ def sill(width, keys=(), tail='', note=''):
 def box_for(body, h, w, title, full=False, keys=(), tail=''):
     """(y, x, height, width) for a box holding `body` on an h x w screen.
 
-    Sized to what it holds and no larger: a help box with three inches of
-    blank border says the list is longer than it is. Capped at the screen,
-    which is where `overflows` takes over.
+    Sized to what it holds and no larger. A help box inside three inches of
+    blank border says the list is longer than it is. The size is capped at
+    the screen, and `overflows` takes over there.
 
-    `keys` and `tail` widen it too. `sill` drops the keys that will not
+    `keys` and `tail` widen the box too. `sill` drops the keys that do not
     fit and keeps the tail before any of them, so a short list under a
-    short title made a box too narrow to say `↵ choose` -- and the way out
-    of it was the one thing it did not show.
+    short title makes a box too narrow to say `↵ choose`. That is the way
+    out of the box.
 
-    `full` takes the whole terminal instead. A notice you read wants to be
-    the size of what it says; a list you WORK in -- the vocabulary, the
-    device map -- wants every row it can get, and centring it in a margin
-    costs two of them for nothing.
+    `full` takes the whole terminal. A notice you read is the size of what
+    it says. A list you WORK in, such as the vocabulary or the device map,
+    takes every row it can get, and a margin costs two rows for nothing.
     """
     if full:
         return 0, 0, h, w
@@ -199,11 +192,11 @@ def box_for(body, h, w, title, full=False, keys=(), tail=''):
 
 
 #: A blank row between the last line and the sill. Text that runs into the
-#: bottom edge reads as text that was cut off there.
+#: bottom edge reads as text cut off there.
 PAD = 1
 
-#: Blank columns between a box's border and what it says. Counted from
-#: the inside of the edge, which is where somebody reading it counts from.
+#: Blank columns between a box's border and what it says. Counted from the
+#: inside of the edge. That is where a reader counts from.
 GAP = 2
 
 
@@ -218,21 +211,19 @@ def overflows(body, h, w, title, full=False):
     return len(body) > rows_in(box_for(body, h, w, title, full)[2])
 
 
-#: What a box you pick from says it answers to. Named because `box_for`
-#: has to know them to leave room for them, and a list that disagreed
-#: with the sill would size the box for keys it does not show.
+#: What a box you pick from says it answers to. `box_for` needs these to
+#: leave room for them. A list that disagreed with the sill would size the
+#: box for keys the box does not show.
 CHOOSE_KEYS = ('\u2191\u2193 move', '\u21b5 choose', 'ESC back')
 
 
 class Tui:
     def __init__(self, scr, theme=None):
         self.scr = scr
-        #: how this screen draws. A Tui built without one gets the colourless
-        #: theme, which is what `setup` falls back to anyway on a terminal
-        #: that has no colour.
+        #: How this screen draws. A Tui built without a theme gets the
+        #: colourless one. `setup` falls back to that on a terminal with no
+        #: colour.
         self.theme = theme or Theme()
-        self.title = ""
-        self.lines = []
 
     def key(self, timeout=0.0):
         """'enter' / 'esc' / 'up' / 'down' / printable char / None."""
@@ -256,7 +247,7 @@ class Tui:
                 return "down"
             if 32 <= c < 127:
                 return chr(c)
-            # ignore resize and anything exotic
+            # Ignore a resize and anything exotic.
 
     def _put(self, y, x, text, attr=curses.A_NORMAL):
         h, w = self.scr.getmaxyx()
@@ -270,9 +261,9 @@ class Tui:
             full=False):
         """Draw a framed box over the middle of the screen. Returns its page.
 
-        Framed by the same `lid`/`sill` the panels use, so every box on this
-        screen -- the help, the control list, the prompt to press something --
-        reads as one kind of thing rather than three.
+        The frame is the same `lid` and `sill` the panels use. Every box
+        then reads as one kind of thing: the help, the control list and the
+        prompt to press something.
         """
         body = [t for _tone, t in lines]
         h, w = self.scr.getmaxyx()
@@ -293,10 +284,10 @@ class Tui:
     def popup(self, title, lines, full=False):
         """A box you read and dismiss.
 
-        Scrolls rather than truncates. It used to draw `lines[:bh - 2]` and
-        stop, so on a short terminal the help simply ended -- and what fell
-        off the bottom was the least-used half, which is the half somebody
-        opening the help is most likely to be after.
+        It scrolls. It does not truncate. A box that draws `lines[:bh - 2]`
+        and stops ends on a short terminal, and what falls off the bottom
+        is the least-used half. That half is what somebody opening the help
+        is looking for.
         """
         body = [t for _tone, t in lines]
         top = 0
@@ -328,10 +319,10 @@ class Tui:
     def confirm(self, title, lines):
         """Show what is about to happen and wait for a yes. True if given.
 
-        RETURN rather than a typed word: this is the thing the screen is for,
-        it is pressed often, and every writer in the family backs the file up
-        before it touches it. What was missing was not a gate -- it was seeing
-        what the keystroke would do while there was still time to say no.
+        RETURN, not a typed word. This is the thing the screen is for, it
+        is pressed often, and every writer backs the file up before it
+        touches it. What this adds is seeing what the keystroke does while
+        there is still time to say no.
         """
         while True:
             self.box(title, lines, ('↵ do it', 'ESC cancel'), tail='')
@@ -345,9 +336,9 @@ class Tui:
                                                    'ESC back')):
         """A line of text. Returns it, or None on ESC.
 
-        In the same frame as everything else, because a prompt drawn on a
-        bare screen is a second set of rules: this one is read with the
-        same eyes that just read a list.
+        In the same frame as everything else. A prompt drawn on a bare
+        screen is a second set of rules, and this one is read by the eyes
+        that just read a list.
         """
         while True:
             self.box(title, [('plain', t) for t in lines]
@@ -363,24 +354,27 @@ class Tui:
             elif k and len(k) == 1 and k.isprintable():
                 value += k
 
-    def choose(self, title, lines, tail='', head=(), skip=()):
+    def choose(self, title, lines, tail='', head=(), skip=(), index=0):
         """A box you pick a line out of. Returns the index, or None on ESC.
 
-        `head` is rows above the list that are not part of it -- where a
-        list was read from, what it is counted out of. In the box rather
-        than in the sill, because the sill's note pushes the keys off and
-        the way out of a box is not the thing to trade away.
+        `head` holds rows above the list that are not part of it: where a
+        list was read from, and what it is counted out of. They go in the
+        box and not in the sill, because the sill's note pushes the keys
+        off, and the way out of a box is not the thing to trade away.
 
-        `skip` names rows inside the list the cursor passes over: a blank
-        one holding two kinds of thing apart. Landing on it would be
-        landing on nothing, and `↵ choose` over a blank row is a key that
-        does not mean anything.
+        `skip` names rows inside the list that the cursor passes over. A
+        blank row holding two kinds of thing apart is one. Landing on it is
+        landing on nothing, and `↵ choose` over a blank row means nothing.
         """
         head, skip = list(head), set(skip)
         pick = [n for n in range(len(lines)) if n not in skip]
         if not pick:
             return None
-        at = top = 0
+        # `index` is where the cursor starts. Without it a form that asks
+        # a field and comes back puts you at the top, which is nine
+        # keystrokes from the row you were on.
+        at = pick.index(index) if index in pick else 0
+        top = 0
         while True:
             h, w = self.scr.getmaxyx()
             rows = head + list(lines)
@@ -393,8 +387,8 @@ class Tui:
                 top = len(head) + sel
             elif len(head) + sel >= top + page:
                 top = len(head) + sel - page + 1
-            # The widest the tail ever gets, so the box does not change
-            # width as the cursor passes 9.
+            # The widest the tail gets. The box then keeps its width as
+            # the cursor passes 9.
             self.box(title, rows, CHOOSE_KEYS,
                      f'{at + 1:>{len(str(len(pick)))}} of {len(pick)}',
                      top, len(head) + sel)
@@ -412,69 +406,15 @@ class Tui:
             elif k == 'esc':
                 return None
 
-    def menu(self, title, items, index=0, footer="arrows = move, "
-             "RETURN = select, ESC = back"):
-        index = max(0, min(index, len(items) - 1))
-        top = 0
-        while True:
-            h, _ = self.scr.getmaxyx()
-            visible = max(3, h - 4)
-            if index < top:
-                top = index
-            elif index >= top + visible:
-                top = index - visible + 1
-            self.scr.erase()
-            self._put(0, 0, title, curses.A_BOLD)
-            for row, i in enumerate(range(top,
-                                          min(len(items), top + visible))):
-                attr = curses.A_REVERSE if i == index else curses.A_NORMAL
-                self._put(2 + row, 2, items[i], attr)
-            self._put(h - 1, 0, f"{footer}  ({index + 1}/{len(items)})")
-            self.scr.refresh()
-            k = self.key(0.5)
-            if k == "up":
-                index = (index - 1) % len(items)
-            elif k == "down":
-                index = (index + 1) % len(items)
-            elif k == "enter":
-                return index
-            elif k == "esc":
-                return None
-
-    def page(self, title):
-        self.title = title
-        self.lines = []
-        self._redraw()
-
-    def log(self, line=""):
-        self.lines.append(line)
-        self._redraw()
-
-    def _redraw(self):
-        h, _ = self.scr.getmaxyx()
-        self.scr.erase()
-        self._put(0, 0, self.title, curses.A_BOLD)
-        for i, ln in enumerate(self.lines[-(h - 2):]):
-            self._put(2 + i, 0, ln)
-        self.scr.refresh()
-
-    def wait_any_key(self):
-        self.log("")
-        self.log("-- Press RETURN or ESC to continue. --")
-        while self.key(0.5) not in ("enter", "esc"):
-            pass
-
-
 def setup(scr):
-    """A Tui on a screen ready for a capture wizard.
+    """A Tui on a screen ready for a caller.
 
-    `set_escdelay` is what makes ESC answer at once rather than after the
-    terminal's escape timeout, and it is missing on older Pythons. Colour is
-    started so `use_default_colors` can hand the terminal's own palette back,
-    and the `Theme` laid over it is where every screen gets its attributes.
-    The capture wizards still come out in bold and reverse -- they ask for
-    `title` and `meta` and that is what those tones are -- but the review
-    screen, which has more than two things to say, gets colour for them.
+    `set_escdelay` makes ESC answer at once rather than after the
+    terminal's escape timeout. Older Pythons lack it.
+
+    Colour is started here, so `use_default_colors` hands the terminal's
+    own palette back. The `Theme` laid over it is where every screen gets
+    its attributes.
     """
     curses.curs_set(0)
     scr.nodelay(True)

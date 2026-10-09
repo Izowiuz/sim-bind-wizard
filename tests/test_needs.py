@@ -1,14 +1,14 @@
 """What `allocate()` promises, held to it.
 
-Nearly every rule in `core/needs.py` carries a comment saying what went wrong
-before it existed -- the airbrake that left the thumb, the pinky shift that
-lost its pin to the landing lights, the bomb release that landed on a latch.
-Those comments are the specification, and each one is a test here: a rule with
-a story attached is a rule somebody will be tempted to simplify away.
+Nearly every rule in `core/needs.py` carries a comment saying what it
+prevents: the airbrake that leaves the thumb, the pinky shift that loses
+its pin to the landing lights, the bomb release that lands on a latch.
+Those comments are the specification, and each one is a test here. A rule
+with a story attached is a rule somebody will simplify away.
 
-The hardware is synthetic (see fake.py) so a case can be exactly one thing.
-Real captures are too rich to isolate a rule in -- and a test that needs the
-author's own stick plugged in is not a test.
+The hardware is synthetic, which `fake.py` explains, so a case is exactly
+one thing. A real capture is too rich to isolate a rule in, and a test
+that needs the author's own stick plugged in is not a test.
 """
 
 import importlib.util
@@ -31,10 +31,10 @@ from core.needs import (Layout, Need, allocate, dump_needs, read_needs,
 def one(placed, what):
     """The placement for a need, by its name.
 
-    Every caller has just asked the allocator to place that need and then
-    reads `.ctrl` or `.slots` off the answer, so nothing here is the test
-    failing rather than a case to handle -- and saying so once beats an
-    Optional at ten call sites.
+    Every caller has just asked the allocator to place that need, and then
+    reads `.ctrl` or `.slots` off the answer. So nothing here is the test
+    failing and not a case to handle. Saying that once beats an Optional
+    at ten call sites.
     """
     p = next((p for p in placed if p.need.what == what), None)
     assert p is not None, f'the allocator placed nothing for {what}'
@@ -50,10 +50,10 @@ class Reach(unittest.TestCase):
         # with the canopy open takes a thumb position the moment one is free,
         # and the only defence left is hand-sorting the need list.
         #
-        # The thumb button here is deliberately the one SCORING would pick
-        # -- exact shape beats the panel dial's worse reach -- so the floor
-        # is the only thing standing between a ramp switch and the best
-        # position on the stick.
+        # The thumb button here is the one SCORING picks, on purpose:
+        # the exact shape beats the panel dial's worse reach. So the floor
+        # is the only thing between a ramp switch and the best position on
+        # the stick.
         devs = {'stick': fake.device('stick', [
             fake.button('Thumb button', 0, reach=fake.THUMB),
             fake.control('dial', 'Panel dial', [1], reach=fake.PANEL),
@@ -71,13 +71,13 @@ class Reach(unittest.TestCase):
         placed, unplaced, _free = allocate(
             [Need('Airbrake', 'hat2', ['OUT', 'IN'], urgency=IN_A_TURN)], devs)
         # ...but the relaxed pass lifts it, because a need wanting two buttons
-        # has no borrow to fall back on.
+        # has no share to fall back on.
         self.assertEqual([], unplaced)
         self.assertTrue(placed[0].need.relaxed)
 
-    def test_ceiling_stays_up_for_a_need_that_could_borrow(self):
+    def test_ceiling_stays_up_for_a_need_that_could_share(self):
         # The lift is only for `wanted > 1`. A one-button need is meant to take
-        # a borrowed thumb press over a whole control it must let go to reach,
+        # a shared thumb press over a whole control it must let go to reach,
         # and lifting the ceiling for it made it lose: War Thunder's radar ACM
         # and sight stabilisation left the thumb for the side dials.
         devs = {'stick': fake.device('stick', [
@@ -167,8 +167,8 @@ class Slots(unittest.TestCase):
     """Which button a binding actually lands on."""
 
     def test_a_lone_binding_goes_on_the_click_not_the_first_direction(self):
-        # On `buttons[0]` it reads as "push the hat left" when the obvious
-        # gesture is to press the hat -- and it leaves the click idle.
+        # On `buttons[0]` it reads as "push the hat left", where the
+        # gesture is to press the hat. It also leaves the click idle.
         devs = {'stick': fake.device('stick', [
             fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4),
         ])}
@@ -208,16 +208,15 @@ class Slots(unittest.TestCase):
 class NeedsOnDisk(unittest.TestCase):
     """The hand-written list, written down instead.
 
-    147 needs across five games carry 373 judgements nothing derives --
-    which band a thing is in, what shape it wants, which device it belongs
-    on, what a human wrote about it. They have lived in a Python literal
-    since the first commit, so nothing could change one without editing
-    code, and nothing has ever had to survive a round trip.
+    147 needs across five games carry 373 judgements nothing derives:
+    which band a thing is in, what shape it wants, which device it
+    belongs on, and what a person wrote about it. In a Python literal,
+    nothing changes one without editing code and nothing survives a round
+    trip.
 
-    What is NOT here is the per-context split every game's constructor
-    takes -- `air`/`heli`, `plane`/`glob`, `ship`/`map`/`foot`. Those zip
-    into the slots and read back off the binds, so writing them too would
-    be the same fact twice.
+    The per-context split a game's constructor takes is NOT here. That is
+    `air` and `heli`, or `plane` and `glob`. Those zip into the slots and
+    read back off the binds, so writing them here is the same fact twice.
     """
 
     def back(self, need):
@@ -233,9 +232,9 @@ class NeedsOnDisk(unittest.TestCase):
             self.assertEqual(getattr(one, f), getattr(got, f), f)
 
     def test_a_job_nobody_wrote_is_a_mistake_in_the_file(self):
-        # The one word a game and an overlay can both say, so a typo costs
-        # that need every wish in the overlay -- silently, because an
-        # unmatched rule looks exactly like a rule that did not apply.
+        # The one word a game and an overlay both say, so a typo costs
+        # that need every wish in the overlay. It costs it in silence: an
+        # unmatched rule looks like a rule that did not apply.
         with self.assertRaises(ValueError) as caught:
             read_needs([{'what': 'Guns', 'shape': 'button',
                          'bindings': [[{'action': 'GUNS'}]],
@@ -256,12 +255,29 @@ class NeedsOnDisk(unittest.TestCase):
         # the shift` is not one either. They were written per need, 86
         # times, and an opinion recorded 86 times is one you cannot
         # change. An overlay says them now, so the file does not.
-        one = Need('Airbrake', 'hat2', [[Bind('OUT')]],
-                   device='throttle', prefer='T1 rocker')
-        setattr(one, 'modifier', True)
+        one = Need('Airbrake', 'hat2', [[Bind('OUT')]])
+        # Seen once first, which is what `apply` does before it wishes
+        # anything: what a need wears after that came from the overlay
+        # rather than from the game.
+        corneeds.forget_wishes([one])
+        for wish in corneeds.WISHES:
+            setattr(one, wish, 'T1 rocker' if wish == 'prefer' else True)
         (row,) = dump_needs([one])
         for wish in corneeds.WISHES:
             self.assertNotIn(wish, row, wish)
+
+    def test_but_what_the_game_asked_for_is(self):
+        # The other half. A game names the device and the finger because
+        # it is describing the cockpit. It says so in its needs file, or,
+        # for the game that has none, in the code that builds the need. A
+        # save keeps that. Dropped unless a FILE said it, the one game
+        # with no file loses its cockpit on every write.
+        one = Need('Airbrake', 'hat2', [[Bind('OUT')]], device='throttle',
+                   prefer='T1 rocker', finger='index')
+        (row,) = dump_needs([one])
+        self.assertEqual('throttle', row['device'])
+        self.assertEqual('T1 rocker', row['prefer'])
+        self.assertEqual('index', row['finger'])
 
     def test_the_fact_flags_survive(self):
         # Named from the table rather than listed here, so a sixth fact is
@@ -303,7 +319,7 @@ class NeedsOnDisk(unittest.TestCase):
 
     def test_a_shape_written_as_a_choice_stays_a_choice(self):
         # `('button', 'hat2')` means "a button, or a rocker will do", and
-        # JSON gives a list back -- `first_shape` must still be 'button'.
+        # JSON gives a list back. `first_shape` is still 'button'.
         one = Need('Gear', ('button', 'hat2'), [[Bind('G')]])
         got = self.back(one)
         self.assertEqual('button', got.first_shape)
@@ -371,12 +387,11 @@ class NeedsOnDisk(unittest.TestCase):
         self.assertEqual([3, None], back.assignment['buttons'])
 
     def test_an_axis_answer_lives_with_the_other_answers(self):
-        # Which lever you confirmed and which way round you left it are
-        # ANSWERS, and they are in the answers file with every other
-        # answer -- one list, keyed the same way, read by the same
-        # reader. They had a section of their own, with rows of their own
-        # shape, which is what made every reader of that file need two
-        # code paths.
+        # Which lever you confirmed, and which way round you left it, are
+        # ANSWERS. They are in the answers file with every other answer:
+        # one list, keyed the same way, read by the same reader. A section
+        # of their own, with rows of their own shape, makes every reader
+        # of that file need two code paths.
         pitch = corneeds.Need('Pitch', 'stick', [[]],
                               takes=corneeds.AXIS, device='stick',
                               on=('y',), invert=True)
@@ -462,10 +477,12 @@ class Borrowing(unittest.TestCase):
         # `on the ramp` takes [2, 3], and the band's own note in
         # scoring.toml says what the floor is for: "without it, something
         # you do once with the canopy open grabs a thumb position the
-        # moment one is free". Every other pass honoured that. This one
-        # checked only the ceiling, and then paid +12 a tier for being
-        # CLOSE -- so X4's Pause and Cockpit menu sat on the hat that
-        # cycles weapon groups, and Elite's two maps on a thumb hat.
+        # moment one is free".
+        #
+        # A pass that checks the ceiling alone, and then pays +12 a tier
+        # for being CLOSE, puts X4's Pause and Cockpit menu on the hat
+        # that cycles weapon groups, and Elite's two maps on a thumb
+        # hat.
         devs = {'stick': fake.device('stick', [
             fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4),
             fake.hat4('Panel hat', 5, reach=fake.PANEL, push=9),
@@ -477,10 +494,10 @@ class Borrowing(unittest.TestCase):
         placed, _unplaced, _free = allocate(needs, devs)
         self.assertEqual('Panel hat', one(placed, 'Canopy').ctrl.label)
 
-    def test_a_turn_need_still_borrows_a_thumb(self):
-        # The floor for every band but `on the ramp` is 0, so nothing else
-        # can notice -- and War Thunder's airbrake, bombs and radar ACM
-        # are served by this pass on purpose.
+    def test_a_turn_need_still_shares_a_thumb(self):
+        # The floor for every band but `on the ramp` is 0, so nothing
+        # else notices. War Thunder's airbrake, bombs and radar ACM are
+        # served by this pass on purpose.
         devs = {'stick': fake.device('stick', [
             fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4),
         ])}
@@ -506,7 +523,7 @@ class Borrowing(unittest.TestCase):
         self.assertEqual(['Canopy'], [n.what for n in unplaced])
 
     def test_a_refusing_fact_refuses_here_too(self):
-        # The borrow pass has its own formula and its own loop, so a gate
+        # The share pass has its own formula and its own loop, so a gate
         # in `score` does not reach it. A modifier need wants one button,
         # which is exactly the shape that gets this far.
         def rig(**facts):
@@ -524,14 +541,14 @@ class Borrowing(unittest.TestCase):
         self.assertEqual(['Shift'], [n.what for n in unplaced])
         placed, unplaced, _free = run(modifier_ok=True)
         self.assertEqual([], unplaced)
-        self.assertEqual('borrowed', one(placed, 'Shift').why.how)
+        self.assertEqual('shared', one(placed, 'Shift').why.how)
 
-    def test_nothing_is_borrowed_for_a_whole_control_need(self):
-        # Which of the two wins is not the point and naming one was a
-        # mistake: it made the test a statement about the order the needs
-        # happened to be listed in. The rule is that the loser gets
-        # NOTHING -- the hat's spare press is not a home for a need
-        # wanting more than one button.
+    def test_nothing_is_shared_for_a_whole_control_need(self):
+        # Which of the two wins is not the point. A test that names one
+        # is a statement about the order the needs happen to be listed
+        # in. The rule is that the loser gets NOTHING: the hat's spare
+        # press is not a home for a need that wants more than one
+        # button.
         devs = {'stick': fake.device('stick', [
             fake.hat4('Thumb hat', 0, reach=fake.THUMB, push=4),
         ])}
@@ -540,7 +557,7 @@ class Borrowing(unittest.TestCase):
         placed, unplaced, _free = allocate(needs, devs)
         self.assertEqual(1, len(unplaced))
         self.assertGreater(unplaced[0].wanted, 1)
-        self.assertNotIn('borrowed', [p.why.how for p in placed])
+        self.assertNotIn('shared', [p.why.how for p in placed])
 
     def test_a_latch_lends_its_click(self):
         # The click is a real button and is fair game.
@@ -555,7 +572,7 @@ class Borrowing(unittest.TestCase):
 
     def test_a_latch_never_lends_a_position_even_with_one_going_spare(self):
         # A latch HOLDS whichever position it is in, so a press action
-        # borrowed from one fires for as long as the lever sits there. Bomb
+        # shared from one fires for as long as the lever sits there. Bomb
         # release landed on the master-arm latch exactly that way.
         #
         # Three positions, two of them bound, and the click taken by the
@@ -582,7 +599,7 @@ class Borrowing(unittest.TestCase):
         _placed, unplaced, _free = allocate(needs, devs)
         self.assertEqual(['Bomb release'], [n.what for n in unplaced])
 
-    def test_a_borrowed_button_takes_its_control_out_of_free(self):
+    def test_a_shared_button_takes_its_control_out_of_free(self):
         # Free means every button of it is free, not merely that no need
         # chose the control.
         devs = {'stick': fake.device('stick', [
@@ -592,8 +609,8 @@ class Borrowing(unittest.TestCase):
         needs = [Need('Trim', 'hat4', ['U', 'R', 'D', 'L']),
                  Need('Fire', 'button', ['FIRE'])]
         placed, _un, free = allocate(needs, devs)
-        borrowed = one(placed, 'Fire').ctrl.label
-        self.assertNotIn(borrowed, [c.label for _r, c in free])
+        shared = one(placed, 'Fire').ctrl.label
+        self.assertNotIn(shared, [c.label for _r, c in free])
 
 
 class Rejections(unittest.TestCase):
@@ -612,9 +629,10 @@ class Rejections(unittest.TestCase):
         self.assertEqual('Low button', placed[0].ctrl.label)
 
     def test_too_few_buttons_is_not_a_home(self):
-        # A selector is an accepted stand-in for a hat4, so shape does not
-        # reject this one -- only capacity does. Without that check the need
-        # is placed and the fourth binding is silently dropped.
+        # A selector is an accepted stand-in for a hat4, so the shape
+        # does not reject this one. Only the capacity does. Without that
+        # check the need is placed and the fourth binding is dropped in
+        # silence.
         devs = {'stick': fake.device('stick', [
             fake.selector('Three-way', 0, positions=3, reach=fake.PANEL),
         ])}
@@ -648,12 +666,13 @@ class AnAxisIsPlacedLikeAnythingElse(unittest.TestCase):
     """Scored against candidates, like a button, and exclusive within a
     context.
 
-    An axis used to be a second model of the whole program -- its own
-    object, its own resolver, its own file section, its own rows on the
-    screen and in the sheet, its own branch of every key. The last of it
-    was the decision: the core took the first control of the right kind
-    in device order, and three games wrote their own comparisons around
-    that as chains of `if`.
+    A second model of the program for the axes is its own object, its own
+    resolver, its own file section, its own rows on the screen and in the
+    sheet, and its own branch of every key.
+
+    The last of it is the decision. A core that takes the first control
+    of the right kind in device order leaves three games writing their
+    own comparisons around it, as chains of `if`.
     """
 
     def desk(self):
@@ -687,8 +706,9 @@ class AnAxisIsPlacedLikeAnythingElse(unittest.TestCase):
         self.assertEqual('Main stick', p.ctrl.label)
         self.assertEqual(corneeds.OnAxis(1), p.slots[0][0])
         # Scored, like anything else. `named` is what a placement says
-        # when the GAME named the axis outright -- DCS reading pitch out
-        # of a command name -- and then there was nothing to compare.
+        # where the GAME named the axis outright, as a game that reads
+        # pitch out of a command name does. There is nothing to compare
+        # then.
         self.assertEqual('floored', p.why.how)
         self.assertTrue(p.points)
         self.assertTrue(p.why.parts, 'and it says what the points were')
@@ -748,9 +768,9 @@ class AnAxisIsPlacedLikeAnythingElse(unittest.TestCase):
         self.assertEqual(['Pedals'], [n.what for n in un])
 
     def test_a_control_carrying_an_axis_is_not_free(self):
-        # `free` meant every BUTTON of it was free -- and the main stick
-        # has no buttons at all, so all zero of them were spare and it
-        # was offered as a free control with pitch on it.
+        # `free` that means every BUTTON of it is free offers the main
+        # stick, which has no buttons: all zero of them are spare, and it
+        # goes on the list with pitch on it.
         devs = self.desk()
         _placed, _un, free = allocate(
             [self.axis('Pitch', device='stick', on=('y',))], devs)
@@ -777,11 +797,11 @@ class AnAxisIsPlacedLikeAnythingElse(unittest.TestCase):
         self.assertEqual('Brake lever', placed[0].ctrl.label)
 
     def test_the_best_fit_wins_rather_than_the_first(self):
-        # Two dials, one resting at zero. Zoom needs that one -- at rest
-        # anywhere else it is part-zoomed from the moment the game starts
-        # -- and an antenna only needs one that stays put, so zoom has
+        # Two dials, and one of them rests at zero. Zoom needs that one:
+        # at rest anywhere else it is part zoomed from the moment the
+        # game starts. An antenna needs one that stays put, so zoom has
         # the better claim and the antenna takes the other. In device
-        # order the antenna came first and took it.
+        # order the antenna comes first and takes it.
         devs = fake.hotas(
             throttle_controls=[fake.control('dial', 'Left dial', [],
                                             axes=[0]),
@@ -905,10 +925,10 @@ class AnAxisIsPlacedLikeAnythingElse(unittest.TestCase):
         self.assertEqual(['Zzz', 'Aaa'], [p.need.what for p in placed])
 
     def test_what_else_would_have_answered_the_same_ask(self):
-        # No score to show -- a lever is named, not chosen -- but the
-        # resolver takes the first that answers and said nothing about
-        # the rest, so on a throttle with two levers the choice nobody
-        # recorded was not visible anywhere.
+        # No score to show, because a lever is named and not chosen. A
+        # resolver that takes the first lever that answers says nothing
+        # about the rest, so on a throttle with two levers the choice
+        # nobody recorded is visible nowhere.
         devs = self.desk()
         thr = self.axis('Throttle', shape='lever', device='throttle')
         dev = devs['throttle']
@@ -983,11 +1003,12 @@ if __name__ == '__main__':
 
 
 class HowFarAControlIs(unittest.TestCase):
-    """Measured on the map now, finger by finger, not matched out of prose.
+    """Measured on the map, finger by finger, and not matched out of
+    prose.
 
-    The old table read the map's own sentences for substrings -- 'thumb',
-    'without releasing' -- so the tier a control got depended on the
-    wording somebody typed while capturing it.
+    A table that reads the map's own sentences for substrings, such as
+    'thumb' or 'without releasing', gives a control the tier the wording
+    somebody typed while capturing it decides.
     """
 
     def ctrl(self, **kw):
@@ -1157,8 +1178,8 @@ class WhichDeviceIsWhich(unittest.TestCase):
 
     def test_no_desk_at_all_says_to_make_one(self):
         # `profile()` answers None for two different states, and this is
-        # the one where nothing is on file at all -- so the profiles have
-        # to be empty as well, or the test reads the other state.
+        # the one where nothing is on file. So the profiles are empty as
+        # well, or the test reads the other state.
         dm = devmap.load()
         with mock.patch.object(dm, 'profile', lambda name=None: None), \
                 mock.patch.object(dm, 'load_profiles', lambda: []):
@@ -1185,11 +1206,13 @@ class WhichDeviceIsWhich(unittest.TestCase):
 
 
 class EveryAxisAGamesNamesExists(unittest.TestCase):
-    """A game names an axis by the control it is part of and which axis of
-    it -- `('stick', 'x')`. It used to be one word, `stick-x`, which said
-    the control's kind and the axis's part in it at once; when the map
-    stopped spelling it that way the lookups silently found nothing, and
-    x4 and Elite quietly lost their flight axes."""
+    """A game names an axis by the control it is part of, and by which
+    axis of it. That is `('stick', 'x')`.
+
+    One word, `stick-x`, says the control's kind and the axis's part in it
+    at once. The day the map stops spelling it that way, the lookups find
+    nothing and two games lose their flight axes in silence.
+    """
 
     #: The tables, and where in a row the selector sits.
     TABLES = (('x4', 'AXIS_NEEDS', 2), ('elite', 'AXIS_NEEDS', 3),
@@ -1317,10 +1340,10 @@ class TheAxisSelectorsPickTheRightAxis(unittest.TestCase):
                 self.assertEqual(3, self.picked(mod, devs, 'stick', row, at))
 
     def test_two_roles_of_one_control_never_land_on_one_axis(self):
-        # The regression this guards: naming only the kind gave roll,
-        # pitch and yaw the same axis. Not that two needs never share one
-        # -- x4 binds the stick for flying and again for walking, which
-        # is two contexts and one piece of plastic.
+        # This guards one fault: the kind named alone gives roll, pitch
+        # and yaw the same axis. It does not say that two needs never
+        # share one. X4 binds the stick for flying and again for walking,
+        # which is two contexts and one piece of plastic.
         for game, table, at in EveryAxisAGamesNamesExists.TABLES:
             mod = _plan_module(game)
             if mod is None or not hasattr(mod, table):
@@ -1347,10 +1370,13 @@ class TheAxisSelectorsPickTheRightAxis(unittest.TestCase):
 
 
 class TheRulesNameOnlyWordsTheMapProduces(unittest.TestCase):
-    """Three tables in `scoring.toml` name shapes and directions, and
-    nothing checked them. A shape nobody has -- a typo, or a kind the map
-    has since renamed -- simply never matched, and the need asking for it
-    went unplaced with no word about why."""
+    """Every word the rules use is one the map produces.
+
+    Three tables in `scoring.toml` name shapes and directions. Unchecked,
+    a shape nobody has, from a typo or from a kind the map has renamed,
+    never matches, and the need that asks for it goes unplaced with no
+    word about why.
+    """
 
     def rules(self, **over):
         import copy
@@ -1542,17 +1568,17 @@ class WhatItRanAgainst(unittest.TestCase):
 
 
 class ALayoutStaysWhereYouLeftIt(unittest.TestCase):
-    """The allocator answered every regeneration from scratch.
+    """A layout stays where you left it.
 
-    Moving ONE binding by hand moved 21 of X4's 32: the one you moved,
-    and twenty others re-decided against a board that had shifted. A
-    layout is learnt with the hands, so that is not an improvement, it is
-    the tool undoing your week.
+    An allocator that answers every regeneration from scratch moves 21 of
+    X4's 32 bindings when you move ONE by hand: the one you moved, and
+    twenty others re-decided against a board that has shifted. You learn
+    a layout with your hands, so that is the tool undoing your week.
 
-    `stayed` is the memory. It is worth 20 -- measured, not judged:
-    across thirty forced moves in five games it took the churn from 16.8
-    bindings to 3.4 and the layouts came out worth exactly what they were
-    worth without it.
+    `stayed` is the memory. It is worth 20, and that is measured rather
+    than judged: across thirty forced moves in five games it took the
+    churn from 16.8 bindings to 3.4, and the layouts came out worth what
+    they were worth without it.
     """
 
     def rig(self):
@@ -1679,8 +1705,8 @@ class WhichSolverRunsIsAsked(unittest.TestCase):
         self.assertEqual('', csolvers.FALLBACK.why_not())
 
     def test_the_best_available_is_the_one_that_answers_best(self):
-        # Not "the first in the tuple that runs" -- that is the same
-        # sentence as the code and passes with the tuple reversed.
+        # Not "the first in the tuple that runs". That is the same
+        # sentence as the code, and it passes with the tuple reversed.
         devs = {'stick': fake.device('stick', [
             fake.button('Thumb', 0, reach=fake.THUMB),
             fake.hat2('Rocker', 1, reach=fake.THUMB)])}
@@ -1756,23 +1782,25 @@ class WhichSolverRunsIsAsked(unittest.TestCase):
 
 
 class TheSolverIsNeverWorseThanWalkingTheList(unittest.TestCase):
-    """Greedy takes the needs in urgency order and gives each the best
-    control still free. It cannot undo a choice, so an early urgent need
-    takes the one a later need needed more -- and the passes named
-    `relaxed` and `borrowed` are what it does instead of backtracking.
+    """The model is never worse than walking the list.
 
-    The model decides the whole assignment at once. The judgement is
-    unchanged: `score()` still says how well a control plays a part, and
-    its number is the objective. So a difference here is one greedy
-    could not reach, not a difference of opinion.
+    Greedy takes the needs in urgency order and gives each one the best
+    control still free. It cannot undo a choice, so an early urgent need
+    takes the control a later need wanted more. The `relaxed` and `shared`
+    passes are what it does in place of backtracking.
+
+    The model decides the whole assignment at once. The judgement is the
+    same one: `score()` says how well a control plays a part, and its
+    number is the objective. So a difference here is one greedy cannot
+    reach, and not a difference of opinion.
     """
 
     def both(self, needs, devs):
         """(greedy, model) -- (total points, placed, unplaced) for each.
 
-        Asked for by name rather than by patching an import away: which
-        solver runs is an argument now, because it being a guess was how
-        the same command produced two different kneeboards.
+        Asked for by name, and not by patching an import away. Which
+        solver runs is an argument, because a guess there is how the same
+        command produces two different kneeboards.
         """
         if csolvers.CpSat.why_not():
             self.skipTest('no ortools here; the model half cannot run')
@@ -1786,24 +1814,25 @@ class TheSolverIsNeverWorseThanWalkingTheList(unittest.TestCase):
     def tight(self):
         """Two needs and two controls, where taking the best first loses.
 
-        The urgent need scores well on both; the other only on the one
-        the urgent one would take. Walking the list places one of two.
+        The urgent need scores well on both. The other scores only on the
+        one the urgent need would take. Walking the list places one of
+        two.
 
-        Two things this rig has to get right, and an earlier one got
-        neither, so it compared two equal numbers and proved nothing:
+        This rig has to get two things right, or it compares two equal
+        numbers and proves nothing.
 
-        Both needs in ONE band, or they are never in the same pass and
-        there is nothing for a model to trade -- the pass order decides
-        it and both solvers agree.
+        Both needs are in ONE band. In two bands they are never in the
+        same pass, so a model has nothing to trade: the pass order
+        decides it and both solvers agree.
 
-        And the loser wants TWO buttons, so the borrow pass cannot
-        quietly rescue it. Borrowing serves a need wanting one button,
-        which is what made the old rig place two of two either way.
+        And the loser wants TWO buttons, so the share pass cannot rescue
+        it. Borrowing serves a need that wants one button, and that is
+        what places two of two either way.
 
-        The names decide which goes first, and that is deliberate: needs
-        are ordered `(pinned, urgency, what)` and `what` is what
-        breaks a tie. `Anything` fits either control and takes the scarce
-        one; `Bigger` fits only that one and is left with nothing.
+        The names decide which need goes first, on purpose. Needs are
+        ordered `(pinned, urgency, what)`, and `what` breaks a tie.
+        `Anything` fits either control and takes the scarce one. `Bigger`
+        fits only that one and is left with nothing.
         """
         devs = {'stick': fake.device('stick', [
             fake.button('Thumb', 0, reach=fake.THUMB),
@@ -1814,9 +1843,9 @@ class TheSolverIsNeverWorseThanWalkingTheList(unittest.TestCase):
                      urgency=IN_A_TURN, device='stick')], devs
 
     def test_the_rig_itself_separates_them(self):
-        # The test that earns the three below. They assert `>=`, which two
-        # equal numbers satisfy -- so a rig that stopped separating would
-        # leave them green and testing nothing.
+        # The test that earns the three below. They assert `>=`, and two
+        # equal numbers satisfy that, so a rig that stopped separating
+        # leaves them green and testing nothing.
         if csolvers.CpSat.why_not():
             self.skipTest('no ortools here; the model half cannot run')
         greedy, model = self.both(*self.tight())
@@ -1875,12 +1904,14 @@ class TheSolverIsNeverWorseThanWalkingTheList(unittest.TestCase):
 class TheSolverAnswersTheSameWayTwice(unittest.TestCase):
     """The same needs on the same desk give the same layout.
 
-    Most of a layout is ties: a dozen thumb buttons are worth exactly the
-    same to a need asking for a button, and nothing in the objective
-    prefers one. Eight search workers raced for those and whichever won
-    was the answer, so three of the six games rebound 51 lines between
-    two runs that differed in nothing at all -- the muscle memory the
-    tool exists to keep, reshuffled by the scheduler.
+    Most of a layout is ties. A dozen thumb buttons are worth the same to
+    a need that asks for a button, and nothing in the objective prefers
+    one.
+
+    Eight search workers race for those, and whichever one wins is the
+    answer. Three of the six games rebound 51 lines between two runs that
+    differed in nothing. That is the muscle memory this program exists to
+    keep, reshuffled by the scheduler.
     """
 
     def test_the_same_question_gets_the_same_answer(self):
@@ -1918,10 +1949,10 @@ class WhatTheModelIsNotAllowedToDo(unittest.TestCase):
         self.assertEqual(1, len(got))
 
     def test_placing_beats_scoring(self):
-        # Scores go negative -- a control on the wrong device with no
-        # directions and buttons to spare -- and the only home for a
-        # need can be one of those. Left unplaced it is a thing you
-        # cannot do in the aircraft; placed badly it is a stretch.
+        # A score goes negative for a control on the wrong device with no
+        # directions and buttons to spare, and the only home for a need
+        # can be one of those. Unplaced, the need is a thing you cannot do
+        # in the aircraft. Placed badly, it is a stretch.
         got = self.model.best([('a', {1: -200})], [1])
         self.assertEqual([('a', 1)], got)
 
@@ -1938,10 +1969,12 @@ class WhatTheModelIsNotAllowedToDo(unittest.TestCase):
 
 
 class APinIsAConstraintAndNotABigNumber(unittest.TestCase):
-    """It is worth +1000 as well, which outranks anything -- until the
-    model can place one more need by moving it. Then a number loses and
-    a constraint does not, and an explicit choice that the solver may
-    trade away is not a choice."""
+    """A pin is a constraint and not a big number.
+
+    +1000 outranks anything, until the model places one more need by
+    moving it. A number loses there and a constraint does not, and an
+    explicit choice the solver may trade away is not a choice.
+    """
 
     def setUp(self):
         if csolvers.CpSat.why_not():
@@ -1969,7 +2002,7 @@ class APinIsAConstraintAndNotABigNumber(unittest.TestCase):
         needs, devs = self.rig()
         placed, _left, _free = allocate(needs, devs)
         other = next((p for p in placed if p.need.what == 'Other'), None)
-        # Either left for the relaxed pass or put somewhere else -- but
-        # never on the pin, which is somebody else's.
+        # Either left for the relaxed pass or put somewhere else. Never
+        # on the pin, which is somebody else's.
         if other is not None:
             self.assertNotEqual('Pin', other.ctrl.label)
