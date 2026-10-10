@@ -577,17 +577,25 @@ class Adapter(abc.ABC):
         beside them already says which control it is: the number answers
         a question nobody asked and hides the one they did.
 
-        The number stays for a button the map says nothing about. `2` is
-        worse than `up` and better than a blank column.
+        A control with ONE button reads `press`. The map names no
+        direction there, because the part is the whole control, and a
+        column of `up`, `down` and `6` reads as three kinds of answer to
+        one question.
+
+        The number stays where a control has several buttons and the map
+        names none of them. `press` twice under one row says the two
+        lines are the same input, and they are not.
         """
         known = cactions.by_id(self.catalogue())
         ctrl = placement.ctrl
+        alone = len(ctrl.bindable_buttons) == 1
         out = []
         for button, payload in placement.slots:
             # An axis key says `axis 4` of itself. Only a button has a
             # direction, and only a hat or a staged trigger answers one.
             part = (isinstance(button, int)
-                    and ctrl.direction(button)) or str(button)
+                    and (ctrl.direction(button) or (alone and 'press'))
+                    or str(button))
             out += [(part, b.named(known)) for b in payload]
         return out
 

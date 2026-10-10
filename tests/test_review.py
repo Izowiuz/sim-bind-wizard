@@ -19,6 +19,7 @@ import unittest.mock
 
 import fake
 from core.actions import Action, Bind
+from core import adapter
 from core import devmap
 from core import needs as corneeds
 from core import solvers as csolvers
@@ -674,7 +675,8 @@ class BindsUnderTheAction(unittest.TestCase):
         """
         rv = made(describe=lambda p: [('up', 'Ship: one'),
                                       ('down', 'Ship: two')])
-        rv.show_binds = showing
+        if showing:
+            rv.open_binds.update(rv.needs)
         return rv
 
     def test_they_are_hidden_to_start_with(self):
@@ -2568,7 +2570,7 @@ class FilteringAndFolding(unittest.TestCase):
     def rv(self):
         rv = made(describe=lambda p: [('up', 'Ship: one'),
                                       ('down', 'Ship: two')])
-        rv.show_binds = True
+        rv.open_binds.update(rv.needs)
         return rv
 
     def names(self, rv):
@@ -2611,7 +2613,7 @@ class FilteringAndFolding(unittest.TestCase):
 
     def test_folding_hides_the_binds_and_keeps_the_actions(self):
         rv = self.rv()
-        rv.show_binds = False
+        rv.open_binds.clear()
         self.assertEqual([], [r for r in rv.rows() if r.kind == 'bind'])
         self.assertEqual(3, len(self.names(rv)))
 
@@ -2966,7 +2968,11 @@ class Footer(unittest.TestCase):
         import inspect
         src = inspect.getsource(review._loop)
         listed = self.said()
+        # How the footer spells a key, not how the loop names it. The
+        # arrows go in pairs there, because one word covers both ways of
+        # the same action: `↑↓ move`, `←→ fold`.
         spelled = {'up': '↑', 'down': '↓', 'enter': '↵', 'esc': 'q',
+                   'left': '←→', 'right': '←→',
                    ' ': 'SPACE', 'tab': 'TAB', 'shift-tab': 'Shift-TAB'}
         branches = [frozenset(re.findall(r"'([^']+)'", m.group(1)))
                     for m in re.finditer(r"k (?:==|in) \(?([^:)]+)\)?:", src)]
@@ -3802,3 +3808,115 @@ class WhatYourHandIsOnLightsUp(unittest.TestCase):
             review._loop(scr, rv, None, sticks)
         self.assertTrue(sels)
         self.assertEqual(1, len(set(sels)))
+
+
+class FoldingWithTheArrows(unittest.TestCase):
+    """`←` and `→` on whatever the cursor is on.
+
+    A heading opens and shuts its whole group. A row opens and shuts
+    what it binds. `h` writes every row at once, which is the one thing
+    an arrow on one row cannot do.
+    """
+
+    def test_a_group_starts_open(self):
+        rv = made()
+        self.assertEqual(set(), rv.shut)
+        self.assertTrue([r for r in rv.rows() if r.kind == 'need'])
+
+    def test_a_shut_group_keeps_its_heading_and_drops_its_rows(self):
+        rv = made()
+        name = next(r.group for r in rv.rows() if r.kind == 'head')
+        rv.shut.add(name)
+        rows = rv.rows()
+        self.assertIn(name, [r.group for r in rows if r.kind == 'head'])
+        self.assertEqual([], [r for r in rows if r.kind == 'need'
+                              and rv.group_of(r.need) == name])
+
+    def test_the_heading_says_how_many_it_hides(self):
+        # Shut, the rows are not there to be counted. Open, they are,
+        # and a number beside them is the same fact written twice.
+        rv = made()
+        head = next(r for r in rv.rows() if r.kind == 'head')
+        self.assertGreater(head.held, 0)
+
+    def test_a_row_opens_what_it_binds(self):
+        rv = made()
+        need = by(rv, 'Trim')
+        self.assertEqual([], [r for r in rv.rows()
+                              if r.kind == 'bind' and r.need is need])
+        rv.open_binds.add(need)
+        self.assertEqual(len(rv.binds(need)),
+                         len([r for r in rv.rows()
+                              if r.kind == 'bind' and r.need is need]))
+
+    def test_a_shut_group_hides_the_binds_under_it_too(self):
+        rv = made()
+        need = by(rv, 'Trim')
+        rv.open_binds.add(need)
+        rv.shut.add(rv.group_of(need))
+        self.assertEqual([], [r for r in rv.rows() if r.kind == 'bind'])
+
+    def test_the_heading_stays_selectable_when_shut(self):
+        # It is what `→` acts on. Unreachable, a group you shut is a
+        # group you cannot open again.
+        rv = made()
+        name = next(r.group for r in rv.rows() if r.kind == 'head')
+        rv.shut.add(name)
+        head = next(r for r in rv.rows() if r.group == name)
+        self.assertTrue(head.selectable)
+
+    def test_the_screen_marks_which_way_a_group_is_folded(self):
+        rv = made()
+        name = next(r.group for r in rv.rows() if r.kind == 'head')
+        scr = Keyed([], h=30, w=120)
+        theme = ctui.Theme(False)
+
+        def frame():
+            said = []
+            with unittest.mock.patch.object(
+                    review, '_put',
+                    lambda s, y, x, text, attr=0: said.append(text)):
+                review._draw(scr, rv, 0, {'top': 0}, theme)
+            return [t for t in said if name.upper() in t]
+
+        self.assertTrue(any(t.startswith(review.OPEN) for t in frame()))
+        rv.shut.add(name)
+        shut = frame()
+        self.assertTrue(any(t.startswith(review.SHUT) for t in shut))
+        self.assertTrue(any(t.rstrip().endswith(str(
+            next(r.held for r in rv.rows() if r.group == name)))
+            for t in shut))
+
+
+class ThePartColumn(unittest.TestCase):
+    """What a line under a row calls the input it is on.
+
+    The map's own word where it has one. A control with one button has
+    none, because the part is the whole control, and a column of `up`,
+    `down` and `6` reads as three kinds of answer to one question.
+    """
+
+    class Stub(adapter.Adapter):
+        """An adapter that names no cache, so its vocabulary is empty.
+
+        `describe` asks for one and this test reads the part column, not
+        the words beside it. `catalogue` is final, so the way to an
+        empty one is to name no file rather than to override it.
+        """
+
+        game = 'stub'
+        CATALOGUE = ''
+
+        def write_all(self, *a, **kw):
+            raise NotImplementedError
+
+    def parts(self, what):
+        rv = made()
+        return [part for part, _does
+                in self.Stub().describe(at(rv, by(rv, what)))]
+
+    def test_a_hat_reads_the_map_s_word_for_each_direction(self):
+        self.assertEqual(['up', 'right', 'down', 'left'], self.parts('Trim'))
+
+    def test_a_control_with_one_button_reads_press(self):
+        self.assertEqual(['press'], self.parts('Gear'))

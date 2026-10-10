@@ -108,7 +108,7 @@ MARK_SAID = {
 class Row:
     """One line of the table. `kind` decides what it answers to."""
 
-    def __init__(self, kind, text, need=None, group=None):
+    def __init__(self, kind, text, need=None, group=None, held=0):
         self.kind = kind        # 'head', 'need', 'bind' or 'gap'.
         self.text = text
         self.need = need
@@ -116,6 +116,11 @@ class Row:
         #: capitals for the screen, and `rename` needs what the needs
         #: hold. 'IN A TURN' is not it.
         self.group = group
+        #: On a heading, how many rows the group holds under the filter.
+        #: Counted where the band was worked out, because that is the
+        #: one place it is already known. The screen says it only where
+        #: the rows are hidden: open, they are there to be counted.
+        self.held = held
 
     @property
     def selectable(self):
@@ -189,11 +194,20 @@ class Review:
         #: need's own name and not against what it binds. `f` answers
         #: "where is the row for X".
         self.filter = ''
-        #: Whether `h` is showing what sits under each action. Off to
-        #: start with. The list of what a game can do is what you come
-        #: here to read, and a plan that binds two actions to a button
-        #: puts two lines under every row before you have asked.
-        self.show_binds = False
+        #: Which rows are showing what sits under them. Empty to start
+        #: with. The list of what a game can do is what you come here to
+        #: read, and a plan that binds two actions to a button puts two
+        #: lines under every row before you have asked.
+        #:
+        #: A set and not a flag with exceptions hung off it. `h` writes
+        #: every row at once and `→` writes one, which is two ways of
+        #: saying the same thing about a row. Said twice, the two
+        #: disagree the moment you use both.
+        self.open_binds = set()
+        #: Groups whose rows are hidden. The heading stays: a group you
+        #: shut is a thing you can open again, and a list that drops it
+        #: has nowhere to put the cursor.
+        self.shut = set()
         #: Laying the whole thing out again, for `o`. The argument is
         #: optional, like `save`. A game that cannot do this says so
         #: rather than raising: the screen cannot help, and taking the
@@ -1358,16 +1372,24 @@ class Review:
                 # filter took away. An empty group is a line you scroll
                 # past to reach the rows you asked for.
                 continue
-            out.append(Row('head', name.upper(), group=name))
+            out.append(Row('head', name.upper(), group=name,
+                           held=len(band)))
+            # Shut, the rows are left out and the heading stays. The
+            # heading is what `→` acts on, and a list that dropped it
+            # would have nowhere to put the cursor.
+            if name in self.shut:
+                out.append(Row('gap', ''))
+                continue
             for need in band:
                 out.append(Row('need', need.what, need=need))
                 # What it binds, under it. In the footer instead, you
                 # move onto a row to learn what it does and never see two
                 # at once. X4 puts six lines there for one hat, so the
                 # footer is the wrong size for the answer.
-                for part, what in (self.binds(need)
-                                   if self.show_binds else ()):
-                    out.append(Row('bind', f'{part:10} {what}', need=need))
+                if need in self.open_binds:
+                    for part, what in self.binds(need):
+                        out.append(Row('bind', f'{part:10} {what}',
+                                       need=need))
             out.append(Row('gap', ''))
         return out
 
@@ -1408,6 +1430,7 @@ KEYS = (
     ('head', 'MOVING'),
     ('plain', '  TAB         Move between the panels. Shift-TAB goes back.'),
     ('plain', '  ↑↓  j k     Move or scroll, in the panel TAB is on.'),
+    ('plain', '  ←→          Open or shut what the cursor is on.'),
     ('plain', '  g  G        Go to its first or its last line.'),
     ('plain', '  f           Filter by text. An empty filter clears it.'),
     ('plain', '  h           Show or hide the bindings under each entry.'),
@@ -1593,6 +1616,10 @@ LIST, DETAIL, FREE = 'list', 'detail', 'free'
 #: rather than move a cursor.
 SCROLL = '↑↓ scroll'
 
+#: Which way `←` and `→` go from a heading. A group with its rows hidden
+#: points at the key that brings them back.
+SHUT, OPEN = '▸', '▾'
+
 #: Which way a movement key goes, by one. Separate from the ends below
 #: so the loop needs one dispatch branch for all six: a second line
 #: starting `if k in` is a branch an earlier one has already answered,
@@ -1616,7 +1643,8 @@ TICK = 0.05
 
 #: In the sill, most-needed first. What is dropped on a narrow panel is
 #: dropped from the end, and nothing else is reachable without moving.
-HINTS = ('↑↓ move', '↵ assign', 'l from free', 'c accept', 'x unassign',
+HINTS = ('↑↓ move', '←→ fold', '↵ assign', 'l from free', 'c accept',
+         'x unassign',
          'a add', 'J what it is', 'Z guess', 'i invert', 'r category', 'f filter',
          'h binds',
          'o overlay', 'y why', 'm map', 's save', 'w write', 'tab panel')
@@ -2355,7 +2383,13 @@ def _draw(scr, rv, sel, state, theme, focus=LIST, lit=()):
         row = rows[i]
         y = iy + n
         if row.kind == 'head':
-            _put(scr, y, ix, row.text[:iw],
+            # The mark and the count are what the screen adds. `text` is
+            # the group's own name, and a test that asks what a group is
+            # called should not have to know which way it is folded.
+            shut = row.group in rv.shut
+            said = (f'{SHUT} {row.text}  {row.held}' if shut
+                    else f'{OPEN} {row.text}')
+            _put(scr, y, ix, said[:iw],
                  theme.sel if i == sel else theme.head)
         elif row.kind == 'bind':
             _put(scr, y, ix + 4, row.text[:iw - 4], theme.meta)
@@ -3252,10 +3286,31 @@ def _loop(scr, rv, write, sticks):
                 rv.status = (f'showing what matches {got!r}' if got
                              else 'showing everything')
         elif k in ('h', 'H'):
-            rv.show_binds = not rv.show_binds
+            # Every row at once, which is the one thing `→` cannot do.
+            # Any row open means this shuts the lot: with some open and
+            # some not, "all" is the answer that changes something.
+            if rv.open_binds:
+                rv.open_binds.clear()
+            else:
+                rv.open_binds.update(n for n in rv.needs if rv.binds(n))
             state['top'] = 0
             rv.status = ('showing what each one binds'
-                         if rv.show_binds else 'binds hidden')
+                         if rv.open_binds else 'binds hidden')
+        elif k in ('left', 'right'):
+            # A heading opens and shuts its whole group. A row opens and
+            # shuts what it binds. Both are the same question asked of
+            # the thing under the cursor, so both are the same key.
+            want = k == 'right'
+            if group:
+                rv.shut.discard(group) if want else rv.shut.add(group)
+                # The rows under it came or went, so where the heading
+                # is has changed. The cursor stays on the heading: it is
+                # what you just acted on and what acts again.
+                sel = _head_of(rv, group, sel)
+            elif need is not None:
+                (rv.open_binds.add(need) if want
+                 else rv.open_binds.discard(need))
+                sel = _row_of(rv, need, sel)
         elif k == '?':
             tui.popup('help', KEYS + tuple(
                 ('plain', f'  {key}           {word}')

@@ -7,7 +7,8 @@
       "suits": "fire",
       "held": true,
       "by_feel": true,
-      "bindings": [[{"action": "PrimaryFire"}, {"action": "BuggyPrimaryFireButton"}]]
+      "bindings": [[{"action": "PrimaryFire"}, {"action": "BuggyPrimaryFireButton"}]],
+      "on": ["second"]
     },
     {
       "what": "Secondary fire",

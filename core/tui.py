@@ -264,7 +264,7 @@ class Tui:
         self.theme = theme or Theme()
 
     def key(self, timeout=0.0):
-        """'enter' / 'esc' / 'up' / 'down' / printable char / None."""
+        """'enter' / 'esc' / an arrow / a printable char / None."""
         deadline = time.monotonic() + timeout
         while True:
             c = self.scr.getch()
@@ -283,6 +283,10 @@ class Tui:
                 return "up"
             if c == curses.KEY_DOWN:
                 return "down"
+            if c == curses.KEY_LEFT:
+                return "left"
+            if c == curses.KEY_RIGHT:
+                return "right"
             if c == 9:
                 return "tab"
             if c == curses.KEY_BTAB:
