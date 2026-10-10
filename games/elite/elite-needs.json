@@ -7,8 +7,8 @@
       "suits": "fire",
       "held": true,
       "by_feel": true,
-      "bindings": [[{"action": "PrimaryFire"}, {"action": "BuggyPrimaryFireButton"}]],
-      "on": ["second"]
+      "on": ["second"],
+      "bindings": [[{"action": "PrimaryFire"}, {"action": "BuggyPrimaryFireButton"}]]
     },
     {
       "what": "Secondary fire",
@@ -176,12 +176,6 @@
       "rapid": true,
       "on": ["forward", "back"],
       "bindings": [[{"action": "RadarIncreaseRange"}], [{"action": "RadarDecreaseRange"}]]
-    },
-    {
-      "what": "Head look",
-      "shape": "ministick",
-      "suits": "view",
-      "bindings": []
     },
     {
       "what": "Head look reset",
@@ -411,6 +405,76 @@
       "suits": "sensor",
       "on": ["forward", "back"],
       "bindings": [[{"action": "ExplorationFSSEnter"}], [{"action": "ExplorationFSSQuit"}]]
+    },
+    {
+      "what": "Panel focus",
+      "shape": "selector",
+      "suits": "comms",
+      "on": ["1", "2", "3", "4", "5"],
+      "bindings": [[{"action": "UI_Back"}], [{"action": "FocusLeftPanel"}, {"action": "FocusLeftPanel_Buggy"}], [{"action": "FocusRadarPanel"}, {"action": "FocusRadarPanel_Buggy"}], [{"action": "FocusRightPanel"}, {"action": "FocusRightPanel_Buggy"}], [{"action": "FocusCommsPanel"}, {"action": "FocusCommsPanel_Buggy"}]]
+    },
+    {
+      "what": "Travel",
+      "shape": "hat2",
+      "suits": "nav",
+      "on": ["up", "down"],
+      "bindings": [[{"action": "Supercruise"}], [{"action": "Hyperspace"}]]
+    },
+    {
+      "what": "Fighter orders",
+      "shape": "encoder",
+      "push": [{"action": "OpenOrders"}],
+      "urgency": 3,
+      "suits": "comms",
+      "on": ["cw", "ccw"],
+      "bindings": [[{"action": "OrderFollow"}], [{"action": "OrderHoldPosition"}]]
+    },
+    {
+      "what": "HUD mode",
+      "shape": "button",
+      "suits": "sensor",
+      "bindings": [[{"action": "PlayerHUDModeToggle"}, {"action": "PlayerHUDModeToggle_Buggy"}]]
+    },
+    {
+      "what": "Scanner tune",
+      "shape": ["dial", "lever"],
+      "suits": "sensor",
+      "takes": "axis",
+      "device": "throttle",
+      "bindings": [[{"action": "ExplorationFSSRadioTuningX_Raw"}]]
+    },
+    {
+      "what": "Scanner zoom",
+      "shape": "hat2",
+      "suits": "sensor",
+      "on": ["up", "down"],
+      "bindings": [[{"action": "ExplorationFSSZoomIn"}], [{"action": "ExplorationFSSZoomOut"}]]
+    },
+    {
+      "what": "Scanner target",
+      "shape": "button",
+      "suits": "sensor",
+      "bindings": [[{"action": "ExplorationFSSTarget"}]]
+    },
+    {
+      "what": "Probe aim left right",
+      "shape": "ministick",
+      "suits": "sensor",
+      "on": ["x"],
+      "takes": "axis",
+      "rests": "centred",
+      "device": "throttle",
+      "bindings": [[{"action": "SAAThirdPersonYawAxisRaw"}]]
+    },
+    {
+      "what": "Probe aim up down",
+      "shape": "ministick",
+      "suits": "sensor",
+      "on": ["y"],
+      "takes": "axis",
+      "rests": "centred",
+      "device": "throttle",
+      "bindings": [[{"action": "SAAThirdPersonPitchAxisRaw"}]]
     }
   ]
 }

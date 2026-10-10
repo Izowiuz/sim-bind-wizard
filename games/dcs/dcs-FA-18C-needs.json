@@ -100,6 +100,7 @@
       "urgency": 0,
       "suits": "flight",
       "device": "stick",
+      "finger": "ring",
       "bindings": [[{"action": "d3018pnilu3018cd13vd1vpnilvu0"}]]
     },
     {
@@ -159,7 +160,7 @@
       "bindings": [[{"action": "a2006cdnil"}]]
     },
     {
-      "what": "Launch Bar Control Switch - EXTEND",
+      "what": "Launch Bar Control Switch",
       "shape": "button",
       "urgency": 1,
       "suits": "systems",
@@ -167,36 +168,12 @@
       "bindings": [[{"action": "d3014pnilu3014cd5vd1vpnilvu0"}]]
     },
     {
-      "what": "Launch Bar Control Switch - RETRACT",
-      "shape": "button",
-      "urgency": 1,
-      "suits": "systems",
-      "device": "throttle",
-      "bindings": [[{"action": "d3014pnilunilcd5vd-1vpnilvunil"}]]
-    },
-    {
-      "what": "Speed Brake Switch - EXTEND",
+      "what": "Speed Brake Switch",
       "shape": "hat2",
       "urgency": 1,
       "suits": "flight",
       "device": "throttle",
-      "bindings": [[{"action": "d3035pnilu3035cd13vd-1vpnilvu0"}]]
-    },
-    {
-      "what": "Speed Brake Switch - OFF",
-      "shape": "hat2",
-      "urgency": 1,
-      "suits": "flight",
-      "device": "throttle",
-      "bindings": [[{"action": "d3035pnilunilcd13vd0vpnilvunil"}]]
-    },
-    {
-      "what": "Speed Brake Switch - RETRACT",
-      "shape": "hat2",
-      "urgency": 1,
-      "suits": "flight",
-      "device": "throttle",
-      "bindings": [[{"action": "d3035pnilunilcd13vd1vpnilvunil"}]]
+      "bindings": [[{"action": "d3035pnilu3035cd13vd-1vpnilvu0"}], [{"action": "d3035pnilu3035cd13vd1vpnilvu0"}]]
     },
     {
       "what": "Undesignate/Nose Wheel Steer Switch",
@@ -255,6 +232,7 @@
       "urgency": 0,
       "suits": "fire",
       "device": "stick",
+      "finger": "thumb",
       "bindings": [[{"action": "d3003pnilu3003cd13vd1vpnilvu0"}]]
     },
     {
@@ -265,32 +243,12 @@
       "bindings": [[{"action": "d3031pnilu3031cd13vd1vpnilvu0"}]]
     },
     {
-      "what": "COMM Switch - COMM 1 (call radio menu)",
-      "shape": "button",
+      "what": "COMM Switch",
+      "shape": "selector",
       "suits": "comms",
+      "on": ["1", "2", "4", "5"],
       "device": "throttle",
-      "bindings": [[{"action": "d3027pnilu3027cd13vd0.2vpnilvu0"}]]
-    },
-    {
-      "what": "COMM Switch - COMM 2 (call radio menu)",
-      "shape": "button",
-      "suits": "comms",
-      "device": "throttle",
-      "bindings": [[{"action": "d3028pnilu3028cd13vd0.4vpnilvu0"}]]
-    },
-    {
-      "what": "COMM Switch - MIDS A",
-      "shape": "button",
-      "suits": "comms",
-      "device": "throttle",
-      "bindings": [[{"action": "d3029pnilu3029cd13vd0.6vpnilvu0"}]]
-    },
-    {
-      "what": "COMM Switch - MIDS B",
-      "shape": "button",
-      "suits": "comms",
-      "device": "throttle",
-      "bindings": [[{"action": "d3030pnilu3030cd13vd0.8vpnilvu0"}]]
+      "bindings": [[{"action": "d3027pnilu3027cd13vd0.2vpnilvu0"}], [{"action": "d3028pnilu3028cd13vd0.4vpnilvu0"}], [{"action": "d3029pnilu3029cd13vd0.6vpnilvu0"}], [{"action": "d3030pnilu3030cd13vd0.8vpnilvu0"}]]
     },
     {
       "what": "Communication menu",
@@ -350,20 +308,12 @@
       "bindings": [[{"action": "d3001pnilu3001cd12vd1vpnilvu0"}]]
     },
     {
-      "what": "Exterior Lights Switch - OFF",
+      "what": "Exterior Lights Switch",
       "shape": "button",
       "urgency": 3,
       "suits": "systems",
       "device": "throttle",
-      "bindings": [[{"action": "d3041pnilunilcd13vd0vpnilvunil"}]]
-    },
-    {
-      "what": "Exterior Lights Switch - ON",
-      "shape": "button",
-      "urgency": 3,
-      "suits": "systems",
-      "device": "throttle",
-      "bindings": [[{"action": "d3041pnilunilcd13vd1vpnilvunil"}]]
+      "bindings": [[{"action": "d3041pnilu3041cd13vd1vpnilvu0"}]]
     },
     {
       "what": "MASTER CAUTION Reset Button",
@@ -382,24 +332,30 @@
       "bindings": [[{"action": "a2012cdnil"}]]
     },
     {
-      "what": "Absolute Camera Horizontal View",
-      "shape": "ministick",
-      "suits": "view",
-      "on": ["x"],
-      "takes": "axis",
-      "rests": "centred",
-      "device": "stick",
-      "bindings": [[{"action": "a2010cdnil"}]]
+      "what": "Heading Set Switch",
+      "shape": "encoder",
+      "suits": "nav",
+      "rapid": true,
+      "on": ["cw", "ccw"],
+      "device": "throttle",
+      "bindings": [[{"action": "d3004pnilu3004cd35vd1vpnilvu0"}], [{"action": "d3005pnilu3005cd35vd-1vpnilvu0"}]]
     },
     {
-      "what": "Absolute Camera Vertical View",
-      "shape": "ministick",
+      "what": "Course Set Switch",
+      "shape": "encoder",
+      "suits": "nav",
+      "rapid": true,
+      "on": ["cw", "ccw"],
+      "device": "throttle",
+      "bindings": [[{"action": "d3006pnilu3006cd35vd1vpnilvu0"}], [{"action": "d3007pnilu3007cd35vd-1vpnilvu0"}]]
+    },
+    {
+      "what": "HMD OFF/BRT Knob",
+      "shape": ["lever", "dial"],
+      "urgency": 3,
       "suits": "view",
-      "on": ["y"],
       "takes": "axis",
-      "rests": "centred",
-      "device": "stick",
-      "bindings": [[{"action": "a2011cdnil"}]]
+      "bindings": [[{"action": "a3003cd58"}]]
     }
   ]
 }
