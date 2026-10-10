@@ -147,6 +147,35 @@ class WhatIsFree(unittest.TestCase):
             [], corneeds.spare_controls(devs, {('stick',
                                                 corneeds.OnAxis(0))}))
 
+    def test_a_lever_that_travels_with_a_busy_lever_is_not_free(self):
+        """The case counting the control's own axes cannot see.
+
+        Two axes that move together are one input. The VMAX's throttle
+        levers travel as a pair, so what you put on the second lever
+        moves with what sits on the first.
+
+        Measured on MSFS when it was found: the throttle sat on axis 2
+        and axis 3 was empty, so the right lever came back free. A lever
+        that moves the throttle is not somewhere to put a thing.
+        """
+        import fake
+        from core import needs as corneeds
+        throttle = fake.device('throttle', [
+            fake.control('lever', 'Left throttle lever', [], axes=[2]),
+            fake.control('lever', 'Right throttle lever', [], axes=[3])],
+            [fake.axis(2, hid='Z', rest='mid', moves_with=[3],
+                       coupling='switchable'),
+             fake.axis(3, hid='RZ', rest='mid', moves_with=[2],
+                       coupling='switchable')])
+        devs = {'throttle': throttle}
+        left, right = throttle.groups()
+        self.assertEqual(
+            [('throttle', left), ('throttle', right)],
+            [(r, c) for r, c in corneeds.spare_controls(devs, set())])
+        self.assertEqual(
+            [], corneeds.spare_controls(devs, {('throttle',
+                                                corneeds.OnAxis(2))}))
+
 
 if __name__ == '__main__':
     unittest.main()

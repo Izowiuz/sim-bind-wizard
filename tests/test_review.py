@@ -3551,3 +3551,147 @@ class TabWalksThePanels(unittest.TestCase):
     def test_the_focused_panel_says_the_arrows_scroll_it(self):
         _seen, frames = self.driven([9])
         self.assertIn(review.SCROLL, frames[-1])
+
+
+class WhatTheVocabularyCallsTaken(unittest.TestCase):
+    """Which actions the vocabulary screen marks as already on a row.
+
+    That screen offers what is left. An action it calls free is one you
+    can promote, and promoting a thing that has a row already makes two
+    rows for one function.
+    """
+
+    def test_an_action_on_a_press_is_taken(self):
+        # Measured on Elite: `UI_Select` sits on the press of a hat and
+        # was the one action of 76 that a walk down `bindings` called
+        # free.
+        needs = plan() + [Need('Views', 'hat4',
+                               [[Bind('U')], [Bind('R')],
+                                [Bind('D')], [Bind('L')]],
+                               push=[Bind('RESET')])]
+        self.assertIn('RESET', review._on_a_row(needs))
+
+    def test_every_action_a_slot_binds_is_taken(self):
+        # One control, two game ids: Elite binds the ship's command and
+        # the buggy's off one press. Both name the row that has them.
+        needs = [Need('Map', 'button', [[Bind('MAP'), Bind('MAP_BUGGY')]])]
+        self.assertEqual({'MAP': 'Map', 'MAP_BUGGY': 'Map'},
+                         review._on_a_row(needs))
+
+    def test_it_says_which_row_has_the_action(self):
+        # Elite shows 49 rows and binds 76 actions. The other 27 are
+        # inside rows, and this screen is the only one that holds them
+        # all, so it is the one that has to say where each went.
+        needs = plan() + [Need('Views', 'hat4',
+                               [[Bind('U')], [Bind('R')],
+                                [Bind('D')], [Bind('L')]],
+                               push=[Bind('RESET')])]
+        got = review._on_a_row(needs)
+        self.assertEqual('Views', got['RESET'])
+        self.assertEqual('Gear', got['GEAR'])
+        # `Trim` binds `U` too, and it is first. Two rows on one action
+        # is a thing to see, and the screen shows the one that has it.
+        self.assertEqual('Trim', got['U'])
+
+    def test_an_action_nobody_binds_is_not_taken(self):
+        self.assertNotIn('RESET', review._on_a_row(plan()))
+
+
+class TheHeaderKeepsTheTally(unittest.TestCase):
+    """The counts, the overlay and `unsaved` sit beside the title.
+
+    `lid` drops its right-hand line whole, and the list panel used to ask
+    for the width its ROWS want. Measured before this was fixed: the rows
+    wanted 68 columns on Elite and 66 on X4, the header wanted 70 and 82,
+    and both games lost the line at EVERY terminal width. A wider
+    terminal did not help, because the surplus goes to the detail panel.
+    """
+
+    def test_the_width_it_asks_for_is_the_width_lid_keeps_it_at(self):
+        # The threshold lives beside `lid`, so the two cannot drift. This
+        # reads it off `lid` itself rather than repeating the sum.
+        for title, right in (
+                ('DCS World · F/A-18C · VIRPIL', '+35 · ?12 · F/A-18C'),
+                ('Elite Dangerous · VIRPIL · Izowiuz-PLAN',
+                 '+49 · Generic spaceship'),
+                ('X4 Foundations · VIRPIL · inputmap_3.xml',
+                 '+38 · ?11 · 1 unassigned · By hand')):
+            with self.subTest(title=title):
+                want = ctui.lid_wants(title, right)
+                self.assertIn(right, ctui.lid(want, title, right))
+                self.assertNotIn(right, ctui.lid(want - 1, title, right))
+
+    def test_a_long_subtitle_does_not_take_the_tally_off_the_screen(self):
+        rv = made()
+        rv.subtitle = 'VIRPIL · Izowiuz-PLAN · a very long file name.xml'
+        scr = Keyed([ord('q')], h=40, w=160)
+        with unittest.mock.patch.object(
+                review.ctui, 'setup',
+                lambda s: ctui.Tui(s, ctui.Theme(False))):
+            review._loop(scr, rv, None, review.Sticks(rv.layout))
+        self.assertIn(review._tally(rv), scr.frames[-1])
+
+
+class TheVocabularyShowsTheRowYouAreOn(unittest.TestCase):
+    """The cursor is on a row you can see.
+
+    `page` is the body: every row between the lid and the sill. The draw
+    took one fewer than that and the scroll clamped to `page`, so the
+    cursor could sit on the row under the last one drawn. Moving down
+    kept it there, and the highlighted action was then invisible for the
+    whole way down a 440-row list.
+    """
+
+    def frame(self, h, downs):
+        cat = [Action(f'ID_{i:03}', f'Action {i:03}') for i in range(60)]
+        rv = made(catalogue=cat)
+        scr = Keyed([ord('j')] * downs + [ord('q')], h=h, w=100)
+        review._browse(scr, ctui.Tui(scr, ctui.Theme(False)), rv)
+        return scr.frames[-1]
+
+    def test_the_one_under_the_cursor_is_drawn(self):
+        for h, downs in ((20, 25), (20, 40), (14, 30), (40, 50)):
+            with self.subTest(h=h, downs=downs):
+                self.assertIn(f'Action {downs:03}', self.frame(h, downs))
+
+    def test_the_body_is_drawn_whole(self):
+        # One row short left a blank line above the sill, which is the
+        # room for one more action of 440.
+        said = [line for line in self.frame(20, 0).split('\n')[1:-1]
+                if 'Action' in line]
+        self.assertEqual(20 - 2, len(said))
+
+
+class TheVocabularySaysWhereAnActionWent(unittest.TestCase):
+    """Which row has this action, beside the action.
+
+    Elite shows 49 rows and binds 76 actions: a row carries a hat's four
+    directions, its press, and the buggy's command beside the ship's.
+    The list names the rows, `BINDS` opens one row at a time, and this
+    screen is the only one that holds all 76.
+    """
+
+    CAT = [Action('ID_GEAR', 'Landing gear'),
+           Action('ID_U', 'Trim up'),
+           Action('ID_SPARE', 'Nothing has this')]
+
+    def frame(self):
+        needs = [Need('Gear', 'button', [[Bind('ID_GEAR')]]),
+                 Need('Trim', 'hat4', [[Bind('ID_U')], [], [], []])]
+        rv = made(needs, catalogue=self.CAT)
+        scr = Keyed([ord('q')], h=20, w=110)
+        review._browse(scr, ctui.Tui(scr, ctui.Theme(False)), rv)
+        # Keyed by the id, which is the one word on the line that
+        # cannot be the name of a row as well.
+        return {a.id: line for line in scr.frames[-1].split('\n')
+                for a in self.CAT if a.id in line}
+
+    def test_the_row_that_has_it_is_on_the_line(self):
+        got = self.frame()
+        self.assertIn('Gear', got['ID_GEAR'])
+        self.assertIn('Trim', got['ID_U'])
+
+    def test_an_action_no_row_has_names_none(self):
+        said = self.frame()['ID_SPARE']
+        self.assertNotIn('Gear', said)
+        self.assertNotIn('Trim', said)

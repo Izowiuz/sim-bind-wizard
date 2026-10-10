@@ -571,10 +571,25 @@ class Adapter(abc.ABC):
         The catalogue answers this. A `Bind` names an action the catalogue
         knows, so the core says what a placement does without handing it
         back to the game for the words.
+
+        The map's own word for the part, where it has one. A hat's four
+        buttons read `18`, `19`, `20` and `21` otherwise, and the panel
+        beside them already says which control it is: the number answers
+        a question nobody asked and hides the one they did.
+
+        The number stays for a button the map says nothing about. `2` is
+        worse than `up` and better than a blank column.
         """
         known = cactions.by_id(self.catalogue())
-        return [(str(button), b.named(known))
-                for button, payload in placement.slots for b in payload]
+        ctrl = placement.ctrl
+        out = []
+        for button, payload in placement.slots:
+            # An axis key says `axis 4` of itself. Only a button has a
+            # direction, and only a hat or a staged trigger answers one.
+            part = (isinstance(button, int)
+                    and ctrl.direction(button)) or str(button)
+            out += [(part, b.named(known)) for b in payload]
+        return out
 
     @typing.final
     def unknown(self) -> list[tuple[str, str, str]]:

@@ -1605,13 +1605,42 @@ def _fit(width, text, lead=''):
     return [lead + bits[0]] + [pad + b for b in bits[1:]]
 
 
-def _side(rv, row, width=DETAIL_MIN - 4):
+def _foot(rv, row, width=DETAIL_MIN - 4):
+    """The lines pinned to the BOTTOM of the detail panel.
+
+    `WHAT HAPPENS TO IT` was asked for at the end of the box, and the end
+    of a scrolling list is not the end of a box.
+
+    Measured on Elite at 120 by 40: the panel holds 29 lines and `Power
+    distribution` wants 48. The one section a reader needs on every row
+    sat 19 lines under the fold, where the row's state and what moves it
+    are exactly what you came to the panel for.
+
+    `_what_happens` writes it, here and in `_side`, so the two cannot
+    disagree about the words.
+    """
+    if row is None or row.kind != 'need':
+        return []
+    out = []
+
+    def say(tone, text='', lead=''):
+        out.extend((tone, piece) for piece in _fit(width, text, lead))
+
+    _what_happens(rv, row.need, say)
+    return out
+
+
+def _side(rv, row, width=DETAIL_MIN - 4, foot=True):
     """The detail panel's body: where the row sits, what it fires, and
     why.
 
     Three questions, and they are not one question. A panel that names
     the control and its reach and stops leaves the third unanswered, and
     the planner's choice is the thing a reader argues with.
+
+    `foot` off leaves `WHAT HAPPENS TO IT` out, for the caller that pins
+    it to the bottom of the panel instead of scrolling it. On means the
+    whole panel in one list, which is what a reader of the text wants.
 
     `Reason` is the account of that choice, written where the decision
     was made. This is its first human reader.
@@ -1668,8 +1697,9 @@ def _side(rv, row, width=DETAIL_MIN - 4):
         say('head', 'WHAT WOULD TAKE IT')
         _against(rv, need, plan.role if plan else '',
                  plan.ctrl if plan else None, say, width)
-        say('plain')
-        _what_happens(rv, need, say)
+        if foot:
+            say('plain')
+            _what_happens(rv, need, say)
         return out
 
     say('head', 'WHERE')
@@ -1700,8 +1730,9 @@ def _side(rv, row, width=DETAIL_MIN - 4):
 
     say('plain')
     _why(rv, need, p, say, width)
-    say('plain')
-    _what_happens(rv, need, say)
+    if foot:
+        say('plain')
+        _what_happens(rv, need, say)
     return out
 
 
@@ -2254,10 +2285,20 @@ def _tally(rv):
 def _draw(scr, rv, sel, state, theme, focus=LIST):
     h, w = scr.getmaxyx()
     rows = rv.rows()
+    title = rv.title + (f' · {rv.subtitle}' if rv.subtitle else '')
+    right = _tally(rv)
     # As wide as the widest row is, so the detail panel gets the space
-    # and the gap does not.
-    wants = 4 + 2 + NAME_W + max((len(rv.where(r.need)) for r in rows
-                                  if r.kind == 'need'), default=0)
+    # and the gap does not. The header counts too. It sits on this panel,
+    # `lid` drops its right-hand line whole, and that line carries the
+    # overlay and `unsaved`: states of the files, not decoration.
+    #
+    # Measured before this asked: the rows wanted 68 columns on Elite and
+    # 66 on X4, the header wanted 70 and 82, and both games lost the
+    # tally at EVERY terminal width. A wider terminal did not help,
+    # because the surplus goes to the detail panel.
+    wants = max(4 + 2 + NAME_W + max((len(rv.where(r.need)) for r in rows
+                                      if r.kind == 'need'), default=0),
+                ctui.lid_wants(title, right))
     (ly, lx, lh, lw), side, spare = _layout(w, h, wants)
     visible = max(1, lh - 2)
     top = state['top']
@@ -2268,14 +2309,12 @@ def _draw(scr, rv, sel, state, theme, focus=LIST):
     state['top'] = top
 
     scr.erase()
-    right = _tally(rv)
     # Needs, not every selectable row. This says which of the things you
     # are placing you are on, and a heading is not one of them.
     pick = [i for i, r in enumerate(rows) if r.kind == 'need']
     at = sum(1 for i in pick if i <= sel)
     iy, ix, ih, iw = _panel(
-        scr, theme, (ly, lx, lh, lw),
-        rv.title + (f' · {rv.subtitle}' if rv.subtitle else ''),
+        scr, theme, (ly, lx, lh, lw), title,
         # A game's own keys sit in the sill beside the family's. A key
         # nobody shows is a key nobody presses.
         right, HINTS + tuple(f'{key} {word}' for key, word, _do in rv.offers),
@@ -2322,7 +2361,19 @@ def _draw(scr, rv, sel, state, theme, focus=LIST):
     # it is the half that knows which of them are a ledger and hang under
     # their `+40`. Wrapped again here, that indent goes the moment a line
     # lands one character over.
-    _scroll(scr, theme, _side(rv, row, dw), (dy, dx, dh), state, DETAIL)
+    #
+    # The state and what moves it sit at the bottom of the BOX, so they
+    # are on screen whatever the rest of the panel is scrolled to. The
+    # scrolling half gets what is left, and a blank line keeps the two
+    # apart.
+    foot = _foot(rv, row, dw)
+    if foot and dh > len(foot) + 2:
+        _scroll(scr, theme, _side(rv, row, dw, foot=False),
+                (dy, dx, dh - len(foot) - 1), state, DETAIL)
+        for n, (tone, text) in enumerate(foot):
+            _put(scr, dy + dh - len(foot) + n, dx, text, theme[tone])
+    else:
+        _scroll(scr, theme, _side(rv, row, dw), (dy, dx, dh), state, DETAIL)
 
     if spare is not None:
         got = rv.free()
@@ -2860,6 +2911,34 @@ def _ran(tui, title, lines):
               full=True)
 
 
+def _on_a_row(needs):
+    """{action id: the row that binds it}.
+
+    A row is not a binding. Elite shows 49 rows and binds 76 actions,
+    because one row carries a hat's four directions, its press, and the
+    buggy's command beside the ship's. The list names the rows and the
+    other 27 actions are inside them, a row at a time, in `BINDS`.
+
+    So this screen is the only one that holds all 76, and the name is
+    what it was missing: which row has this.
+
+    `push` counts. The press of a control is a binding like any other.
+    Read off `bindings` alone, an action on a push came back free, and
+    this screen then offered a second row for a thing that has one.
+    Measured on Elite: `UI_Select` sits on the press of a hat and was the
+    one action of 76 that this called free.
+
+    First one wins. Two rows on one action is a thing to see rather than
+    a thing to hide, and the vocabulary screen is where you see it.
+    """
+    out = {}
+    for n in needs:
+        for slot in list(n.bindings) + [n.push or []]:
+            for b in slot or ():
+                out.setdefault(b.action, n.what)
+    return out
+
+
 def _browse(scr, tui, rv):
     """The whole vocabulary, to take something out of. Returns a line.
 
@@ -2869,10 +2948,16 @@ def _browse(scr, tui, rv):
 
     Windowed rather than sized to content. MSFS ships 3111 actions, and a
     box that drops what does not fit, in silence, is worse than no box.
+
+    `page` is the body: every row between the lid and the sill. The draw
+    took one fewer than that and the scroll clamped to `page`, so the
+    cursor could sit on the row under the last one drawn. Moving down
+    then kept it there, and the highlighted action was invisible for the
+    whole way down a 440-row list.
     """
     order = [a for _cat, group in cactions.grouped(rv.catalogue)
              for a in group]
-    bound = {b.action for n in rv.needs for slot in n.bindings for b in slot}
+    bound = _on_a_row(rv.needs)
     find, sel, top, said = '', 0, 0, ''
     while True:
         h, w = scr.getmaxyx()
@@ -2895,13 +2980,22 @@ def _browse(scr, tui, rv):
         for row in range(1, h - 1):
             _put(scr, row, 0, ctui.V, tui.theme.head)
             _put(scr, row, w - 1, ctui.V, tui.theme.head)
-        for i, a in enumerate(shown[top:top + page - 1]):
+        for i, a in enumerate(shown[top:top + page]):
             y = 1 + i
             mark = '+' if a.id in bound else ' '
             tone = (tui.theme.sel if top + i == sel
                     else tui.theme.mine if a.id in bound else tui.theme.plain)
             _put(scr, y, 2, f'{mark} {a.name[:38]:38}', tone)
-            _put(scr, y, 43, f'{a.kind:6} {a.id[:w - 46]}', tui.theme.meta)
+            # The row that has it, at the right, where the eye reads
+            # down one column. The id keeps what is left, because a
+            # reader who wants the id is checking spelling and a reader
+            # who wants the row is finding where a thing went.
+            held = bound.get(a.id, '')
+            mine = max(50, w - 2 - len(held)) if held else w - 1
+            _put(scr, y, 43, f'{a.kind:6} {a.id}'[:mine - 44],
+                 tui.theme.meta)
+            if held:
+                _put(scr, y, mine, held[:w - 1 - mine], tui.theme.mine)
         _put(scr, h - 1, 0,
              ctui.sill(w, ('↑↓ move', '↵ add', 'f filter', 'h reread',
                            'D forget', 'q back'),
@@ -2945,8 +3039,7 @@ def _browse(scr, tui, rv):
             where = _pick_category(scr, tui, rv)
             if where:
                 said = rv.promote(shown[sel], where)
-                bound = {b.action for n in rv.needs
-                         for slot in n.bindings for b in slot}
+                bound = _on_a_row(rv.needs)
 
 
 # ------------------------------------------------------------------ the loop

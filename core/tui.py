@@ -146,6 +146,20 @@ def lid(width, title='', right=''):
     return TL + head + fill + tail + TR
 
 
+def lid_wants(title='', right=''):
+    """The width at which `lid` keeps `right` beside `title`.
+
+    `lid` drops the right-hand line whole, and a caller that chooses its
+    own width has to know when that happens. The arithmetic lives beside
+    the thing that does it, so one of them cannot drift from the other.
+
+    Read off `lid`: two columns of corner, three for `─ ` and the space
+    after the title, two for the spaces around `right`, and one for the
+    gap the drop test insists on.
+    """
+    return len(title) + len(right) + 8
+
+
 def sill(width, keys=(), tail='', note=''):
     """The bottom edge: which keys do what, and where you are.
 

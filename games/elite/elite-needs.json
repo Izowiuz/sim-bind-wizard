@@ -247,10 +247,10 @@
       "shape": "stick",
       "urgency": 0,
       "suits": "flight",
-      "takes": "axis",
-      "device": "stick",
       "on": ["x"],
+      "takes": "axis",
       "rests": "centred",
+      "device": "stick",
       "bindings": [[{"action": "RollAxisRaw", "mode": "Ship"}]]
     },
     {
@@ -258,11 +258,11 @@
       "shape": "stick",
       "urgency": 0,
       "suits": "flight",
-      "takes": "axis",
-      "device": "stick",
       "on": ["y"],
+      "takes": "axis",
       "invert": true,
       "rests": "centred",
+      "device": "stick",
       "bindings": [[{"action": "PitchAxisRaw", "mode": "Ship"}]]
     },
     {
@@ -270,10 +270,10 @@
       "shape": "stick",
       "urgency": 0,
       "suits": "flight",
-      "takes": "axis",
-      "device": "stick",
       "on": ["z"],
+      "takes": "axis",
       "rests": "centred",
+      "device": "stick",
       "bindings": [[{"action": "YawAxisRaw", "mode": "Ship"}]]
     },
     {
@@ -282,8 +282,8 @@
       "urgency": 0,
       "suits": "flight",
       "takes": "axis",
-      "device": "throttle",
       "rests": "mid",
+      "device": "throttle",
       "bindings": [[{"action": "ThrottleAxis", "mode": "Ship"}]]
     },
     {
@@ -291,10 +291,10 @@
       "shape": "ministick",
       "urgency": 0,
       "suits": "flight",
-      "takes": "axis",
-      "device": "throttle",
       "on": ["x"],
+      "takes": "axis",
       "rests": "centred",
+      "device": "throttle",
       "bindings": [[{"action": "LateralThrustRaw", "mode": "Ship"}]]
     },
     {
@@ -302,10 +302,10 @@
       "shape": "ministick",
       "urgency": 0,
       "suits": "flight",
-      "takes": "axis",
-      "device": "throttle",
       "on": ["y"],
+      "takes": "axis",
       "rests": "centred",
+      "device": "throttle",
       "bindings": [[{"action": "VerticalThrustRaw", "mode": "Ship"}]]
     },
     {
@@ -313,10 +313,10 @@
       "shape": "stick",
       "urgency": 0,
       "suits": "flight",
-      "takes": "axis",
-      "device": "stick",
       "on": ["x"],
+      "takes": "axis",
       "rests": "centred",
+      "device": "stick",
       "bindings": [[{"action": "BuggyRollAxisRaw", "mode": "SRV"}]]
     },
     {
@@ -324,11 +324,11 @@
       "shape": "stick",
       "urgency": 0,
       "suits": "flight",
-      "takes": "axis",
-      "device": "stick",
       "on": ["y"],
+      "takes": "axis",
       "invert": true,
       "rests": "centred",
+      "device": "stick",
       "bindings": [[{"action": "BuggyPitchAxis", "mode": "SRV"}]]
     },
     {
@@ -336,10 +336,10 @@
       "shape": "stick",
       "urgency": 0,
       "suits": "flight",
-      "takes": "axis",
-      "device": "stick",
       "on": ["x"],
+      "takes": "axis",
       "rests": "centred",
+      "device": "stick",
       "bindings": [[{"action": "SteeringAxis", "mode": "SRV"}]]
     },
     {
@@ -348,29 +348,68 @@
       "urgency": 0,
       "suits": "flight",
       "takes": "axis",
-      "device": "throttle",
       "rests": "mid",
+      "device": "throttle",
       "bindings": [[{"action": "DriveSpeedAxis", "mode": "SRV"}]]
     },
     {
       "what": "CamTranslateXAxis",
       "shape": "ministick",
       "suits": "view",
-      "takes": "axis",
-      "device": "stick",
       "on": ["x"],
+      "takes": "axis",
       "rests": "centred",
+      "device": "stick",
       "bindings": [[{"action": "CamTranslateXAxis", "mode": "Ship"}]]
     },
     {
       "what": "CamTranslateYAxis",
       "shape": "ministick",
       "suits": "view",
-      "takes": "axis",
-      "device": "stick",
       "on": ["y"],
+      "takes": "axis",
       "rests": "centred",
+      "device": "stick",
       "bindings": [[{"action": "CamTranslateYAxis", "mode": "Ship"}]]
+    },
+    {
+      "what": "Panel move",
+      "shape": "hat4",
+      "push": [{"action": "UI_Select"}],
+      "suits": "comms",
+      "on": ["up", "right", "down", "left"],
+      "bindings": [[{"action": "UI_Up"}], [{"action": "UI_Right"}], [{"action": "UI_Down"}], [{"action": "UI_Left"}]]
+    },
+    {
+      "what": "Silent running",
+      "shape": "button",
+      "suits": "defence",
+      "bindings": [[{"action": "ToggleButtonUpInput"}]]
+    },
+    {
+      "what": "Target of target",
+      "shape": "button",
+      "suits": "lock",
+      "bindings": [[{"action": "SelectTargetsTarget"}]]
+    },
+    {
+      "what": "Next route system",
+      "shape": "button",
+      "suits": "nav",
+      "bindings": [[{"action": "TargetNextRouteSystem"}]]
+    },
+    {
+      "what": "Nav lock",
+      "shape": "button",
+      "suits": "nav",
+      "bindings": [[{"action": "WingNavLock"}]]
+    },
+    {
+      "what": "Scanner",
+      "shape": "hat2",
+      "suits": "sensor",
+      "on": ["forward", "back"],
+      "bindings": [[{"action": "ExplorationFSSEnter"}], [{"action": "ExplorationFSSQuit"}]]
     }
   ]
 }

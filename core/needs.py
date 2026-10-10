@@ -619,6 +619,16 @@ def spare_controls(devices, busy, among=None):
     mini-sticks: on this desk that is five controls, every one a flight
     control, offered to a cold-start switch.
 
+    An axis that travels with a busy axis is busy. Whatever you put on
+    the second throttle lever moves with what sits on the first, so the
+    second lever is not free. The axis pass keys its own bookkeeping by
+    `group_of` for that reason, and this asks the same question.
+
+    Measured on this desk: MSFS puts the throttle on axis 2 and leaves
+    axis 3 empty. The two levers travel as a pair. Counted axis by axis,
+    the right lever came back free, and a lever that moves the throttle
+    is not somewhere to put a thing.
+
     `busy` is {(role, button index or OnAxis)}, which is what a walk down
     `Placement.slots` gives. `among` narrows the pool, for a caller that
     has one and has already dropped what it knows is taken.
@@ -636,9 +646,10 @@ def spare_controls(devices, busy, among=None):
         for c in d.groups(bindable=True)]
     out = []
     for role, ctrl in pool:
+        dev = devices[role]
         keys = [(role, b) for b in ctrl.bindable_buttons]
-        keys += [(role, OnAxis(a.index))
-                 for a in axes_of(devices[role], ctrl)]
+        for axis in axes_of(dev, ctrl):
+            keys += [(role, OnAxis(i)) for i in group_of(dev, axis)]
         if not any(k in busy for k in keys):
             out.append((role, ctrl))
     return out

@@ -380,6 +380,48 @@
       "on": ["x"],
       "rests": "centred",
       "bindings": [[{"action": "INPUT_RANGE_FP_STRAFE", "mode": "On foot"}]]
+    },
+    {
+      "what": "Deploy",
+      "shape": "hat4",
+      "suits": "nav",
+      "by_feel": true,
+      "on": ["up", "right", "down", "left"],
+      "push": [{"action": "INPUT_ACTION_REPEAT_DEPLOYMENT"}],
+      "bindings": [[{"action": "INPUT_ACTION_DEPLOY_SATELLITE"}], [{"action": "INPUT_ACTION_DEPLOY_NAVBEACON"}], [{"action": "INPUT_ACTION_DEPLOY_RESOURCEPROBE"}], [{"action": "INPUT_ACTION_DEPLOY_MINE"}]]
+    },
+    {
+      "what": "Loot magnet",
+      "shape": "latch",
+      "suits": "systems",
+      "held": true,
+      "bindings": [[{"action": "INPUT_STATE_LOOTMAGNET"}]]
+    },
+    {
+      "what": "Zoom",
+      "shape": "encoder",
+      "suits": "view",
+      "rapid": true,
+      "on": ["cw", "ccw"],
+      "push": [{"action": "INPUT_ACTION_CAMERA_RESETVIEW"}],
+      "bindings": [[{"action": "INPUT_STATE_CAMERA_ZOOMIN"}], [{"action": "INPUT_STATE_CAMERA_ZOOMOUT"}]]
+    },
+    {
+      "what": "Full throttle",
+      "shape": "hat2",
+      "suits": "flight",
+      "held": true,
+      "on": ["forward", "back"],
+      "bindings": [[{"action": "INPUT_STATE_FULLFORWARD"}], [{"action": "INPUT_STATE_FULLREVERSE"}]]
+    },
+    {
+      "what": "Speed",
+      "shape": "hat2",
+      "suits": "flight",
+      "held": true,
+      "rapid": true,
+      "on": ["forward", "back"],
+      "bindings": [[{"action": "INPUT_STATE_ACCELERATE"}], [{"action": "INPUT_STATE_DECELERATE"}]]
     }
   ]
 }

@@ -261,6 +261,87 @@
       "on": ["y"],
       "rests": "centred",
       "bindings": [[{"action": "KEY_AXIS_PAN_PITCH", "mode": "glob"}]]
+    },
+    {
+      "what": "Reverse thrust",
+      "shape": "latch",
+      "suits": "flight",
+      "held": true,
+      "bindings": [[{"action": "KEY_THROTTLE_REVERSE_THRUST_HOLD", "mode": "plane"}]]
+    },
+    {
+      "what": "Mixture",
+      "shape": ["lever", "dial"],
+      "takes": "axis",
+      "suits": "systems",
+      "device": "throttle",
+      "bindings": [[{"action": "KEY_AXIS_MIXTURE_SET", "mode": "plane"}]]
+    },
+    {
+      "what": "Autopilot",
+      "shape": "button",
+      "suits": "flight",
+      "bindings": [[{"action": "KEY_AP_MASTER", "mode": "glob"}]]
+    },
+    {
+      "what": "Zoom",
+      "shape": "hat2",
+      "suits": "view",
+      "rapid": true,
+      "on": ["forward", "back"],
+      "bindings": [[{"action": "KEY_ZOOM_IN", "mode": "glob"}], [{"action": "KEY_ZOOM_OUT", "mode": "glob"}]]
+    },
+    {
+      "what": "Landing lights",
+      "shape": "button",
+      "suits": "systems",
+      "bindings": [[{"action": "KEY_LANDING_LIGHTS_TOGGLE", "mode": "glob"}]]
+    },
+    {
+      "what": "Pitot heat",
+      "shape": "button",
+      "suits": "systems",
+      "bindings": [[{"action": "KEY_PITOT_HEAT_TOGGLE", "mode": "glob"}]]
+    },
+    {
+      "what": "Anti ice",
+      "shape": "button",
+      "suits": "systems",
+      "bindings": [[{"action": "KEY_ANTI_ICE_TOGGLE", "mode": "glob"}]]
+    },
+    {
+      "what": "All lights",
+      "shape": "button",
+      "urgency": 3,
+      "suits": "systems",
+      "bindings": [[{"action": "KEY_ALL_LIGHTS_TOGGLE", "mode": "glob"}]]
+    },
+    {
+      "what": "Avionics",
+      "shape": "button",
+      "urgency": 3,
+      "suits": "systems",
+      "bindings": [[{"action": "KEY_TOGGLE_AVIONICS_MASTER", "mode": "glob"}]]
+    },
+    {
+      "what": "Battery",
+      "shape": "button",
+      "urgency": 3,
+      "suits": "systems",
+      "bindings": [[{"action": "KEY_TOGGLE_MASTER_BATTERY", "mode": "glob"}]]
+    },
+    {
+      "what": "Rotor governor",
+      "shape": "button",
+      "urgency": 3,
+      "suits": "systems",
+      "bindings": [[{"action": "KEY_ROTOR_GOV_SWITCH_TOGGLE", "mode": "heli"}]]
+    },
+    {
+      "what": "Pause",
+      "shape": "button",
+      "urgency": 3,
+      "bindings": [[{"action": "KEY_PAUSE_TOGGLE", "mode": "glob"}]]
     }
   ]
 }
