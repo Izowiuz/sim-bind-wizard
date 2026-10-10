@@ -60,6 +60,14 @@ class Theme:
         self.meta = self._tone(None, dim, dim)
         self.plain = self._tone(None, norm, norm)
         self.sel = self._tone(None, rev, rev)
+        #: What the hand is on, ADDED to whatever tone a row already
+        #: carries. Not a tone of its own: the row goes on saying what
+        #: its state is, and this says the thumb is there now.
+        #:
+        #: Underline rather than bold or reverse. `mine` is already bold
+        #: where the terminal has no colour and the cursor is already
+        #: reverse, so either of those says two things with one mark.
+        self.touched = curses.A_UNDERLINE
 
     def _tone(self, colour, lit, dull):
         """One tone: a colour pair where there is colour, else the fallback.

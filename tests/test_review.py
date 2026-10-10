@@ -3455,11 +3455,11 @@ class TabWalksThePanels(unittest.TestCase):
         seen = {}
         was = review._draw
 
-        def watch(scr, rv, sel, state, theme, focus=review.LIST):
+        def watch(scr, rv, sel, state, theme, focus=review.LIST, **kw):
             seen.update(state)
             seen['sel'] = sel
             seen['focus'] = focus
-            return was(scr, rv, sel, state, theme, focus)
+            return was(scr, rv, sel, state, theme, focus, **kw)
 
         with unittest.mock.patch.object(
                 review.ctui, 'setup',
@@ -3695,3 +3695,110 @@ class TheVocabularySaysWhereAnActionWent(unittest.TestCase):
         said = self.frame()['ID_SPARE']
         self.assertNotIn('Gear', said)
         self.assertNotIn('Trim', said)
+
+
+class WhatYourHandIsOnLightsUp(unittest.TestCase):
+    """A press names the control in the corner and marks its rows.
+
+    The box answers "which control is this". The list answers "which
+    function is on it". Reading a column of control names to find the
+    row is the work a press is there to save.
+
+    The cursor stays where it is. It is what `c`, `x` and `↵` act on,
+    and a lever nudged by a sleeve would move it under them.
+    """
+
+    def touched(self, rv, what):
+        """(role, kind, index) for the input a row sits on."""
+        p = at(rv, by(rv, what))
+        button = p.slots[0][0]
+        return (p.role,
+                'axis' if isinstance(button, corneeds.OnAxis) else 'button',
+                button.index if isinstance(button, corneeds.OnAxis)
+                else button)
+
+    def test_the_row_on_the_input_comes_back(self):
+        rv = made()
+        need = by(rv, 'Gear')
+        self.assertIn(need, rv.on_input(*self.touched(rv, 'Gear')))
+
+    def test_a_role_no_device_answers_names_nothing(self):
+        self.assertEqual([], made().on_input('pedals', 'button', 0))
+
+    def test_an_input_the_map_does_not_name_names_nothing(self):
+        self.assertEqual([], made().on_input('stick', 'button', 999))
+
+    def test_every_row_it_marks_is_one_the_corner_names(self):
+        # The box names what the CONTROL carries and the rows say what
+        # the BUTTON does, so the marked rows are some of what the box
+        # names and never a row it leaves out.
+        rv = made()
+        got = self.touched(rv, 'Gear')
+        said = ' '.join(t for _tone, t in rv.pressed(*got))
+        lit = rv.on_input(*got)
+        self.assertTrue(lit)
+        for need in lit:
+            self.assertIn(need.what, said)
+
+    def test_one_direction_of_a_shared_hat_marks_one_row(self):
+        # Four of Elite's rows share the stick's top thumb hat. A hat
+        # marked whole leaves the reader working out which of them the
+        # thumb just did.
+        rv = made()
+        got = self.touched(rv, 'Trim')
+        ctrl, _part = rv.touched_at(*got)
+        self.assertLessEqual(len(rv.on_input(*got)),
+                             len(rv.who_has(got[0], ctrl)))
+
+    def test_the_mark_is_added_to_the_tone_the_row_already_has(self):
+        rv = made()
+        need = by(rv, 'Gear')
+        scr = Keyed([], h=30, w=120)
+        theme = ctui.Theme(False)
+        seen = {}
+
+        def catch(s, y, x, text, attr=curses.A_NORMAL):
+            if 'Gear' in text:
+                seen[len(seen)] = attr
+
+        with unittest.mock.patch.object(review, '_put', catch):
+            review._draw(scr, rv, 0, {'top': 0}, theme)
+            review._draw(scr, rv, 0, {'top': 0}, theme, lit=frozenset([need]))
+        dark, lit = seen[0], seen[1]
+        self.assertNotEqual(dark, lit)
+        self.assertEqual(dark | theme.touched, lit)
+
+    def test_a_press_does_not_move_the_cursor(self):
+        # The device map jumps the cursor to the pressed row. Here the
+        # cursor is what `c`, `x` and `↵` act on, so a lever nudged by a
+        # sleeve would move them off the row you are reading.
+        rv = made()
+        p = at(rv, by(rv, 'Canopy'))
+        button = p.slots[0][0]
+        kind = 'axis' if isinstance(button, corneeds.OnAxis) else 'button'
+        index = button.index if kind == 'axis' else button
+        scr = Keyed([ord('q')], h=30, w=120)
+        sels, first, was = [], [True], review._draw
+
+        def once():
+            # One event, then quiet. A press that never stopped would
+            # hold the corner box up for the whole run.
+            if first[0]:
+                first[0] = False
+                return (p.role, kind, index)
+            return None
+
+        def watch(s, r, sel, state, theme, focus=review.LIST, **kw):
+            sels.append(sel)
+            return was(s, r, sel, state, theme, focus, **kw)
+
+        sticks = review.Sticks(rv.layout)
+        with unittest.mock.patch.object(
+                review.ctui, 'setup',
+                lambda s: ctui.Tui(s, ctui.Theme(False))), \
+             unittest.mock.patch.object(review, '_draw', watch), \
+             unittest.mock.patch.object(sticks, 'touched', once), \
+             unittest.mock.patch.object(sticks, 'open', lambda: None):
+            review._loop(scr, rv, None, sticks)
+        self.assertTrue(sels)
+        self.assertEqual(1, len(set(sels)))

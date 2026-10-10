@@ -531,6 +531,42 @@ class Review:
         dev = self.layout.devices.get(role)
         return None if dev is None else dev.group_of(button)
 
+    def touched_at(self, role, kind, index):
+        """(control, what to call this part of it) for a touched input.
+
+        A control's buttons and its axes are numbered in different
+        namespaces, so `kind` says which one `index` is in. `control_at`
+        above answers for a button alone, which is what an assignment
+        asks and not what a hand on the desk reports.
+
+        The control is None where the map names nothing there. One walk,
+        so the corner box and the list cannot disagree about which
+        control a thumb is on.
+        """
+        dev = self.layout.devices.get(role)
+        if dev is None:
+            return None, ''
+        if kind == 'axis':
+            return dev.axis_group(index), f'axis {index}'
+        return dev.group_of(index), f'js {index}'
+
+    def on_input(self, role, kind, index):
+        """[need] sitting on the INPUT somebody just touched.
+
+        The button, not the control it belongs to. Three rows share the
+        stick's top thumb hat, and pressing `up` is one of them: a hat
+        lit whole says the press reached a control and leaves the reader
+        to work out which function that was.
+
+        So this is narrower than the corner box below, which names what
+        the control carries. The box answers "what is this", and the
+        rows answer "what did my thumb just do".
+        """
+        want = corneeds.OnAxis(index) if kind == 'axis' else index
+        return [n for n, p in self.at.items()
+                if p is not None and p.role == role
+                and any(b == want for b, _v in p.slots)]
+
     def pressed(self, role, kind, index):
         """[(tone, text)] naming what was just touched, for the corner.
 
@@ -541,15 +577,9 @@ class Review:
         The device map draws the same box for the same question, out of
         the same map. This is that answer in this screen's own tones.
         """
-        dev = self.layout.devices.get(role)
-        if dev is None:
+        if role not in self.layout.devices:
             return []
-        if kind == 'axis':
-            ctrl = dev.axis_group(index)
-            part = f'axis {index}'
-        else:
-            ctrl = dev.group_of(index)
-            part = f'js {index}'
+        ctrl, part = self.touched_at(role, kind, index)
         out = [('subhead', f'{role}  {part}')]
         if ctrl is None:
             # A button the firmware reports with nothing behind it, or an
@@ -2282,7 +2312,7 @@ def _tally(rv):
     return rv.narrowed() or ctui.SEP.join(c for c in counts if c)
 
 
-def _draw(scr, rv, sel, state, theme, focus=LIST):
+def _draw(scr, rv, sel, state, theme, focus=LIST, lit=()):
     h, w = scr.getmaxyx()
     rows = rv.rows()
     title = rv.title + (f' · {rv.subtitle}' if rv.subtitle else '')
@@ -2334,7 +2364,12 @@ def _draw(scr, rv, sel, state, theme, focus=LIST):
             # map ask the theme the same question and get the same
             # answer.
             st = rv.mark[row.need]
-            attr = theme.sel if i == sel else theme[st]
+            # The state decides the tone and the hand adds to it. A row
+            # under a thumb is still a row you chose or the planner did,
+            # and a tone of its own would take that away to say so.
+            attr = (theme.sel if i == sel else theme[st])
+            if row.need in lit:
+                attr |= theme.touched
             # A divider, not a gap. At 68 columns the eye carries a name
             # across 26 blank spaces to reach what it is bound to, and it
             # loses the row on the way.
@@ -3115,9 +3150,20 @@ def _loop(scr, rv, write, sticks):
         got = sticks.touched()
         if got is not None:
             touch, at = got, time.monotonic()
-        _draw(scr, rv, sel, state, tui.theme, focus)
-        if touch is not None and time.monotonic() - at < HOLD:
-            tui.corner('pressed', rv.pressed(*touch))
+        # One answer about the moment, for both halves of it. The box
+        # names what is under the hand and the list underlines the rows
+        # that sit there, so a press says where a function lives without
+        # reading a column of control names.
+        #
+        # The rows are marked and the cursor is left alone. The cursor
+        # is what `c`, `x` and `↵` act on, and a lever nudged by a
+        # sleeve would move it under them.
+        up = (touch if touch is not None and time.monotonic() - at < HOLD
+              else None)
+        _draw(scr, rv, sel, state, tui.theme, focus,
+              lit=frozenset(rv.on_input(*up)) if up else frozenset())
+        if up:
+            tui.corner('pressed', rv.pressed(*up))
             scr.refresh()
         # A tick a reader can feel. At 0.5 s a press shows up half a
         # second after the thumb, which reads as the screen missing it.
