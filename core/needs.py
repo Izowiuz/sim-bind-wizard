@@ -607,6 +607,43 @@ def axes_of(dev, ctrl):
             if dev.axis_group(a.index) is ctrl]
 
 
+def spare_controls(devices, busy, among=None):
+    """[(role, control)] with every INPUT of it still free.
+
+    Free means every input, and an axis is an input. It does not mean
+    that no need chose the control.
+
+    The main stick has no buttons, so all zero of them are spare. Counted
+    on the buttons alone it is offered as a free control with pitch, roll
+    and steering on it. The same holds for both throttle levers and both
+    mini-sticks: on this desk that is five controls, every one a flight
+    control, offered to a cold-start switch.
+
+    `busy` is {(role, button index or OnAxis)}, which is what a walk down
+    `Placement.slots` gives. `among` narrows the pool, for a caller that
+    has one and has already dropped what it knows is taken.
+
+    One definition, because the allocator and the review screen both
+    answer this and the screen's own copy counted buttons alone. Nine
+    bindings on five controls were offered as somewhere to put a thing.
+
+    Not `spare`. The share pass binds that name to a list of buttons, so
+    the whole name is local to `allocate` and the module's own is out of
+    reach there.
+    """
+    pool = among if among is not None else [
+        (role, c) for role, d in sorted(devices.items())
+        for c in d.groups(bindable=True)]
+    out = []
+    for role, ctrl in pool:
+        keys = [(role, b) for b in ctrl.bindable_buttons]
+        keys += [(role, OnAxis(a.index))
+                 for a in axes_of(devices[role], ctrl)]
+        if not any(k in busy for k in keys):
+            out.append((role, ctrl))
+    return out
+
+
 def group_of(dev, axis):
     """Which input this axis IS, as a key: itself and whatever travels
     with it.
@@ -2496,19 +2533,12 @@ def allocate(needs, devices, usable=None, rules=None, solver=None,
     # row waits, empty, for you to say where it goes now.
     still += orphan + nowhere + sorted(empty)
 
-    # Free means every INPUT of it is free, and an axis is an input. It
-    # does not mean that no need chose the control.
-    #
-    # The main stick has no buttons, so all zero of them are spare and it
-    # is offered as a free control with pitch, roll and rudder on it. The
-    # same holds for both throttle levers and both mini-sticks: five
-    # controls on this desk, every one a flight control, offered to a
-    # cold-start switch.
+    # `spare_controls` says what free means, once, for this and for
+    # the review screen. The pool drops what the named and pinned
+    # passes took whole, which is a fact only this function has.
     on_axes = {(p.role, b) for p in placed for b, _v in p.slots
                if isinstance(b, OnAxis)}
-    free = [(r, c) for j, (r, c) in enumerate(pool)
-            if j not in taken
-            and not any((r, b) in occupied for b in c.bindable_buttons)
-            and not any((r, OnAxis(a.index)) in on_axes
-                        for a in axes_of(devices[r], c))]
+    free = spare_controls(devices, occupied | on_axes,
+                          [(r, c) for j, (r, c) in enumerate(pool)
+                           if j not in taken])
     return placed, [needs[i] for i in still], free

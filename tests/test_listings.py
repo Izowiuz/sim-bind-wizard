@@ -101,6 +101,52 @@ class WhatIsFree(unittest.TestCase):
                 + ', '.join(f'{r}/{lbl}' for r, lbl in sorted(busy & offered)))
         self.assertGreater(tried, 0, 'no game is harvested here')
 
+    def test_the_screen_and_the_allocator_say_the_same(self):
+        """One question, one answer.
+
+        `corneeds.spare_controls` is that answer. The screen's own copy
+        counted buttons alone, and the main stick has none: all zero of
+        them were spare, so it was offered as somewhere to put a thing
+        with pitch, roll and steering on it.
+
+        Measured on X4 when it was found: the screen said 12 free and
+        the allocator said 7. The five it added carried nine bindings,
+        and every one of the five was a flight control.
+        """
+        from core import review
+        tried = 0
+        for name, g in GAMES.items():
+            if g is None:
+                continue
+            tried += 1
+            layout = g.build()
+            rv = review.Review(layout, g.title, g.subtitle)
+            with self.subTest(game=name):
+                self.assertEqual({(r, c.id) for r, c in layout.free},
+                                 {(r, c.id) for r, c in rv.free()})
+        self.assertGreater(tried, 0, 'no game is harvested here')
+
+    def test_a_control_with_axes_and_no_buttons_is_not_free(self):
+        """The case the button count cannot see.
+
+        A lever has no buttons at all, so every one of its zero buttons
+        is spare whatever is on it.
+        """
+        import fake
+        from core import needs as corneeds
+        stick = fake.device('stick', [
+            fake.control('stick', 'Main stick', [], axes=[0, 1])],
+            [fake.axis(0, role='x'), fake.axis(1, hid='Y', role='y')])
+        devs = {'stick': stick}
+        ctrl = stick.groups()[0]
+        self.assertEqual([], ctrl.bindable_buttons)
+        self.assertEqual(
+            [('stick', ctrl)],
+            [(r, c) for r, c in corneeds.spare_controls(devs, set())])
+        self.assertEqual(
+            [], corneeds.spare_controls(devs, {('stick',
+                                                corneeds.OnAxis(0))}))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -2651,35 +2651,77 @@ class TwoPanelsOrOne(unittest.TestCase):
     which puts six bindings under one hat. The row that needs the space
     is the one that cannot have it. A column has the height of the
     screen.
+
+    The right column is split again, in height: the detail is about the
+    row the cursor is on and the free list is about the desk. Neither
+    answers the other's question, so neither can be the other's tail.
     """
 
     def test_a_wide_terminal_gets_two_panels(self):
-        listed, detail = review._layout(100, 30)
+        listed, detail, _free = review._layout(100, 30)
         self.assertIsNotNone(detail)
         self.assertEqual(listed[1], 0, 'the list starts at the left edge')
         self.assertGreater(detail[1], listed[1] + 20)
 
     def test_they_do_not_overlap(self):
-        listed, detail = review._layout(100, 30)
+        listed, detail, _free = review._layout(100, 30)
         self.assertLessEqual(listed[1] + listed[3], detail[1])
 
     def test_together_they_fill_the_width(self):
         for w in (90, 100, 120, 200):
-            listed, detail = review._layout(w, 30)
+            listed, detail, _free = review._layout(w, 30)
             self.assertLessEqual(detail[1] + detail[3], w)
             self.assertGreaterEqual(detail[1] + detail[3], w - 1)
 
     def test_a_narrow_terminal_stacks_them(self):
         # 80 columns leaves the list about 50 wide, and
         # `throttle · Middle finger hat` does not fit in 50.
-        listed, detail = review._layout(80, 30)
+        listed, detail, _free = review._layout(80, 30)
         self.assertEqual(listed[3], detail[3], 'both full width')
         self.assertGreater(detail[0], listed[0] + listed[2] - 1)
 
     def test_a_short_terminal_keeps_the_list_usable(self):
         # Stacked on a small screen, the detail must not eat the list.
-        listed, detail = review._layout(80, 14)
+        listed, _detail, _free = review._layout(80, 14)
         self.assertGreaterEqual(listed[2], 6)
+
+    # ---- the free panel under the detail ----
+
+    def test_a_tall_column_gets_a_free_panel(self):
+        _listed, detail, free = review._layout(100, 30)
+        self.assertIsNotNone(free)
+        assert free is not None
+        self.assertEqual(detail[1], free[1], 'the same column')
+        self.assertEqual(detail[3], free[3], 'the same width')
+
+    def test_the_two_do_not_overlap(self):
+        _listed, detail, free = review._layout(100, 30)
+        assert free is not None
+        self.assertEqual(detail[0] + detail[2], free[0])
+
+    def test_together_they_fill_the_column(self):
+        for h in (24, 30, 40, 60):
+            with self.subTest(height=h):
+                _listed, detail, free = review._layout(100, h)
+                assert free is not None
+                self.assertEqual(h, detail[2] + free[2])
+
+    def test_a_short_column_drops_it(self):
+        # The detail is unreadable below about ten rows, and the free
+        # list is the half you can reach another way.
+        _listed, detail, free = review._layout(100, 20)
+        self.assertIsNone(free)
+        self.assertEqual(20, detail[2], 'the detail takes the column')
+
+    def test_a_stacked_screen_has_no_room_for_it(self):
+        _listed, _detail, free = review._layout(80, 30)
+        self.assertIsNone(free)
+
+    def test_the_detail_keeps_the_larger_half(self):
+        # It is about the row you are on, which is what the keys act on.
+        _listed, detail, free = review._layout(100, 30)
+        assert free is not None
+        self.assertGreater(detail[2], free[2])
 
 
 class WhatItFound(unittest.TestCase):
@@ -3206,3 +3248,176 @@ class LayingItOutMarksTheScreen(unittest.TestCase):
         said = rv.lay_over('no-such-overlay')
         self.assertIn('no-such-overlay', said)
         self.assertFalse(rv.unsaved)
+
+
+class Stub:
+    """One `js` node, with the events it is about to report.
+
+    `core/capture.py`'s `Device` opens a file descriptor in its
+    constructor, so a test cannot make one. This answers the two things
+    `Sticks.touched` reads off it, and keeps `axis_vals` the way the real
+    one does: updated as the batch is parsed, before the caller sees it.
+    """
+
+    def __init__(self, role, batches, rest=None):
+        self.role = role
+        self.batches = list(batches)
+        self.axis_vals = dict(rest or {})
+
+    def read_events(self):
+        got = self.batches.pop(0) if self.batches else []
+        for kind, number, value in got:
+            if kind == 'axis':
+                self.axis_vals[number] = value
+        return got
+
+
+class WhatIsUnderYourHand(unittest.TestCase):
+    """`Sticks.touched`: which control was just pressed or moved.
+
+    An axis is measured against where it was before a hand took hold,
+    and not against the value it had one tick ago. A tick is 50 ms: a
+    lever moved by hand travels a few hundred units in that time, and a
+    threshold against the previous tick asks for a fifth of the range
+    inside a twentieth of a second. Nothing a hand does clears that, so
+    nothing moving ever showed.
+    """
+
+    def sticks(self, *devices):
+        rv = made()
+        s = review.Sticks(rv.layout)
+        s.opened = True
+        s.devices = list(devices)
+        return s
+
+    def test_a_press_is_reported(self):
+        s = self.sticks(Stub('stick', [[('button', 7, 1)]]))
+        self.assertEqual(('stick', 'button', 7), s.touched())
+
+    def test_letting_go_is_not(self):
+        # A release is not a thing you are showing the screen.
+        s = self.sticks(Stub('stick', [[('button', 7, 0)]]))
+        self.assertIsNone(s.touched())
+
+    def test_a_quiet_tick_says_nothing(self):
+        s = self.sticks(Stub('stick', [[]]))
+        self.assertIsNone(s.touched())
+
+    def test_a_lever_moved_by_hand_is_reported(self):
+        # Four ticks of a few hundred units each, which is what a hand
+        # does. Against the previous tick none of them clears the bar.
+        dev = Stub('stick', [[('axis', 1, v)] for v in
+                             (200, 900, 2000, 3600)], rest={1: 0})
+        s = self.sticks(dev)
+        said = [s.touched() for _ in range(4)]
+        self.assertEqual([None, None, None, ('stick', 'axis', 1)], said)
+
+    def test_jitter_at_rest_is_not_a_move(self):
+        # A lever at rest wanders by a few hundred either way.
+        dev = Stub('stick', [[('axis', 1, v)] for v in
+                             (120, -90, 200, -150)], rest={1: 0})
+        s = self.sticks(dev)
+        self.assertEqual([None] * 4, [s.touched() for _ in range(4)])
+
+    def test_a_lever_parked_at_one_end_is_not_a_move(self):
+        # The driver reports where every axis is when the node opens. A
+        # reader that took that for a movement would show a press
+        # nobody made.
+        dev = Stub('stick', [[('axis', 3, -32767)]], rest={3: -32767})
+        self.assertIsNone(self.sticks(dev).touched())
+
+    def test_it_keeps_reporting_while_the_lever_travels(self):
+        dev = Stub('stick', [[('axis', 1, v)] for v in
+                             (4000, 9000, 16000)], rest={1: 0})
+        s = self.sticks(dev)
+        self.assertEqual([('stick', 'axis', 1)] * 3,
+                         [s.touched() for _ in range(3)])
+
+    def test_a_lever_that_stopped_is_the_next_baseline(self):
+        # Let go at 9000 and that is where it lives now, so the next
+        # move is measured from there rather than from zero.
+        dev = Stub('stick', [[('axis', 1, 9000)], [], [('axis', 1, 10000)]],
+                   rest={1: 0})
+        s = self.sticks(dev)
+        self.assertEqual(('stick', 'axis', 1), s.touched())
+        self.assertIsNone(s.touched())          # quiet, so it re-bases
+        self.assertIsNone(s.touched())          # 1000 from 9000
+
+    def test_the_newest_thing_in_a_batch_wins(self):
+        # A caller that polls once a tick wants what is under the hand
+        # now, not the oldest thing in the queue.
+        s = self.sticks(Stub('stick', [[('button', 2, 1),
+                                        ('button', 5, 1)]]))
+        self.assertEqual(('stick', 'button', 5), s.touched())
+
+    def test_two_devices_are_both_read(self):
+        s = self.sticks(Stub('stick', [[]]),
+                        Stub('throttle', [[('button', 9, 1)]]))
+        self.assertEqual(('throttle', 'button', 9), s.touched())
+
+    def test_nothing_plugged_in_answers_nothing(self):
+        self.assertIsNone(self.sticks().touched())
+
+
+class WhatTheCornerSays(unittest.TestCase):
+    """`Review.pressed`: what was just touched, in words.
+
+    A number is not an answer to "which one did I press": it is the same
+    question again. This says which device, what the control is called,
+    which part of it this is, and what is on it.
+    """
+
+    def said(self, rv, role, kind, index):
+        return [t for _tone, t in rv.pressed(role, kind, index)]
+
+    def test_a_button_names_its_control(self):
+        rv = made()
+        said = self.said(rv, 'stick', 'button', 5)
+        self.assertIn('stick  js 5', said)
+        self.assertIn('Pinky button', said)
+
+    def test_a_hat_names_the_direction_too(self):
+        # Four buttons wear one label, so the label alone does not say
+        # which one is under your thumb.
+        rv = made()
+        said = self.said(rv, 'stick', 'button', 0)
+        self.assertIn('Thumb hat', said)
+        self.assertIn('up', said)
+
+    def test_it_says_what_is_on_the_control(self):
+        rv = made()
+        need = by(rv, 'Gear')
+        at = rv.at[need]
+        assert at is not None
+        said = self.said(rv, at.role, 'button', at.slots[0][0])
+        self.assertIn('Gear', said)
+
+    def test_a_spare_control_says_so(self):
+        rv = made()
+        rv.clear_all()
+        said = self.said(rv, 'stick', 'button', 5)
+        self.assertIn('Nothing is on it.', said)
+
+    def test_a_number_the_map_does_not_name(self):
+        # A button the firmware reports with nothing behind it. The map
+        # is where that gets answered, and saying so beats a blank box.
+        rv = made()
+        said = self.said(rv, 'stick', 'button', 99)
+        self.assertIn('The device map does not name it.', said)
+
+    def test_a_device_the_layout_has_not_got(self):
+        self.assertEqual([], made().pressed('pedals', 'button', 0))
+
+    def test_several_needs_on_one_control_are_one_name_and_a_count(self):
+        # The share pass hands a leftover need a spare button of a
+        # control something else owns, so four names can belong on one
+        # line. A list cut mid-word reads as a name nobody gave: X4's
+        # main stick comes out as `INPUT_RANGE_STEERING_PRIMARY,
+        # INPUT_RANG`.
+        self.assertEqual('Gear +1', review._one_of(['Gear', 'Canopy']))
+        self.assertEqual('Gear +2',
+                         review._one_of(['Gear', 'Canopy', 'Trim']))
+
+    def test_one_name_carries_no_count(self):
+        self.assertEqual('Gear', review._one_of(['Gear']))
+        self.assertEqual('', review._one_of([]))

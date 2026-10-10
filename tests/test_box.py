@@ -421,3 +421,64 @@ class RowsTheCursorStepsOver(unittest.TestCase):
     def test_a_list_that_is_all_blanks_answers_nothing(self):
         got, _scr, _t = self.driven([10], skip=(0, 1, 2, 3))
         self.assertIsNone(got)
+
+
+class TheCornerBox(unittest.TestCase):
+    """A small box in the bottom right, over whatever is already there.
+
+    It answers a question about what is behind it, so it is drawn after
+    that screen and not instead of it. The device map draws the same box
+    for the same question.
+    """
+
+    def drawn(self, lines, h=24, w=80, title='pressed'):
+        import curses
+        from core import tui as ctui
+        scr = Keyed([], h=h, w=w)
+        tui = ctui.Tui(scr, ctui.Theme(False))
+        for row in range(h):                    # a list behind it
+            tui._put(row, 0, 'x' * (w - 1))
+        tui.corner(title, lines)
+        scr.refresh()
+        return scr.frames[-1].split('\n')
+
+    def test_nothing_at_all_draws_nothing(self):
+        # The box is there while there is something to say and gone the
+        # rest of the time. That is what tells a reader it is about the
+        # moment.
+        rows = self.drawn([])
+        self.assertEqual({'x'}, set(''.join(rows).replace(' ', '')))
+
+    def test_it_sits_in_the_bottom_right(self):
+        rows = self.drawn([('plain', 'js 23')])
+        lit = [n for n, r in enumerate(rows) if '╭' in r or '╰' in r]
+        self.assertTrue(lit, rows)
+        # The last row of the screen is left to the sill behind it.
+        self.assertLess(max(lit), len(rows) - 1)
+        self.assertGreater(rows[max(lit)].index('╰'), len(rows[0]) // 2)
+
+    def test_the_title_is_in_the_edge(self):
+        rows = self.drawn([('plain', 'js 23')], title='pressed')
+        self.assertIn('pressed', '\n'.join(rows))
+
+    def test_what_it_says_is_on_the_screen(self):
+        rows = self.drawn([('plain', 'throttle  js 23'),
+                           ('meta', 'Middle finger hat  up')])
+        said = '\n'.join(rows)
+        self.assertIn('throttle  js 23', said)
+        self.assertIn('Middle finger hat  up', said)
+
+    def test_it_leaves_a_blank_column_down_its_left(self):
+        # The list behind runs up to the frame and is cut mid-word. The
+        # box's body row, not its sill: a sill is corners and a rule.
+        rows = self.drawn([('plain', 'js 23')])
+        body = next(r for r in rows if '│' in r)
+        self.assertEqual(' ', body[body.index('│') - 1])
+
+    def test_it_does_not_hide_the_list_above_it(self):
+        rows = self.drawn([('plain', 'js 23')])
+        self.assertEqual('x' * 79, rows[0].rstrip())
+
+    def test_more_than_fits_is_cut_rather_than_grown(self):
+        rows = self.drawn([('plain', f'line {n}') for n in range(40)])
+        self.assertEqual(24, len(rows))

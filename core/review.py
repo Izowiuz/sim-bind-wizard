@@ -44,6 +44,7 @@ import io
 import os
 import re
 import textwrap
+import time
 
 from core import actions as cactions
 from core import capture as ccapture
@@ -445,17 +446,29 @@ class Review:
         return out
 
     def free(self):
-        """[(role, control)] with every button still spare.
+        """[(role, control)] with every input of it still spare.
 
         Worked out from what is assigned, and not read off the layout.
         Clearing a need hands its control back, and assigning one takes a
         control the allocator had left over.
+
+        `corneeds.spare_controls` says what free means, so this and the
+        allocator answer the same question. Counted on the buttons
+        alone, this offered the main stick with pitch, roll and steering
+        on it.
+
+        A control a row on this screen claims is not offered, whatever
+        its inputs say. Two rows across the four games bind nothing at
+        all, and a row with no bindings takes a control and writes
+        nothing: Elite's `Head look` and MSFS's `Look around`. The
+        screen shows them sitting there, so offering the control is the
+        screen contradicting itself.
         """
-        busy = self.occupied()
-        return [(role, ctrl)
-                for role, dev in sorted(self.layout.devices.items())
-                for ctrl in dev.groups(bindable=True)
-                if not any((role, b) in busy for b in ctrl.bindable_buttons)]
+        claimed = {(p.role, p.ctrl.id)
+                   for p in self.at.values() if p is not None}
+        return [(role, ctrl) for role, ctrl in corneeds.spare_controls(
+                    self.layout.devices, self.occupied())
+                if (role, ctrl.id) not in claimed]
 
     def fits(self, need):
         """Free controls this need could live on.
@@ -517,6 +530,44 @@ class Review:
         """The map's control owning a raw kernel button number."""
         dev = self.layout.devices.get(role)
         return None if dev is None else dev.group_of(button)
+
+    def pressed(self, role, kind, index):
+        """[(tone, text)] naming what was just touched, for the corner.
+
+        A number is not an answer to "which one did I press": it is the
+        same question again. This says which device, what the control is
+        called, which part of it this is, and what is on it.
+
+        The device map draws the same box for the same question, out of
+        the same map. This is that answer in this screen's own tones.
+        """
+        dev = self.layout.devices.get(role)
+        if dev is None:
+            return []
+        if kind == 'axis':
+            ctrl = dev.axis_group(index)
+            part = f'axis {index}'
+        else:
+            ctrl = dev.group_of(index)
+            part = f'js {index}'
+        out = [('subhead', f'{role}  {part}')]
+        if ctrl is None:
+            # A button the firmware reports with nothing behind it, or an
+            # axis nobody has swept. The map is where that gets answered,
+            # and saying so beats a blank box.
+            out.append(('unset', 'The device map does not name it.'))
+            return out
+        out.append(('plain', ctrl.label))
+        way = ctrl.direction(index) if kind == 'button' else ''
+        if way:
+            out.append(('meta', way))
+        on = self.who_has(role, ctrl)
+        if on:
+            out.append((self.mark[on[0]],
+                        _one_of([n.what for n in on])))
+        else:
+            out.append(('meta', 'Nothing is on it.'))
+        return out
 
     def took(self, need, role, button):
         """Assign from the input somebody moved, or say why not.
@@ -1448,29 +1499,64 @@ NAME_W = 29
 DETAIL_MIN = 26
 
 
+#: The free panel's own height, frame included. Seven rows of controls
+#: under a lid and a sill: enough to read a desk's spare hats and levers
+#: without scrolling on any of the four games but MSFS, which has 20.
+FREE_H = 9
+
+#: Under this the free panel is dropped. The detail panel is unreadable
+#: below about 26 columns and pointless below about ten rows, and the
+#: free list is the half you can reach another way.
+FREE_AT = 24
+
+
 def _layout(width, height, wants=None):
-    """((y, x, h, w) for the list, the same for the detail), or stacked.
+    """((y, x, h, w) for the list, the detail, and the free controls).
 
     Side by side where there is room. `wants` is how wide the list would
-    like to be for the rows it has, and the rest goes to the detail panel
+    like to be for the rows it has, and the rest goes to the right
     rather than to blank space. A fixed split leaves that space between
     the two.
 
-    Below `SPLIT_AT` they stack. A list cut off in the middle of a
-    control's name is worse than a shorter one.
+    The right column is split again, in height. The detail is about the
+    row the cursor is on and the free list is about the desk, so neither
+    answers the other's question and neither can be the other's tail.
+
+    The free panel is dropped where the column is too short for both.
+    Its answer is reachable another way and the detail's is not.
+
+    Below `SPLIT_AT` the two columns stack. A list cut off in the middle
+    of a control's name is worse than a shorter one, and a stack has no
+    room for a third panel.
     """
     if width >= SPLIT_AT:
         left = width - DETAIL_MIN
         if wants:
             left = max(SPLIT_AT - DETAIL_MIN, min(left, wants))
-        return (0, 0, height, left), (0, left, height, width - left)
+        right = width - left
+        if height >= FREE_AT:
+            tall = min(FREE_H, height // 3)
+            return ((0, 0, height, left),
+                    (0, left, height - tall, right),
+                    (height - tall, left, tall, right))
+        return (0, 0, height, left), (0, left, height, right), None
     # Stacked. The list keeps what it needs and the detail takes the
     # rest, never more than a third and never less than a frame plus two
     # lines.
     tall = max(4, min(height // 3, 10))
     listed = max(6, height - tall)
-    return (0, 0, listed, width), (listed, 0, height - listed, width)
+    return ((0, 0, listed, width), (listed, 0, height - listed, width),
+            None)
 
+
+#: How long the corner box stays up after something is touched. Long
+#: enough to read a control's name, short enough that the box is about
+#: the thing in your hand rather than about the last hour.
+HOLD = 2.0
+
+#: How long the loop waits for a key. The corner box is drawn between
+#: ticks, so this is also how late a press can show.
+TICK = 0.05
 
 #: In the sill, most-needed first. What is dropped on a narrow panel is
 #: dropped from the end, and nothing else is reachable without moving.
@@ -1639,6 +1725,57 @@ def _what_happens(rv, need, say):
     if not corneeds.described(need):
         say('plain')
         say('unset', 'This row has no job. No overlay rule reaches it.')
+
+
+def _one_of(names):
+    """`Strafe +1` -- one name and a count, where there is room for one.
+
+    A control carries more than the need that took it: the share pass
+    hands a leftover need a spare button of a control something else
+    owns, so four names can belong on one line.
+
+    The first name and a count, rather than as many as fit. A list cut
+    mid-word reads as a name nobody gave: `INPUT_RANGE_STEERING_PRIMARY,
+    INPUT_RANG` is what X4's main stick comes out as. The map screen has
+    room for all of them.
+    """
+    if not names:
+        return ''
+    return names[0] + (f' +{len(names) - 1}' if len(names) > 1 else '')
+
+
+def _free_side(rv, got, width):
+    """[(tone, text)] -- the controls nothing sits on, device by device.
+
+    The answer to "where could this go", which the detail panel cannot
+    give: that one is about the row the cursor is on, and this is about
+    the desk.
+
+    Each row says what the control is and what it offers, because a name
+    alone does not say whether a thing fits. `T1 rocker` takes two
+    bindings and `Side lever` takes an axis, and the shape is what tells
+    them apart.
+
+    Grouped by device, like everything else on this screen. One run of
+    twenty control names makes you work out which stick each is on.
+    """
+    if not got:
+        return [('meta', 'Every control carries something.')]
+    out, role = [], None
+    for this, ctrl in got:
+        if this != role:
+            role = this
+            out.append(('subhead', this))
+        says = ctrl.kind
+        n = len(ctrl.bindable_buttons)
+        if n:
+            says += f'  {ctui.plural(n, "button")}'
+        axes = corneeds.axes_of(rv.layout.devices[this], ctrl)
+        if axes:
+            says += f'  {ctui.plural(len(axes), "axis", "axes")}'
+        out.append(('plain', f'  {ctrl.label}'[:width]))
+        out.append(('meta', f'    {says}'[:width]))
+    return out
 
 
 def _title_of(row):
@@ -1971,9 +2108,7 @@ def _against(rv, need, role, ctrl, say, width, how='', said=''):
         if got is ctrl:
             return ''
         on = [n.what for n in rv.who_has(role, got) if n is not need]
-        if not on:
-            return 'free'
-        return on[0] + (f' +{len(on) - 1}' if len(on) > 1 else '')
+        return _one_of(on) or 'free'
 
     held = {(r, c.id): whos_on(r, c) for _s, r, c in rows}
     lab = max(len(c.label) for _s, _r, c in rows) + 2
@@ -2089,7 +2224,7 @@ def _draw(scr, rv, sel, state, theme):
     # and the gap does not.
     wants = 4 + 2 + NAME_W + max((len(rv.where(r.need)) for r in rows
                                   if r.kind == 'need'), default=0)
-    (ly, lx, lh, lw), side = _layout(w, h, wants)
+    (ly, lx, lh, lw), side, spare = _layout(w, h, wants)
     visible = max(1, lh - 2)
     top = state['top']
     if sel < top:
@@ -2156,6 +2291,15 @@ def _draw(scr, rv, sel, state, theme):
             break
         _put(scr, dy + n, dx, text, theme[tone])
 
+    if spare is not None:
+        got = rv.free()
+        fy, fx, fh, fw = _panel(scr, theme, spare,
+                                f'{len(got)} free', tail='l to take one')
+        for n, (tone, text) in enumerate(_free_side(rv, got, fw)):
+            if n >= fh:
+                break
+            _put(scr, fy + n, fx, text, theme[tone])
+
     scr.refresh()
 
 
@@ -2179,6 +2323,8 @@ class Sticks:
         self.devices = []
         self.why = ''
         self.opened = False
+        #: (role, axis) -> where that lever was before a hand took it.
+        self.rest = {}
 
     def open(self):
         if self.opened:
@@ -2207,6 +2353,61 @@ class Sticks:
             self.why = ('none of the devices in the map are plugged in '
                         f'({", ".join(sorted(want)) or "no USB ids"})')
         return self.devices
+
+    #: How far an axis travels before it counts as moved, out of
+    #: +-32767. A lever at rest jitters by a few hundred either way, and
+    #: a deliberate nudge clears this.
+    #:
+    #: Smaller than `capture.AXIS_THRESHOLD`, which is 14000, and the two
+    #: answer different questions. A capture waits for one unambiguous
+    #: answer, so it wants a shove. This says what is under your hand,
+    #: and a third of a throttle's travel is a thing you did.
+    MOVED = 3000
+
+    def touched(self):
+        """(role, 'button' or 'axis', index) for what moved, or None.
+
+        Reads whatever is queued and answers the last thing in it, so a
+        caller that polls once a tick sees the newest press rather than
+        the oldest.
+
+        Nothing is opened here. The screen opens the devices once, and a
+        desk with none plugged in answers None for the rest of the
+        session rather than trying again twenty times a second.
+
+        An axis is measured against `rest`, and not against the value it
+        had one tick ago. A tick is 50 ms: a lever moved by hand travels
+        a few hundred units in that time, and a threshold against the
+        previous tick asks for a fifth of the range inside a twentieth
+        of a second. Nothing a hand does clears that, so nothing moving
+        ever showed.
+
+        `rest` is where the lever was before you took hold of it, which
+        is the same baseline `capture.wait_input` takes once before it
+        waits.
+        """
+        got = None
+        for dev in self.devices:
+            before = dict(dev.axis_vals)
+            moved = {}
+            for kind, number, value in dev.read_events():
+                if kind == 'button' and value == 1:
+                    got = (dev.role, 'button', number)
+                elif kind == 'axis':
+                    moved[number] = value
+            for number, value in moved.items():
+                was = self.rest.setdefault((dev.role, number),
+                                           before.get(number, value))
+                if abs(value - was) > self.MOVED:
+                    got = (dev.role, 'axis', number)
+            # An axis that reported nothing this tick is where it is
+            # going to stay, so that is the place to measure the next
+            # move from. A lever you are moving reports every tick and
+            # keeps the baseline it started from.
+            for number, value in dev.axis_vals.items():
+                if number not in moved:
+                    self.rest[(dev.role, number)] = value
+        return got
 
     def close(self):
         for d in self.devices:
@@ -2739,12 +2940,35 @@ def _loop(scr, rv, write, sticks):
         here = min(range(len(pick)), key=lambda j: abs(pick[j] - sel))
         sel = pick[max(0, min(len(pick) - 1, here + step))]
 
+    # Opened once, here, rather than on the first capture. The corner
+    # box answers "which one did I just press", and a box that opened a
+    # device the first time you pressed one would miss that press.
+    #
+    # A desk with nothing plugged in costs one walk of
+    # `/proc/bus/input/devices` and answers None for the rest of the
+    # session. `Sticks.why` says what it found, and `↵` is where that
+    # sentence belongs: it is the key that needs a device.
+    sticks.open()
+    #: What was touched last, and when. The box is up for `HOLD` and
+    #: gone after, which is what says it is about the moment.
+    touch, at = None, 0.0
+
     while True:
         rows = rv.rows()
         if sel >= len(rows) or not rows[sel].selectable:
             move(0)
+        got = sticks.touched()
+        if got is not None:
+            touch, at = got, time.monotonic()
         _draw(scr, rv, sel, state, tui.theme)
-        k = tui.key(0.5)
+        if touch is not None and time.monotonic() - at < HOLD:
+            tui.corner('pressed', rv.pressed(*touch))
+            scr.refresh()
+        # A tick a reader can feel. At 0.5 s a press shows up half a
+        # second after the thumb, which reads as the screen missing it.
+        # One redraw is 1.1 ms over 45 rows, so twenty a second is 2% of
+        # a core.
+        k = tui.key(TICK)
         if k is None:
             continue
         # By kind, not by `selectable`. A heading is selectable and

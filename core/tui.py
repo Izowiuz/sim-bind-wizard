@@ -281,6 +281,41 @@ class Tui:
         self.scr.refresh()
         return page
 
+    def corner(self, title, lines):
+        """A small box in the bottom right, over whatever is already there.
+
+        Drawn after the screen it sits on, and not instead of it. It
+        answers a question about what is behind it, so a box that hid the
+        list would answer into an empty room.
+
+        Nothing is drawn for an empty `lines`. The box is there while
+        there is something to say and gone the rest of the time, which is
+        what tells a reader it is about the moment.
+
+        A blank column down its left, for the reason a dialog has one: the
+        list behind runs up to the frame and is cut mid-word.
+
+        The device map draws the same box for the same question. This is
+        that box, on this family's `lid` and `sill`.
+        """
+        if not lines:
+            return
+        h, w = self.scr.getmaxyx()
+        body = [t for _tone, t in lines]
+        wide = max((len(t) for t in body), default=0)
+        bw = min(w - 4, max(len(title) + 8, wide + 2 + 2 * GAP))
+        bh = min(h - 2, len(body) + 2)
+        y, x = h - bh - 1, w - bw - 2
+        for row in range(y, y + bh):
+            self._put(row, max(0, x - 1), ' ')
+        self._put(y, x, lid(bw, title), self.theme.head)
+        for n in range(bh - 2):
+            self._put(y + 1 + n, x, V + ' ' * (bw - 2) + V, self.theme.head)
+        self._put(y + bh - 1, x, sill(bw), self.theme.head)
+        for n, (tone, text) in enumerate(lines[:bh - 2]):
+            self._put(y + 1 + n, x + 1 + GAP,
+                      text[:bw - 2 - 2 * GAP], self.theme[tone])
+
     def popup(self, title, lines, full=False):
         """A box you read and dismiss.
 
