@@ -2933,17 +2933,29 @@ class Footer(unittest.TestCase):
     def test_every_hint_in_the_border_is_also_in_the_help(self):
         # Otherwise the two drift, and the short list becomes the only
         # place some key is named.
+        #
+        # A single character is matched as it is written: `c` and `C` are
+        # two actions, so the case IS the key. A word is matched either
+        # way, because there the case is spelling: the help names a key
+        # like `SPACE` or `TAB` in capitals and the sill writes `tab
+        # panel` beside `c accept`.
         listed = self.said()
         for hint in review.HINTS:
             key = hint.split()[0]
-            self.assertIn(key, listed, f'{hint!r} is nowhere in `?`')
+            said = listed if len(key) == 1 else listed.lower()
+            want = key if len(key) == 1 else key.lower()
+            self.assertIn(want, said, f'{hint!r} is nowhere in `?`')
 
     def test_moving_is_documented_at_all(self):
-        # What it does, not how it is spelled: the last version of this
-        # pinned 'g / G' and broke when the help went man-terse, which
-        # told nobody anything about whether moving was documented.
-        keys = self.said()
-        for what in ('previous', 'next', 'first', 'last'):
+        # What it does, not how it is spelled: a version of this that
+        # pinned 'g / G' broke when the help went man-terse, which told
+        # nobody anything about whether moving was documented.
+        #
+        # `panels`, because the arrows move in whichever one TAB is on
+        # and the help has to say that much. `first` and `last` are the
+        # two ends, which is the other half of moving.
+        keys = self.said().lower()
+        for what in ('panels', 'scroll', 'first', 'last'):
             self.assertIn(what, keys)
 
     def test_every_branch_of_the_loop_is_reachable_from_the_footer(self):
@@ -2955,7 +2967,7 @@ class Footer(unittest.TestCase):
         src = inspect.getsource(review._loop)
         listed = self.said()
         spelled = {'up': '↑', 'down': '↓', 'enter': '↵', 'esc': 'q',
-                   ' ': 'SPACE'}
+                   ' ': 'SPACE', 'tab': 'TAB', 'shift-tab': 'Shift-TAB'}
         branches = [frozenset(re.findall(r"'([^']+)'", m.group(1)))
                     for m in re.finditer(r"k (?:==|in) \(?([^:)]+)\)?:", src)]
         self.assertGreater(len(branches), 6, 'the parse found nothing')
@@ -3421,3 +3433,121 @@ class WhatTheCornerSays(unittest.TestCase):
     def test_one_name_carries_no_count(self):
         self.assertEqual('Gear', review._one_of(['Gear']))
         self.assertEqual('', review._one_of([]))
+
+
+class TabWalksThePanels(unittest.TestCase):
+    """TAB chooses what the arrows move, and nothing else changes.
+
+    Every other key goes on acting on the row under the cursor in the
+    list, so `c` accepts that row whatever the arrows are pointed at.
+    The cursor stays lit for the same reason.
+
+    The free list is 20 controls on MSFS and the panel holds three. Read
+    with no way to scroll, the rest is dropped in silence, which is the
+    one thing a box may not do.
+    """
+
+    def driven(self, keys, h=40, w=120, needs=None):
+        """`_loop` over a fake screen, and the state it left behind."""
+        rv = made(needs, rebuild=lambda: Layout(DEVS(),
+                                                *allocate(plan(), DEVS())))
+        scr = Keyed(list(keys) + [ord('q')], h=h, w=w)
+        seen = {}
+        was = review._draw
+
+        def watch(scr, rv, sel, state, theme, focus=review.LIST):
+            seen.update(state)
+            seen['sel'] = sel
+            seen['focus'] = focus
+            return was(scr, rv, sel, state, theme, focus)
+
+        with unittest.mock.patch.object(
+                review.ctui, 'setup',
+                lambda s: ctui.Tui(s, ctui.Theme(False))), \
+             unittest.mock.patch.object(review, '_draw', watch):
+            review._loop(scr, rv, None, review.Sticks(rv.layout))
+        return seen, scr.frames
+
+    def test_the_list_has_it_to_start_with(self):
+        seen, _frames = self.driven([])
+        self.assertEqual(review.LIST, seen.get('focus', review.LIST))
+
+    def test_tab_moves_it_on(self):
+        seen, _frames = self.driven([9])
+        self.assertEqual(review.DETAIL, seen['focus'])
+
+    def test_it_comes_back_round(self):
+        # Three panels on a wide screen, so three presses is where you
+        # started.
+        seen, _frames = self.driven([9, 9, 9])
+        self.assertEqual(review.LIST, seen['focus'])
+
+    def test_shift_tab_goes_back(self):
+        import curses
+        seen, _frames = self.driven([curses.KEY_BTAB])
+        self.assertEqual(review.FREE, seen['focus'])
+
+    def test_a_screen_with_no_free_panel_skips_it(self):
+        # Stacked, so there is nowhere to put one. Two panels, and two
+        # presses is where you started.
+        seen, _frames = self.driven([9, 9], w=80)
+        self.assertEqual(review.LIST, seen['focus'])
+
+    # ---- what the arrows do ----
+
+    def test_the_arrows_move_the_cursor_on_the_list(self):
+        import curses
+        seen, _frames = self.driven([curses.KEY_DOWN, curses.KEY_DOWN])
+        self.assertGreater(seen['sel'], 0)
+        self.assertEqual(0, seen.get(review.DETAIL, 0))
+
+    def test_they_scroll_the_panel_they_are_pointed_at(self):
+        import curses
+        seen, _frames = self.driven([9, curses.KEY_DOWN, curses.KEY_DOWN])
+        self.assertGreater(seen[review.DETAIL], 0)
+
+    def test_the_cursor_does_not_move_while_they_scroll(self):
+        # The keys act on the row under it, so it has to stay put.
+        import curses
+        a, _f = self.driven([])
+        b, _f = self.driven([9, curses.KEY_DOWN, curses.KEY_DOWN])
+        self.assertEqual(a['sel'], b['sel'])
+
+    def test_a_key_that_is_not_an_arrow_acts_on_the_list(self):
+        # `x` empties the row under the cursor, whatever TAB is on.
+        #
+        # Down first. The cursor opens on the first selectable row and
+        # that is a heading, which carries no need, so `x` there has
+        # nothing to empty. After TAB the arrows scroll a panel and
+        # cannot reach a row at all.
+        import curses
+        rv = made(rebuild=lambda: Layout(DEVS(), *allocate(plan(), DEVS())))
+        scr = Keyed([curses.KEY_DOWN, 9, ord('x'), ord('q')], h=40, w=120)
+        with unittest.mock.patch.object(
+                review.ctui, 'setup',
+                lambda s: ctui.Tui(s, ctui.Theme(False))):
+            review._loop(scr, rv, None, review.Sticks(rv.layout))
+        self.assertEqual(1, sum(1 for n in rv.needs
+                                if (n.assignment or {}).get('how')
+                                == corneeds.CLEARED))
+
+    def test_scrolling_up_from_the_top_stays_at_the_top(self):
+        import curses
+        seen, _frames = self.driven([9, curses.KEY_UP, curses.KEY_UP])
+        self.assertEqual(0, seen[review.DETAIL])
+
+    # ---- how the focus is drawn ----
+
+    def test_the_focused_panel_is_heavy(self):
+        _seen, frames = self.driven([])
+        said = frames[-1]
+        self.assertIn('┏', said, 'the list has the focus and is heavy')
+        self.assertIn('╭', said, 'and the others are not')
+
+    def test_only_one_panel_is_heavy(self):
+        _seen, frames = self.driven([9])
+        self.assertEqual(1, frames[-1].count('┏'))
+
+    def test_the_focused_panel_says_the_arrows_scroll_it(self):
+        _seen, frames = self.driven([9])
+        self.assertIn(review.SCROLL, frames[-1])

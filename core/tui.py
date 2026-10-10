@@ -88,6 +88,22 @@ class Theme:
 #: does it this way.
 TL, TR, BL, BR, H, V = '╭', '╮', '╰', '╯', '─', '│'
 
+#: The same six, heavy, for a panel the arrows are pointed at. A shape
+#: rather than a colour: these screens run on a terminal with no colour
+#: as often as not, and `Theme` falls back to bold and dim there, which
+#: a frame already uses for its own edge.
+HEAVY = {TL: '┏', TR: '┓', BL: '┗', BR: '┛', H: '━', V: '┃'}
+
+
+def weight(text, heavy):
+    """`text` with the frame drawn heavy, or as it came.
+
+    Applied to the finished string rather than threaded through `lid` and
+    `sill` as six arguments. Both of them build one string on purpose, so
+    this is one `translate` over the thing they already made.
+    """
+    return text.translate(str.maketrans(HEAVY)) if heavy else text
+
 #: Hints are joined with the separator the rest of the family uses. btop
 #: notches each hint into the border, as `┘info ↵└`, because its hints are
 #: buttons you click. These are labels, so a notch costs two columns for
@@ -245,6 +261,10 @@ class Tui:
                 return "up"
             if c == curses.KEY_DOWN:
                 return "down"
+            if c == 9:
+                return "tab"
+            if c == curses.KEY_BTAB:
+                return "shift-tab"
             if 32 <= c < 127:
                 return chr(c)
             # Ignore a resize and anything exotic.

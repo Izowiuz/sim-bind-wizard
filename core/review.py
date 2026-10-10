@@ -1376,8 +1376,9 @@ KEYS = (
     ('plain', f'  {BARE}           This row has no job.'),
     ('plain', ''),
     ('head', 'MOVING'),
-    ('plain', '  ↑↓  j k     Move to the previous or the next entry.'),
-    ('plain', '  g  G        Move to the first or the last entry.'),
+    ('plain', '  TAB         Move between the panels. Shift-TAB goes back.'),
+    ('plain', '  ↑↓  j k     Move or scroll, in the panel TAB is on.'),
+    ('plain', '  g  G        Go to its first or its last line.'),
     ('plain', '  f           Filter by text. An empty filter clears it.'),
     ('plain', '  h           Show or hide the bindings under each entry.'),
     ('plain', ''),
@@ -1549,6 +1550,31 @@ def _layout(width, height, wants=None):
             None)
 
 
+#: The panels TAB walks, in the order it walks them. The arrows move
+#: inside whichever one has the focus, and every other key goes on
+#: acting on the row under the cursor in the list: `c` accepts that row
+#: whatever the arrows are pointed at.
+#:
+#: A panel that is not drawn is skipped. The free list is dropped on a
+#: short column, and a stacked screen has no room for it at all.
+LIST, DETAIL, FREE = 'list', 'detail', 'free'
+
+#: What the focused panel says in its sill, where the arrows scroll it
+#: rather than move a cursor.
+SCROLL = '↑↓ scroll'
+
+#: Which way a movement key goes, by one. Separate from the ends below
+#: so the loop needs one dispatch branch for all six: a second line
+#: starting `if k in` is a branch an earlier one has already answered,
+#: and `test_no_key_is_answered_twice` reads the source for exactly
+#: that shape.
+STEP = {'up': -1, 'k': -1, 'down': 1, 'j': 1}
+
+#: And the two that go to an end. Which way, not how far: how far is the
+#: length of whatever the arrows are pointed at, and only the loop knows
+#: which panel that is.
+END = {'g': -1, 'G': 1}
+
 #: How long the corner box stays up after something is touched. Long
 #: enough to read a control's name, short enough that the box is about
 #: the thing in your hand rather than about the last hour.
@@ -1563,7 +1589,7 @@ TICK = 0.05
 HINTS = ('↑↓ move', '↵ assign', 'l from free', 'c accept', 'x unassign',
          'a add', 'J what it is', 'Z guess', 'i invert', 'r category', 'f filter',
          'h binds',
-         'o overlay', 'y why', 'm map', 's save', 'w write')
+         'o overlay', 'y why', 'm map', 's save', 'w write', 'tab panel')
 
 
 def _fit(width, text, lead=''):
@@ -2178,14 +2204,22 @@ def _worth(say, need, role, ctrl, points, rules, floor=True, axis=None,
         say('meta', text, lead=f'  {delta:>+{lead}}  ')
 
 
-def _panel(scr, theme, rect, title, right='', keys=(), tail='', note=''):
-    """Frame a box and hand back the rectangle inside it."""
+def _panel(scr, theme, rect, title, right='', keys=(), tail='', note='',
+           focus=False):
+    """Frame a box and hand back the rectangle inside it.
+
+    A framed panel is heavy where the arrows are pointed at it. A shape
+    rather than a colour: the frame already spends its tone on being a
+    frame, and these screens run on a terminal with no colour.
+    """
     y, x, h, w = rect
-    _put(scr, y, x, ctui.lid(w, title, right), theme.head)
+    heavy = ctui.weight
+    _put(scr, y, x, heavy(ctui.lid(w, title, right), focus), theme.head)
+    side = heavy(ctui.V, focus)
     for row in range(y + 1, y + h - 1):
-        _put(scr, row, x, ctui.V, theme.head)
-        _put(scr, row, x + w - 1, ctui.V, theme.head)
-    _put(scr, y + h - 1, x, ctui.sill(w, keys, tail, note),
+        _put(scr, row, x, side, theme.head)
+        _put(scr, row, x + w - 1, side, theme.head)
+    _put(scr, y + h - 1, x, heavy(ctui.sill(w, keys, tail, note), focus),
          theme.note if note else theme.head)
     return y + 1, x + 2, h - 2, w - 4
 
@@ -2217,7 +2251,7 @@ def _tally(rv):
     return rv.narrowed() or ctui.SEP.join(c for c in counts if c)
 
 
-def _draw(scr, rv, sel, state, theme):
+def _draw(scr, rv, sel, state, theme, focus=LIST):
     h, w = scr.getmaxyx()
     rows = rv.rows()
     # As wide as the widest row is, so the detail panel gets the space
@@ -2245,7 +2279,8 @@ def _draw(scr, rv, sel, state, theme):
         # A game's own keys sit in the sill beside the family's. A key
         # nobody shows is a key nobody presses.
         right, HINTS + tuple(f'{key} {word}' for key, word, _do in rv.offers),
-        _where(rows, sel, at, pick), note=rv.status)
+        _where(rows, sel, at, pick), note=rv.status,
+        focus=focus == LIST)
 
     for n, i in enumerate(range(top, min(len(rows), top + visible))):
         row = rows[i]
@@ -2281,26 +2316,49 @@ def _draw(scr, rv, sel, state, theme):
     # whatever the cursor is on, and its title says which.
     name = _title_of(row)
     dy, dx, dh, dw = _panel(scr, theme, side, name[:side[3] - 6],
-                            tail='? help')
+                            tail=SCROLL if focus == DETAIL else '? help',
+                            focus=focus == DETAIL)
     # One wrapper, not two. `_side` fits its own lines to `dw`, because
     # it is the half that knows which of them are a ledger and hang under
     # their `+40`. Wrapped again here, that indent goes the moment a line
     # lands one character over.
-    for n, (tone, text) in enumerate(_side(rv, row, dw)):
-        if n >= dh:
-            break
-        _put(scr, dy + n, dx, text, theme[tone])
+    _scroll(scr, theme, _side(rv, row, dw), (dy, dx, dh), state, DETAIL)
 
     if spare is not None:
         got = rv.free()
-        fy, fx, fh, fw = _panel(scr, theme, spare,
-                                f'{len(got)} free', tail='l to take one')
-        for n, (tone, text) in enumerate(_free_side(rv, got, fw)):
-            if n >= fh:
-                break
-            _put(scr, fy + n, fx, text, theme[tone])
+        fy, fx, fh, fw = _panel(
+            scr, theme, spare, f'{len(got)} free',
+            tail=SCROLL if focus == FREE else 'l to take one',
+            focus=focus == FREE)
+        _scroll(scr, theme, _free_side(rv, got, fw), (fy, fx, fh),
+                state, FREE)
 
     scr.refresh()
+
+
+def _scroll(scr, theme, lines, rect, state, which):
+    """Draw a panel's lines from wherever it is scrolled to.
+
+    The offset is clamped HERE, where the height and the length are both
+    known, and written back. So the key that scrolls adds one and knows
+    nothing about either, and a panel whose content shrank under it comes
+    back into view rather than going blank.
+
+    A tail line says how much is below, because a box that drops what
+    does not fit, in silence, is worse than no box. MSFS leaves 20
+    controls free and the panel holds three.
+    """
+    y, x, h = rect
+    top = max(0, min(state.get(which, 0), max(0, len(lines) - h)))
+    state[which] = top
+    room = h - 1 if len(lines) > h else h
+    for n, (tone, text) in enumerate(lines[top:top + room]):
+        _put(scr, y + n, x, text, theme[tone])
+    left = len(lines) - top - room
+    if len(lines) > h:
+        _put(scr, y + room, x,
+             f'+{left} below' if left > 0 else 'the end',
+             theme.meta)
 
 
 # -------------------------------------------------------------- the sticks
@@ -2928,6 +2986,10 @@ def run(layout, title, subtitle='', describe=None, write=None, paths=(),
 def _loop(scr, rv, write, sticks):
     tui = ctui.setup(scr)
     state = {'top': 0}
+    #: Which panel the arrows move in. Beside `sel` rather than in
+    #: `state`, which holds the scroll offsets and is all integers:
+    #: where you are is loop state, and `_draw` takes both.
+    focus = LIST
     rows = rv.rows()
     sel = next((i for i, r in enumerate(rows) if r.selectable), 0)
     written = None
@@ -2960,7 +3022,7 @@ def _loop(scr, rv, write, sticks):
         got = sticks.touched()
         if got is not None:
             touch, at = got, time.monotonic()
-        _draw(scr, rv, sel, state, tui.theme)
+        _draw(scr, rv, sel, state, tui.theme, focus)
         if touch is not None and time.monotonic() - at < HOLD:
             tui.corner('pressed', rv.pressed(*touch))
             scr.refresh()
@@ -2986,17 +3048,33 @@ def _loop(scr, rv, write, sticks):
                 # sim-device-map does this on the way out.
                 _save(scr, tui, rv)
             return written
-        if k in ('up', 'k'):
-            move(-1)
+        if k in ('tab', 'shift-tab'):
+            # The panels that are drawn, which is what `_layout` just
+            # decided: a short column has no free list and a stacked
+            # screen has nowhere to put one. Asked of the layout rather
+            # than remembered, so a terminal somebody resized cannot
+            # leave the focus on a panel that is no longer there.
+            _, _side_r, _free_r = _layout(*scr.getmaxyx()[::-1])
+            panels = [LIST, DETAIL] + ([FREE] if _free_r else [])
+            at = panels.index(focus) if focus in panels else 0
+            focus = panels[(at + (1 if k == 'tab' else -1)) % len(panels)]
             rv.status = ''
-        elif k in ('down', 'j'):
-            move(+1)
-            rv.status = ''
-        elif k == 'g':
-            move(-len(rows))
-            rv.status = ''
-        elif k == 'G':
-            move(len(rows))
+        elif k in ('up', 'k', 'down', 'j', 'g', 'G'):
+            # The arrows move inside whichever panel the focus is on.
+            # Every other key goes on acting on the row under the cursor
+            # in the list, so `c` accepts that row whatever the arrows
+            # are pointed at.
+            #
+            # One branch for all six. `STEP` answers the four that move
+            # by one, and the two that go to an end fall through its
+            # `or`, because a step of one is truthy and a miss is 0.
+            step = STEP.get(k, 0) or END[k] * (len(rows) + 1)
+            if focus == LIST:
+                move(step)
+            else:
+                # Clamped in `_scroll`, where the height and the length
+                # are both known. This only has to say which way.
+                state[focus] = max(0, state.get(focus, 0) + step)
             rv.status = ''
         elif k == 'c' and need is not None:
             rv.status = rv.confirm(need)
